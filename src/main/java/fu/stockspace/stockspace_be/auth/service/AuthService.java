@@ -10,6 +10,8 @@ import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.RoleRepository;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.auth.security.JwtUtil;
+import fu.stockspace.stockspace_be.common.exception.AppException;
+import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -48,19 +50,15 @@ public class AuthService {
     @Transactional
     public AuthResult register(RegisterRequest request) {
         if (!SELF_REGISTER_ROLES.contains(request.getRole())) {
-            throw new IllegalArgumentException(
-                    "Self-registration is only allowed for OWNER and TENANT roles"
-            );
+            throw new AppException(ErrorCode.ROLE_NOT_SUPPORTED);
         }
 
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new IllegalArgumentException(
-                    "Email already registered: " + request.getEmail()
-            );
+            throw new AppException(ErrorCode.USER_ALREADY_EXISTS);
         }
 
         Role dbRole = roleRepository.findByName(request.getRole().name())
-                .orElseThrow(() -> new IllegalArgumentException("Role not found in database: " + request.getRole()));
+                .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_FOUND));
 
         User user = User.builder()
                 .email(request.getEmail())
@@ -89,7 +87,7 @@ public class AuthService {
         );
 
         User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new IllegalStateException("User not found after authentication"));
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
         String userRolesStr = user.getRoles().stream()
                 .map(Role::getName)

@@ -55,7 +55,16 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Business logic lỗi — email trùng, role không hợp lệ, v.v.
+     * Xử lý lỗi nghiệp vụ AppException định nghĩa sẵn bởi ErrorCode.
+     */
+    @ExceptionHandler(AppException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAppException(AppException ex) {
+        return ResponseEntity.status(ex.getErrorCode().getStatus())
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    /**
+     * Business logic lỗi — các trường hợp IllegalArgumentException chung.
      */
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse<Void>> handleIllegalArgument(IllegalArgumentException ex) {
