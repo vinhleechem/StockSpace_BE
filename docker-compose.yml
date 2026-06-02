@@ -9,8 +9,8 @@ services:
       - "5432:5432"
     environment:
       POSTGRES_DB: stockspace
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 123456
+      POSTGRES_USER: ${DB_USERNAME:postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:123456}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: always
@@ -32,9 +32,10 @@ services:
       - "8080:8080"
     environment:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/stockspace
-      - SPRING_DATASOURCE_USERNAME=postgres
-      - SPRING_DATASOURCE_PASSWORD=123456
+      - SPRING_DATASOURCE_USERNAME=${DB_USERNAME:postgres}
+      - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD:123456}
       - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      - APP_JWT_SECRET=${JWT_SECRET}
     depends_on:
       postgres:
         condition: service_healthy

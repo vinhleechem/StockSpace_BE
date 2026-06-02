@@ -21,7 +21,7 @@ public class OpenApiConfig {
                 .info(new Info()
                         .title("StockSpace API Documentation")
                         .version("1.0")
-                        .description("Tài liệu API cho hệ thống quản lý kho StockSpace. Hỗ trợ đầy đủ phân quyền Full RBAC."))
+                        .description("Tài liệu API cho hệ thống quản lý kho StockSpace"))
                 .addSecurityItem(new SecurityRequirement().addList(securitySchemeName))
                 .components(new Components()
                         .addSecuritySchemes(securitySchemeName,
