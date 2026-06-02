@@ -1,0 +1,29 @@
+package fu.stockspace.stockspace_be.auth.service;
+
+import fu.stockspace.stockspace_be.auth.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.stereotype.Service;
+
+/**
+ * Implement UserDetailsService để Spring Security biết cách load user từ DB.
+ * Dùng email làm "username".
+ *
+ * Chỉ Dev 1 sửa file này.
+ */
+@Service
+@RequiredArgsConstructor
+public class UserDetailsServiceImpl implements UserDetailsService {
+
+    private final UserRepository userRepository;
+
+    @Override
+    public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new UsernameNotFoundException(
+                        "User not found with email: " + email
+                ));
+    }
+}
