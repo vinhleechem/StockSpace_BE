@@ -3,7 +3,7 @@ package fu.stockspace.stockspace_be.auth.service;
 import fu.stockspace.stockspace_be.auth.entity.RefreshToken;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.RefreshTokenRepository;
-import fu.stockspace.stockspace_be.common.exception.AppException;
+import fu.stockspace.stockspace_be.common.exception.UnauthorizedException;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -64,12 +64,12 @@ public class RefreshTokenService {
     @Transactional
     public RefreshToken validateRefreshToken(String token) {
         RefreshToken refreshToken = refreshTokenRepository.findByToken(token)
-                .orElseThrow(() -> new AppException(ErrorCode.INVALID_REFRESH_TOKEN));
+                .orElseThrow(() -> new UnauthorizedException(ErrorCode.INVALID_REFRESH_TOKEN));
 
         if (refreshToken.isExpired()) {
             // Token hết hạn → xóa khỏi DB luôn
             refreshTokenRepository.delete(refreshToken);
-            throw new AppException(ErrorCode.INVALID_REFRESH_TOKEN, "Refresh token has expired. Please login again.");
+            throw new UnauthorizedException(ErrorCode.INVALID_REFRESH_TOKEN, "Refresh token has expired. Please login again.");
         }
 
         return refreshToken;
