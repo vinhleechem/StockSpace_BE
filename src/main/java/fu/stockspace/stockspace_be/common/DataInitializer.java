@@ -1,0 +1,136 @@
+package fu.stockspace.stockspace_be.common;
+
+import fu.stockspace.stockspace_be.auth.entity.Permission;
+import fu.stockspace.stockspace_be.auth.entity.Role;
+import fu.stockspace.stockspace_be.auth.entity.RoleType;
+import fu.stockspace.stockspace_be.auth.entity.User;
+import fu.stockspace.stockspace_be.auth.repository.PermissionRepository;
+import fu.stockspace.stockspace_be.auth.repository.RoleRepository;
+import fu.stockspace.stockspace_be.auth.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.HashSet;
+import java.util.Set;
+
+/**
+ * Khởi tạo dữ liệu mẫu (Roles, Permissions, default Users) khi chạy ứng dụng lần đầu.
+ */
+@Component
+@RequiredArgsConstructor
+@Slf4j
+public class DataInitializer implements CommandLineRunner {
+
+    private final RoleRepository roleRepository;
+    private final PermissionRepository permissionRepository;
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+
+    @Override
+    @Transactional
+    public void run(String... args) throws Exception {
+        log.info("Starting DataInitializer to seed roles and permissions...");
+
+        // 1. Khởi tạo permissions
+        Permission whRead = getOrCreatePermission("WAREHOUSE_READ", "Xem thông tin kho bãi");
+        Permission whCreate = getOrCreatePermission("WAREHOUSE_CREATE", "Tạo mới kho bãi");
+        Permission whUpdate = getOrCreatePermission("WAREHOUSE_UPDATE", "Cập nhật kho bãi");
+        Permission whDelete = getOrCreatePermission("WAREHOUSE_DELETE", "Xóa kho bãi");
+
+        Permission rentalCreate = getOrCreatePermission("RENTAL_REQUEST_CREATE", "Tạo yêu cầu thuê kho");
+        Permission rentalRead = getOrCreatePermission("RENTAL_REQUEST_READ", "Xem yêu cầu thuê kho");
+        Permission rentalProcess = getOrCreatePermission("RENTAL_REQUEST_PROCESS", "Duyệt/từ chối yêu cầu thuê");
+
+        Permission inspectRead = getOrCreatePermission("INSPECTION_READ", "Xem báo cáo thanh tra");
+        Permission inspectCreate = getOrCreatePermission("INSPECTION_CREATE", "Tạo báo cáo thanh tra");
+        Permission inspectApprove = getOrCreatePermission("INSPECTION_APPROVE", "Phê duyệt thanh tra");
+
+        Permission invRead = getOrCreatePermission("INVENTORY_READ", "Xem tồn kho");
+        Permission invCreate = getOrCreatePermission("INVENTORY_CREATE", "Thêm hàng vào kho");
+        Permission invUpdate = getOrCreatePermission("INVENTORY_UPDATE", "Cập nhật hàng hóa");
+        Permission invDelete = getOrCreatePermission("INVENTORY_DELETE", "Xóa hàng hóa khỏi kho");
+
+        Permission inboundCreate = getOrCreatePermission("INBOUND_CREATE", "Tạo phiếu nhập kho");
+        Permission outboundCreate = getOrCreatePermission("OUTBOUND_CREATE", "Tạo phiếu xuất kho");
+
+        Permission staffManage = getOrCreatePermission("STAFF_MANAGE", "Quản lý nhân viên");
+        Permission pkgPurchase = getOrCreatePermission("PACKAGE_PURCHASE", "Mua gói dịch vụ");
+
+        // 2. Khởi tạo default roles và gán permissions
+        
+        // ROLE_ADMIN — có tất cả quyền
+        Set<Permission> adminPermissions = new HashSet<>(permissionRepository.findAll());
+        getOrCreateRole(RoleType.ROLE_ADMIN.name(), "Administrator với đầy đủ quyền hạn", adminPermissions);
+
+        // ROLE_OWNER — Quản lý kho bãi của họ + duyệt thuê + xem thanh tra
+        Set<Permission> ownerPermissions = Set.of(whRead, whCreate, whUpdate, whDelete, rentalRead, rentalProcess, inspectRead);
+        getOrCreateRole(RoleType.ROLE_OWNER.name(), "Chủ kho bãi (Warehouse Owner)", ownerPermissions);
+
+        // ROLE_TENANT — Thuê kho, quản lý hàng hóa, staff, mua gói dịch vụ
+        Set<Permission> tenantPermissions = Set.of(whRead, rentalCreate, rentalRead, invRead, invCreate, invUpdate, invDelete, inboundCreate, outboundCreate, staffManage, pkgPurchase);
+        getOrCreateRole(RoleType.ROLE_TENANT.name(), "Người thuê kho (Tenant)", tenantPermissions);
+
+        // ROLE_STAFF — Quản lý hàng hóa, phiếu nhập/xuất
+        Set<Permission> staffPermissions = Set.of(invRead, invCreate, invUpdate, invDelete, inboundCreate, outboundCreate);
+        getOrCreateRole(RoleType.ROLE_STAFF.name(), "Nhân viên kho (Warehouse Staff)", staffPermissions);
+
+        // ROLE_INSPECTOR — Thanh tra chất lượng kho
+        Set<Permission> inspectorPermissions = Set.of(whRead, inspectRead, inspectCreate, inspectApprove);
+        getOrCreateRole(RoleType.ROLE_INSPECTOR.name(), "Thanh tra kho bãi (Inspector)", inspectorPermissions);
+
+        // 3. Khởi tạo default users để tiện test
+        createDefaultUser("admin@stockspace.com", "Password123", "System Admin", "0987654321", RoleType.ROLE_ADMIN.name());
+        createDefaultUser("owner@stockspace.com", "Password123", "Nguyen Owner", "0987654322", RoleType.ROLE_OWNER.name());
+        createDefaultUser("tenant@stockspace.com", "Password123", "Tran Tenant", "0987654323", RoleType.ROLE_TENANT.name());
+        createDefaultUser("staff@stockspace.com", "Password123", "Le Staff", "0987654324", RoleType.ROLE_STAFF.name());
+        createDefaultUser("inspector@stockspace.com", "Password123", "Pham Inspector", "0987654325", RoleType.ROLE_INSPECTOR.name());
+
+        log.info("DataInitializer finished seeding successfully!");
+    }
+
+    private Permission getOrCreatePermission(String name, String description) {
+        return permissionRepository.findByName(name)
+                .orElseGet(() -> {
+                    Permission permission = Permission.builder()
+                            .name(name)
+                            .description(description)
+                            .build();
+                    log.info("Seeding permission: {}", name);
+                    return permissionRepository.save(permission);
+                });
+    }
+
+    private void getOrCreateRole(String name, String description, Set<Permission> permissions) {
+        Role role = roleRepository.findByName(name)
+                .orElseGet(() -> Role.builder()
+                        .name(name)
+                        .description(description)
+                        .build());
+        role.setPermissions(permissions);
+        roleRepository.save(role);
+        log.info("Seeding role: {} with {} permissions", name, permissions.size());
+    }
+
+    private void createDefaultUser(String email, String rawPassword, String fullName, String phone, String roleName) {
+        if (!userRepository.existsByEmail(email)) {
+            Role role = roleRepository.findByName(roleName)
+                    .orElseThrow(() -> new IllegalStateException("Role not found during user seeding: " + roleName));
+
+            User user = User.builder()
+                    .email(email)
+                    .password(passwordEncoder.encode(rawPassword))
+                    .fullName(fullName)
+                    .phone(phone)
+                    .roles(Set.of(role))
+                    .isActive(true)
+                    .build();
+
+            userRepository.save(user);
+            log.info("Seeded default user: {} with role {}", email, roleName);
+        }
+    }
+}

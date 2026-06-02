@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  # 1. PostgreSQL Database Service
+  postgres:
+    image: postgres:16-alpine
+    container_name: stockspace-db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: stockspace
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123456
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d stockspace"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+  # 3. Spring Boot App Service (Tùy chọn: Chạy app trong docker luôn)
+  # Để build app trong container: chạy lệnh `docker compose up --build`
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stockspace-app
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/stockspace
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=123456
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: always
+
+volumes:
+  postgres_data:
