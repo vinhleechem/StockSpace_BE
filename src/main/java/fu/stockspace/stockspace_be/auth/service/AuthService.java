@@ -10,7 +10,9 @@ import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.RoleRepository;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.auth.security.JwtUtil;
-import fu.stockspace.stockspace_be.common.exception.AppException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -50,15 +52,15 @@ public class AuthService {
     @Transactional
     public AuthResult register(RegisterRequest request) {
         if (!SELF_REGISTER_ROLES.contains(request.getRole())) {
-            throw new AppException(ErrorCode.ROLE_NOT_SUPPORTED);
+            throw new BadRequestException(ErrorCode.ROLE_NOT_SUPPORTED);
         }
 
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new AppException(ErrorCode.USER_ALREADY_EXISTS);
+            throw new ResourceConflictException(ErrorCode.USER_ALREADY_EXISTS);
         }
 
         Role dbRole = roleRepository.findByName(request.getRole().name())
-                .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_FOUND));
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.ROLE_NOT_FOUND));
 
         User user = User.builder()
                 .email(request.getEmail())
@@ -87,7 +89,7 @@ public class AuthService {
         );
 
         User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
 
         String userRolesStr = user.getRoles().stream()
                 .map(Role::getName)
