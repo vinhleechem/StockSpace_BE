@@ -27,7 +27,14 @@ users ──────────── user_roles ────────�
 - [x] **Repository**:
   - `RoleRepository.java` (JPA): Tìm kiếm role theo tên (`findByName`).
   - `PermissionRepository.java` (JPA): Tìm kiếm permission theo tên (`findByName`).
-- [x] **Exception Handling**: Xây dựng custom `AppException` và enum `ErrorCode` chuẩn hóa toàn bộ các thông điệp lỗi nghiệp vụ và mã trạng thái HTTP trả về, tránh lạm dụng `IllegalArgumentException` chung chung.
+- [x] **Exception Handling**: Chuẩn hóa toàn bộ lỗi nghiệp vụ bằng cách kết hợp giữa enum `ErrorCode` và các class Custom Exception được chia nhỏ đại diện cho từng mã trạng thái HTTP:
+  - `BadRequestException` (HTTP 400)
+  - `UnauthorizedException` (HTTP 401)
+  - `ForbiddenException` (HTTP 403)
+  - `ResourceNotFoundException` (HTTP 404)
+  - `ResourceConflictException` (HTTP 409)
+  - `InternalServerException` (HTTP 500)
+  Tránh hoàn toàn việc lạm dụng `IllegalArgumentException` chung chung.
 
 ### 2. JWT & Security Utilities
 - [x] **`JwtUtil.java`**:

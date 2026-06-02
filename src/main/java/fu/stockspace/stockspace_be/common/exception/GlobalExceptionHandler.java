@@ -1,6 +1,7 @@
 package fu.stockspace.stockspace_be.common.exception;
 
 import fu.stockspace.stockspace_be.common.dto.ApiResponse;
+import fu.stockspace.stockspace_be.common.exception.exceptions.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -55,11 +56,57 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Xử lý lỗi nghiệp vụ AppException định nghĩa sẵn bởi ErrorCode.
+    /**
+     * Xử lý lỗi BadRequestException (400).
      */
-    @ExceptionHandler(AppException.class)
-    public ResponseEntity<ApiResponse<Void>> handleAppException(AppException ex) {
-        return ResponseEntity.status(ex.getErrorCode().getStatus())
+    @ExceptionHandler(BadRequestException.class)
+    public ResponseEntity<ApiResponse<Void>> handleBadRequest(BadRequestException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    /**
+     * Xử lý lỗi UnauthorizedException (401).
+     */
+    @ExceptionHandler(UnauthorizedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUnauthorized(UnauthorizedException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    /**
+     * Xử lý lỗi ForbiddenException (403).
+     */
+    @ExceptionHandler(ForbiddenException.class)
+    public ResponseEntity<ApiResponse<Void>> handleForbidden(ForbiddenException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    /**
+     * Xử lý lỗi ResourceNotFoundException (404).
+     */
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleResourceNotFound(ResourceNotFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    /**
+     * Xử lý lỗi ResourceConflictException (409).
+     */
+    @ExceptionHandler(ResourceConflictException.class)
+    public ResponseEntity<ApiResponse<Void>> handleResourceConflict(ResourceConflictException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    /**
+     * Xử lý lỗi InternalServerException (500).
+     */
+    @ExceptionHandler(InternalServerException.class)
+    public ResponseEntity<ApiResponse<Void>> handleInternalServer(InternalServerException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponse.error(ex.getMessage()));
     }
 
