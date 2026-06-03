@@ -2,6 +2,8 @@ package fu.stockspace.stockspace_be.auth.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import lombok.experimental.SuperBuilder;
+import fu.stockspace.stockspace_be.common.entity.BaseEntity;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -9,7 +11,6 @@ import org.springframework.security.core.userdetails.UserDetails;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
-import java.util.UUID;
 
 /**
  * Entity User — đây là base account của toàn bộ hệ thống.
@@ -23,13 +24,13 @@ import java.util.UUID;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
-public class User implements UserDetails {
+@SuperBuilder
+public class User extends BaseEntity implements UserDetails {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", updatable = false, nullable = false)
-    private UUID id;
+    private Long id;
 
     @Column(name = "email", unique = true, nullable = false, length = 255)
     private String email;
@@ -52,26 +53,6 @@ public class User implements UserDetails {
     @Builder.Default
     private java.util.Set<Role> roles = new java.util.HashSet<>();
 
-    @Column(name = "is_active", nullable = false)
-    @Builder.Default
-    private boolean isActive = true;
-
-    @Column(name = "created_at", updatable = false)
-    private LocalDateTime createdAt;
-
-    @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
-
-    @PrePersist
-    protected void onCreate() {
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
-    }
-
-    @PreUpdate
-    protected void onUpdate() {
-        this.updatedAt = LocalDateTime.now();
-    }
 
     // ==================== UserDetails impl ====================
 
@@ -102,7 +83,7 @@ public class User implements UserDetails {
 
     @Override
     public boolean isAccountNonLocked() {
-        return isActive;
+        return isActive();
     }
 
     @Override
@@ -112,6 +93,6 @@ public class User implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return isActive;
+        return isActive();
     }
 }

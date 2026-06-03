@@ -30,7 +30,7 @@ public class OpenApiConfig {
                                         .type(SecurityScheme.Type.HTTP)
                                         .scheme("bearer")
                                         .bearerFormat("JWT")
-                                        .description("Nhập chuỗi JWT access token của bạn vào đây (Không cần ghi chữ 'Bearer ' ở trước).")
+                                        .description("Nhập chuỗi JWT access token của bạn vào đây")
                         ));
     }
 }

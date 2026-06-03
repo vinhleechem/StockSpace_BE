@@ -5,14 +5,13 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
-import java.util.UUID;
 
 /**
  * Repository cho User entity.
  * Dev 2: Nếu cần thêm query, hãy extends repo này hoặc tạo custom query — đừng sửa file này.
  */
 @Repository
-public interface UserRepository extends JpaRepository<User, UUID> {
+public interface UserRepository extends JpaRepository<User, Long> {
 
     /**
      * Tìm user theo email — dùng cho login và load UserDetails.

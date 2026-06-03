@@ -5,13 +5,12 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
-import java.util.UUID;
 
 /**
  * Repository cho Permission entity.
  */
 @Repository
-public interface PermissionRepository extends JpaRepository<Permission, UUID> {
+public interface PermissionRepository extends JpaRepository<Permission, Long> {
 
     /**
      * Tìm Permission theo tên.

@@ -9,10 +9,9 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
-import java.util.UUID;
 
 @Repository
-public interface RefreshTokenRepository extends JpaRepository<RefreshToken, UUID> {
+public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long> {
 
     /**
      * Tìm token theo giá trị — dùng khi client gửi refresh request.

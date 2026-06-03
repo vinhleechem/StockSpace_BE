@@ -2,10 +2,11 @@ package fu.stockspace.stockspace_be.auth.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import lombok.experimental.SuperBuilder;
+import fu.stockspace.stockspace_be.common.entity.BaseEntity;
 
 import java.util.HashSet;
 import java.util.Set;
-import java.util.UUID;
 
 /**
  * Role entity — lưu vào bảng `roles`.
@@ -21,12 +22,12 @@ import java.util.UUID;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
-public class Role {
+@SuperBuilder
+public class Role extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     /**
      * Tên role — luôn có prefix ROLE_ để Spring Security nhận diện.

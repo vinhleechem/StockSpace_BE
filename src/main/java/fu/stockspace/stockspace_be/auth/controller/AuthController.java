@@ -16,6 +16,7 @@ import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import io.swagger.v3.oas.annotations.Parameter;
 
 /**
  * Controller xử lý authentication endpoints.
@@ -87,6 +88,7 @@ public class AuthController {
      */
     @PostMapping("/refresh")
     public ResponseEntity<ApiResponse<LoginResponse>> refresh(
+            @Parameter(hidden = true)
             @CookieValue(name = RefreshTokenService.REFRESH_TOKEN_COOKIE_NAME, required = false)
             String refreshTokenValue
     ) {
@@ -111,6 +113,7 @@ public class AuthController {
     @PostMapping("/logout")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<Void>> logout(
+            @Parameter(hidden = true)
             @CookieValue(name = RefreshTokenService.REFRESH_TOKEN_COOKIE_NAME, required = false)
             String refreshTokenValue
     ) {
@@ -168,7 +171,7 @@ public class AuthController {
                 .orElse("");
 
         UserInfoResponse info = new UserInfoResponse(
-                user.getId().toString(),
+                user.getId(),
                 user.getEmail(),
                 user.getFullName(),
                 user.getPhone(),
@@ -200,7 +203,7 @@ public class AuthController {
     // ==================== Inner records ====================
 
     public record UserInfoResponse(
-            String userId,
+            Long userId,
             String email,
             String fullName,
             String phone,

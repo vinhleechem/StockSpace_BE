@@ -2,8 +2,8 @@ package fu.stockspace.stockspace_be.auth.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-
-import java.util.UUID;
+import lombok.experimental.SuperBuilder;
+import fu.stockspace.stockspace_be.common.entity.BaseEntity;
 
 /**
  * Permission entity — lưu vào bảng `permissions`.
@@ -20,12 +20,12 @@ import java.util.UUID;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
-public class Permission {
+@SuperBuilder
+public class Permission extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     /**
      * Tên permission — unique, viết HOA, dùng _ phân cách.

@@ -5,8 +5,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.UUID;
-
 /**
  * Response trả về sau khi login hoặc register thành công.
  */
@@ -21,7 +19,7 @@ public class LoginResponse {
     @Builder.Default
     private String tokenType = "Bearer";
 
-    private UUID userId;
+    private Long userId;
     private String email;
     private String fullName;
     private String role;

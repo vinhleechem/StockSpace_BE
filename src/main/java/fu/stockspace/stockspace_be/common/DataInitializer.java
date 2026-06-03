@@ -110,7 +110,12 @@ public class DataInitializer implements CommandLineRunner {
                         .name(name)
                         .description(description)
                         .build());
-        role.setPermissions(permissions);
+        if (role.getPermissions() == null) {
+            role.setPermissions(new HashSet<>(permissions));
+        } else {
+            role.getPermissions().clear();
+            role.getPermissions().addAll(permissions);
+        }
         roleRepository.save(role);
         log.info("Seeding role: {} with {} permissions", name, permissions.size());
     }

@@ -2,6 +2,8 @@ package fu.stockspace.stockspace_be.auth.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import lombok.experimental.SuperBuilder;
+import fu.stockspace.stockspace_be.common.entity.BaseEntity;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -19,12 +21,12 @@ import java.util.UUID;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
-public class RefreshToken {
+@SuperBuilder
+public class RefreshToken extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     /**
      * Token value — UUID random, unique.
@@ -46,14 +48,6 @@ public class RefreshToken {
      */
     @Column(name = "expires_at", nullable = false)
     private LocalDateTime expiresAt;
-
-    @Column(name = "created_at", updatable = false)
-    private LocalDateTime createdAt;
-
-    @PrePersist
-    protected void onCreate() {
-        this.createdAt = LocalDateTime.now();
-    }
 
     /**
      * Kiểm tra token đã hết hạn chưa.
