@@ -11,7 +11,8 @@
 ---
 
 ## 📖 Giới Thiệu Dự Án
-**StockSpace** là một nền tảng quản lý và vận hành kho bãi thông minh hiện đại. Dự án được thiết kế chuyên biệt để giải quyết các bài toán về tối ưu hóa không gian lưu trữ, tự động hóa quy trình nhập/xuất kho, kiểm tra thanh tra chất lượng và kết nối hiệu quả giữa **Chủ kho (Warehouse Owner)** và **Người thuê kho (Tenant)**.
+
+**StockSpace** là một nền tảng cho thuê, quản lý và vận hành kho bãi thông minh hiện đại sau khi thuê. Dự án được thiết kế chuyên biệt để giải quyết các bài toán về quản lý không gian lưu trữ, quy trình nhập/xuất kho, tồn kho, kiểm tra thanh tra chất lượng và kết nối hiệu quả giữa **Chủ kho (Warehouse Owner)** và **Người thuê kho (Tenant)**.
 
 Mã nguồn Backend này được phát triển trên nền tảng **Spring Boot** kết hợp cùng cơ chế bảo mật nghiêm ngặt của **Spring Security**, kiến trúc phân quyền động **Full RBAC (Role-Based Access Control)** và giải pháp đóng gói **Docker** hoàn chỉnh.
 
@@ -24,111 +25,125 @@ StockSpace được xây dựng với mục tiêu trở thành một hệ sinh t
 ### 🏢 A. Các Phân Hệ Nghiệp Vụ Chính (Business Modules)
 
 1. **Quản Lý Kho Bãi (Warehouse Management)**
-   * **Đăng ký kho**: Cho phép Chủ kho (Owner) tạo mới, chỉnh sửa thông tin kho (vị trí GPS, kích thước, hình ảnh, sơ đồ mặt bằng, bảng giá, trang thiết bị).
-   * **Tìm kiếm & Lọc thông minh**: Cho phép Người thuê (Tenant) tìm kho bãi trống theo khoảng cách, diện tích, khoảng giá, và xếp hạng chất lượng.
-   * **Trạng thái kho**: Tự động cập nhật trạng thái kho bãi (Đang trống, Đã thuê, Đang bảo trì).
+   - **Đăng ký kho**: Cho phép Chủ kho (Owner) tạo mới, chỉnh sửa thông tin kho (vị trí, kích thước, hình ảnh, sơ đồ 2D, bảng giá, trang thiết bị).
+   - **Quản lý sau thuê**: Cho phép người thuê (Tenant) clone lại layout default của Owner để điều chỉnh sơ đồ 2D theo sắp xếp cá nhân.
+   - **Tìm kiếm & Lọc thông minh**: Cho phép Người thuê (Tenant) tìm kho bãi trống theo khoảng cách, diện tích, khoảng giá, và xếp hạng chất lượng.
+   - **Trạng thái kho**: Tự động cập nhật trạng thái kho bãi (Đang trống, Đã thuê, Đang bảo trì).
 
 2. **Quản Lý Giao Dịch & Thuê Kho (Rental & Lease Management)**
-   * **Yêu cầu thuê**: Tenant có thể tạo và gửi yêu cầu thuê kho kèm các điều khoản hợp đồng mong muốn.
-   * **Phê duyệt hợp đồng**: Owner nhận thông báo, xem hồ sơ Tenant và thực hiện duyệt/từ chối yêu cầu thuê.
-   * **Quản lý lịch sử**: Theo dõi thời hạn thuê, chu kỳ thanh toán và tự động cảnh báo gia hạn hợp đồng.
+   - **Yêu cầu thuê**: Tenant có thể đặt cọc để tạo và gửi yêu cầu thuê kho, kèm theo đó tenant có thể đọc các cam kết/điều khoản hoàn cọc do phía hệ thống quy định trước với cả ba bên để dễ dàng xử lý khi khi có tranh chấp tiền cọc.
+   - **Phê duyệt hợp đồng**: Owner nhận thông báo, xem hồ sơ Tenant và thực hiện duyệt/từ chối yêu cầu thuê.
+   - **Quản lý lịch sử**: Theo dõi thời hạn thuê, chu kỳ thanh toán và tự động cảnh báo gia hạn hợp đồng.
 
 3. **Quản Lý Tồn Kho Hàng Hóa (Inventory Management)**
-   * **Danh mục sản phẩm**: Quản lý thông tin hàng hóa lưu trữ (loại hàng, mã SKU/Barcode, hạn sử dụng, điều kiện bảo quản đặc biệt như đông lạnh, dễ vỡ).
-   * **Cảnh báo tồn kho**: Thiết lập định mức an toàn và tự động gửi cảnh báo khi số lượng hàng trong kho xuống dưới mức cho phép.
+   - **Danh mục sản phẩm**: Quản lý thông tin hàng hóa lưu trữ (loại hàng, mã SKU, hạn sử dụng, điều kiện bảo quản đặc biệt như đông lạnh, dễ vỡ, vị trí lưu trữ).
+   - **Cảnh báo tồn kho**: Thiết lập định mức an toàn và tự động gửi cảnh báo khi số lượng hàng trong kho xuống dưới mức cho phép hoặc có lô hàng trong kho quá lâu.
 
 4. **Quản Lý Phiếu Nhập & Xuất Kho (Inbound & Outbound Management)**
-   * **Tạo phiếu**: Cho phép Tenant tạo lịch nhập kho (Inbound) và xuất kho (Outbound) trước khi hàng cập bến.
-   * **Thực thi & Đối soát**: Nhân viên kho (Staff) quét mã, kiểm đếm số lượng thực tế tại chỗ và cập nhật trực tiếp vào số lượng tồn kho hệ thống.
+   - **Tạo phiếu**: Cho phép Tenant tạo lịch nhập kho (Inbound) và xuất kho (Outbound) trước khi hàng cập bến.
+   - **Thực thi & Đối soát**: Nhân viên kho (Staff) quét mã, kiểm đếm số lượng thực tế tại chỗ và cập nhật trực tiếp vào số lượng tồn kho hệ thống.
 
-5. **Thanh Tra & Đánh Giá Chất Lượng (Quality Inspection)**
-   * **Lịch trình thanh tra**: Thanh tra viên (Inspector) lập lịch kiểm tra an toàn cháy nổ, vệ sinh, và kết cấu kho định kỳ.
-   * **Báo cáo chất lượng**: Lập biên bản điện tử và chấm điểm chất lượng kho. Báo cáo này hiển thị công khai để tăng uy tín của Chủ kho đối với Tenant.
+5. **Kiểm định & Đánh Giá Chất Lượng (Quality Inspection)**
+   - **Quy chuẩn & Checklist kiểm định**: Admin có quyền tạo, chỉnh sửa Check list kiểm định để Nhân viên Kiểm định (Inspector) có thể dựa trên đó đánh giá kho bãi đã đạt chuẩn yêu cầu (đúng thông tin chưa).
+   - **Yêu cầu kiểm định**: Chủ kho (Owner) có quyền gửi yêu cầu và trả phí kiểm định để Nhân viên kiểm định (Inspector) đến tận nơi kiểm tra chất lượng, thông tin thực tế dựa trên checklist công khai.
+   - **Báo cáo chất lượng**: Nhân viên kiểm định (Inspector) có quyền gỡ bài đăng hoặc yêu cầu chỉnh sửa thông tin đối với các kho bãi chưa đạt yêu cầu theo checklist. Sau khi bài đăng đã đạt các chuẩn theo checklist thì bài đăng sẽ được công khai kèm theo trạng thái "Đã được kiểm định" để tăng uy tín của Owner với Tenant.
 
-6. **Phân Quyền Nhân Sự Nội Bộ (Staff Delegation)**
-   * Tenant có thể tạo tài khoản và phân quyền cho Nhân viên (Staff) của mình để thực thi việc quản lý hàng hóa và quét mã nhập xuất tại kho đã thuê.
+6. **Gói Dịch Vụ & Thanh Toán (Subscription & Billing)**
+   - **Ví hệ thống**: hệ thống sẽ có một ví ảo để quản lý các nguồn tiền chung bao gồm cả tiền cọc.
+   - **Quản lý cọc**: trong quá trình giao dịch cọc sẽ được giữ ở ví Admin, nếu có tranh chấp xảy ra, Nhân viên kiểm định sẽ gửi yêu cầu xử lý cọc cho Admin và Admin có quyền xác nhận cách xử lý tiền cọc dựa trên các quy định sẵn có và hợp đồng.
+   - **Quản lý các gói dịch vụ**: Admin có quyền quản lý các gói dịch vụ sử dụng nền tảng StockSpace của các đối tác (Owner, Tenant) và tích hợp cổng thanh toán để nạp tiền/thanh toán hóa đơn hàng tháng.
 
-7. **Quói Dịch Vụ & Thanh Toán (Subscription & Billing)**
-   * Quản lý các gói dịch vụ sử dụng nền tảng StockSpace của các đối tác (Owner, Tenant) và tích hợp cổng thanh toán để nạp tiền/thanh toán hóa đơn hàng tháng.
+7. **Phân Quyền Nhân Sự Nội Bộ (Staff Delegation)**
+   - Sau khi Tenant mua gói dịch vụ quản lý sau thuê, hệ thống sẽ tự động cấp tài khoản Nhân viên kho (Staff) tương ứng theo mỗi kho mà Tenant đang thuê.
+   - Staff có quyền tạo phiếu nhập/xuất/điều chỉnh tồn hàng trong kho mình làm việc.
 
 ---
 
 ### ⚙️ B. Phân Hệ Kỹ Thuật & Bảo Mật (Technical & Infrastructure Features)
 
 1. **🔐 Xác Thực Cấp Cao (JWT + HttpOnly Cookie)**
-   * **Dual-Token Strategy**: Sử dụng `accessToken` (lưu trữ ngắn hạn trên memory phía client) và `refreshToken` (lưu trữ dài hạn trong cơ sở dữ liệu và chuyển giao qua **HttpOnly & Secure Cookie** phía client). Ngăn chặn hoàn toàn các cuộc tấn công XSS.
-   * **Refresh Token Rotation (RTR)**: Tự động hủy token cũ và phát hành token mới trong mỗi phiên làm việc. Phát hiện và ngăn chặn lập tức hành vi đánh cắp session.
-   * **Logout Toàn Diện**: Hỗ trợ đăng xuất thiết bị hiện tại (xóa session tương ứng) và đăng xuất khỏi toàn bộ thiết bị (xóa sạch các phiên đăng nhập đang hoạt động trong DB).
+   - **Dual-Token Strategy**: Sử dụng `accessToken` (lưu trữ ngắn hạn trên memory phía client) và `refreshToken` (lưu trữ dài hạn trong cơ sở dữ liệu và chuyển giao qua **HttpOnly & Secure Cookie** phía client). Ngăn chặn hoàn toàn các cuộc tấn công XSS.
+   - **Refresh Token Rotation (RTR)**: Tự động hủy token cũ và phát hành token mới trong mỗi phiên làm việc. Phát hiện và ngăn chặn lập tức hành vi đánh cắp session.
+   - **Logout Toàn Diện**: Hỗ trợ đăng xuất thiết bị hiện tại (xóa session tương ứng) và đăng xuất khỏi toàn bộ thiết bị (xóa sạch các phiên đăng nhập đang hoạt động trong DB).
 
 2. **🔀 Phân Quyền Động Đa Tầng (Full RBAC)**
-   * Không sử dụng phân quyền tĩnh cứng trong code. Hệ thống sở hữu 5 bảng cơ sở dữ liệu liên kết động:
+   - Không sử dụng phân quyền tĩnh cứng trong code. Hệ thống sở hữu 5 bảng cơ sở dữ liệu liên kết động:
      $$\text{Users} \longleftrightarrow \text{Roles} \longleftrightarrow \text{Permissions}$$
-   * **Hỗ trợ gán nhiều vai trò (Multi-Role)** cho một người dùng.
-   * Tích hợp cơ chế kiểm tra quyền hạn chi tiết (**Permission-based authorization**) qua `@PreAuthorize("hasAuthority('PERMISSION_NAME')")`. Admin có thể thay đổi toàn bộ quyền hạn của một Role ngay trên giao diện mà không cần chỉnh sửa một dòng code hay khởi động lại server.
+   - **Hỗ trợ gán nhiều vai trò (Multi-Role)** cho một người dùng.
+   - Tích hợp cơ chế kiểm tra quyền hạn chi tiết (**Permission-based authorization**) qua `@PreAuthorize("hasAuthority('PERMISSION_NAME')")`. Admin có thể thay đổi toàn bộ quyền hạn của một Role ngay trên giao diện mà không cần chỉnh sửa một dòng code hay khởi động lại server.
 
 3. **🚀 Tự Động Khởi Tạo Dữ Liệu (Auto-Seeding)**
-   * Tích hợp `DataInitializer` tự động khởi chạy khi deploy ứng dụng:
-     * Seed sẵn **18 quyền hạn nghiệp vụ** (Warehouse, Rental Request, Inspection, Inventory, Inbound, Outbound, Staff, Package...).
-     * Tạo sẵn **5 vai trò mặc định** kèm cấu hình phân quyền tiêu chuẩn.
-     * Tạo sẵn **5 tài khoản kiểm thử đại diện** ứng với từng vai trò.
+   - Tích hợp `DataInitializer` tự động khởi chạy khi deploy ứng dụng:
+     - Seed sẵn **18 quyền hạn nghiệp vụ** (Warehouse, Rental Request, Inspection, Inventory, Inbound, Outbound, Staff, Package...).
+     - Tạo sẵn **5 vai trò mặc định** kèm cấu hình phân quyền tiêu chuẩn.
+     - Tạo sẵn **5 tài khoản kiểm thử đại diện** ứng với từng vai trò.
 
 4. **🔌 Tài Liệu API Tương Tác Trực Quan (Swagger UI)**
-   * Tích hợp **Springdoc OpenAPI v2** hỗ trợ giao diện thử nghiệm API tương tác.
-   * Cấu hình sẵn cơ chế **JWT Bearer Authentication**, cho phép bạn bấm nút **Authorize** dán token trực tiếp để test các endpoint yêu cầu quyền truy cập bảo mật.
+   - Tích hợp **Springdoc OpenAPI v2** hỗ trợ giao diện thử nghiệm API tương tác.
+   - Cấu hình sẵn cơ chế **JWT Bearer Authentication**, cho phép bạn bấm nút **Authorize** dán token trực tiếp để test các endpoint yêu cầu quyền truy cập bảo mật.
 
 ---
 
 ## 🛠️ Công Nghệ Sử Dụng (Technology Stack)
-* **Core Framework**: Spring Boot 4.0.6 (Spring Framework 6.x)
-* **Language**: Java 17 (OpenJDK)
-* **Security & Authentication**: Spring Security 6.x & JJWT (Java JWT) 0.12.6
-* **Database**: PostgreSQL 16
-* **ORM & Database Seeding**: Spring Data JPA / Hibernate 7
-* **API Documentation**: Springdoc OpenAPI WebMVC UI 2.8.5
-* **DevOps**: Docker & Docker Compose
-* **Utilities**: Lombok, Jakarta Validation
+
+- **Core Framework**: Spring Boot 4.0.6 (Spring Framework 6.x)
+- **Language**: Java 17 (OpenJDK)
+- **Security & Authentication**: Spring Security 6.x & JJWT (Java JWT) 0.12.6
+- **Database**: PostgreSQL 16
+- **ORM & Database Seeding**: Spring Data JPA / Hibernate 7
+- **API Documentation**: Springdoc OpenAPI WebMVC UI 2.8.5
+- **DevOps**: Docker & Docker Compose
+- **Utilities**: Lombok, Jakarta Validation
 
 ---
-
 
 ## 🚀 Hướng Dẫn Khởi Chạy Dự Án (Quick Start)
 
 ### Yêu Cầu Hệ Thống:
-* Đã cài đặt **Docker** và **Docker Desktop**.
-* *(Không cần cài đặt Java hay PostgreSQL trực tiếp trên máy).*
+
+- Đã cài đặt **Docker** và **Docker Desktop**.
+- _(Không cần cài đặt Java hay PostgreSQL trực tiếp trên máy)._
 
 ### Bước 1: Pull mã nguồn về máy
+
 ```bash
 git clone <url-repo-cua-ban>
 cd StockSpace_BE
 ```
 
 ### Bước 2: Khởi chạy cơ sở dữ liệu qua Docker Compose
+
 Mở terminal tại thư mục gốc dự án và chạy:
+
 ```bash
 docker compose up -d postgres
 ```
-*Lệnh này sẽ tải image PostgreSQL và chạy ngầm một container DB ở port `5432` trên máy của bạn.*
+
+_Lệnh này sẽ tải image PostgreSQL và chạy ngầm một container DB ở port `5432` trên máy của bạn._
 
 ### Bước 3: Chạy ứng dụng Spring Boot
+
 Bạn chỉ cần mở dự án bằng IntelliJ IDEA / Eclipse hoặc chạy lệnh Maven sau ở local:
+
 ```bash
 ./mvnw spring-boot:run
 ```
-*(Nếu muốn chạy cả ứng dụng lẫn database hoàn toàn trong môi trường Docker, hãy chạy: `docker compose up -d --build`)*
+
+_(Nếu muốn chạy cả ứng dụng lẫn database hoàn toàn trong môi trường Docker, hãy chạy: `docker compose up -d --build`)_
 
 ---
 
 ## 🎯 Danh Sách Tài Khoản Thử Nghiệm (Default Seeded Users)
+
 Tất cả các tài khoản mặc định đều sử dụng chung mật khẩu: **`Password123`**
 
-| Email | Vai Trò (Role) | Chức Năng Chính |
-|-------|----------------|-----------------|
-| `admin@stockspace.com` | **ROLE_ADMIN** | Toàn quyền kiểm soát hệ thống, quản lý User, Role, Permission. |
-| `owner@stockspace.com` | **ROLE_OWNER** | Quản lý thông tin kho bãi của mình, duyệt yêu cầu thuê, xem thanh tra. |
-| `tenant@stockspace.com` | **ROLE_TENANT** | Người thuê kho, quản lý hàng hóa, tạo phiếu nhập/xuất, mua gói dịch vụ. |
-| `staff@stockspace.com` | **ROLE_STAFF** | Nhân viên kho, quản lý tồn kho, nhập/xuất kho thực tế. |
-| `inspector@stockspace.com` | **ROLE_INSPECTOR**| Thanh tra, đánh giá chất lượng kho bãi, phê duyệt biên bản thanh tra. |
+| Email                      | Vai Trò (Role)     | Chức Năng Chính                                                         |
+| -------------------------- | ------------------ | ----------------------------------------------------------------------- |
+| `admin@stockspace.com`     | **ROLE_ADMIN**     | Toàn quyền kiểm soát hệ thống, quản lý User, Role, Permission.          |
+| `owner@stockspace.com`     | **ROLE_OWNER**     | Quản lý thông tin kho bãi của mình, duyệt yêu cầu thuê, xem thanh tra.  |
+| `tenant@stockspace.com`    | **ROLE_TENANT**    | Người thuê kho, quản lý hàng hóa, tạo phiếu nhập/xuất, mua gói dịch vụ. |
+| `staff@stockspace.com`     | **ROLE_STAFF**     | Nhân viên kho, quản lý tồn kho, nhập/xuất kho thực tế.                  |
+| `inspector@stockspace.com` | **ROLE_INSPECTOR** | Thanh tra, đánh giá chất lượng kho bãi, phê duyệt biên bản thanh tra.   |
 
 ---
 
