@@ -57,6 +57,9 @@ StockSpace được xây dựng với mục tiêu trở thành một hệ sinh t
    - Sau khi Tenant mua gói dịch vụ quản lý sau thuê, hệ thống sẽ tự động cấp tài khoản Nhân viên kho (Staff) tương ứng theo mỗi kho mà Tenant đang thuê.
    - Staff có quyền tạo phiếu nhập/xuất/điều chỉnh tồn hàng trong kho mình làm việc.
 
+8. **ChatBot AI hỗ trợ thông tin liên quan**
+   - Hệ thống tích hợp Chat Bot AI hỗ trợ trả lời các vấn đề liên quan đến hệ thống như: tìm kiếm thông tin kho phù hợp, các điều khoản về cọc/hợp đồng, cách thức giao dịch, các quy trình trong hệ thống, các gói dịch vụ từng chức năng,...
+
 ---
 
 ### ⚙️ B. Phân Hệ Kỹ Thuật & Bảo Mật (Technical & Infrastructure Features)
