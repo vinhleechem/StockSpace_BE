@@ -58,24 +58,24 @@ users ──────────── user_roles ────────�
 
 ---
 
-## 🧑‍💻 Hạng Mục 2: API Quản Lý Của Admin (Dev 2) — [CẦN LÀM ⏳]
+## 🧑‍💻 Hạng Mục 2: API Quản Lý Của Admin (Dev 2) — [ĐÃ HOÀN THÀNH ✅]
 Hạng mục này phục vụ việc cấu hình, tạo mới, chỉnh sửa vai trò, quyền hạn trực tiếp từ giao diện Admin của hệ thống.
 
 ### 1. DTOs Cần Thiết (Được đặt trong package `fu.stockspace.stockspace_be.admin.dto`)
-- [ ] **`CreateRoleRequest.java`**: Dùng để tạo/cập nhật Role (gồm `name`, `description`).
-- [ ] **`AssignPermissionRequest.java`**: Dùng để gán quyền cho vai trò (chứa `permissionId`).
-- [ ] **`AssignRoleRequest.java`**: Dùng để gán vai trò cho người dùng (chứa `roleId`).
-- [ ] **`RoleResponse.java`**: DTO trả về thông tin chi tiết của vai trò (gồm `id`, `name`, `description`, danh sách `permissions` đi kèm).
+- [x] **`CreateRoleRequest.java`**: Dùng để tạo/cập nhật Role (gồm `name`, `description`).
+- [x] **`AssignPermissionRequest.java`**: Dùng để gán quyền cho vai trò (chứa `permissionId`).
+- [x] **`AssignRoleRequest.java`**: Dùng để gán vai trò cho người dùng (chứa `roleId`).
+- [x] **`RoleResponse.java`**: DTO trả về thông tin chi tiết của vai trò (gồm `id`, `name`, `description`, danh sách `permissions` đi kèm).
 
 ### 2. Services Xử Lý Logic (Trong package `fu.stockspace.stockspace_be.admin.service`)
-- [ ] **`RoleManagementService.java`**:
+- [x] **`RoleManagementService.java`**:
   - Lấy danh sách tất cả các vai trò trong hệ thống.
   - Tạo mới, cập nhật, xóa vai trò.
   - Gán quyền (Permission) vào vai trò (Role).
   - Gỡ bỏ quyền khỏi vai trò.
   - Gán vai trò cho User (thêm vào bảng `user_roles`).
   - Gỡ vai trò khỏi User.
-- [ ] **`PermissionManagementService.java`**:
+- [x] **`PermissionManagementService.java`**:
   - Xem danh sách quyền.
   - Tạo mới quyền (chỉ dành cho các tính năng đặc thù phát sinh sau này).
 

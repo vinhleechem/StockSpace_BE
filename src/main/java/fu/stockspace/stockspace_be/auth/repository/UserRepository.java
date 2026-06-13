@@ -2,8 +2,11 @@ package fu.stockspace.stockspace_be.auth.repository;
 
 import fu.stockspace.stockspace_be.auth.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -22,4 +25,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
      * Kiểm tra email đã tồn tại chưa — dùng khi register.
      */
     boolean existsByEmail(String email);
+
+    /**
+     * Tìm danh sách người dùng được gán một role cụ thể.
+     */
+    @Query("SELECT u FROM User u JOIN u.roles r WHERE r.id = :roleId")
+    List<User> findUsersByRoleId(@Param("roleId") Long roleId);
 }
