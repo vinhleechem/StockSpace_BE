@@ -25,6 +25,10 @@ public enum ErrorCode {
     USER_NOT_FOUND("Người dùng không tồn tại trong hệ thống", HttpStatus.NOT_FOUND),
     USER_ALREADY_EXISTS("Email đăng ký này đã tồn tại trong hệ thống", HttpStatus.CONFLICT),
     ROLE_NOT_SUPPORTED("Chỉ có thể tự đăng ký tài khoản với vai trò OWNER hoặc TENANT", HttpStatus.BAD_REQUEST),
+    PASSWORD_MISMATCH("Mật khẩu xác nhận không khớp", HttpStatus.BAD_REQUEST),
+    CANNOT_DELETE_ADMIN("Không thể xóa tài khoản Admin", HttpStatus.FORBIDDEN),
+    CANNOT_DEACTIVATE_SELF("Không thể tự khóa tài khoản của chính mình", HttpStatus.FORBIDDEN),
+    WEAK_PASSWORD("Mật khẩu phải có ít nhất 8 ký tự, bao gồm chữ hoa, chữ thường và số", HttpStatus.BAD_REQUEST),
 
     // Role & Permission Errors
     ROLE_NOT_FOUND("Vai trò không tồn tại trong hệ thống", HttpStatus.NOT_FOUND),
