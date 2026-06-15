@@ -9,6 +9,9 @@ import fu.stockspace.stockspace_be.warehouse.dto.*;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +29,8 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestExcepti
 import java.io.IOException;
 
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Controller xử lý các API Quản lý Kho của Warehouse Owner.
@@ -61,19 +66,31 @@ public class OwnerWarehouseController {
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Tạo warehouse mới (Owner)")
     public ResponseEntity<ApiResponse<WarehouseResponse>> create(
-            @RequestParam("request") String requestJson,
+            @Parameter(
+                description = "Thông tin kho dạng JSON",
+                content = @Content(
+                    mediaType = MediaType.APPLICATION_JSON_VALUE,
+                    schema = @Schema(implementation = CreateWarehouseRequest.class)
+                )
+            )
+            @RequestPart("request") String requestJson,
             @RequestPart(value = "files", required = false) List<MultipartFile> files
     ) throws IOException {
         Long ownerId = getCurrentUserId();
-        CreateWarehouseRequest request = objectMapper.readValue(requestJson, CreateWarehouseRequest.class);
 
-        // Kiểm tra validation thủ công vì nhận vào String
-        var violations = validator.validate(request);
+        CreateWarehouseRequest request;
+        try {
+            request = objectMapper.readValue(requestJson, CreateWarehouseRequest.class);
+        } catch (Exception e) {
+            throw new BadRequestException("Định dạng JSON request không hợp lệ: " + e.getMessage());
+        }
+
+        Set<ConstraintViolation<CreateWarehouseRequest>> violations = validator.validate(request);
         if (!violations.isEmpty()) {
             String errorMsg = violations.stream()
-                    .map(ConstraintViolation::getMessage)
-                    .collect(java.util.stream.Collectors.joining(", "));
-            throw new BadRequestException(errorMsg);
+                    .map(v -> v.getPropertyPath() + ": " + v.getMessage())
+                    .collect(Collectors.joining(", "));
+            throw new BadRequestException("Validation failed: " + errorMsg);
         }
 
         if (files != null && !files.isEmpty()) {
