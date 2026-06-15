@@ -30,8 +30,8 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
             SELECT w FROM Warehouse w
             WHERE w.isVerified = true
               AND (:status IS NULL OR w.status = :status)
-              AND (:keyword IS NULL OR LOWER(w.name) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(w.address) LIKE LOWER(CONCAT('%', :keyword, '%')))
+              AND (:keyword IS NULL OR LOWER(w.name) LIKE :keyword
+                   OR LOWER(w.address) LIKE :keyword)
               AND (:minPrice IS NULL OR w.pricePerMonth >= :minPrice)
               AND (:maxPrice IS NULL OR w.pricePerMonth <= :maxPrice)
               AND (:minCapacity IS NULL OR w.capacity >= :minCapacity)
@@ -49,8 +49,8 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
 
     @Query("""
             SELECT w FROM Warehouse w
-            WHERE (:keyword IS NULL OR LOWER(w.name) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(w.address) LIKE LOWER(CONCAT('%', :keyword, '%')))
+            WHERE (:keyword IS NULL OR LOWER(w.name) LIKE :keyword
+                   OR LOWER(w.address) LIKE :keyword)
               AND (:status IS NULL OR w.status = :status)
               AND (:isVerified IS NULL OR w.isVerified = :isVerified)
             """)
@@ -70,4 +70,6 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
     // ==================== Misc ====================
 
     boolean existsByIdAndOwnerId(UUID id, Long ownerId);
+
+    boolean existsByTypeId(Integer typeId);
 }

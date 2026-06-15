@@ -208,7 +208,7 @@ public class WarehouseService {
                 : Sort.by(sortBy).descending();
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        String kw = StringUtils.hasText(request.getKeyword()) ? request.getKeyword().trim() : null;
+        String kw = StringUtils.hasText(request.getKeyword()) ? "%" + request.getKeyword().trim().toLowerCase() + "%" : null;
 
         Page<Warehouse> result = warehouseRepository.searchPublic(
                 kw,
@@ -287,7 +287,7 @@ public class WarehouseService {
                 : Sort.by(sortBy).descending();
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        String kw = StringUtils.hasText(request.getKeyword()) ? request.getKeyword().trim() : null;
+        String kw = StringUtils.hasText(request.getKeyword()) ? "%" + request.getKeyword().trim().toLowerCase() + "%" : null;
 
         Page<Warehouse> result = warehouseRepository.searchAll(
                 kw,

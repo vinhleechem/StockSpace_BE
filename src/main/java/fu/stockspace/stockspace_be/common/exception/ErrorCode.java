@@ -42,6 +42,8 @@ public enum ErrorCode {
     WAREHOUSE_NOT_AVAILABLE("Kho bãi hiện không khả dụng để thuê", HttpStatus.BAD_REQUEST),
     WAREHOUSE_ALREADY_VERIFIED("Kho bãi đã được xác minh trước đó", HttpStatus.CONFLICT),
     WAREHOUSE_TYPE_NOT_FOUND("Loại kho không tồn tại trong hệ thống", HttpStatus.NOT_FOUND),
+    WAREHOUSE_TYPE_ALREADY_EXISTS("Loại kho đã tồn tại trong hệ thống", HttpStatus.CONFLICT),
+    WAREHOUSE_TYPE_IN_USE("Loại kho đang được sử dụng bởi một hoặc nhiều kho bãi, không thể xóa", HttpStatus.BAD_REQUEST),
     WAREHOUSE_CANNOT_DELETE_RENTED("Không thể xoá kho đang có Tenant thuê", HttpStatus.BAD_REQUEST),
     WAREHOUSE_INVALID_STATUS_TRANSITION("Không thể chuyển sang trạng thái này", HttpStatus.BAD_REQUEST),
     WAREHOUSE_IMAGE_LIMIT_EXCEEDED("Số lượng ảnh vượt quá giới hạn tối đa (10 ảnh)", HttpStatus.BAD_REQUEST),

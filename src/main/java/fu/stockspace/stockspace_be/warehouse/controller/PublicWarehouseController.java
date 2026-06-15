@@ -3,6 +3,7 @@ package fu.stockspace.stockspace_be.warehouse.controller;
 import fu.stockspace.stockspace_be.common.dto.ApiResponse;
 import fu.stockspace.stockspace_be.warehouse.dto.*;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseService;
+import fu.stockspace.stockspace_be.warehouse.service.WarehouseTypeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -10,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -27,6 +29,7 @@ import java.util.UUID;
 public class PublicWarehouseController {
 
     private final WarehouseService warehouseService;
+    private final WarehouseTypeService warehouseTypeService;
 
     // ==================== Search ====================
 
@@ -76,5 +79,18 @@ public class PublicWarehouseController {
     public ResponseEntity<ApiResponse<WarehouseResponse>> getDetail(@PathVariable UUID id) {
         WarehouseResponse response = warehouseService.getWarehouseDetail(id);
         return ResponseEntity.ok(ApiResponse.success("Lấy thông tin kho thành công", response));
+    }
+
+    // ==================== Types ====================
+
+    /**
+     * GET /api/warehouses/types
+     * Lấy danh sách toàn bộ loại kho (không phân trang).
+     */
+    @GetMapping("/types")
+    @Operation(summary = "Lấy danh sách tất cả loại kho")
+    public ResponseEntity<ApiResponse<List<WarehouseTypeResponse>>> getAllTypes() {
+        List<WarehouseTypeResponse> types = warehouseTypeService.getAllTypes();
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách loại kho thành công", types));
     }
 }
