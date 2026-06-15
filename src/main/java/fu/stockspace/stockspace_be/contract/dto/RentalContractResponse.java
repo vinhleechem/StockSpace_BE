@@ -43,4 +43,9 @@ public class RentalContractResponse {
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    // Phase 1 deal info
+    private LocalDateTime submittedAt;
+    private String cancelReason;
+    private String cancelEvidence;
 }

@@ -9,7 +9,11 @@ package fu.stockspace.stockspace_be.contract.entity;
  * DISPUTED         — Có tranh chấp đang mở (DisputeTicket)
  */
 public enum ContractStatus {
+    UNDER_NEGOTIATION,
+    PENDING_TENANT_CONFIRM,
     ACTIVE,
+    PENDING_CANCEL,
+    CANCELLED,
     PENDING_HANDOVER,
     COMPLETED,
     DISPUTED
