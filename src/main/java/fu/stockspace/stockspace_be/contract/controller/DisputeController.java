@@ -17,6 +17,20 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import fu.stockspace.stockspace_be.common.service.CloudinaryService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.validation.Validator;
+import jakarta.validation.ConstraintViolation;
+import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import org.springframework.http.MediaType;
+import org.springframework.web.multipart.MultipartFile;
+import java.io.IOException;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Controller xử lý các API Dispute Ticket.
@@ -33,17 +47,50 @@ import org.springframework.web.bind.annotation.*;
 public class DisputeController {
 
     private final DisputeService disputeService;
+    private final CloudinaryService cloudinaryService;
+    private final ObjectMapper objectMapper;
+    private final Validator validator;
 
     /**
      * POST /api/disputes
-     * Mở tranh chấp cho hợp đồng.
+     * Mở tranh chấp cho hợp đồng (hỗ trợ upload ảnh bằng chứng).
      */
-    @PostMapping
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Mở tranh chấp hợp đồng")
     public ResponseEntity<ApiResponse<DisputeResponse>> raise(
-            @Valid @RequestBody CreateDisputeRequest request
-    ) {
+            @Parameter(
+                description = "Thông tin tranh chấp dạng JSON",
+                content = @Content(
+                    mediaType = MediaType.APPLICATION_JSON_VALUE,
+                    schema = @Schema(implementation = CreateDisputeRequest.class)
+                )
+            )
+            @RequestPart("request") String requestJson,
+            @RequestPart(value = "files", required = false) List<MultipartFile> files
+    ) throws IOException {
         Long userId = getCurrentUser().getId();
+
+        CreateDisputeRequest request;
+        try {
+            request = objectMapper.readValue(requestJson, CreateDisputeRequest.class);
+        } catch (Exception e) {
+            throw new BadRequestException("Định dạng JSON request không hợp lệ: " + e.getMessage());
+        }
+
+        Set<ConstraintViolation<CreateDisputeRequest>> violations = validator.validate(request);
+        if (!violations.isEmpty()) {
+            String errorMsg = violations.stream()
+                    .map(v -> v.getPropertyPath() + ": " + v.getMessage())
+                    .collect(Collectors.joining(", "));
+            throw new BadRequestException("Validation failed: " + errorMsg);
+        }
+
+        // Upload ảnh bằng chứng lên Cloudinary nếu có gửi file
+        if (files != null && !files.isEmpty()) {
+            List<String> urls = cloudinaryService.uploadImages(files);
+            request.setEvidenceImages(urls);
+        }
+
         DisputeResponse response = disputeService.raiseDispute(userId, request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Đã mở tranh chấp thành công. Admin sẽ xử lý sớm.", response));
