@@ -19,6 +19,10 @@ import org.springframework.web.bind.annotation.*;
 import fu.stockspace.stockspace_be.common.service.CloudinaryService;
 import org.springframework.http.MediaType;
 import org.springframework.web.multipart.MultipartFile;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.validation.Validator;
+import jakarta.validation.ConstraintViolation;
+import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import java.io.IOException;
 
 import java.util.List;
@@ -45,6 +49,8 @@ public class OwnerWarehouseController {
 
     private final WarehouseService warehouseService;
     private final CloudinaryService cloudinaryService;
+    private final ObjectMapper objectMapper;
+    private final Validator validator;
 
     // ==================== Create ====================
 
@@ -56,10 +62,21 @@ public class OwnerWarehouseController {
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Tạo warehouse mới (Owner)")
     public ResponseEntity<ApiResponse<WarehouseResponse>> create(
-            @RequestPart("request") @Valid CreateWarehouseRequest request,
+            @RequestParam("request") String requestJson,
             @RequestPart(value = "files", required = false) List<MultipartFile> files
     ) throws IOException {
         Long ownerId = getCurrentUserId();
+        CreateWarehouseRequest request = objectMapper.readValue(requestJson, CreateWarehouseRequest.class);
+
+        // Kiểm tra validation thủ công vì nhận vào String
+        var violations = validator.validate(request);
+        if (!violations.isEmpty()) {
+            String errorMsg = violations.stream()
+                    .map(ConstraintViolation::getMessage)
+                    .collect(java.util.stream.Collectors.joining(", "));
+            throw new BadRequestException(errorMsg);
+        }
+
         if (files != null && !files.isEmpty()) {
             List<String> urls = cloudinaryService.uploadImages(files);
             request.setImageUrls(urls);
