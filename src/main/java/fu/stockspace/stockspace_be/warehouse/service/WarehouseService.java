@@ -83,7 +83,7 @@ public class WarehouseService {
      * Owner cập nhật thông tin Warehouse.
      */
     @Transactional
-    public WarehouseResponse updateWarehouse(Long ownerId, UUID warehouseId, UpdateWarehouseRequest request) {
+    public WarehouseResponse updateWarehouse(Long ownerId, Long warehouseId, UpdateWarehouseRequest request) {
         Warehouse warehouse = getOwnedWarehouse(ownerId, warehouseId);
 
         if (StringUtils.hasText(request.getName())) {
@@ -117,7 +117,7 @@ public class WarehouseService {
      * Ràng buộc: chỉ xoá được khi không có tenant đang thuê (status != RENTED).
      */
     @Transactional
-    public void deleteWarehouse(Long ownerId, UUID warehouseId) {
+    public void deleteWarehouse(Long ownerId, Long warehouseId) {
         Warehouse warehouse = getOwnedWarehouse(ownerId, warehouseId);
 
         if (warehouse.getStatus() == WarehouseStatus.RENTED) {
@@ -133,7 +133,7 @@ public class WarehouseService {
      * Không cho phép tự set RENTED hoặc PENDING_VERIFICATION qua API này.
      */
     @Transactional
-    public WarehouseResponse updateStatus(Long ownerId, UUID warehouseId, WarehouseStatus newStatus) {
+    public WarehouseResponse updateStatus(Long ownerId, Long warehouseId, WarehouseStatus newStatus) {
         if (newStatus == WarehouseStatus.RENTED || newStatus == WarehouseStatus.PENDING_VERIFICATION) {
             throw new BadRequestException(ErrorCode.WAREHOUSE_INVALID_STATUS_TRANSITION);
         }
@@ -167,7 +167,7 @@ public class WarehouseService {
      * Giới hạn tối đa MAX_IMAGES_PER_WAREHOUSE ảnh.
      */
     @Transactional
-    public List<String> addImages(Long ownerId, UUID warehouseId, List<String> imageUrls) {
+    public List<String> addImages(Long ownerId, Long warehouseId, List<String> imageUrls) {
         Warehouse warehouse = getOwnedWarehouse(ownerId, warehouseId);
 
         int currentCount = warehouseImageRepository.countByWarehouseId(warehouseId);
@@ -184,7 +184,7 @@ public class WarehouseService {
      * Owner xóa tất cả ảnh và thay bằng danh sách mới.
      */
     @Transactional
-    public List<String> replaceImages(Long ownerId, UUID warehouseId, List<String> imageUrls) {
+    public List<String> replaceImages(Long ownerId, Long warehouseId, List<String> imageUrls) {
         Warehouse warehouse = getOwnedWarehouse(ownerId, warehouseId);
 
         warehouseImageRepository.deleteAllByWarehouseId(warehouseId);
@@ -227,7 +227,7 @@ public class WarehouseService {
      * Public: chỉ xem được kho đã verified.
      */
     @Transactional(readOnly = true)
-    public WarehouseResponse getWarehouseDetail(UUID warehouseId) {
+    public WarehouseResponse getWarehouseDetail(Long warehouseId) {
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
 
@@ -245,7 +245,7 @@ public class WarehouseService {
      * Gọi từ AdminWarehouseService.
      */
     @Transactional
-    public WarehouseResponse verifyWarehouse(UUID warehouseId) {
+    public WarehouseResponse verifyWarehouse(Long warehouseId) {
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
 
@@ -265,7 +265,7 @@ public class WarehouseService {
      * Admin từ chối Warehouse listing — set status = INACTIVE.
      */
     @Transactional
-    public WarehouseResponse rejectWarehouse(UUID warehouseId) {
+    public WarehouseResponse rejectWarehouse(Long warehouseId) {
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
 
@@ -304,7 +304,7 @@ public class WarehouseService {
      * Gọi từ InspectionService.
      */
     @Transactional
-    public void markAsVerifiedByInspection(UUID warehouseId) {
+    public void markAsVerifiedByInspection(Long warehouseId) {
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
 
@@ -319,7 +319,7 @@ public class WarehouseService {
      * Gọi từ ContractService.
      */
     @Transactional
-    public void markAsAvailable(UUID warehouseId) {
+    public void markAsAvailable(Long warehouseId) {
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
 
@@ -333,7 +333,7 @@ public class WarehouseService {
      * Gọi từ BookingService.
      */
     @Transactional
-    public void markAsRented(UUID warehouseId) {
+    public void markAsRented(Long warehouseId) {
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
 
@@ -344,7 +344,7 @@ public class WarehouseService {
 
     // ==================== Private helpers ====================
 
-    private Warehouse getOwnedWarehouse(Long ownerId, UUID warehouseId) {
+    private Warehouse getOwnedWarehouse(Long ownerId, Long warehouseId) {
         return warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId)
                 .orElseThrow(() -> new ForbiddenException(ErrorCode.WAREHOUSE_NOT_OWNED));
     }

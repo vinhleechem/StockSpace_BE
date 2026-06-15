@@ -6,7 +6,6 @@ import lombok.experimental.SuperBuilder;
 import fu.stockspace.stockspace_be.common.entity.BaseEntity;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 /**
  * Entity lưu Refresh Token vào DB.

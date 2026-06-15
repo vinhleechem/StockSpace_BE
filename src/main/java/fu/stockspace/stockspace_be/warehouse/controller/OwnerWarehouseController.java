@@ -26,7 +26,6 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestExcepti
 import java.io.IOException;
 
 import java.util.List;
-import java.util.UUID;
 
 /**
  * Controller xử lý các API Quản lý Kho của Warehouse Owner.
@@ -114,7 +113,7 @@ public class OwnerWarehouseController {
     @PutMapping("/{id}")
     @Operation(summary = "Cập nhật thông tin warehouse (Owner)")
     public ResponseEntity<ApiResponse<WarehouseResponse>> update(
-            @PathVariable UUID id,
+            @PathVariable Long id,
             @Valid @RequestBody UpdateWarehouseRequest request
     ) {
         Long ownerId = getCurrentUserId();
@@ -132,7 +131,7 @@ public class OwnerWarehouseController {
     @PatchMapping("/{id}/status")
     @Operation(summary = "Cập nhật trạng thái warehouse (AVAILABLE / INACTIVE)")
     public ResponseEntity<ApiResponse<WarehouseResponse>> updateStatus(
-            @PathVariable UUID id,
+            @PathVariable Long id,
             @RequestParam WarehouseStatus status
     ) {
         Long ownerId = getCurrentUserId();
@@ -148,7 +147,7 @@ public class OwnerWarehouseController {
      */
     @DeleteMapping("/{id}")
     @Operation(summary = "Xoá warehouse (Owner)")
-    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         Long ownerId = getCurrentUserId();
         warehouseService.deleteWarehouse(ownerId, id);
         return ResponseEntity.ok(ApiResponse.success("Xoá kho thành công", null));
@@ -164,7 +163,7 @@ public class OwnerWarehouseController {
     @PostMapping(value = "/{id}/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Thêm ảnh vào warehouse")
     public ResponseEntity<ApiResponse<List<String>>> addImages(
-            @PathVariable UUID id,
+            @PathVariable Long id,
             @RequestParam("files") List<MultipartFile> files
     ) throws IOException {
         Long ownerId = getCurrentUserId();
@@ -181,7 +180,7 @@ public class OwnerWarehouseController {
     @PutMapping(value = "/{id}/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Thay thế toàn bộ ảnh warehouse")
     public ResponseEntity<ApiResponse<List<String>>> replaceImages(
-            @PathVariable UUID id,
+            @PathVariable Long id,
             @RequestParam("files") List<MultipartFile> files
     ) throws IOException {
         Long ownerId = getCurrentUserId();

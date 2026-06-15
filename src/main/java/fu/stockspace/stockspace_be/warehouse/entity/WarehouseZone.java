@@ -4,10 +4,7 @@ import fu.stockspace.stockspace_be.common.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
-import org.hibernate.annotations.UuidGenerator;
-
 import java.math.BigDecimal;
-import java.util.UUID;
 
 /**
  * Entity WarehouseZone — khu vực trong layout kho (Zone A, Zone B, v.v.)
@@ -23,9 +20,9 @@ import java.util.UUID;
 public class WarehouseZone extends BaseEntity {
 
     @Id
-    @UuidGenerator
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", updatable = false, nullable = false)
-    private UUID id;
+    private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "layout_id", nullable = false)

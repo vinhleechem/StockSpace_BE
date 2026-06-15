@@ -10,7 +10,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.util.Optional;
-import java.util.UUID;
+
 
 /**
  * Repository cho Warehouse.
@@ -18,7 +18,7 @@ import java.util.UUID;
  * searchWarehouses — public search: filter theo keyword, status, price, capacity
  * findByOwnerId    — owner xem kho của mình
  */
-public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
+public interface WarehouseRepository extends JpaRepository<Warehouse, Long> {
 
     // ==================== Public Search ====================
 
@@ -65,11 +65,11 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
 
     Page<Warehouse> findByOwnerId(Long ownerId, Pageable pageable);
 
-    Optional<Warehouse> findByIdAndOwnerId(UUID id, Long ownerId);
+    Optional<Warehouse> findByIdAndOwnerId(Long id, Long ownerId);
 
     // ==================== Misc ====================
 
-    boolean existsByIdAndOwnerId(UUID id, Long ownerId);
+    boolean existsByIdAndOwnerId(Long id, Long ownerId);
 
     boolean existsByTypeId(Integer typeId);
 }

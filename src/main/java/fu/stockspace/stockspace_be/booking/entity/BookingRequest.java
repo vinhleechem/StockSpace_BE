@@ -6,10 +6,7 @@ import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
-import org.hibernate.annotations.UuidGenerator;
-
 import java.math.BigDecimal;
-import java.util.UUID;
 
 /**
  * Entity BookingRequest — yêu cầu thuê kho từ Tenant.
@@ -34,9 +31,9 @@ import java.util.UUID;
 public class BookingRequest extends BaseEntity {
 
     @Id
-    @UuidGenerator
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", updatable = false, nullable = false)
-    private UUID id;
+    private Long id;
 
     // ==================== Relations ====================
 

@@ -4,10 +4,7 @@ import fu.stockspace.stockspace_be.common.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
-import org.hibernate.annotations.UuidGenerator;
-
 import java.math.BigDecimal;
-import java.util.UUID;
 
 /**
  * Entity WarehouseRack — kệ hàng trong một Zone.
@@ -23,9 +20,9 @@ import java.util.UUID;
 public class WarehouseRack extends BaseEntity {
 
     @Id
-    @UuidGenerator
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", updatable = false, nullable = false)
-    private UUID id;
+    private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "zone_id", nullable = false)

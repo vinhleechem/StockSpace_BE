@@ -7,15 +7,15 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
-import java.util.UUID;
 
-public interface WarehouseImageRepository extends JpaRepository<WarehouseImage, UUID> {
 
-    List<WarehouseImage> findAllByWarehouseIdOrderByDisplayOrderAsc(UUID warehouseId);
+public interface WarehouseImageRepository extends JpaRepository<WarehouseImage, Long> {
+
+    List<WarehouseImage> findAllByWarehouseIdOrderByDisplayOrderAsc(Long warehouseId);
 
     @Modifying
     @Query("DELETE FROM WarehouseImage wi WHERE wi.warehouse.id = :warehouseId")
-    void deleteAllByWarehouseId(@Param("warehouseId") UUID warehouseId);
+    void deleteAllByWarehouseId(@Param("warehouseId") Long warehouseId);
 
-    int countByWarehouseId(UUID warehouseId);
+    int countByWarehouseId(Long warehouseId);
 }

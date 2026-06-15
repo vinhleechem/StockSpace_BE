@@ -22,7 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.UUID;
+
 import java.util.stream.Collectors;
 
 /**
@@ -98,7 +98,7 @@ public class BookingService {
      * Tenant huỷ booking (chỉ khi status còn PENDING).
      */
     @Transactional
-    public void cancelBooking(Long tenantId, UUID bookingId) {
+    public void cancelBooking(Long tenantId, Long bookingId) {
         BookingRequest booking = bookingRepository.findByIdAndTenantId(bookingId, tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.BOOKING_NOT_FOUND));
 
@@ -146,7 +146,7 @@ public class BookingService {
      * 4. Đổi Warehouse status → RENTED
      */
     @Transactional
-    public BookingResponse approveBooking(Long ownerId, UUID bookingId) {
+    public BookingResponse approveBooking(Long ownerId, Long bookingId) {
         BookingRequest booking = getOwnerBooking(ownerId, bookingId);
         validatePending(booking);
 
@@ -180,7 +180,7 @@ public class BookingService {
      * Owner từ chối yêu cầu thuê kho.
      */
     @Transactional
-    public BookingResponse rejectBooking(Long ownerId, UUID bookingId, String reason) {
+    public BookingResponse rejectBooking(Long ownerId, Long bookingId, String reason) {
         BookingRequest booking = getOwnerBooking(ownerId, bookingId);
         validatePending(booking);
 
@@ -194,7 +194,7 @@ public class BookingService {
 
     // ==================== Private helpers ====================
 
-    private BookingRequest getOwnerBooking(Long ownerId, UUID bookingId) {
+    private BookingRequest getOwnerBooking(Long ownerId, Long bookingId) {
         return bookingRepository.findByIdAndOwnerId(bookingId, ownerId)
                 .orElseThrow(() -> new ForbiddenException(ErrorCode.BOOKING_NOT_FOUND));
     }

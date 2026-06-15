@@ -23,7 +23,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 /**
  * Service xử lý nghiệp vụ Inspection (Kiểm định kho).
@@ -51,7 +50,7 @@ public class InspectionService {
      * Mỗi kho chỉ có 1 yêu cầu PENDING tại một thời điểm.
      */
     @Transactional
-    public InspectionReportResponse requestInspection(Long ownerId, UUID warehouseId) {
+    public InspectionReportResponse requestInspection(Long ownerId, Long warehouseId) {
         Warehouse warehouse = warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId)
                 .orElseThrow(() -> new ForbiddenException(ErrorCode.WAREHOUSE_NOT_OWNED));
 
@@ -102,7 +101,7 @@ public class InspectionService {
      * Nếu FAILED → Warehouse vẫn INACTIVE
      */
     @Transactional
-    public InspectionReportResponse submitReport(Long inspectorId, UUID inspectionId,
+    public InspectionReportResponse submitReport(Long inspectorId, Long inspectionId,
                                                   SubmitInspectionRequest request) {
         InspectionReport report = inspectionRepository.findById(inspectionId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.INSPECTION_NOT_FOUND));
@@ -159,7 +158,7 @@ public class InspectionService {
      * Đổi status → IN_PROGRESS.
      */
     @Transactional
-    public InspectionReportResponse assignInspector(UUID inspectionId, Long inspectorId) {
+    public InspectionReportResponse assignInspector(Long inspectionId, Long inspectorId) {
         InspectionReport report = inspectionRepository.findById(inspectionId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.INSPECTION_NOT_FOUND));
 

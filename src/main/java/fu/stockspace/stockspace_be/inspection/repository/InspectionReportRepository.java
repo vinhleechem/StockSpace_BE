@@ -9,11 +9,11 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
-import java.util.UUID;
 
-public interface InspectionReportRepository extends JpaRepository<InspectionReport, UUID> {
 
-    List<InspectionReport> findByWarehouseId(UUID warehouseId);
+public interface InspectionReportRepository extends JpaRepository<InspectionReport, Long> {
+
+    List<InspectionReport> findByWarehouseId(Long warehouseId);
 
     Page<InspectionReport> findByInspectorId(Long inspectorId, Pageable pageable);
 

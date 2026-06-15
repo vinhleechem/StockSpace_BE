@@ -15,7 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.UUID;
+
 
 /**
  * Controller xử lý các API Rental Contract.
@@ -62,7 +62,7 @@ public class ContractController {
      */
     @GetMapping("/{id}")
     @Operation(summary = "Chi tiết hợp đồng thuê kho")
-    public ResponseEntity<ApiResponse<RentalContractResponse>> getById(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<RentalContractResponse>> getById(@PathVariable Long id) {
         Long userId = getCurrentUser().getId();
         RentalContractResponse response = contractService.getContractById(id, userId);
         return ResponseEntity.ok(ApiResponse.success("Lấy thông tin hợp đồng thành công", response));
@@ -75,7 +75,7 @@ public class ContractController {
      */
     @PatchMapping("/{id}/confirm-handover")
     @Operation(summary = "Xác nhận bàn giao kho (Owner / Tenant)")
-    public ResponseEntity<ApiResponse<RentalContractResponse>> confirmHandover(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<RentalContractResponse>> confirmHandover(@PathVariable Long id) {
         Long userId = getCurrentUser().getId();
         RentalContractResponse response = contractService.confirmHandover(userId, id);
         return ResponseEntity.ok(ApiResponse.success("Xác nhận bàn giao thành công", response));

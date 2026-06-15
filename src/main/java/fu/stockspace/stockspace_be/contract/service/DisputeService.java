@@ -19,7 +19,7 @@ import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.UUID;
+
 
 /**
  * Service xử lý nghiệp vụ Dispute Ticket.
@@ -115,7 +115,7 @@ public class DisputeService {
      * Gọi từ AdminDisputeService.
      */
     @Transactional
-    public DisputeResponse resolveDispute(UUID disputeId, Long adminId, String adminNote) {
+    public DisputeResponse resolveDispute(Long disputeId, Long adminId, String adminNote) {
         DisputeTicket ticket = disputeRepository.findById(disputeId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.DISPUTE_NOT_FOUND));
 

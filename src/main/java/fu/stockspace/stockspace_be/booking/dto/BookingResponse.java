@@ -5,7 +5,7 @@ import lombok.Getter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.UUID;
+
 
 /**
  * DTO trả về thông tin BookingRequest.
@@ -14,7 +14,7 @@ import java.util.UUID;
 @Builder
 public class BookingResponse {
 
-    private UUID id;
+    private Long id;
     private String status;
     private BigDecimal depositAmount;
     private String rejectReason;
@@ -26,7 +26,7 @@ public class BookingResponse {
     private String tenantPhone;
 
     // Warehouse info
-    private UUID warehouseId;
+    private Long warehouseId;
     private String warehouseName;
     private String warehouseAddress;
     private Long ownerId;

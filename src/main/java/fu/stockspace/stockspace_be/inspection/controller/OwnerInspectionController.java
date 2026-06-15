@@ -16,7 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.UUID;
+
 
 /**
  * Controller xử lý các API Kiểm định của Warehouse Owner.
@@ -41,7 +41,7 @@ public class OwnerInspectionController {
     @PostMapping
     @Operation(summary = "Gửi yêu cầu kiểm định kho")
     public ResponseEntity<ApiResponse<InspectionReportResponse>> requestInspection(
-            @RequestParam UUID warehouseId
+            @RequestParam Long warehouseId
     ) {
         Long ownerId = getCurrentUser().getId();
         InspectionReportResponse response = inspectionService.requestInspection(ownerId, warehouseId);

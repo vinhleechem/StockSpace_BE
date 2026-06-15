@@ -5,12 +5,9 @@ import fu.stockspace.stockspace_be.common.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
-import org.hibernate.annotations.UuidGenerator;
-
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 /**
  * Entity Warehouse — đại diện cho một kho bãi được đăng trên hệ thống.
@@ -33,9 +30,9 @@ import java.util.UUID;
 public class Warehouse extends BaseEntity {
 
     @Id
-    @UuidGenerator
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", updatable = false, nullable = false)
-    private UUID id;
+    private Long id;
 
     // ==================== Relations ====================
 

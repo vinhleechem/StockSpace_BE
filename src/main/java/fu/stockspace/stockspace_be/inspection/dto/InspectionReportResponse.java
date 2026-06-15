@@ -4,7 +4,7 @@ import lombok.Builder;
 import lombok.Getter;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
+
 
 /**
  * DTO trả về thông tin InspectionReport.
@@ -13,14 +13,14 @@ import java.util.UUID;
 @Builder
 public class InspectionReportResponse {
 
-    private UUID id;
+    private Long id;
     private String status;
     private String checklistData;
     private String notes;
     private LocalDateTime inspectedAt;
 
     // Warehouse info
-    private UUID warehouseId;
+    private Long warehouseId;
     private String warehouseName;
     private String warehouseAddress;
 

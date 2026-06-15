@@ -16,7 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.UUID;
+
 
 /**
  * Controller xử lý các API Booking của Tenant.
@@ -71,7 +71,7 @@ public class TenantBookingController {
      */
     @DeleteMapping("/{id}")
     @Operation(summary = "Huỷ yêu cầu thuê kho")
-    public ResponseEntity<ApiResponse<Void>> cancel(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<Void>> cancel(@PathVariable Long id) {
         Long tenantId = getCurrentUserId();
         bookingService.cancelBooking(tenantId, id);
         return ResponseEntity.ok(ApiResponse.success("Huỷ yêu cầu thuê kho thành công", null));

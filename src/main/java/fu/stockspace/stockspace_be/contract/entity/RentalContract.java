@@ -5,10 +5,7 @@ import fu.stockspace.stockspace_be.common.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
-import org.hibernate.annotations.UuidGenerator;
-
 import java.time.LocalDate;
-import java.util.UUID;
 
 /**
  * Entity RentalContract — hợp đồng thuê kho được tạo tự động khi Owner approve Booking.
@@ -28,9 +25,9 @@ import java.util.UUID;
 public class RentalContract extends BaseEntity {
 
     @Id
-    @UuidGenerator
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", updatable = false, nullable = false)
-    private UUID id;
+    private Long id;
 
     /** 1-1 với BookingRequest */
     @OneToOne(fetch = FetchType.LAZY)

@@ -8,11 +8,11 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
-import java.util.UUID;
 
-public interface RentalContractRepository extends JpaRepository<RentalContract, UUID> {
 
-    Optional<RentalContract> findByBookingId(UUID bookingId);
+public interface RentalContractRepository extends JpaRepository<RentalContract, Long> {
+
+    Optional<RentalContract> findByBookingId(Long bookingId);
 
     /** Hợp đồng của Tenant */
     @Query("""

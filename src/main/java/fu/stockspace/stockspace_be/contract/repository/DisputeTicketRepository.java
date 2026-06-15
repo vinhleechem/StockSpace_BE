@@ -8,11 +8,11 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
-import java.util.UUID;
 
-public interface DisputeTicketRepository extends JpaRepository<DisputeTicket, UUID> {
 
-    Optional<DisputeTicket> findByContractId(UUID contractId);
+public interface DisputeTicketRepository extends JpaRepository<DisputeTicket, Long> {
+
+    Optional<DisputeTicket> findByContractId(Long contractId);
 
     Page<DisputeTicket> findByRaisedById(Long userId, Pageable pageable);
 

@@ -15,7 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.UUID;
+
 
 /**
  * Controller xử lý các API Booking của Warehouse Owner.
@@ -56,7 +56,7 @@ public class OwnerBookingController {
      */
     @PatchMapping("/{id}/approve")
     @Operation(summary = "Chấp nhận yêu cầu thuê kho")
-    public ResponseEntity<ApiResponse<BookingResponse>> approve(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<BookingResponse>> approve(@PathVariable Long id) {
         Long ownerId = getCurrentUserId();
         BookingResponse response = bookingService.approveBooking(ownerId, id);
         return ResponseEntity.ok(ApiResponse.success("Chấp nhận yêu cầu thuê kho thành công", response));
@@ -70,7 +70,7 @@ public class OwnerBookingController {
     @PatchMapping("/{id}/reject")
     @Operation(summary = "Từ chối yêu cầu thuê kho")
     public ResponseEntity<ApiResponse<BookingResponse>> reject(
-            @PathVariable UUID id,
+            @PathVariable Long id,
             @Valid @RequestBody RejectBookingRequest request
     ) {
         Long ownerId = getCurrentUserId();

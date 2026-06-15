@@ -19,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
-import java.util.UUID;
+
 import java.util.stream.Collectors;
 
 /**
@@ -47,7 +47,7 @@ public class ContractService {
      * Gọi từ BookingService.approveBooking().
      */
     @Transactional
-    public RentalContract createContractFromBooking(UUID bookingId) {
+    public RentalContract createContractFromBooking(Long bookingId) {
         BookingRequest booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.BOOKING_NOT_FOUND));
 
@@ -91,7 +91,7 @@ public class ContractService {
      * Xem chi tiết hợp đồng — chỉ Owner hoặc Tenant liên quan mới xem được.
      */
     @Transactional(readOnly = true)
-    public RentalContractResponse getContractById(UUID contractId, Long userId) {
+    public RentalContractResponse getContractById(Long contractId, Long userId) {
         RentalContract contract = contractRepository.findById(contractId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
 
@@ -115,7 +115,7 @@ public class ContractService {
      * - Warehouse status → AVAILABLE
      */
     @Transactional
-    public RentalContractResponse confirmHandover(Long userId, UUID contractId) {
+    public RentalContractResponse confirmHandover(Long userId, Long contractId) {
         RentalContract contract = contractRepository.findById(contractId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
 
@@ -162,7 +162,7 @@ public class ContractService {
      * Admin / Dispute handler: set contract status = DISPUTED.
      */
     @Transactional
-    public void setDisputed(UUID contractId) {
+    public void setDisputed(Long contractId) {
         RentalContract contract = contractRepository.findById(contractId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
         contract.setStatus(ContractStatus.DISPUTED);

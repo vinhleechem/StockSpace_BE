@@ -17,7 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.UUID;
+
 
 /**
  * Controller xử lý các API Kiểm định cho Inspector.
@@ -58,7 +58,7 @@ public class InspectorController {
     @PostMapping("/{id}/report")
     @Operation(summary = "Nộp báo cáo kết quả kiểm định")
     public ResponseEntity<ApiResponse<InspectionReportResponse>> submitReport(
-            @PathVariable UUID id,
+            @PathVariable Long id,
             @Valid @RequestBody SubmitInspectionRequest request
     ) {
         Long inspectorId = getCurrentUser().getId();

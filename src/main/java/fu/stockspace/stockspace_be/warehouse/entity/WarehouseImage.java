@@ -2,9 +2,7 @@ package fu.stockspace.stockspace_be.warehouse.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.UuidGenerator;
 
-import java.util.UUID;
 
 /**
  * Entity WarehouseImage — lưu URL ảnh của một Warehouse.
@@ -24,9 +22,9 @@ import java.util.UUID;
 public class WarehouseImage {
 
     @Id
-    @UuidGenerator
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", updatable = false, nullable = false)
-    private UUID id;
+    private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "warehouse_id", nullable = false)

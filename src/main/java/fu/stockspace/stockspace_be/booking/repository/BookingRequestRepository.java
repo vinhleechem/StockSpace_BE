@@ -9,20 +9,20 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
-import java.util.UUID;
 
-public interface BookingRequestRepository extends JpaRepository<BookingRequest, UUID> {
+
+public interface BookingRequestRepository extends JpaRepository<BookingRequest, Long> {
 
     // ==================== Tenant ====================
 
     Page<BookingRequest> findByTenantId(Long tenantId, Pageable pageable);
 
-    Optional<BookingRequest> findByIdAndTenantId(UUID id, Long tenantId);
+    Optional<BookingRequest> findByIdAndTenantId(Long id, Long tenantId);
 
     /**
      * Kiểm tra Tenant đã có booking PENDING cho kho này chưa (tránh spam).
      */
-    boolean existsByTenantIdAndWarehouseIdAndStatus(Long tenantId, UUID warehouseId, ApprovalStatus status);
+    boolean existsByTenantIdAndWarehouseIdAndStatus(Long tenantId, Long warehouseId, ApprovalStatus status);
 
     // ==================== Owner ====================
 
@@ -41,7 +41,7 @@ public interface BookingRequestRepository extends JpaRepository<BookingRequest, 
             WHERE b.id = :bookingId
               AND b.warehouse.owner.id = :ownerId
             """)
-    Optional<BookingRequest> findByIdAndOwnerId(@Param("bookingId") UUID bookingId,
+    Optional<BookingRequest> findByIdAndOwnerId(@Param("bookingId") Long bookingId,
                                                 @Param("ownerId") Long ownerId);
 
     // ==================== Admin ====================

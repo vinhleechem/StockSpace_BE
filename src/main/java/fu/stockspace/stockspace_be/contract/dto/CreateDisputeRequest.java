@@ -6,7 +6,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.util.List;
-import java.util.UUID;
+
 
 /**
  * DTO khi một bên mở Dispute với hợp đồng.
@@ -16,7 +16,7 @@ import java.util.UUID;
 public class CreateDisputeRequest {
 
     @NotNull(message = "ID hợp đồng không được để trống")
-    private UUID contractId;
+    private Long contractId;
 
     @NotBlank(message = "Lý do tranh chấp không được để trống")
     private String reason;

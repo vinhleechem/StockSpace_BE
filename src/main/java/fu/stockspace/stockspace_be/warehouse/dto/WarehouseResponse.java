@@ -6,7 +6,7 @@ import lombok.Getter;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.UUID;
+
 
 /**
  * DTO trả về thông tin tóm tắt của Warehouse (dùng trong danh sách / phân trang).
@@ -15,7 +15,7 @@ import java.util.UUID;
 @Builder
 public class WarehouseResponse {
 
-    private UUID id;
+    private Long id;
     private String name;
     private String address;
     private String description;
