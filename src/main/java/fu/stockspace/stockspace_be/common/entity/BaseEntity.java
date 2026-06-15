@@ -27,6 +27,10 @@ public abstract class BaseEntity {
     @lombok.Builder.Default
     private boolean isActive = true;
 
+    @Column(name = "is_deleted", nullable = false)
+    @lombok.Builder.Default
+    private boolean isDeleted = false;
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
