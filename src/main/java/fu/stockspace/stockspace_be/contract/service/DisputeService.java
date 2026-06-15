@@ -1,0 +1,151 @@
+package fu.stockspace.stockspace_be.contract.service;
+
+import fu.stockspace.stockspace_be.auth.entity.User;
+import fu.stockspace.stockspace_be.auth.repository.UserRepository;
+import fu.stockspace.stockspace_be.common.exception.ErrorCode;
+import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
+import fu.stockspace.stockspace_be.contract.dto.CreateDisputeRequest;
+import fu.stockspace.stockspace_be.contract.dto.DisputeResponse;
+import fu.stockspace.stockspace_be.contract.entity.ContractStatus;
+import fu.stockspace.stockspace_be.contract.entity.DisputeTicket;
+import fu.stockspace.stockspace_be.contract.entity.RentalContract;
+import fu.stockspace.stockspace_be.contract.repository.DisputeTicketRepository;
+import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.*;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.UUID;
+
+/**
+ * Service xử lý nghiệp vụ Dispute Ticket.
+ *
+ * Chức năng:
+ * - Mở tranh chấp → đổi Contract sang DISPUTED
+ * - Xem dispute của mình
+ * - Admin giải quyết dispute → gọi từ AdminDisputeService
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class DisputeService {
+
+    private final DisputeTicketRepository disputeRepository;
+    private final RentalContractRepository contractRepository;
+    private final ContractService contractService;
+    private final UserRepository userRepository;
+
+    // ==================== User ====================
+
+    /**
+     * Mở tranh chấp cho hợp đồng.
+     *
+     * Ràng buộc:
+     * - Hợp đồng phải ACTIVE hoặc PENDING_HANDOVER
+     * - Chỉ Owner hoặc Tenant của hợp đồng được mở
+     * - Mỗi hợp đồng chỉ có 1 dispute tại một thời điểm
+     */
+    @Transactional
+    public DisputeResponse raiseDispute(Long userId, CreateDisputeRequest request) {
+        RentalContract contract = contractRepository.findById(request.getContractId())
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
+
+        // Chỉ cho phép dispute khi contract đang active
+        if (contract.getStatus() == ContractStatus.COMPLETED
+                || contract.getStatus() == ContractStatus.DISPUTED) {
+            throw new BadRequestException(ErrorCode.DISPUTE_ALREADY_OPEN);
+        }
+
+        // Kiểm tra đã có dispute chưa
+        boolean exists = disputeRepository.findByContractId(contract.getId()).isPresent();
+        if (exists) {
+            throw new ResourceConflictException(ErrorCode.DISPUTE_ALREADY_OPEN);
+        }
+
+        // Kiểm tra user là tenant hoặc owner của hợp đồng
+        Long tenantId = contract.getBooking().getTenant().getId();
+        Long ownerId = contract.getBooking().getWarehouse().getOwner().getId();
+        if (!userId.equals(tenantId) && !userId.equals(ownerId)) {
+            throw new BadRequestException(ErrorCode.FORBIDDEN);
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+
+        // Chuyển ảnh thành JSON string đơn giản
+        String evidenceJson = request.getEvidenceImages() != null
+                ? request.getEvidenceImages().toString()
+                : null;
+
+        DisputeTicket ticket = DisputeTicket.builder()
+                .contract(contract)
+                .raisedBy(user)
+                .reason(request.getReason())
+                .evidenceImages(evidenceJson)
+                .status("OPEN")
+                .build();
+
+        ticket = disputeRepository.save(ticket);
+
+        // Đổi contract → DISPUTED
+        contractService.setDisputed(contract.getId());
+
+        log.info("Dispute {} opened by user {} for contract {}", ticket.getId(), userId, contract.getId());
+        return mapToResponse(ticket);
+    }
+
+    /**
+     * Xem danh sách dispute của user hiện tại.
+     */
+    @Transactional(readOnly = true)
+    public Page<DisputeResponse> getMyDisputes(Long userId, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        return disputeRepository.findByRaisedById(userId, pageable)
+                .map(this::mapToResponse);
+    }
+
+    // ==================== Admin internal ====================
+
+    /**
+     * Admin giải quyết dispute.
+     * Gọi từ AdminDisputeService.
+     */
+    @Transactional
+    public DisputeResponse resolveDispute(UUID disputeId, Long adminId, String adminNote) {
+        DisputeTicket ticket = disputeRepository.findById(disputeId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.DISPUTE_NOT_FOUND));
+
+        User admin = userRepository.findById(adminId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+
+        ticket.setStatus("RESOLVED");
+        ticket.setHandledBy(admin);
+        ticket.setAdminNote(adminNote);
+        ticket = disputeRepository.save(ticket);
+
+        log.info("Admin {} resolved dispute {}", adminId, disputeId);
+        return mapToResponse(ticket);
+    }
+
+    // ==================== Private helpers ====================
+
+    private DisputeResponse mapToResponse(DisputeTicket t) {
+        return DisputeResponse.builder()
+                .id(t.getId())
+                .status(t.getStatus())
+                .reason(t.getReason())
+                .evidenceImages(t.getEvidenceImages())
+                .adminNote(t.getAdminNote())
+                .contractId(t.getContract() != null ? t.getContract().getId() : null)
+                .raisedById(t.getRaisedBy() != null ? t.getRaisedBy().getId() : null)
+                .raisedByName(t.getRaisedBy() != null ? t.getRaisedBy().getFullName() : null)
+                .handledById(t.getHandledBy() != null ? t.getHandledBy().getId() : null)
+                .handledByName(t.getHandledBy() != null ? t.getHandledBy().getFullName() : null)
+                .createdAt(t.getCreatedAt())
+                .build();
+    }
+}
