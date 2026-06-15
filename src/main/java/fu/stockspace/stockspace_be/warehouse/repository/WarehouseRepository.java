@@ -20,6 +20,18 @@ import java.util.Optional;
  */
 public interface WarehouseRepository extends JpaRepository<Warehouse, Long> {
 
+    @Query("SELECT w FROM Warehouse w WHERE w.id = ?1 AND w.isDeleted = false")
+    Optional<Warehouse> findById(Long id);
+
+    @Query("SELECT w FROM Warehouse w WHERE w.isDeleted = false")
+    java.util.List<Warehouse> findAll();
+
+    @Query("SELECT w FROM Warehouse w WHERE w.isDeleted = false")
+    Page<Warehouse> findAll(Pageable pageable);
+
+    @Query("SELECT COUNT(w) FROM Warehouse w WHERE w.isDeleted = false")
+    long count();
+
     // ==================== Public Search ====================
 
     /**
@@ -29,6 +41,7 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, Long> {
     @Query("""
             SELECT w FROM Warehouse w
             WHERE w.isVerified = true
+              AND w.isDeleted = false
               AND (:status IS NULL OR w.status = :status)
               AND (:keyword IS NULL OR LOWER(w.name) LIKE :keyword
                    OR LOWER(w.address) LIKE :keyword)
@@ -49,7 +62,8 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, Long> {
 
     @Query("""
             SELECT w FROM Warehouse w
-            WHERE (:keyword IS NULL OR LOWER(w.name) LIKE :keyword
+            WHERE w.isDeleted = false
+              AND (:keyword IS NULL OR LOWER(w.name) LIKE :keyword
                    OR LOWER(w.address) LIKE :keyword)
               AND (:status IS NULL OR w.status = :status)
               AND (:isVerified IS NULL OR w.isVerified = :isVerified)
@@ -63,13 +77,17 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, Long> {
 
     // ==================== Owner ====================
 
+    @Query("SELECT w FROM Warehouse w WHERE w.owner.id = ?1 AND w.isDeleted = false")
     Page<Warehouse> findByOwnerId(Long ownerId, Pageable pageable);
 
+    @Query("SELECT w FROM Warehouse w WHERE w.id = ?1 AND w.owner.id = ?2 AND w.isDeleted = false")
     Optional<Warehouse> findByIdAndOwnerId(Long id, Long ownerId);
 
     // ==================== Misc ====================
 
+    @Query("SELECT COUNT(w) > 0 FROM Warehouse w WHERE w.id = ?1 AND w.owner.id = ?2 AND w.isDeleted = false")
     boolean existsByIdAndOwnerId(Long id, Long ownerId);
 
+    @Query("SELECT COUNT(w) > 0 FROM Warehouse w WHERE w.type.id = ?1 AND w.isDeleted = false")
     boolean existsByTypeId(Integer typeId);
 }

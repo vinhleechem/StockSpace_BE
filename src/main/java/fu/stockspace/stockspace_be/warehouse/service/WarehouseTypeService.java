@@ -69,15 +69,15 @@ public class WarehouseTypeService {
     @Transactional
     public void deleteType(Integer id) {
         log.info("Deleting warehouse type ID: {}", id);
-        if (!warehouseTypeRepository.existsById(id)) {
-            throw new ResourceNotFoundException(ErrorCode.WAREHOUSE_TYPE_NOT_FOUND);
-        }
+        WarehouseType warehouseType = warehouseTypeRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_TYPE_NOT_FOUND));
 
         if (warehouseRepository.existsByTypeId(id)) {
             throw new BadRequestException(ErrorCode.WAREHOUSE_TYPE_IN_USE);
         }
 
-        warehouseTypeRepository.deleteById(id);
+        warehouseType.setDeleted(true);
+        warehouseTypeRepository.save(warehouseType);
         log.info("Deleted warehouse type ID: {}", id);
     }
 

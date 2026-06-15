@@ -11,11 +11,26 @@ import org.springframework.data.repository.query.Param;
 import java.util.Optional;
 
 public interface WarehouseTypeRepository extends JpaRepository<WarehouseType, Integer> {
+    @Query("SELECT wt FROM WarehouseType wt WHERE wt.id = ?1 AND wt.isDeleted = false")
+    Optional<WarehouseType> findById(Integer id);
+
+    @Query("SELECT wt FROM WarehouseType wt WHERE wt.isDeleted = false")
+    java.util.List<WarehouseType> findAll();
+
+    @Query("SELECT wt FROM WarehouseType wt WHERE wt.isDeleted = false")
+    Page<WarehouseType> findAll(Pageable pageable);
+
+    @Query("SELECT COUNT(wt) FROM WarehouseType wt WHERE wt.isDeleted = false")
+    long count();
+
+    @Query("SELECT wt FROM WarehouseType wt WHERE wt.name = ?1 AND wt.isDeleted = false")
     Optional<WarehouseType> findByName(String name);
+
+    @Query("SELECT COUNT(wt) > 0 FROM WarehouseType wt WHERE wt.name = ?1 AND wt.isDeleted = false")
     boolean existsByName(String name);
 
-    @Query("SELECT wt FROM WarehouseType wt WHERE " +
+    @Query("SELECT wt FROM WarehouseType wt WHERE wt.isDeleted = false AND (" +
            "LOWER(wt.name) LIKE :keyword " +
-           "OR LOWER(wt.description) LIKE :keyword")
+           "OR LOWER(wt.description) LIKE :keyword)")
     Page<WarehouseType> search(@Param("keyword") String keyword, Pageable pageable);
 }

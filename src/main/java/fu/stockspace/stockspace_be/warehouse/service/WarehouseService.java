@@ -124,7 +124,8 @@ public class WarehouseService {
             throw new BadRequestException(ErrorCode.WAREHOUSE_CANNOT_DELETE_RENTED);
         }
 
-        warehouseRepository.delete(warehouse);
+        warehouse.setDeleted(true);
+        warehouseRepository.save(warehouse);
         log.info("Owner {} deleted warehouse {}", ownerId, warehouseId);
     }
 
