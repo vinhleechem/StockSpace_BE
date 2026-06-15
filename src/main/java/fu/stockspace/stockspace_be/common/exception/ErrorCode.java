@@ -34,7 +34,47 @@ public enum ErrorCode {
     ROLE_NOT_FOUND("Vai trò không tồn tại trong hệ thống", HttpStatus.NOT_FOUND),
     PERMISSION_NOT_FOUND("Quyền hạn không tồn tại trong hệ thống", HttpStatus.NOT_FOUND),
     ROLE_ALREADY_EXISTS("Vai trò đã tồn tại trong hệ thống", HttpStatus.CONFLICT),
-    PERMISSION_ALREADY_EXISTS("Quyền hạn đã tồn tại trong hệ thống", HttpStatus.CONFLICT);
+    PERMISSION_ALREADY_EXISTS("Quyền hạn đã tồn tại trong hệ thống", HttpStatus.CONFLICT),
+
+    // Warehouse Errors
+    WAREHOUSE_NOT_FOUND("Kho bãi không tồn tại trong hệ thống", HttpStatus.NOT_FOUND),
+    WAREHOUSE_NOT_OWNED("Bạn không phải chủ sở hữu của kho này", HttpStatus.FORBIDDEN),
+    WAREHOUSE_NOT_AVAILABLE("Kho bãi hiện không khả dụng để thuê", HttpStatus.BAD_REQUEST),
+    WAREHOUSE_ALREADY_VERIFIED("Kho bãi đã được xác minh trước đó", HttpStatus.CONFLICT),
+    WAREHOUSE_TYPE_NOT_FOUND("Loại kho không tồn tại trong hệ thống", HttpStatus.NOT_FOUND),
+    WAREHOUSE_CANNOT_DELETE_RENTED("Không thể xoá kho đang có Tenant thuê", HttpStatus.BAD_REQUEST),
+    WAREHOUSE_INVALID_STATUS_TRANSITION("Không thể chuyển sang trạng thái này", HttpStatus.BAD_REQUEST),
+    WAREHOUSE_IMAGE_LIMIT_EXCEEDED("Số lượng ảnh vượt quá giới hạn tối đa (10 ảnh)", HttpStatus.BAD_REQUEST),
+
+    // Booking Errors
+    BOOKING_NOT_FOUND("Yêu cầu thuê kho không tồn tại", HttpStatus.NOT_FOUND),
+    BOOKING_ALREADY_PROCESSED("Yêu cầu thuê kho đã được xử lý (Approved/Rejected)", HttpStatus.BAD_REQUEST),
+    BOOKING_DUPLICATE_PENDING("Bạn đã có một yêu cầu thuê kho đang chờ duyệt cho kho này", HttpStatus.CONFLICT),
+
+    // Contract Errors
+    CONTRACT_NOT_FOUND("Hợp đồng thuê kho không tồn tại", HttpStatus.NOT_FOUND),
+    CONTRACT_ALREADY_CONFIRMED("Bạn đã xác nhận bàn giao hoặc hợp đồng đã hoàn thành", HttpStatus.BAD_REQUEST),
+
+    // Inspection Errors
+    INSPECTION_NOT_FOUND("Yêu cầu kiểm định không tồn tại", HttpStatus.NOT_FOUND),
+    INSPECTION_ALREADY_SUBMITTED("Kiểm định đã được nộp hoặc đang xử lý", HttpStatus.BAD_REQUEST),
+
+    // Wallet & Transaction Errors
+    WALLET_NOT_FOUND("Ví điện tử không tồn tại", HttpStatus.NOT_FOUND),
+    WALLET_INSUFFICIENT_BALANCE("Số dư ví không đủ để thực hiện giao dịch", HttpStatus.BAD_REQUEST),
+
+    // Service Package & Subscription Errors
+    PACKAGE_NOT_FOUND("Gói dịch vụ không tồn tại", HttpStatus.NOT_FOUND),
+    SUBSCRIPTION_ALREADY_ACTIVE("Bạn đã có gói dịch vụ đang hoạt động", HttpStatus.CONFLICT),
+    SUBSCRIPTION_NOT_FOUND("Subscription không tồn tại", HttpStatus.NOT_FOUND),
+
+    // Withdraw Errors
+    WITHDRAW_REQUEST_NOT_FOUND("Yêu cầu rút tiền không tồn tại", HttpStatus.NOT_FOUND),
+    WITHDRAW_ALREADY_PROCESSED("Yêu cầu rút tiền đã được xử lý", HttpStatus.BAD_REQUEST),
+
+    // Dispute Errors
+    DISPUTE_NOT_FOUND("Tranh chấp không tồn tại", HttpStatus.NOT_FOUND),
+    DISPUTE_ALREADY_OPEN("Đã có tranh chấp đang mở cho hợp đồng này", HttpStatus.CONFLICT);
 
     private final String message;
     private final HttpStatus status;
