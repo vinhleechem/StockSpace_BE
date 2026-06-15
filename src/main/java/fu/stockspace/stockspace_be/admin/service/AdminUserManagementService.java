@@ -270,7 +270,8 @@ public class AdminUserManagementService {
         }
 
         log.info("Admin {} deleting user ID: {} ({})", currentAdminEmail, id, user.getEmail());
-        userRepository.delete(user);
+        user.setDeleted(true);
+        userRepository.save(user);
         log.info("User ID: {} deleted successfully", id);
     }
 

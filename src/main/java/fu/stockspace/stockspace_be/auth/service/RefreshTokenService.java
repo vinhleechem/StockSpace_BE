@@ -67,7 +67,8 @@ public class RefreshTokenService {
 
         if (refreshToken.isExpired()) {
             // Token hết hạn → xóa khỏi DB luôn
-            refreshTokenRepository.delete(refreshToken);
+            refreshToken.setDeleted(true);
+            refreshTokenRepository.save(refreshToken);
             throw new UnauthorizedException(ErrorCode.INVALID_REFRESH_TOKEN, "Refresh token has expired. Please login again.");
         }
 

@@ -149,7 +149,8 @@ public class RoleManagementService {
             }
         }
 
-        roleRepository.delete(role);
+        role.setDeleted(true);
+        roleRepository.save(role);
         log.info("Role ID: {} deleted successfully", id);
     }
 
