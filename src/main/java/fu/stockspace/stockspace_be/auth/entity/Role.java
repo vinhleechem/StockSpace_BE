@@ -17,6 +17,8 @@ import java.util.Set;
  * Ví dụ: Admin tạo role "ROLE_SUPERVISOR" mới mà không cần sửa code.
  */
 @Entity
+@org.hibernate.annotations.SQLDelete(sql = "UPDATE roles SET is_deleted = true WHERE id = ?")
+@org.hibernate.annotations.SQLRestriction("is_deleted = false")
 @Table(name = "roles")
 @Getter
 @Setter

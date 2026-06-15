@@ -20,24 +20,41 @@ public interface UserRepository extends JpaRepository<User, Long> {
     /**
      * Tìm user theo email — dùng cho login và load UserDetails.
      */
+    @Query("SELECT u FROM User u WHERE u.id = ?1 AND u.isDeleted = false")
+    Optional<User> findById(Long id);
+
+    @Query("SELECT u FROM User u WHERE u.isDeleted = false")
+    List<User> findAll();
+
+    @Query("SELECT u FROM User u WHERE u.isDeleted = false")
+    Page<User> findAll(Pageable pageable);
+
+    @Query("SELECT COUNT(u) FROM User u WHERE u.isDeleted = false")
+    long count();
+
+    /**
+     * Tìm user theo email — dùng cho login và load UserDetails.
+     */
+    @Query("SELECT u FROM User u WHERE u.email = ?1 AND u.isDeleted = false")
     Optional<User> findByEmail(String email);
 
     /**
      * Kiểm tra email đã tồn tại chưa — dùng khi register.
      */
+    @Query("SELECT COUNT(u) > 0 FROM User u WHERE u.email = ?1 AND u.isDeleted = false")
     boolean existsByEmail(String email);
 
     /**
      * Tìm danh sách người dùng được gán một role cụ thể.
      */
-    @Query("SELECT u FROM User u JOIN u.roles r WHERE r.id = :roleId")
+    @Query("SELECT u FROM User u JOIN u.roles r WHERE r.id = :roleId AND u.isDeleted = false")
     List<User> findUsersByRoleId(@Param("roleId") Long roleId);
 
     /**
      * Tìm kiếm user theo email / fullName / phone với phân trang.
      * Dùng cho trang quản lý người dùng của Admin.
      */
-    @Query("SELECT u FROM User u WHERE " +
+    @Query("SELECT u FROM User u WHERE u.isDeleted = false AND " +
            "(:keyword IS NULL OR LOWER(u.email) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
            "OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
            "OR u.phone LIKE CONCAT('%', :keyword, '%'))")
@@ -46,7 +63,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     /**
      * Tìm kiếm user theo keyword + filter theo role name.
      */
-    @Query("SELECT DISTINCT u FROM User u JOIN u.roles r WHERE " +
+    @Query("SELECT DISTINCT u FROM User u JOIN u.roles r WHERE u.isDeleted = false AND " +
            "r.name = :roleName AND " +
            "(:keyword IS NULL OR LOWER(u.email) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
            "OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
@@ -58,7 +75,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     /**
      * Tìm kiếm user theo keyword + filter theo isActive.
      */
-    @Query("SELECT u FROM User u WHERE " +
+    @Query("SELECT u FROM User u WHERE u.isDeleted = false AND " +
            "u.isActive = :isActive AND " +
            "(:keyword IS NULL OR LOWER(u.email) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
            "OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +

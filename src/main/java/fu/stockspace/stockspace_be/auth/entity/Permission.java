@@ -15,6 +15,8 @@ import fu.stockspace.stockspace_be.common.entity.BaseEntity;
  *   @PreAuthorize("hasAuthority('WAREHOUSE_CREATE')")
  */
 @Entity
+@org.hibernate.annotations.SQLDelete(sql = "UPDATE permissions SET is_deleted = true WHERE id = ?")
+@org.hibernate.annotations.SQLRestriction("is_deleted = false")
 @Table(name = "permissions")
 @Getter
 @Setter
