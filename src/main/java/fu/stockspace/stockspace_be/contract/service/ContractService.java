@@ -1,14 +1,18 @@
 package fu.stockspace.stockspace_be.contract.service;
 
+import fu.stockspace.stockspace_be.auth.entity.User;
+import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.booking.entity.BookingRequest;
 import fu.stockspace.stockspace_be.booking.repository.BookingRequestRepository;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
-import fu.stockspace.stockspace_be.contract.dto.RentalContractResponse;
+import fu.stockspace.stockspace_be.contract.dto.*;
 import fu.stockspace.stockspace_be.contract.entity.ContractStatus;
+import fu.stockspace.stockspace_be.contract.entity.DisputeTicket;
 import fu.stockspace.stockspace_be.contract.entity.RentalContract;
+import fu.stockspace.stockspace_be.contract.repository.DisputeTicketRepository;
 import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseService;
 import lombok.RequiredArgsConstructor;
@@ -18,8 +22,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
-
 import java.util.stream.Collectors;
 
 /**
@@ -38,6 +42,8 @@ public class ContractService {
     private final RentalContractRepository contractRepository;
     private final BookingRequestRepository bookingRepository;
     private final WarehouseService warehouseService;
+    private final DisputeTicketRepository disputeRepository;
+    private final UserRepository userRepository;
 
     // ==================== Internal ====================
 
@@ -53,15 +59,15 @@ public class ContractService {
 
         RentalContract contract = RentalContract.builder()
                 .booking(booking)
-                .status(ContractStatus.ACTIVE)
-                .startDate(LocalDate.now())
-                .endDate(LocalDate.now().plusMonths(1))
+                .status(ContractStatus.UNDER_NEGOTIATION)
+                .startDate(null)
+                .endDate(null)
                 .tenantConfirmed(false)
                 .ownerConfirmed(false)
                 .build();
 
         contract = contractRepository.save(contract);
-        log.info("RentalContract created: {} for booking {}", contract.getId(), bookingId);
+        log.info("RentalContract created: {} in UNDER_NEGOTIATION state for booking {}", contract.getId(), bookingId);
         return contract;
     }
 
@@ -197,6 +203,219 @@ public class ContractService {
                 .ownerName(owner != null ? owner.getFullName() : null)
                 .createdAt(c.getCreatedAt())
                 .updatedAt(c.getUpdatedAt())
+                .submittedAt(c.getSubmittedAt())
+                .cancelReason(c.getCancelReason())
+                .cancelEvidence(c.getCancelEvidence())
                 .build();
+    }
+
+    // ==================== Phase 1 Deal / Negotiation ====================
+
+    /**
+     * Owner cấu hình hợp đồng online sau khi ký hợp đồng giấy thành công.
+     */
+    @Transactional
+    public RentalContractResponse submitOnlineContract(Long ownerId, Long contractId, SubmitContractRequest request) {
+        log.info("Owner {} submitting online contract for contract {}", ownerId, contractId);
+        RentalContract contract = contractRepository.findById(contractId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
+
+        Long actualOwnerId = contract.getBooking().getWarehouse().getOwner().getId();
+        if (!ownerId.equals(actualOwnerId)) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        }
+
+        if (contract.getStatus() != ContractStatus.UNDER_NEGOTIATION) {
+            throw new BadRequestException("Hợp đồng không ở trạng thái thương lượng");
+        }
+
+        if (request.getStartDate().isAfter(request.getEndDate())) {
+            throw new BadRequestException("Ngày bắt đầu phải trước ngày kết thúc");
+        }
+
+        contract.setStartDate(request.getStartDate());
+        contract.setEndDate(request.getEndDate());
+        contract.setPaperContractImages(request.getPaperContractImages().toString());
+        contract.setStatus(ContractStatus.PENDING_TENANT_CONFIRM);
+        contract.setSubmittedAt(LocalDateTime.now());
+
+        contract = contractRepository.save(contract);
+        log.info("Contract {} status updated to PENDING_TENANT_CONFIRM", contractId);
+        return mapToResponse(contract);
+    }
+
+    /**
+     * Tenant xác nhận kích hoạt hợp đồng (trong hạn 7 ngày).
+     */
+    @Transactional
+    public RentalContractResponse tenantConfirmContract(Long tenantId, Long contractId) {
+        log.info("Tenant {} confirming contract {}", tenantId, contractId);
+        RentalContract contract = contractRepository.findById(contractId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
+
+        Long actualTenantId = contract.getBooking().getTenant().getId();
+        if (!tenantId.equals(actualTenantId)) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        }
+
+        if (contract.getStatus() != ContractStatus.PENDING_TENANT_CONFIRM) {
+            throw new BadRequestException("Hợp đồng không ở trạng thái chờ xác nhận");
+        }
+
+        // Kiểm tra thời hạn 7 ngày
+        if (contract.getSubmittedAt() != null && contract.getSubmittedAt().plusDays(7).isBefore(LocalDateTime.now())) {
+            throw new BadRequestException("Hợp đồng đã quá hạn 7 ngày để xác nhận. Tiền cọc đã bị xử lý.");
+        }
+
+        contract.setTenantConfirmed(true);
+        contract.setOwnerConfirmed(true);
+        contract.setStatus(ContractStatus.ACTIVE);
+
+        // =========================================================
+        // [INTEGRATION POINT — Dev B]
+        // Chuyển tiền cọc sang ví Owner khi Tenant confirm:
+        // walletService.addBalance(
+        //     contract.getBooking().getWarehouse().getOwner().getId(),
+        //     contract.getBooking().getDepositAmount(),
+        //     "Nhận cọc thuê kho: " + contract.getBooking().getWarehouse().getName()
+        // );
+        // =========================================================
+
+        contract = contractRepository.save(contract);
+        log.info("Contract {} is now ACTIVE", contractId);
+        return mapToResponse(contract);
+    }
+
+    /**
+     * Tenant báo thương thảo thất bại (report trước hoặc sau khi owner submit hợp đồng).
+     */
+    @Transactional
+    public RentalContractResponse tenantReportFailed(Long tenantId, Long contractId, TenantReportFailedRequest request) {
+        log.info("Tenant {} reporting contract failed: {}", tenantId, contractId);
+        RentalContract contract = contractRepository.findById(contractId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
+
+        Long actualTenantId = contract.getBooking().getTenant().getId();
+        if (!tenantId.equals(actualTenantId)) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        }
+
+        if (contract.getStatus() != ContractStatus.UNDER_NEGOTIATION 
+                && contract.getStatus() != ContractStatus.PENDING_TENANT_CONFIRM) {
+            throw new BadRequestException("Không thể báo cáo sự cố hợp đồng ở trạng thái hiện tại");
+        }
+
+        // Kiểm tra đã có tranh chấp chưa
+        if (disputeRepository.findByContractId(contract.getId()).isPresent()) {
+            throw new BadRequestException("Hợp đồng này đã có tranh chấp đang mở");
+        }
+
+        User tenant = userRepository.findById(tenantId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+
+        String evidenceJson = request.getEvidenceImages() != null ? request.getEvidenceImages().toString() : null;
+
+        DisputeTicket ticket = DisputeTicket.builder()
+                .contract(contract)
+                .raisedBy(tenant)
+                .reason(request.getReason())
+                .evidenceImages(evidenceJson)
+                .status("OPEN")
+                .build();
+
+        disputeRepository.save(ticket);
+        contract.setStatus(ContractStatus.DISPUTED);
+        contract = contractRepository.save(contract);
+
+        log.info("Dispute ticket opened for contract {} by Tenant", contractId);
+        return mapToResponse(contract);
+    }
+
+    /**
+     * Owner đề xuất hủy thương lượng (Cancel deal).
+     */
+    @Transactional
+    public RentalContractResponse ownerRequestCancel(Long ownerId, Long contractId, OwnerCancelRequest request) {
+        log.info("Owner {} requesting cancellation for contract {}", ownerId, contractId);
+        RentalContract contract = contractRepository.findById(contractId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
+
+        Long actualOwnerId = contract.getBooking().getWarehouse().getOwner().getId();
+        if (!ownerId.equals(actualOwnerId)) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        }
+
+        if (contract.getStatus() != ContractStatus.UNDER_NEGOTIATION 
+                && contract.getStatus() != ContractStatus.PENDING_TENANT_CONFIRM) {
+            throw new BadRequestException("Không thể đề xuất hủy hợp đồng ở trạng thái hiện tại");
+        }
+
+        contract.setCancelReason(request.getReason());
+        String evidenceJson = request.getEvidenceImages() != null ? request.getEvidenceImages().toString() : null;
+        contract.setCancelEvidence(evidenceJson);
+        contract.setStatus(ContractStatus.PENDING_CANCEL);
+
+        contract = contractRepository.save(contract);
+        log.info("Contract {} is now PENDING_CANCEL", contractId);
+        return mapToResponse(contract);
+    }
+
+    /**
+     * Tenant phản hồi yêu cầu hủy deal của Owner.
+     */
+    @Transactional
+    public RentalContractResponse tenantRespondCancel(Long tenantId, Long contractId, boolean agree) {
+        log.info("Tenant {} responding to cancel request for contract {}, agree={}", tenantId, contractId, agree);
+        RentalContract contract = contractRepository.findById(contractId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
+
+        Long actualTenantId = contract.getBooking().getTenant().getId();
+        if (!tenantId.equals(actualTenantId)) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        }
+
+        if (contract.getStatus() != ContractStatus.PENDING_CANCEL) {
+            throw new BadRequestException("Hợp đồng không có yêu cầu hủy nào đang chờ phản hồi");
+        }
+
+        if (agree) {
+            // Tenant đồng ý hủy -> hoàn cọc 10%, trả lại kho về AVAILABLE
+            contract.setStatus(ContractStatus.CANCELLED);
+            warehouseService.markAsAvailable(contract.getBooking().getWarehouse().getId());
+
+            // =========================================================
+            // [INTEGRATION POINT — Dev B]
+            // Hoàn cọc 10% cho Tenant:
+            // walletService.refundBalance(
+            //     tenantId,
+            //     contract.getBooking().getDepositAmount(),
+            //     "Hoàn đặt cọc thuê kho do hai bên đồng thuận hủy: " + contract.getBooking().getWarehouse().getName()
+            // );
+            // =========================================================
+            log.info("Contract {} cancelled by mutual agreement", contractId);
+        } else {
+            // Tenant KHÔNG đồng ý hủy -> chuyển thành DISPUTED để Inspector giải quyết
+            if (disputeRepository.findByContractId(contract.getId()).isPresent()) {
+                throw new BadRequestException("Hợp đồng này đã có tranh chấp đang mở");
+            }
+
+            User tenant = userRepository.findById(tenantId)
+                    .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+
+            DisputeTicket ticket = DisputeTicket.builder()
+                    .contract(contract)
+                    .raisedBy(tenant)
+                    .reason("Tenant không đồng ý yêu cầu hủy thương lượng của Owner. Lý do hủy của Owner: " + contract.getCancelReason())
+                    .evidenceImages(contract.getCancelEvidence())
+                    .status("OPEN")
+                    .build();
+
+            disputeRepository.save(ticket);
+            contract.setStatus(ContractStatus.DISPUTED);
+            log.info("Tenant disagreed to cancel. Contract {} status changed to DISPUTED", contractId);
+        }
+
+        contract = contractRepository.save(contract);
+        return mapToResponse(contract);
     }
 }
