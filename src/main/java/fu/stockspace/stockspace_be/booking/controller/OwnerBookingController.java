@@ -29,7 +29,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/owner/bookings")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('OWNER')")
+@PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
 public class OwnerBookingController {
 
     private final BookingService bookingService;

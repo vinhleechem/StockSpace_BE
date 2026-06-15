@@ -43,7 +43,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/owner/warehouses")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('OWNER')")
+@PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
 public class OwnerWarehouseController {
 
     private final WarehouseService warehouseService;

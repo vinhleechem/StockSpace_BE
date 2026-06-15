@@ -29,7 +29,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/disputes")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('OWNER', 'TENANT')")
+@PreAuthorize("hasAnyRole('OWNER', 'TENANT', 'ADMIN')")
 public class DisputeController {
 
     private final DisputeService disputeService;

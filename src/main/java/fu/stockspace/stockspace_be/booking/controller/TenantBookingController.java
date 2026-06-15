@@ -30,7 +30,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/tenant/bookings")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('TENANT')")
+@PreAuthorize("hasAnyRole('TENANT', 'ADMIN')")
 public class TenantBookingController {
 
     private final BookingService bookingService;
