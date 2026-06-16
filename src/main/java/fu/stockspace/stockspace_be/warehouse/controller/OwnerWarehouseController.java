@@ -61,7 +61,7 @@ public class OwnerWarehouseController {
     /**
      * POST /api/owner/warehouses
      * Tạo mới một Warehouse listing.
-     * Status ban đầu sẽ là PENDING_VERIFICATION.
+     * Status ban đầu sẽ là PENDING_APPROVAL.
      */
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Tạo warehouse mới (Owner)")

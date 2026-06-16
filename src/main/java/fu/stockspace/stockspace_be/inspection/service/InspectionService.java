@@ -95,10 +95,8 @@ public class InspectionService {
     }
 
     /**
-     * Inspector nộp báo cáo kiểm định.
-     *
-     * Nếu PASSED → Warehouse.isVerified = true + status = AVAILABLE
-     * Nếu FAILED → Warehouse vẫn INACTIVE
+     * Nếu PASSED → Warehouse.isVerified = true (đã kiểm định)
+     * Nếu FAILED → Warehouse.isVerified = false (chưa/không đạt kiểm định)
      */
     @Transactional
     public InspectionReportResponse submitReport(Long inspectorId, Long inspectionId,

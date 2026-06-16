@@ -7,6 +7,8 @@ import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.PermissionRepository;
 import fu.stockspace.stockspace_be.auth.repository.RoleRepository;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
+import fu.stockspace.stockspace_be.common.entity.SystemPolicy;
+import fu.stockspace.stockspace_be.common.repository.SystemPolicyRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -29,6 +31,7 @@ public class DataInitializer implements CommandLineRunner {
     private final PermissionRepository permissionRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final SystemPolicyRepository systemPolicyRepository;
 
     @Override
     @Transactional
@@ -89,6 +92,9 @@ public class DataInitializer implements CommandLineRunner {
         createDefaultUser("staff@stockspace.com", "Password123", "Le Staff", "0987654324", RoleType.ROLE_STAFF.name());
         createDefaultUser("inspector@stockspace.com", "Password123", "Pham Inspector", "0987654325", RoleType.ROLE_INSPECTOR.name());
 
+        // 4. Khởi tạo chính sách/cam kết ràng buộc mặc định
+        seedDefaultSystemPolicy();
+
         log.info("DataInitializer finished seeding successfully!");
     }
 
@@ -136,6 +142,28 @@ public class DataInitializer implements CommandLineRunner {
 
             userRepository.save(user);
             log.info("Seeded default user: {} with role {}", email, roleName);
+        }
+    }
+
+    private void seedDefaultSystemPolicy() {
+        if (systemPolicyRepository.count() == 0) {
+            SystemPolicy policy = SystemPolicy.builder()
+                    .version("v1.0")
+                    .content("BẢN CAM KẾT RÀNG BUỘC PHÁP LÝ (BẢN CHUẨN HỆ THỐNG)\n" +
+                            "1. Đối với Người cho thuê (Owner):\n" +
+                            "   - Cam kết cung cấp thông tin kho bãi chính xác, trung thực, bao gồm diện tích, hình ảnh và tình trạng thực tế.\n" +
+                            "   - Cam kết chuẩn bị kho sạch sẽ, đúng theo thỏa thuận để bàn giao cho người thuê.\n" +
+                            "2. Đối với Người thuê (Tenant):\n" +
+                            "   - Cam kết thanh toán đặt cọc 10% đúng hạn để xác nhận thỏa thuận thuê kho.\n" +
+                            "   - Cam kết sử dụng kho bãi đúng mục đích thỏa thuận, tuân thủ các quy định phòng cháy chữa cháy và pháp luật.\n" +
+                            "3. Điều khoản Tranh chấp (Dispute):\n" +
+                            "   - Mọi tranh chấp liên quan đến tiền đặt cọc sẽ được chuyển cho Inspector/Admin phân xử dựa trên bằng chứng do hai bên cung cấp.\n" +
+                            "   - Quyết định của Ban quản lý hệ thống StockSpace là quyết định cuối cùng và có tính ràng buộc cao nhất.")
+                    .isActive(true)
+                    .isDeleted(false)
+                    .build();
+            systemPolicyRepository.save(policy);
+            log.info("Seeded default system policy: {}", policy.getVersion());
         }
     }
 }

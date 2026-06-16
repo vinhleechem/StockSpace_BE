@@ -18,7 +18,7 @@ import java.util.List;
  * Controller xử lý các API công khai cho Warehouse — không yêu cầu xác thực.
  *
  * Endpoints:
- *   GET /api/warehouses         — Tìm kiếm & lọc kho (chỉ kho đã verified)
+ *   GET /api/warehouses         — Tìm kiếm & lọc kho (chỉ kho đã duyệt đăng bài)
  *   GET /api/warehouses/{id}    — Xem chi tiết kho
  *   GET /api/warehouses/types   — Danh sách loại kho
  */
@@ -35,7 +35,7 @@ public class PublicWarehouseController {
 
     /**
      * GET /api/warehouses
-     * Tìm kiếm kho đã được xác minh (isVerified = true).
+     * Tìm kiếm kho đã được duyệt đăng bài.
      *
      * Query params:
      *   - keyword    : tìm theo tên / địa chỉ
@@ -47,7 +47,7 @@ public class PublicWarehouseController {
      *   - sortDir    : asc / desc
      */
     @GetMapping
-    @Operation(summary = "Tìm kiếm kho bãi công khai (đã xác minh)")
+    @Operation(summary = "Tìm kiếm kho bãi công khai")
     public ResponseEntity<ApiResponse<PagedWarehouseResponse>> search(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) BigDecimal minPrice,
@@ -72,7 +72,7 @@ public class PublicWarehouseController {
 
     /**
      * GET /api/warehouses/{id}
-     * Xem chi tiết một Warehouse (chỉ kho đã verified).
+     * Xem chi tiết một Warehouse (chỉ kho đã duyệt đăng bài).
      */
     @GetMapping("/{id}")
     @Operation(summary = "Xem chi tiết kho bãi")
