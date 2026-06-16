@@ -2,6 +2,7 @@ package fu.stockspace.stockspace_be.booking.entity;
 
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.common.entity.BaseEntity;
+import fu.stockspace.stockspace_be.common.entity.SystemPolicy;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import jakarta.persistence.*;
 import lombok.*;
@@ -58,4 +59,8 @@ public class BookingRequest extends BaseEntity {
     /** Lý do từ chối (nếu REJECTED) */
     @Column(name = "reject_reason", columnDefinition = "TEXT")
     private String rejectReason;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "policy_version_id", nullable = false)
+    private SystemPolicy policy;
 }

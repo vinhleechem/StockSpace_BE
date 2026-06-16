@@ -10,6 +10,8 @@ import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
+import fu.stockspace.stockspace_be.common.entity.SystemPolicy;
+import fu.stockspace.stockspace_be.common.repository.SystemPolicyRepository;
 import fu.stockspace.stockspace_be.contract.service.ContractService;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
@@ -48,6 +50,7 @@ public class BookingService {
     private final UserRepository userRepository;
     private final WarehouseService warehouseService;
     private final ContractService contractService;
+    private final SystemPolicyRepository systemPolicyRepository;
 
     // ==================== Tenant ====================
 
@@ -80,11 +83,15 @@ public class BookingService {
             throw new BadRequestException(ErrorCode.BOOKING_DUPLICATE_PENDING);
         }
 
+        SystemPolicy policy = systemPolicyRepository.findFirstByIsActiveTrueAndIsDeletedFalseOrderByCreatedAtDesc()
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy chính sách/cam kết ràng buộc hiệu lực nào trong hệ thống"));
+
         BookingRequest booking = BookingRequest.builder()
                 .tenant(tenant)
                 .warehouse(warehouse)
                 .depositAmount(request.getDepositAmount())
                 .status(ApprovalStatus.PENDING)
+                .policy(policy)
                 .build();
 
         booking = bookingRepository.save(booking);
@@ -223,6 +230,8 @@ public class BookingService {
                 .warehouseAddress(wh != null ? wh.getAddress() : null)
                 .ownerId(wh != null && wh.getOwner() != null ? wh.getOwner().getId() : null)
                 .ownerName(wh != null && wh.getOwner() != null ? wh.getOwner().getFullName() : null)
+                .policyId(b.getPolicy() != null ? b.getPolicy().getId() : null)
+                .policyVersion(b.getPolicy() != null ? b.getPolicy().getVersion() : null)
                 .createdAt(b.getCreatedAt())
                 .updatedAt(b.getUpdatedAt())
                 .build();

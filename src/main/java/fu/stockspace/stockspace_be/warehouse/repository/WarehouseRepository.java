@@ -35,12 +35,12 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, Long> {
     // ==================== Public Search ====================
 
     /**
-     * Tìm kiếm kho công khai: chỉ trả về kho đã được verify + AVAILABLE
+     * Tìm kiếm kho công khai: trả về kho đã được duyệt đăng bài (không cần đã kiểm định)
      * Filter: keyword (name/address), pricePerMonth, capacity
      */
     @Query("""
             SELECT w FROM Warehouse w
-            WHERE w.isVerified = true
+            WHERE w.status <> fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus.PENDING_APPROVAL
               AND w.isDeleted = false
               AND (:status IS NULL OR w.status = :status)
               AND (:keyword IS NULL OR LOWER(w.name) LIKE :keyword

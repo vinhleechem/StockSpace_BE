@@ -10,6 +10,8 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundE
 import fu.stockspace.stockspace_be.warehouse.dto.*;
 import fu.stockspace.stockspace_be.warehouse.entity.*;
 import fu.stockspace.stockspace_be.warehouse.repository.*;
+import fu.stockspace.stockspace_be.common.entity.SystemPolicy;
+import fu.stockspace.stockspace_be.common.repository.SystemPolicyRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
@@ -39,12 +41,13 @@ public class WarehouseService {
     private final WarehouseTypeRepository warehouseTypeRepository;
     private final WarehouseImageRepository warehouseImageRepository;
     private final UserRepository userRepository;
+    private final SystemPolicyRepository systemPolicyRepository;
 
     // ==================== Owner: CRUD ====================
 
     /**
      * Owner tạo mới Warehouse.
-     * Kho sẽ ở trạng thái PENDING_VERIFICATION cho đến khi được Admin/Inspector duyệt.
+     * Kho sẽ ở trạng thái PENDING_APPROVAL cho đến khi được Admin duyệt bài đăng.
      */
     @Transactional
     public WarehouseResponse createWarehouse(Long ownerId, CreateWarehouseRequest request) {
@@ -56,6 +59,9 @@ public class WarehouseService {
         WarehouseType type = warehouseTypeRepository.findById(request.getTypeId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_TYPE_NOT_FOUND));
 
+        SystemPolicy policy = systemPolicyRepository.findFirstByIsActiveTrueAndIsDeletedFalseOrderByCreatedAtDesc()
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy chính sách/cam kết ràng buộc hiệu lực nào trong hệ thống"));
+
         Warehouse warehouse = Warehouse.builder()
                 .owner(owner)
                 .type(type)
@@ -64,8 +70,9 @@ public class WarehouseService {
                 .description(request.getDescription())
                 .capacity(request.getCapacity())
                 .pricePerMonth(request.getPricePerMonth())
-                .status(WarehouseStatus.PENDING_VERIFICATION)
+                .status(WarehouseStatus.PENDING_APPROVAL)
                 .isVerified(false)
+                .policy(policy)
                 .build();
 
         warehouse = warehouseRepository.save(warehouse);
@@ -131,11 +138,11 @@ public class WarehouseService {
 
     /**
      * Owner cập nhật trạng thái Warehouse (AVAILABLE ↔ INACTIVE).
-     * Không cho phép tự set RENTED hoặc PENDING_VERIFICATION qua API này.
+     * Không cho phép tự set RENTED hoặc PENDING_APPROVAL qua API này.
      */
     @Transactional
     public WarehouseResponse updateStatus(Long ownerId, Long warehouseId, WarehouseStatus newStatus) {
-        if (newStatus == WarehouseStatus.RENTED || newStatus == WarehouseStatus.PENDING_VERIFICATION) {
+        if (newStatus == WarehouseStatus.RENTED || newStatus == WarehouseStatus.PENDING_APPROVAL) {
             throw new BadRequestException(ErrorCode.WAREHOUSE_INVALID_STATUS_TRANSITION);
         }
 
@@ -225,14 +232,14 @@ public class WarehouseService {
 
     /**
      * Xem chi tiết một Warehouse theo ID.
-     * Public: chỉ xem được kho đã verified.
+     * Public: chỉ xem được kho đã duyệt đăng bài (không bắt buộc đã kiểm định).
      */
     @Transactional(readOnly = true)
     public WarehouseResponse getWarehouseDetail(Long warehouseId) {
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
 
-        if (!warehouse.isVerified()) {
+        if (warehouse.getStatus() == WarehouseStatus.PENDING_APPROVAL) {
             throw new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND);
         }
 
@@ -242,7 +249,7 @@ public class WarehouseService {
     // ==================== Admin (internal) ====================
 
     /**
-     * Admin duyệt Warehouse listing — set isVerified = true + status = AVAILABLE.
+     * Admin duyệt bài đăng Warehouse listing — set status = AVAILABLE.
      * Gọi từ AdminWarehouseService.
      */
     @Transactional
@@ -250,15 +257,14 @@ public class WarehouseService {
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
 
-        if (warehouse.isVerified()) {
-            throw new ResourceConflictException(ErrorCode.WAREHOUSE_ALREADY_VERIFIED);
+        if (warehouse.getStatus() != WarehouseStatus.PENDING_APPROVAL) {
+            throw new BadRequestException("Kho bãi đã được duyệt bài đăng hoặc đang hoạt động");
         }
 
-        warehouse.setVerified(true);
         warehouse.setStatus(WarehouseStatus.AVAILABLE);
         warehouse = warehouseRepository.save(warehouse);
 
-        log.info("Admin verified warehouse {}", warehouseId);
+        log.info("Admin approved listing for warehouse {}", warehouseId);
         return mapToResponse(warehouse);
     }
 
@@ -395,6 +401,8 @@ public class WarehouseService {
                 .ownerPhone(w.getOwner() != null ? w.getOwner().getPhone() : null)
                 .coverImageUrl(cover)
                 .imageUrls(urls)
+                .policyId(w.getPolicy() != null ? w.getPolicy().getId() : null)
+                .policyVersion(w.getPolicy() != null ? w.getPolicy().getVersion() : null)
                 .createdAt(w.getCreatedAt())
                 .updatedAt(w.getUpdatedAt())
                 .build();

@@ -2,6 +2,7 @@ package fu.stockspace.stockspace_be.warehouse.entity;
 
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.common.entity.BaseEntity;
+import fu.stockspace.stockspace_be.common.entity.SystemPolicy;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
@@ -14,7 +15,8 @@ import java.util.List;
  * Map với bảng: warehouses
  *
  * Luồng trạng thái:
- *   Owner tạo → PENDING_VERIFICATION → Admin/Inspector duyệt → AVAILABLE
+ *   Owner tạo → PENDING_APPROVAL → Admin duyệt bài đăng → AVAILABLE (isVerified = false)
+ *   Inspector kiểm định PASSED → isVerified = true
  *   Tenant thuê → RENTED → Hợp đồng kết thúc → AVAILABLE
  */
 @Entity
@@ -64,7 +66,7 @@ public class Warehouse extends BaseEntity {
 
     // ==================== Status ====================
 
-    /** true nếu đã qua kiểm định / Admin duyệt */
+    /** true nếu đã qua kiểm định bởi Inspector */
     @Column(name = "is_verified", nullable = false)
     @Builder.Default
     private boolean isVerified = false;
@@ -72,7 +74,11 @@ public class Warehouse extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)
     @Builder.Default
-    private WarehouseStatus status = WarehouseStatus.PENDING_VERIFICATION;
+    private WarehouseStatus status = WarehouseStatus.PENDING_APPROVAL;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "policy_version_id", nullable = false)
+    private SystemPolicy policy;
 
     // ==================== Images ====================
 

@@ -32,6 +32,10 @@ public class BookingResponse {
     private Long ownerId;
     private String ownerName;
 
+    /** Phiên bản cam kết ràng buộc */
+    private Long policyId;
+    private String policyVersion;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

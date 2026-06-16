@@ -39,6 +39,10 @@ public class WarehouseResponse {
     /** Toàn bộ ảnh — dùng cho detail view */
     private List<String> imageUrls;
 
+    /** Phiên bản cam kết ràng buộc */
+    private Long policyId;
+    private String policyVersion;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
