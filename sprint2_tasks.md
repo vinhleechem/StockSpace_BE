@@ -48,7 +48,7 @@ Các module Auth + Admin User Management đã hoàn thành ở sprint trước.
 - [x] **`WarehouseLayout.java`** — `@Entity @Table("warehouse_layouts")`, fields: `id (uuid)`, `warehouse_id FK`, `tenant_id FK`, `isDefault`
 - [x] **`WarehouseZone.java`** — `@Entity @Table("warehouse_zones")`, fields: `id (uuid)`, `layout_id FK`, `name`, `code`, `maxWeight`, `maxVolume`, `coordinateX`, `coordinateY`, `width`, `height`
 - [x] **`WarehouseRack.java`** — `@Entity @Table("warehouse_racks")`, fields: `id (uuid)`, `zone_id FK`, `name`, `code`, `maxWeight`, `maxVolume`, `coordinateX/Y/width/height`
-- [x] **`WarehouseStatus.java`** (Enum) — `AVAILABLE`, `RENTED`, `PENDING_VERIFICATION`, `INACTIVE`
+- [x] **`WarehouseStatus.java`** (Enum) — `AVAILABLE`, `RENTED`, `PENDING_APPROVAL`, `INACTIVE`
 
 #### 1.2. Repositories
 - [x] **`WarehouseTypeRepository.java`** — `JpaRepository<WarehouseType, Integer>`
@@ -325,21 +325,21 @@ Các module Auth + Admin User Management đã hoàn thành ở sprint trước.
 ### ═══ MODULE 7: Admin mở rộng ═══
 
 #### 7.1. Services mới (thêm vào package `admin/service/`)
-- [ ] **`AdminWarehouseService.java`** — `getAllWarehouses(filter, Pageable)`, `verifyWarehouse(UUID)`, `rejectWarehouseListing(UUID, String reason)`
+- [ ] **`AdminWarehouseService.java`** — `getAllWarehouses(filter, Pageable)`, `verifyWarehouse(UUID)`, `rejectWarehouseListing(UUID, String reason)` (tích hợp trong `WarehouseService.java`)
 - [ ] **`AdminTransactionService.java`** — `getAllTransactions(Pageable, filter)` — thống kê toàn hệ thống
 - [ ] **`AdminWithdrawService.java`** — `getAllWithdrawRequests(ApprovalStatus, Pageable)`, `approveWithdraw(UUID)` → tạo Transaction, `rejectWithdraw(UUID, reason)`
-- [ ] **`AdminInspectionService.java`** — `getAllInspections(Pageable, filter)`, `assignInspector(UUID inspectionId, Long inspectorId)`
+- [ ] **`AdminInspectionService.java`** — `getAllInspections(Pageable, filter)`, `assignInspector(UUID inspectionId, Long inspectorId)` (tích hợp trong `InspectionService.java`)
 - [ ] **`AdminPackageService.java`** — delegate sang `ServicePackageService` + `getAllSubscriptions(Pageable)`
-- [ ] **`AdminDisputeService.java`** — `getAllDisputes(status, Pageable)`, `resolveDispute(UUID id, String adminNote)` → đổi status + cập nhật hợp đồng
+- [x] **`AdminDisputeService.java`** — `getAllDisputes(status, Pageable)`, `resolveDispute(Long disputeId, Long adminId, ResolveDisputeRequest request)`
 
 #### 7.2. Controllers mới (thêm vào package `admin/controller/`)
-- [ ] **`AdminWarehouseController.java`** — `@RequestMapping("/api/admin/warehouses")`
+- [x] **`AdminWarehouseController.java`** — `@RequestMapping("/api/admin/warehouses")`
 
   | Method | Path | Mô tả |
   |--------|------|--------|
   | `GET` | `/api/admin/warehouses` | Danh sách tất cả kho (filter: status, isVerified) |
-  | `PATCH` | `/api/admin/warehouses/{id}/verify` | Duyệt kho (isVerified = true, status = AVAILABLE) |
-  | `PATCH` | `/api/admin/warehouses/{id}/reject` | Từ chối listing |
+  | `POST` | `/api/admin/warehouses/{id}/verify` | Duyệt bài đăng (status = AVAILABLE) |
+  | `POST` | `/api/admin/warehouses/{id}/reject` | Từ chối duyệt (status = INACTIVE) |
 
 - [ ] **`AdminTransactionController.java`** — `@RequestMapping("/api/admin/transactions")`
 
@@ -355,12 +355,12 @@ Các module Auth + Admin User Management đã hoàn thành ở sprint trước.
   | `PATCH` | `/api/admin/withdrawals/{id}/approve` | Duyệt rút tiền → tạo Transaction WITHDRAWAL |
   | `PATCH` | `/api/admin/withdrawals/{id}/reject` | Từ chối rút tiền |
 
-- [ ] **`AdminInspectionController.java`** — `@RequestMapping("/api/admin/inspections")`
+- [x] **`AdminInspectionController.java`** — `@RequestMapping("/api/admin/inspections")`
 
   | Method | Path | Mô tả |
   |--------|------|--------|
   | `GET` | `/api/admin/inspections` | Xem tất cả inspection requests (filter status) |
-  | `PATCH` | `/api/admin/inspections/{id}/assign` | Gán inspector cho yêu cầu kiểm định |
+  | `POST` | `/api/admin/inspections/{id}/assign` | Gán inspector cho yêu cầu kiểm định |
 
 - [ ] **`AdminPackageController.java`** — `@RequestMapping("/api/admin/packages")`
 
@@ -371,12 +371,41 @@ Các module Auth + Admin User Management đã hoàn thành ở sprint trước.
   | `DELETE` | `/api/admin/packages/{id}` | Xóa gói |
   | `GET` | `/api/admin/subscriptions` | Xem tất cả subscriptions |
 
-- [ ] **`AdminDisputeController.java`** — `@RequestMapping("/api/admin/disputes")`
+- [x] **`AdminDisputeController.java`** — `@RequestMapping("/api/admin/disputes")`
 
   | Method | Path | Mô tả |
   |--------|------|--------|
   | `GET` | `/api/admin/disputes` | Xem tất cả dispute (filter: OPEN/RESOLVED) |
-  | `PATCH` | `/api/admin/disputes/{id}/resolve` | Giải quyết dispute + ghi note |
+  | `POST` | `/api/admin/disputes/{id}/resolve` | Giải quyết dispute + ghi note |
+
+- [x] **`AdminSystemPolicyController.java`** — `@RequestMapping("/api/admin/system-policies")`
+
+  | Method | Path | Mô tả |
+  |--------|------|--------|
+  | `POST` | `/api/admin/system-policies` | Tạo chính sách cam kết mới |
+  | `GET` | `/api/admin/system-policies/{type}/history` | Xem lịch sử các chính sách cam kết |
+
+---
+
+### ═══ MODULE 8: System Policy (Chính sách cam kết) ═══
+
+#### 8.1. Entities & Repositories
+- [x] **`SystemPolicy.java`** — `@Entity @Table("system_policies")`, fields: `id (serial)`, `policyType`, `content`, `isActive`, `version`, `createdAt`, `updatedAt`
+- [x] **`SystemPolicyRepository.java`** — `JpaRepository<SystemPolicy, Integer>`
+
+#### 8.2. DTOs
+- [x] **`CreateSystemPolicyRequest.java`** — `policyType`, `content`
+- [x] **`SystemPolicyResponse.java`** — `id`, `policyType`, `content`, `isActive`, `version`, `createdAt`, `updatedAt`
+
+#### 8.3. Services
+- [x] **`SystemPolicyService.java`** — methods:
+  - `createPolicy(CreateSystemPolicyRequest)` → `SystemPolicyResponse` (Admin)
+  - `getActivePolicy(String policyType)` → `SystemPolicyResponse` (Public)
+  - `getPolicyHistory(String policyType)` → `List<SystemPolicyResponse>` (Admin)
+
+#### 8.4. Controllers
+- [x] **`PublicSystemPolicyController.java`** — `@RequestMapping("/api/system-policies")`, public endpoint to get active policy
+- [x] **`AdminSystemPolicyController.java`** — `@RequestMapping("/api/admin/system-policies")`, admin endpoints to create and view history
 
 ---
 
