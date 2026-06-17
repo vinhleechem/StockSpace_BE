@@ -32,7 +32,7 @@ Các module Auth + Admin User Management đã hoàn thành ở sprint trước.
 > Thực hiện ngay ngày 1 để 2 dev không block nhau.
 
 - [x] **Dev A tạo skeleton `BookingRequest.java`** (chỉ cần entity + UUID field) để Dev B có FK reference
-- [ ] **Dev B expose `WalletService.deductBalance()` + `WalletService.refundBalance()`** là `@Transactional` internal methods trước khi Dev A wire deposit flow
+- [x] **Dev B expose `WalletService.deductBalance()` + `WalletService.refundBalance()`** là `@Transactional` internal methods trước khi Dev A wire deposit flow
 - [x] **Cả 2 thêm ErrorCode mới vào `ErrorCode.java`** (xem danh sách cuối file) — làm 1 lần tránh conflict
 
 ---
@@ -227,42 +227,42 @@ Các module Auth + Admin User Management đã hoàn thành ở sprint trước.
 ### ═══ MODULE 5: Wallet & Transaction (Ví & Giao dịch) ═══
 
 #### 5.1. Entities & Enums
-- [ ] **`Wallet.java`** — `@Entity @Table("wallets")`, fields: `id (uuid)`, `user_id FK→User (unique)`, `balance (decimal 15,2)`, extend `BaseEntity`
-- [ ] **`Transaction.java`** — `@Entity @Table("transactions")`, fields: `id (uuid)`, `wallet_id FK`, `subscription_id FK (null)`, `booking_id FK (null)` 🔗, `amount`, `transactionType`, `paymentMethod`, `createdAt`
-- [ ] **`WithdrawRequest.java`** — `@Entity @Table("withdraw_requests")`, fields: `id (uuid)`, `user_id FK`, `transaction_id FK (unique, null)`, `amount`, `bankName`, `bankAccountNumber`, `bankAccountHolder`, `status (ApprovalStatus)`, extend `BaseEntity`
-- [ ] **`TransactionType.java`** (Enum) — `TOP_UP`, `WITHDRAWAL`, `DEPOSIT_PAYMENT`, `DEPOSIT_REFUND`, `PACKAGE_PAYMENT`, `COMMISSION`
-- [ ] **`PaymentMethod.java`** (Enum) — `BANK_TRANSFER`, `VNPAY`, `MOMO`, `WALLET`
+- [x] **`Wallet.java`** — `@Entity @Table("wallets")`, fields: `id (uuid)`, `user_id FK→User (unique)`, `balance (decimal 15,2)`, extend `BaseEntity`
+- [x] **`Transaction.java`** — `@Entity @Table("transactions")`, fields: `id (uuid)`, `wallet_id FK`, `subscription_id FK (null)`, `booking_id FK (null)` 🔗, `amount`, `transactionType`, `paymentMethod`, `createdAt`
+- [x] **`WithdrawRequest.java`** — `@Entity @Table("withdraw_requests")`, fields: `id (uuid)`, `user_id FK`, `transaction_id FK (unique, null)`, `amount`, `bankName`, `bankAccountNumber`, `bankAccountHolder`, `status (ApprovalStatus)`, extend `BaseEntity`
+- [x] **`TransactionType.java`** (Enum) — `TOP_UP`, `WITHDRAWAL`, `DEPOSIT_PAYMENT`, `DEPOSIT_REFUND`, `PACKAGE_PAYMENT`, `COMMISSION`
+- [x] **`PaymentMethod.java`** (Enum) — `BANK_TRANSFER`, `VNPAY`, `MOMO`, `WALLET`
 
 #### 5.2. Repositories
-- [ ] **`WalletRepository.java`** — `findByUserId(Long)`, `findByUserIdWithLock(Long)` (dùng `@Lock(PESSIMISTIC_WRITE)` để tránh race condition)
-- [ ] **`TransactionRepository.java`** — `findByWalletId(UUID, Pageable)`, `findAll(Pageable)` for Admin
-- [ ] **`WithdrawRequestRepository.java`** — `findByUserId(Long, Pageable)`, `findByStatus(ApprovalStatus, Pageable)`
+- [x] **`WalletRepository.java`** — `findByUserId(Long)`, `findByUserIdWithLock(Long)` (dùng `@Lock(PESSIMISTIC_WRITE)` để tránh race condition)
+- [x] **`TransactionRepository.java`** — `findByWalletId(UUID, Pageable)`, `findAll(Pageable)` for Admin
+- [x] **`WithdrawRequestRepository.java`** — `findByUserId(Long, Pageable)`, `findByStatus(ApprovalStatus, Pageable)`
 
 #### 5.3. DTOs
-- [ ] **`WalletResponse.java`** — `id`, `userId`, `balance`, `updatedAt`
-- [ ] **`TopUpRequest.java`** — `amount (BigDecimal)`, `paymentMethod`
-- [ ] **`TransactionResponse.java`** — `id`, `amount`, `type`, `method`, `referenceId`, `createdAt`
-- [ ] **`PagedTransactionResponse.java`**
-- [ ] **`WithdrawRequestDto.java`** — `amount`, `bankName`, `bankAccountNumber`, `bankAccountHolder`
-- [ ] **`WithdrawResponse.java`**
+- [x] **`WalletResponse.java`** — `id`, `userId`, `balance`, `updatedAt`
+- [x] **`TopUpRequest.java`** — `amount (BigDecimal)`, `paymentMethod`
+- [x] **`TransactionResponse.java`** — `id`, `amount`, `type`, `method`, `referenceId`, `createdAt`
+- [x] **`PagedTransactionResponse.java`**
+- [x] **`WithdrawRequestDto.java`** — `amount`, `bankName`, `bankAccountNumber`, `bankAccountHolder`
+- [x] **`WithdrawResponse.java`**
 
 #### 5.4. Services
-- [ ] **`WalletService.java`** ⚠️ — expose internal methods sớm nhất:
+- [x] **`WalletService.java`** ⚠️ — expose internal methods sớm nhất:
   - `getOrCreateWallet(Long userId)` → `Wallet` — tự tạo ví nếu chưa có
   - `getWalletInfo(Long userId)` → `WalletResponse`
   - `topUp(Long userId, TopUpRequest)` → `TransactionResponse`
   - **`deductBalance(Long userId, BigDecimal amount, String description)`** ← Dev A cần gọi khi approve booking
   - **`refundBalance(Long userId, BigDecimal amount, String description)`** ← Dev A gọi khi reject/cancel
-- [ ] **`TransactionService.java`** — methods:
+- [x] **`TransactionService.java`** — methods:
   - `getMyTransactions(Long userId, Pageable)` → `PagedTransactionResponse`
   - `recordTransaction(UUID walletId, BigDecimal amount, TransactionType, PaymentMethod, UUID refId)` — **internal**
   - `getAllTransactions(Pageable)` → `PagedTransactionResponse` (for Admin)
-- [ ] **`WithdrawService.java`** — methods:
+- [x] **`WithdrawService.java`** — methods:
   - `submitWithdrawRequest(Long userId, WithdrawRequestDto)` → `WithdrawResponse` — check đủ số dư
   - `getMyWithdrawRequests(Long userId, Pageable)` → `Page<WithdrawResponse>`
 
 #### 5.5. Controllers
-- [ ] **`WalletController.java`** — `@RequestMapping("/api/wallet")`, `@PreAuthorize("isAuthenticated()")`
+- [x] **`WalletController.java`** — `@RequestMapping("/api/wallet")`, `@PreAuthorize("isAuthenticated()")`
 
   | Method | Path | Mô tả |
   |--------|------|--------|
@@ -277,43 +277,43 @@ Các module Auth + Admin User Management đã hoàn thành ở sprint trước.
 ### ═══ MODULE 6: Service Package & Subscription ═══
 
 #### 6.1. Entities & Enums
-- [ ] **`ServicePackage.java`** — `@Entity @Table("service_packages")`, fields: `id (serial)`, `name`, `features (jsonb)`, `price`, `durationDays`, extend `BaseEntity`
-- [ ] **`Subscription.java`** — `@Entity @Table("subscriptions")`, fields: `id (uuid)`, `tenant_id FK→User`, `package_id FK→ServicePackage`, `startDate`, `endDate`, `status`, extend `BaseEntity`
-- [ ] **`SubscriptionStatus.java`** (Enum) — `ACTIVE`, `EXPIRED`, `CANCELLED`
+- [x] **`ServicePackage.java`** — `@Entity @Table("service_packages")`, fields: `id (serial)`, `name`, `features (jsonb)`, `price`, `durationDays`, extend `BaseEntity`
+- [x] **`Subscription.java`** — `@Entity @Table("subscriptions")`, fields: `id (uuid)`, `tenant_id FK→User`, `package_id FK→ServicePackage`, `startDate`, `endDate`, `status`, extend `BaseEntity`
+- [x] **`SubscriptionStatus.java`** (Enum) — `ACTIVE`, `EXPIRED`, `CANCELLED`
 
 #### 6.2. Repositories
-- [ ] **`ServicePackageRepository.java`** — `JpaRepository<ServicePackage, Integer>`
-- [ ] **`SubscriptionRepository.java`** — `findByTenantIdAndStatus(Long, SubscriptionStatus)`, `findActiveByTenantIdAndWarehouseId(Long, UUID)` (dùng để guard WMS)
+- [x] **`ServicePackageRepository.java`** — `JpaRepository<ServicePackage, Integer>`
+- [x] **`SubscriptionRepository.java`** — `findByTenantIdAndStatus(Long, SubscriptionStatus)`, `findActiveByTenantIdAndWarehouseId(Long, UUID)` (dùng để guard WMS)
 
 #### 6.3. DTOs
-- [ ] **`ServicePackageResponse.java`** — `id`, `name`, `features`, `price`, `durationDays`
-- [ ] **`SubscriptionResponse.java`** — `id`, `package info`, `startDate`, `endDate`, `status`
-- [ ] **`PurchasePackageRequest.java`** — `packageId (int)`
-- [ ] **`CreatePackageRequest.java`** — for Admin
-- [ ] **`UpdatePackageRequest.java`** — for Admin
+- [x] **`ServicePackageResponse.java`** — `id`, `name`, `features`, `price`, `durationDays`
+- [x] **`SubscriptionResponse.java`** — `id`, `package info`, `startDate`, `endDate`, `status`
+- [x] **`PurchasePackageRequest.java`** — `packageId (int)`
+- [x] **`CreatePackageRequest.java`** — for Admin
+- [x] **`UpdatePackageRequest.java`** — for Admin
 
 #### 6.4. Services
-- [ ] **`ServicePackageService.java`** — methods:
+- [x] **`ServicePackageService.java`** — methods:
   - `getAllPackages()` → `List<ServicePackageResponse>` **(public)**
   - `getPackageById(Integer id)` → `ServicePackageResponse`
   - `createPackage(CreatePackageRequest)` → `ServicePackageResponse` (Admin)
   - `updatePackage(Integer id, UpdatePackageRequest)` → `ServicePackageResponse` (Admin)
   - `deletePackage(Integer id)` (Admin)
-- [ ] **`SubscriptionService.java`** — methods:
+- [x] **`SubscriptionService.java`** — methods:
   - `purchasePackage(Long tenantId, PurchasePackageRequest)` → `SubscriptionResponse` 🔗 gọi `WalletService.deductBalance()`
   - `getMyActiveSubscription(Long tenantId)` → `SubscriptionResponse`
   - **`hasActiveSubscription(Long tenantId)`** → `boolean` — guard cho WMS features (Sprint 3)
   - `getAllSubscriptions(Pageable)` → Paged (Admin)
 
 #### 6.5. Controllers
-- [ ] **`PublicPackageController.java`** — `@RequestMapping("/api/packages")`
+- [x] **`PublicPackageController.java`** — `@RequestMapping("/api/packages")`
 
   | Method | Path | Mô tả |
   |--------|------|--------|
   | `GET` | `/api/packages` | Xem danh sách gói dịch vụ |
   | `GET` | `/api/packages/{id}` | Chi tiết gói |
 
-- [ ] **`TenantSubscriptionController.java`** — `@RequestMapping("/api/tenant/subscriptions")`, `@PreAuthorize("hasRole('TENANT')")`
+- [x] **`TenantSubscriptionController.java`** — `@RequestMapping("/api/tenant/subscriptions")`, `@PreAuthorize("hasRole('TENANT')")`
 
   | Method | Path | Mô tả |
   |--------|------|--------|
@@ -325,11 +325,11 @@ Các module Auth + Admin User Management đã hoàn thành ở sprint trước.
 ### ═══ MODULE 7: Admin mở rộng ═══
 
 #### 7.1. Services mới (thêm vào package `admin/service/`)
-- [ ] **`AdminWarehouseService.java`** — `getAllWarehouses(filter, Pageable)`, `verifyWarehouse(UUID)`, `rejectWarehouseListing(UUID, String reason)` (tích hợp trong `WarehouseService.java`)
-- [ ] **`AdminTransactionService.java`** — `getAllTransactions(Pageable, filter)` — thống kê toàn hệ thống
-- [ ] **`AdminWithdrawService.java`** — `getAllWithdrawRequests(ApprovalStatus, Pageable)`, `approveWithdraw(UUID)` → tạo Transaction, `rejectWithdraw(UUID, reason)`
-- [ ] **`AdminInspectionService.java`** — `getAllInspections(Pageable, filter)`, `assignInspector(UUID inspectionId, Long inspectorId)` (tích hợp trong `InspectionService.java`)
-- [ ] **`AdminPackageService.java`** — delegate sang `ServicePackageService` + `getAllSubscriptions(Pageable)`
+- [x] **`AdminWarehouseService.java`** — `getAllWarehouses(filter, Pageable)`, `verifyWarehouse(UUID)`, `rejectWarehouseListing(UUID, String reason)` (tích hợp trong `WarehouseService.java`)
+- [x] **`AdminTransactionService.java`** — `getAllTransactions(Pageable, filter)` — thống kê toàn hệ thống
+- [x] **`AdminWithdrawService.java`** — `getAllWithdrawRequests(ApprovalStatus, Pageable)`, `approveWithdraw(UUID)` → tạo Transaction, `rejectWithdraw(UUID, reason)`
+- [x] **`AdminInspectionService.java`** — `getAllInspections(Pageable, filter)`, `assignInspector(UUID inspectionId, Long inspectorId)` (tích hợp trong `InspectionService.java`)
+- [x] **`AdminPackageService.java`** — delegate sang `ServicePackageService` + `getAllSubscriptions(Pageable)`
 - [x] **`AdminDisputeService.java`** — `getAllDisputes(status, Pageable)`, `resolveDispute(Long disputeId, Long adminId, ResolveDisputeRequest request)`
 
 #### 7.2. Controllers mới (thêm vào package `admin/controller/`)
@@ -341,13 +341,13 @@ Các module Auth + Admin User Management đã hoàn thành ở sprint trước.
   | `POST` | `/api/admin/warehouses/{id}/verify` | Duyệt bài đăng (status = AVAILABLE) |
   | `POST` | `/api/admin/warehouses/{id}/reject` | Từ chối duyệt (status = INACTIVE) |
 
-- [ ] **`AdminTransactionController.java`** — `@RequestMapping("/api/admin/transactions")`
+- [x] **`AdminTransactionController.java`** — `@RequestMapping("/api/admin/transactions")`
 
   | Method | Path | Mô tả |
   |--------|------|--------|
   | `GET` | `/api/admin/transactions` | Toàn bộ giao dịch hệ thống (phân trang, filter theo type) |
 
-- [ ] **`AdminWithdrawController.java`** — `@RequestMapping("/api/admin/withdrawals")`
+- [x] **`AdminWithdrawController.java`** — `@RequestMapping("/api/admin/withdrawals")`
 
   | Method | Path | Mô tả |
   |--------|------|--------|
@@ -362,7 +362,7 @@ Các module Auth + Admin User Management đã hoàn thành ở sprint trước.
   | `GET` | `/api/admin/inspections` | Xem tất cả inspection requests (filter status) |
   | `POST` | `/api/admin/inspections/{id}/assign` | Gán inspector cho yêu cầu kiểm định |
 
-- [ ] **`AdminPackageController.java`** — `@RequestMapping("/api/admin/packages")`
+- [x] **`AdminPackageController.java`** — `@RequestMapping("/api/admin/packages")`
 
   | Method | Path | Mô tả |
   |--------|------|--------|
