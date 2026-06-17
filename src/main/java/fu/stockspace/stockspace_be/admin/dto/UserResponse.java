@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * DTO trả về thông tin đầy đủ của User cho trang quản lý Admin.
@@ -19,7 +20,7 @@ import java.util.Set;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class UserResponse {
 
-    private Long id;
+    private UUID id;
     private String email;
     private String fullName;
     private String phone;

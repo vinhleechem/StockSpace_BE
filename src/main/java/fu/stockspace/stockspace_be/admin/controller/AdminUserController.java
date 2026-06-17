@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import java.util.UUID;
 
 /**
  * Controller xử lý các API Quản lý Người dùng (User Management) cho Admin.
@@ -72,7 +73,7 @@ public class AdminUserController {
     @GetMapping("/{id}")
     @Operation(summary = "Xem chi tiết thông tin người dùng theo ID")
     public ResponseEntity<ApiResponse<UserResponse>> getUserById(
-            @PathVariable Long id
+            @PathVariable UUID id
     ) {
         UserResponse user = userManagementService.getUserById(id);
         return ResponseEntity.ok(ApiResponse.success("Lấy thông tin người dùng thành công", user));
@@ -103,7 +104,7 @@ public class AdminUserController {
     @PutMapping("/{id}")
     @Operation(summary = "Cập nhật thông tin người dùng (fullName, phone)")
     public ResponseEntity<ApiResponse<UserResponse>> updateUser(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @Valid @RequestBody UpdateUserRequest request
     ) {
         UserResponse user = userManagementService.updateUser(id, request);
@@ -119,7 +120,7 @@ public class AdminUserController {
     @PatchMapping("/{id}/activate")
     @Operation(summary = "Kích hoạt (mở khóa) tài khoản người dùng")
     public ResponseEntity<ApiResponse<UserResponse>> activateUser(
-            @PathVariable Long id
+            @PathVariable UUID id
     ) {
         UserResponse user = userManagementService.setUserStatus(id, true);
         return ResponseEntity.ok(ApiResponse.success("Kích hoạt tài khoản thành công", user));
@@ -132,7 +133,7 @@ public class AdminUserController {
     @PatchMapping("/{id}/deactivate")
     @Operation(summary = "Khóa tài khoản người dùng")
     public ResponseEntity<ApiResponse<UserResponse>> deactivateUser(
-            @PathVariable Long id
+            @PathVariable UUID id
     ) {
         UserResponse user = userManagementService.setUserStatus(id, false);
         return ResponseEntity.ok(ApiResponse.success("Khóa tài khoản thành công", user));
@@ -147,7 +148,7 @@ public class AdminUserController {
     @PatchMapping("/{id}/reset-password")
     @Operation(summary = "Admin đặt lại mật khẩu cho người dùng")
     public ResponseEntity<ApiResponse<Void>> resetPassword(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @Valid @RequestBody ResetPasswordRequest request
     ) {
         userManagementService.resetPassword(id, request);
@@ -164,7 +165,7 @@ public class AdminUserController {
     @DeleteMapping("/{id}")
     @Operation(summary = "Xóa vĩnh viễn người dùng khỏi hệ thống")
     public ResponseEntity<ApiResponse<Void>> deleteUser(
-            @PathVariable Long id
+            @PathVariable UUID id
     ) {
         userManagementService.deleteUser(id);
         return ResponseEntity.ok(ApiResponse.success("Xóa người dùng thành công", null));
