@@ -1,5 +1,4 @@
 package fu.stockspace.stockspace_be.booking.service;
-
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.booking.dto.*;
@@ -17,16 +16,15 @@ import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseService;
+import fu.stockspace.stockspace_be.wallet.service.WalletService;
+import fu.stockspace.stockspace_be.wallet.entity.TransactionType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import java.util.List;
-
 import java.util.stream.Collectors;
-
 /**
  * Service xử lý nghiệp vụ Booking Request (Thuê kho).
  *
@@ -44,16 +42,14 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class BookingService {
-
     private final BookingRequestRepository bookingRepository;
     private final WarehouseRepository warehouseRepository;
     private final UserRepository userRepository;
     private final WarehouseService warehouseService;
     private final ContractService contractService;
     private final SystemPolicyRepository systemPolicyRepository;
-
+    private final WalletService walletService;
     // ==================== Tenant ====================
-
     /**
      * Tenant gửi yêu cầu thuê kho.
      *
@@ -64,28 +60,22 @@ public class BookingService {
     @Transactional
     public BookingResponse sendBookingRequest(Long tenantId, CreateBookingRequest request) {
         log.info("Tenant {} sending booking request for warehouse {}", tenantId, request.getWarehouseId());
-
         User tenant = userRepository.findById(tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
-
         Warehouse warehouse = warehouseRepository.findById(request.getWarehouseId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
-
         // Kho phải AVAILABLE
         if (warehouse.getStatus() != WarehouseStatus.AVAILABLE) {
             throw new BadRequestException(ErrorCode.WAREHOUSE_NOT_AVAILABLE);
         }
-
         // Không cho spam booking
         boolean hasPending = bookingRepository.existsByTenantIdAndWarehouseIdAndStatus(
                 tenantId, warehouse.getId(), ApprovalStatus.PENDING);
         if (hasPending) {
             throw new BadRequestException(ErrorCode.BOOKING_DUPLICATE_PENDING);
         }
-
         SystemPolicy policy = systemPolicyRepository.findFirstByIsActiveTrueAndIsDeletedFalseOrderByCreatedAtDesc()
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy chính sách/cam kết ràng buộc hiệu lực nào trong hệ thống"));
-
         BookingRequest booking = BookingRequest.builder()
                 .tenant(tenant)
                 .warehouse(warehouse)
@@ -93,14 +83,11 @@ public class BookingService {
                 .status(ApprovalStatus.PENDING)
                 .policy(policy)
                 .build();
-
         booking = bookingRepository.save(booking);
         log.info("Booking request created: {} (tenant={}, warehouse={})",
                 booking.getId(), tenantId, warehouse.getId());
-
         return mapToResponse(booking);
     }
-
     /**
      * Tenant huỷ booking (chỉ khi status còn PENDING).
      */
@@ -108,18 +95,14 @@ public class BookingService {
     public void cancelBooking(Long tenantId, Long bookingId) {
         BookingRequest booking = bookingRepository.findByIdAndTenantId(bookingId, tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.BOOKING_NOT_FOUND));
-
         if (booking.getStatus() != ApprovalStatus.PENDING) {
             throw new BadRequestException(ErrorCode.BOOKING_ALREADY_PROCESSED);
         }
-
         booking.setStatus(ApprovalStatus.REJECTED);
         booking.setRejectReason("Tenant tự huỷ yêu cầu");
         bookingRepository.save(booking);
-
         log.info("Tenant {} cancelled booking {}", tenantId, bookingId);
     }
-
     /**
      * Tenant xem lịch sử booking của mình (phân trang).
      */
@@ -129,9 +112,7 @@ public class BookingService {
         Page<BookingRequest> bookingPage = bookingRepository.findByTenantId(tenantId, pageable);
         return toPagedResponse(bookingPage);
     }
-
     // ==================== Owner ====================
-
     /**
      * Owner xem danh sách yêu cầu thuê đến kho của mình (phân trang).
      */
@@ -141,7 +122,6 @@ public class BookingService {
         Page<BookingRequest> bookingPage = bookingRepository.findByWarehouseOwnerId(ownerId, pageable);
         return toPagedResponse(bookingPage);
     }
-
     /**
      * Owner chấp nhận yêu cầu thuê kho.
      *
@@ -156,10 +136,8 @@ public class BookingService {
     public BookingResponse approveBooking(Long ownerId, Long bookingId) {
         BookingRequest booking = getOwnerBooking(ownerId, bookingId);
         validatePending(booking);
-
         booking.setStatus(ApprovalStatus.APPROVED);
         booking = bookingRepository.save(booking);
-
         // =========================================================
         // [INTEGRATION POINT — Dev B]
         // Sau khi Dev B hoàn thành WalletService, uncomment:
@@ -169,20 +147,23 @@ public class BookingService {
         //     booking.getDepositAmount(),
         //     "Đặt cọc thuê kho: " + booking.getWarehouse().getName()
         // );
+        walletService.deductBalance(
+            booking.getTenant().getId(),
+            booking.getDepositAmount(),
+            TransactionType.DEPOSIT_PAYMENT,
+            "Đặt cọc thuê kho: " + booking.getWarehouse().getName(),
+            booking.getId(),
+            null
+        );
         // =========================================================
-
         // Tạo RentalContract
         contractService.createContractFromBooking(booking.getId());
-
         // Đổi warehouse sang RENTED
         warehouseService.markAsRented(booking.getWarehouse().getId());
-
         log.info("Owner {} approved booking {} — warehouse {} is now RENTED",
                 ownerId, bookingId, booking.getWarehouse().getId());
-
         return mapToResponse(booking);
     }
-
     /**
      * Owner từ chối yêu cầu thuê kho.
      */
@@ -190,32 +171,25 @@ public class BookingService {
     public BookingResponse rejectBooking(Long ownerId, Long bookingId, String reason) {
         BookingRequest booking = getOwnerBooking(ownerId, bookingId);
         validatePending(booking);
-
         booking.setStatus(ApprovalStatus.REJECTED);
         booking.setRejectReason(reason);
         booking = bookingRepository.save(booking);
-
         log.info("Owner {} rejected booking {} (reason: {})", ownerId, bookingId, reason);
         return mapToResponse(booking);
     }
-
     // ==================== Private helpers ====================
-
     private BookingRequest getOwnerBooking(Long ownerId, Long bookingId) {
         return bookingRepository.findByIdAndOwnerId(bookingId, ownerId)
                 .orElseThrow(() -> new ForbiddenException(ErrorCode.BOOKING_NOT_FOUND));
     }
-
     private void validatePending(BookingRequest booking) {
         if (booking.getStatus() != ApprovalStatus.PENDING) {
             throw new BadRequestException(ErrorCode.BOOKING_ALREADY_PROCESSED);
         }
     }
-
     private BookingResponse mapToResponse(BookingRequest b) {
         User tenant = b.getTenant();
         Warehouse wh = b.getWarehouse();
-
         return BookingResponse.builder()
                 .id(b.getId())
                 .status(b.getStatus().name())
@@ -236,12 +210,10 @@ public class BookingService {
                 .updatedAt(b.getUpdatedAt())
                 .build();
     }
-
     private PagedBookingResponse toPagedResponse(Page<BookingRequest> page) {
         List<BookingResponse> content = page.getContent().stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
-
         return PagedBookingResponse.builder()
                 .content(content)
                 .page(page.getNumber())
