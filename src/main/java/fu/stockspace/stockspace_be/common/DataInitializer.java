@@ -11,6 +11,8 @@ import fu.stockspace.stockspace_be.common.repository.SystemPolicyRepository;
 import fu.stockspace.stockspace_be.wallet.service.WalletService;
 import fu.stockspace.stockspace_be.subscription.entity.ServicePackage;
 import fu.stockspace.stockspace_be.subscription.repository.ServicePackageRepository;
+import fu.stockspace.stockspace_be.common.entity.SystemConfig;
+import fu.stockspace.stockspace_be.common.repository.SystemConfigRepository;
 import java.math.BigDecimal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +36,7 @@ public class DataInitializer implements CommandLineRunner {
     private final SystemPolicyRepository systemPolicyRepository;
     private final WalletService walletService;
     private final ServicePackageRepository packageRepository;
+    private final SystemConfigRepository systemConfigRepository;
     @Override
     @Transactional
     public void run(String... args) throws Exception {
@@ -84,6 +87,8 @@ public class DataInitializer implements CommandLineRunner {
         seedDefaultSystemPolicy();
         // 5. Khởi tạo các gói dịch vụ mặc định
         seedDefaultPackages();
+        // 6. Khởi tạo cấu hình hệ thống mặc định
+        seedSystemConfig();
         log.info("DataInitializer finished seeding successfully!");
     }
     private Permission getOrCreatePermission(String name, String description) {
@@ -168,6 +173,36 @@ public class DataInitializer implements CommandLineRunner {
                     .isActive(true)
                     .build());
             log.info("Seeded default service packages successfully");
+        }
+    }
+    private void seedSystemConfig() {
+        // First check or seed "Phí Đăng Bài Kho Bãi" package
+        ServicePackage postingFeePkg = packageRepository.findByName("Phí Đăng Bài Kho Bãi")
+                .orElseGet(() -> packageRepository.save(ServicePackage.builder()
+                        .name("Phí Đăng Bài Kho Bãi")
+                        .features("{\"type\":\"POSTING_FEE\"}")
+                        .price(new BigDecimal("50000.00"))
+                        .durationDays(0)
+                        .isActive(true)
+                        .build()));
+
+        if (systemConfigRepository.count() == 0) {
+            systemConfigRepository.save(SystemConfig.builder()
+                    .configKey("deposit_percentage")
+                    .configValue("10")
+                    .description("Tỷ lệ phần trăm đặt cọc thuê kho (ví dụ: 10 đại diện cho 10%)")
+                    .build());
+            systemConfigRepository.save(SystemConfig.builder()
+                    .configKey("contract_expiry_days")
+                    .configValue("7")
+                    .description("Số ngày tối đa để Tenant xác nhận ký hợp đồng online sau khi Owner submit")
+                    .build());
+            systemConfigRepository.save(SystemConfig.builder()
+                    .configKey("warehouse_publish_package_id")
+                    .configValue(postingFeePkg.getId().toString())
+                    .description("ID của gói dịch vụ Phí Đăng Bài Kho Bãi trong hệ thống")
+                    .build());
+            log.info("Seeded default system configurations successfully");
         }
     }
 }
