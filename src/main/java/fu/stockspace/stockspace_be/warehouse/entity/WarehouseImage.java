@@ -4,6 +4,9 @@ import jakarta.persistence.*;
 import lombok.*;
 
 
+import java.util.UUID;
+
+
 /**
  * Entity WarehouseImage — lưu URL ảnh của một Warehouse.
  * Map với bảng: warehouse_images
@@ -22,9 +25,9 @@ import lombok.*;
 public class WarehouseImage {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", updatable = false, nullable = false)
-    private Long id;
+    private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "warehouse_id", nullable = false)

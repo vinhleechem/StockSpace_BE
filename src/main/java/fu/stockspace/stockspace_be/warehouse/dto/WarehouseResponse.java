@@ -11,11 +11,13 @@ import java.util.List;
 /**
  * DTO trả về thông tin tóm tắt của Warehouse (dùng trong danh sách / phân trang).
  */
+import java.util.UUID;
+
 @Getter
 @Builder
 public class WarehouseResponse {
 
-    private Long id;
+    private UUID id;
     private String name;
     private String address;
     private String description;
@@ -29,7 +31,7 @@ public class WarehouseResponse {
     private String typeName;
 
     /** Thông tin chủ kho (summary) */
-    private Long ownerId;
+    private UUID ownerId;
     private String ownerName;
     private String ownerPhone;
 
@@ -40,7 +42,7 @@ public class WarehouseResponse {
     private List<String> imageUrls;
 
     /** Phiên bản cam kết ràng buộc */
-    private Long policyId;
+    private UUID policyId;
     private String policyVersion;
 
     private LocalDateTime createdAt;

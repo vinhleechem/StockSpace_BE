@@ -18,10 +18,12 @@ import java.util.Optional;
  * searchWarehouses — public search: filter theo keyword, status, price, capacity
  * findByOwnerId    — owner xem kho của mình
  */
-public interface WarehouseRepository extends JpaRepository<Warehouse, Long> {
+import java.util.UUID;
+
+public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
 
     @Query("SELECT w FROM Warehouse w WHERE w.id = ?1 AND w.isDeleted = false")
-    Optional<Warehouse> findById(Long id);
+    Optional<Warehouse> findById(UUID id);
 
     @Query("SELECT w FROM Warehouse w WHERE w.isDeleted = false")
     java.util.List<Warehouse> findAll();
@@ -78,15 +80,15 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, Long> {
     // ==================== Owner ====================
 
     @Query("SELECT w FROM Warehouse w WHERE w.owner.id = ?1 AND w.isDeleted = false")
-    Page<Warehouse> findByOwnerId(Long ownerId, Pageable pageable);
+    Page<Warehouse> findByOwnerId(UUID ownerId, Pageable pageable);
 
     @Query("SELECT w FROM Warehouse w WHERE w.id = ?1 AND w.owner.id = ?2 AND w.isDeleted = false")
-    Optional<Warehouse> findByIdAndOwnerId(Long id, Long ownerId);
+    Optional<Warehouse> findByIdAndOwnerId(UUID id, UUID ownerId);
 
     // ==================== Misc ====================
 
     @Query("SELECT COUNT(w) > 0 FROM Warehouse w WHERE w.id = ?1 AND w.owner.id = ?2 AND w.isDeleted = false")
-    boolean existsByIdAndOwnerId(Long id, Long ownerId);
+    boolean existsByIdAndOwnerId(UUID id, UUID ownerId);
 
     @Query("SELECT COUNT(w) > 0 FROM Warehouse w WHERE w.type.id = ?1 AND w.isDeleted = false")
     boolean existsByTypeId(Integer typeId);

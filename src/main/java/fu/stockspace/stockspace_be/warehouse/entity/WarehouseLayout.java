@@ -7,6 +7,9 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 
+import java.util.UUID;
+
+
 /**
  * Entity WarehouseLayout — bản đồ layout kho, có thể là layout mặc định của Owner
  * hoặc layout tuỳ chỉnh của Tenant sau khi thuê.
@@ -22,9 +25,9 @@ import lombok.experimental.SuperBuilder;
 public class WarehouseLayout extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", updatable = false, nullable = false)
-    private Long id;
+    private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "warehouse_id", nullable = false)
