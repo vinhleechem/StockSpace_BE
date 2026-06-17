@@ -9,7 +9,7 @@ import java.util.UUID;
 @Builder
 public class SubscriptionResponse {
     private UUID id;
-    private Long tenantId;
+    private UUID tenantId;
     private ServicePackageResponse servicePackage;
     private LocalDate startDate;
     private LocalDate endDate;

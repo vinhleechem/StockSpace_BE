@@ -40,7 +40,7 @@ public class WalletService {
      * Lấy ví của người dùng, tự động tạo nếu chưa tồn tại.
      */
     @Transactional
-    public Wallet getOrCreateWallet(Long userId) {
+    public Wallet getOrCreateWallet(UUID userId) {
         return walletRepository.findByUserId(userId)
                 .orElseGet(() -> {
                     User user = userRepository.findById(userId)
@@ -58,7 +58,7 @@ public class WalletService {
      * Lấy thông tin ví của người dùng.
      */
     @Transactional(readOnly = true)
-    public WalletResponse getWalletInfo(Long userId) {
+    public WalletResponse getWalletInfo(UUID userId) {
         Wallet wallet = walletRepository.findByUserId(userId)
                 .orElseGet(() -> {
                     // Cần tạo transaction mới để lưu ví nên gọi qua method có Transaction
@@ -70,7 +70,7 @@ public class WalletService {
      * Tạo yêu cầu nạp tiền, lưu transaction PENDING và trả về thông tin thanh toán VietQR.
      */
     @Transactional
-    public TopUpResponse createTopUpRequest(Long userId, TopUpRequest request) {
+    public TopUpResponse createTopUpRequest(UUID userId, TopUpRequest request) {
         Wallet wallet = getOrCreateWallet(userId);
         String paymentCode = generatePaymentCode();
         Transaction transaction = Transaction.builder()
@@ -138,7 +138,7 @@ public class WalletService {
             return;
         }
         // 5. Khóa ví và cộng tiền vào tài khoản
-        Long userId = transaction.getWallet().getUser().getId();
+        UUID userId = transaction.getWallet().getUser().getId();
         Wallet wallet = walletRepository.findByUserIdWithLock(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WALLET_NOT_FOUND));
         BigDecimal transferAmount = payload.getTransferAmount();
@@ -157,7 +157,7 @@ public class WalletService {
      * Yêu cầu phương thức gọi phải có @Transactional và nên gọi trong service có lock.
      */
     @Transactional
-    public Transaction deductBalance(Long userId, BigDecimal amount, TransactionType type, String description, Long bookingId, UUID subscriptionId) {
+    public Transaction deductBalance(UUID userId, BigDecimal amount, TransactionType type, String description, UUID bookingId, UUID subscriptionId) {
         Wallet wallet = walletRepository.findByUserIdWithLock(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WALLET_NOT_FOUND));
         if (wallet.getBalance().compareTo(amount) < 0) {
@@ -183,7 +183,7 @@ public class WalletService {
      * Yêu cầu phương thức gọi phải có @Transactional và nên gọi trong service có lock.
      */
     @Transactional
-    public Transaction refundBalance(Long userId, BigDecimal amount, TransactionType type, String description, Long bookingId, UUID subscriptionId) {
+    public Transaction refundBalance(UUID userId, BigDecimal amount, TransactionType type, String description, UUID bookingId, UUID subscriptionId) {
         Wallet wallet = walletRepository.findByUserIdWithLock(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WALLET_NOT_FOUND));
         wallet.setBalance(wallet.getBalance().add(amount));

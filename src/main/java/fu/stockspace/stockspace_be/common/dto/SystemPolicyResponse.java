@@ -4,10 +4,12 @@ import lombok.Builder;
 import lombok.Getter;
 import java.time.LocalDateTime;
 
+import java.util.UUID;
+
 @Getter
 @Builder
 public class SystemPolicyResponse {
-    private Long id;
+    private UUID id;
     private String version;
     private String content;
     private boolean isActive;

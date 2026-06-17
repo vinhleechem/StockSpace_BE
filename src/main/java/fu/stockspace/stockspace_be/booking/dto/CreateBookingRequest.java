@@ -16,7 +16,7 @@ import java.math.BigDecimal;
 public class CreateBookingRequest {
 
     @NotNull(message = "ID kho không được để trống")
-    private Long warehouseId;
+    private java.util.UUID warehouseId;
 
     @NotNull(message = "Số tiền đặt cọc không được để trống")
     @DecimalMin(value = "0.0", inclusive = false, message = "Số tiền đặt cọc phải lớn hơn 0")

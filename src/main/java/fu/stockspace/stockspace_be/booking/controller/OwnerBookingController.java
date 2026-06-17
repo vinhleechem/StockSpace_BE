@@ -44,7 +44,7 @@ public class OwnerBookingController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        Long ownerId = getCurrentUserId();
+        java.util.UUID ownerId = getCurrentUserId();
         PagedBookingResponse result = bookingService.getIncomingRequests(ownerId, page, size);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách yêu cầu thuê thành công", result));
     }
@@ -56,8 +56,8 @@ public class OwnerBookingController {
      */
     @PatchMapping("/{id}/approve")
     @Operation(summary = "Chấp nhận yêu cầu thuê kho")
-    public ResponseEntity<ApiResponse<BookingResponse>> approve(@PathVariable Long id) {
-        Long ownerId = getCurrentUserId();
+    public ResponseEntity<ApiResponse<BookingResponse>> approve(@PathVariable java.util.UUID id) {
+        java.util.UUID ownerId = getCurrentUserId();
         BookingResponse response = bookingService.approveBooking(ownerId, id);
         return ResponseEntity.ok(ApiResponse.success("Chấp nhận yêu cầu thuê kho thành công", response));
     }
@@ -70,15 +70,15 @@ public class OwnerBookingController {
     @PatchMapping("/{id}/reject")
     @Operation(summary = "Từ chối yêu cầu thuê kho")
     public ResponseEntity<ApiResponse<BookingResponse>> reject(
-            @PathVariable Long id,
+            @PathVariable java.util.UUID id,
             @Valid @RequestBody RejectBookingRequest request
     ) {
-        Long ownerId = getCurrentUserId();
+        java.util.UUID ownerId = getCurrentUserId();
         BookingResponse response = bookingService.rejectBooking(ownerId, id, request.getReason());
         return ResponseEntity.ok(ApiResponse.success("Từ chối yêu cầu thuê kho thành công", response));
     }
 
-    private Long getCurrentUserId() {
+    private java.util.UUID getCurrentUserId() {
         return SecurityUtil.getCurrentUser()
                 .map(User::getId)
                 .orElseThrow(() -> new UnauthorizedException(ErrorCode.UNAUTHENTICATED));

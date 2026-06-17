@@ -45,7 +45,7 @@ public class InspectorController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        Long inspectorId = getCurrentUser().getId();
+        java.util.UUID inspectorId = getCurrentUser().getId();
         Page<InspectionReportResponse> result = inspectionService.getAssignedInspections(inspectorId, page, size);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách kiểm định thành công", result));
     }
@@ -58,10 +58,10 @@ public class InspectorController {
     @PostMapping("/{id}/report")
     @Operation(summary = "Nộp báo cáo kết quả kiểm định")
     public ResponseEntity<ApiResponse<InspectionReportResponse>> submitReport(
-            @PathVariable Long id,
+            @PathVariable java.util.UUID id,
             @Valid @RequestBody SubmitInspectionRequest request
     ) {
-        Long inspectorId = getCurrentUser().getId();
+        java.util.UUID inspectorId = getCurrentUser().getId();
         InspectionReportResponse response = inspectionService.submitReport(inspectorId, id, request);
         return ResponseEntity.ok(ApiResponse.success("Nộp báo cáo kiểm định thành công", response));
     }

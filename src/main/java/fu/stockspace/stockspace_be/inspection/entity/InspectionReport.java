@@ -8,6 +8,8 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 import java.time.LocalDateTime;
 
+import java.util.UUID;
+
 /**
  * Entity InspectionReport — báo cáo kiểm định kho.
  * Map với bảng: inspection_reports
@@ -30,9 +32,9 @@ import java.time.LocalDateTime;
 public class InspectionReport extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", updatable = false, nullable = false)
-    private Long id;
+    private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "warehouse_id", nullable = false)
