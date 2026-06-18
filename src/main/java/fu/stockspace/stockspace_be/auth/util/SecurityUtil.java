@@ -6,6 +6,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Utility để Dev 2 lấy thông tin user đang login từ SecurityContext.
@@ -13,7 +14,7 @@ import java.util.Optional;
  * ============================================================
  * DÀNH CHO DEV 2 — Cách dùng trong Controller/Service:
  *
- *   Long userId = SecurityUtil.getCurrentUserId();
+ *   UUID userId = SecurityUtil.getCurrentUserId();
  *   String email = SecurityUtil.getCurrentUserEmail();
  *   Role role = SecurityUtil.getCurrentRole();
  * ============================================================
@@ -37,11 +38,11 @@ public class SecurityUtil {
     }
 
     /**
-     * Lấy ID (Long) của user đang login.
+     * Lấy ID (UUID) của user đang login.
      *
      * @throws IllegalStateException nếu chưa authenticate (không nên xảy ra trên endpoint có @PreAuthorize)
      */
-    public static Long getCurrentUserId() {
+    public static UUID getCurrentUserId() {
         return getCurrentUser()
                 .map(User::getId)
                 .orElseThrow(() -> new IllegalStateException("No authenticated user found in SecurityContext"));

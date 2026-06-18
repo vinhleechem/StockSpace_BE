@@ -11,11 +11,13 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 
 
-public interface InspectionReportRepository extends JpaRepository<InspectionReport, Long> {
+import java.util.UUID;
 
-    List<InspectionReport> findByWarehouseId(Long warehouseId);
+public interface InspectionReportRepository extends JpaRepository<InspectionReport, UUID> {
 
-    Page<InspectionReport> findByInspectorId(Long inspectorId, Pageable pageable);
+    List<InspectionReport> findByWarehouseId(UUID warehouseId);
+
+    Page<InspectionReport> findByInspectorId(UUID inspectorId, Pageable pageable);
 
     Page<InspectionReport> findByStatus(InspectionStatus status, Pageable pageable);
 
@@ -24,7 +26,7 @@ public interface InspectionReportRepository extends JpaRepository<InspectionRepo
             WHERE r.warehouse.owner.id = :ownerId
             ORDER BY r.createdAt DESC
             """)
-    Page<InspectionReport> findByWarehouseOwnerId(@Param("ownerId") Long ownerId, Pageable pageable);
+    Page<InspectionReport> findByWarehouseOwnerId(@Param("ownerId") UUID ownerId, Pageable pageable);
 
     @Query("""
             SELECT r FROM InspectionReport r

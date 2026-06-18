@@ -10,11 +10,13 @@ import org.springframework.data.repository.query.Param;
 import java.util.Optional;
 
 
-public interface DisputeTicketRepository extends JpaRepository<DisputeTicket, Long> {
+import java.util.UUID;
 
-    Optional<DisputeTicket> findByContractId(Long contractId);
+public interface DisputeTicketRepository extends JpaRepository<DisputeTicket, UUID> {
 
-    Page<DisputeTicket> findByRaisedById(Long userId, Pageable pageable);
+    Optional<DisputeTicket> findByContractId(UUID contractId);
+
+    Page<DisputeTicket> findByRaisedById(UUID userId, Pageable pageable);
 
     Page<DisputeTicket> findByStatus(String status, Pageable pageable);
 

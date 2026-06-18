@@ -7,6 +7,9 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 
+import java.util.UUID;
+
+
 /**
  * Entity DisputeTicket — tranh chấp được mở bởi một bên (Owner hoặc Tenant).
  * Map với bảng: dispute_tickets
@@ -24,9 +27,9 @@ import lombok.experimental.SuperBuilder;
 public class DisputeTicket extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", updatable = false, nullable = false)
-    private Long id;
+    private UUID id;
 
     /** 1-1 với RentalContract */
     @OneToOne(fetch = FetchType.LAZY)

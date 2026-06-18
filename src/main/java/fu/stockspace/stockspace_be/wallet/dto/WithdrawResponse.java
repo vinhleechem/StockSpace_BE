@@ -10,7 +10,7 @@ import java.util.UUID;
 @Builder
 public class WithdrawResponse {
     private UUID id;
-    private Long userId;
+    private UUID userId;
     private BigDecimal amount;
     private String bankName;
     private String bankAccountNumber;

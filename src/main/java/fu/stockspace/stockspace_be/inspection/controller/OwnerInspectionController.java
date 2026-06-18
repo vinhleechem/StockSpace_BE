@@ -41,9 +41,9 @@ public class OwnerInspectionController {
     @PostMapping
     @Operation(summary = "Gửi yêu cầu kiểm định kho")
     public ResponseEntity<ApiResponse<InspectionReportResponse>> requestInspection(
-            @RequestParam Long warehouseId
+            @RequestParam java.util.UUID warehouseId
     ) {
-        Long ownerId = getCurrentUser().getId();
+        java.util.UUID ownerId = getCurrentUser().getId();
         InspectionReportResponse response = inspectionService.requestInspection(ownerId, warehouseId);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Gửi yêu cầu kiểm định thành công. Admin sẽ sắp xếp Inspector sớm.", response));
@@ -59,7 +59,7 @@ public class OwnerInspectionController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        Long ownerId = getCurrentUser().getId();
+        java.util.UUID ownerId = getCurrentUser().getId();
         Page<InspectionReportResponse> result = inspectionService.getMyInspections(ownerId, page, size);
         return ResponseEntity.ok(ApiResponse.success("Lấy lịch sử kiểm định thành công", result));
     }

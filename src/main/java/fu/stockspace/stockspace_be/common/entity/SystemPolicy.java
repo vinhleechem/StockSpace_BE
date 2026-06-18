@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 
+import java.util.UUID;
+
 /**
  * Entity SystemPolicy — chính sách hệ thống chứa cam kết ràng buộc pháp lý.
  * Map với bảng: system_policies
@@ -18,9 +20,9 @@ import lombok.experimental.SuperBuilder;
 public class SystemPolicy extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", updatable = false, nullable = false)
-    private Long id;
+    private UUID id;
 
     @Column(name = "version", unique = true, nullable = false, length = 50)
     private String version;

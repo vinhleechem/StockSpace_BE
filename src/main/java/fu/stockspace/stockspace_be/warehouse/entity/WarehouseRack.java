@@ -6,6 +6,8 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 import java.math.BigDecimal;
 
+import java.util.UUID;
+
 /**
  * Entity WarehouseRack — kệ hàng trong một Zone.
  * Map với bảng: warehouse_racks
@@ -20,9 +22,9 @@ import java.math.BigDecimal;
 public class WarehouseRack extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", updatable = false, nullable = false)
-    private Long id;
+    private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "zone_id", nullable = false)

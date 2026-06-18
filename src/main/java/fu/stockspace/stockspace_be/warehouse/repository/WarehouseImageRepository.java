@@ -9,13 +9,15 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 
 
-public interface WarehouseImageRepository extends JpaRepository<WarehouseImage, Long> {
+import java.util.UUID;
 
-    List<WarehouseImage> findAllByWarehouseIdOrderByDisplayOrderAsc(Long warehouseId);
+public interface WarehouseImageRepository extends JpaRepository<WarehouseImage, UUID> {
+
+    List<WarehouseImage> findAllByWarehouseIdOrderByDisplayOrderAsc(UUID warehouseId);
 
     @Modifying
     @Query("DELETE FROM WarehouseImage wi WHERE wi.warehouse.id = :warehouseId")
-    void deleteAllByWarehouseId(@Param("warehouseId") Long warehouseId);
+    void deleteAllByWarehouseId(@Param("warehouseId") UUID warehouseId);
 
-    int countByWarehouseId(Long warehouseId);
+    int countByWarehouseId(UUID warehouseId);
 }

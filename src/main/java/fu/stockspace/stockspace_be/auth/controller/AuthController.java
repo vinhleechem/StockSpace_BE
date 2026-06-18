@@ -17,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import io.swagger.v3.oas.annotations.Parameter;
+import java.util.UUID;
 
 /**
  * Controller xử lý authentication endpoints.
@@ -203,7 +204,7 @@ public class AuthController {
     // ==================== Inner records ====================
 
     public record UserInfoResponse(
-            Long userId,
+            UUID userId,
             String email,
             String fullName,
             String phone,

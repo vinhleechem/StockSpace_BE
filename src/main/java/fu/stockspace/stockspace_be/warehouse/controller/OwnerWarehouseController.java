@@ -30,6 +30,7 @@ import java.io.IOException;
 
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -76,7 +77,7 @@ public class OwnerWarehouseController {
             @RequestPart("request") String requestJson,
             @RequestPart(value = "files", required = false) List<MultipartFile> files
     ) throws IOException {
-        Long ownerId = getCurrentUserId();
+        UUID ownerId = getCurrentUserId();
 
         CreateWarehouseRequest request;
         try {
@@ -116,7 +117,7 @@ public class OwnerWarehouseController {
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir
     ) {
-        Long ownerId = getCurrentUserId();
+        UUID ownerId = getCurrentUserId();
         PagedWarehouseResponse result = warehouseService.getMyWarehouses(ownerId, page, size, sortBy, sortDir);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách kho thành công", result));
     }
@@ -130,10 +131,10 @@ public class OwnerWarehouseController {
     @PutMapping("/{id}")
     @Operation(summary = "Cập nhật thông tin warehouse (Owner)")
     public ResponseEntity<ApiResponse<WarehouseResponse>> update(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @Valid @RequestBody UpdateWarehouseRequest request
     ) {
-        Long ownerId = getCurrentUserId();
+        UUID ownerId = getCurrentUserId();
         WarehouseResponse response = warehouseService.updateWarehouse(ownerId, id, request);
         return ResponseEntity.ok(ApiResponse.success("Cập nhật kho thành công", response));
     }
@@ -148,10 +149,10 @@ public class OwnerWarehouseController {
     @PatchMapping("/{id}/status")
     @Operation(summary = "Cập nhật trạng thái warehouse (AVAILABLE / INACTIVE)")
     public ResponseEntity<ApiResponse<WarehouseResponse>> updateStatus(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @RequestParam WarehouseStatus status
     ) {
-        Long ownerId = getCurrentUserId();
+        UUID ownerId = getCurrentUserId();
         WarehouseResponse response = warehouseService.updateStatus(ownerId, id, status);
         return ResponseEntity.ok(ApiResponse.success("Cập nhật trạng thái kho thành công", response));
     }
@@ -164,8 +165,8 @@ public class OwnerWarehouseController {
      */
     @DeleteMapping("/{id}")
     @Operation(summary = "Xoá warehouse (Owner)")
-    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
-        Long ownerId = getCurrentUserId();
+    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable UUID id) {
+        UUID ownerId = getCurrentUserId();
         warehouseService.deleteWarehouse(ownerId, id);
         return ResponseEntity.ok(ApiResponse.success("Xoá kho thành công", null));
     }
@@ -180,10 +181,10 @@ public class OwnerWarehouseController {
     @PostMapping(value = "/{id}/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Thêm ảnh vào warehouse")
     public ResponseEntity<ApiResponse<List<String>>> addImages(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @RequestParam("files") List<MultipartFile> files
     ) throws IOException {
-        Long ownerId = getCurrentUserId();
+        UUID ownerId = getCurrentUserId();
         List<String> urls = cloudinaryService.uploadImages(files);
         List<String> saved = warehouseService.addImages(ownerId, id, urls);
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -197,10 +198,10 @@ public class OwnerWarehouseController {
     @PutMapping(value = "/{id}/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Thay thế toàn bộ ảnh warehouse")
     public ResponseEntity<ApiResponse<List<String>>> replaceImages(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @RequestParam("files") List<MultipartFile> files
     ) throws IOException {
-        Long ownerId = getCurrentUserId();
+        UUID ownerId = getCurrentUserId();
         List<String> urls = cloudinaryService.uploadImages(files);
         List<String> saved = warehouseService.replaceImages(ownerId, id, urls);
         return ResponseEntity.ok(ApiResponse.success("Cập nhật ảnh thành công", saved));
@@ -208,7 +209,7 @@ public class OwnerWarehouseController {
 
     // ==================== Private helpers ====================
 
-    private Long getCurrentUserId() {
+    private UUID getCurrentUserId() {
         return SecurityUtil.getCurrentUser()
                 .map(User::getId)
                 .orElseThrow(() -> new UnauthorizedException(ErrorCode.UNAUTHENTICATED));

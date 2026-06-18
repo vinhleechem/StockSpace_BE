@@ -16,7 +16,7 @@ import java.util.List;
 public class CreateDisputeRequest {
 
     @NotNull(message = "ID hợp đồng không được để trống")
-    private Long contractId;
+    private java.util.UUID contractId;
 
     @NotBlank(message = "Lý do tranh chấp không được để trống")
     private String reason;

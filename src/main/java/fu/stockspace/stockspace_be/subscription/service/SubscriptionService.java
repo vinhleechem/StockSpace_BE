@@ -34,7 +34,7 @@ public class SubscriptionService {
      * Mua gói dịch vụ. Khấu trừ tiền ví Tenant và kích hoạt gói.
      */
     @Transactional
-    public SubscriptionResponse purchasePackage(Long tenantId, PurchasePackageRequest request) {
+    public SubscriptionResponse purchasePackage(UUID tenantId, PurchasePackageRequest request) {
         ServicePackage servicePackage = packageRepository.findById(request.getPackageId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.PACKAGE_NOT_FOUND));
         if (!servicePackage.isActive()) {
@@ -77,7 +77,7 @@ public class SubscriptionService {
      * Lấy thông tin gói dịch vụ đang active của Tenant.
      */
     @Transactional(readOnly = true)
-    public SubscriptionResponse getMyActiveSubscription(Long tenantId) {
+    public SubscriptionResponse getMyActiveSubscription(UUID tenantId) {
         Subscription subscription = subscriptionRepository
                 .findFirstByTenantIdAndStatusAndEndDateGreaterThanEqualOrderByEndDateDesc(
                         tenantId, SubscriptionStatus.ACTIVE, LocalDate.now())
@@ -88,7 +88,7 @@ public class SubscriptionService {
      * Helper kiểm tra nhanh xem Tenant có gói active không.
      */
     @Transactional(readOnly = true)
-    public boolean hasActiveSubscription(Long tenantId) {
+    public boolean hasActiveSubscription(UUID tenantId) {
         return subscriptionRepository
                 .findFirstByTenantIdAndStatusAndEndDateGreaterThanEqualOrderByEndDateDesc(
                         tenantId, SubscriptionStatus.ACTIVE, LocalDate.now())

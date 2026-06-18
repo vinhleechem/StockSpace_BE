@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.UUID;
 
 
 /**
@@ -76,7 +77,7 @@ public class PublicWarehouseController {
      */
     @GetMapping("/{id}")
     @Operation(summary = "Xem chi tiết kho bãi")
-    public ResponseEntity<ApiResponse<WarehouseResponse>> getDetail(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<WarehouseResponse>> getDetail(@PathVariable UUID id) {
         WarehouseResponse response = warehouseService.getWarehouseDetail(id);
         return ResponseEntity.ok(ApiResponse.success("Lấy thông tin kho thành công", response));
     }

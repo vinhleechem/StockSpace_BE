@@ -14,6 +14,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
+
 /**
  * Controller xử lý các API quản lý và duyệt kho dành cho Admin và Inspector.
  */
@@ -63,7 +65,7 @@ public class AdminWarehouseController {
     @PostMapping("/{id}/verify")
     @Operation(summary = "Duyệt kho (Xác minh thành công)")
     public ResponseEntity<ApiResponse<WarehouseResponse>> verifyWarehouse(
-            @PathVariable Long id
+            @PathVariable UUID id
     ) {
         WarehouseResponse response = warehouseService.verifyWarehouse(id);
         return ResponseEntity.ok(ApiResponse.success("Duyệt kho thành công. Kho hiện đã sẵn sàng hoạt động.", response));
@@ -76,7 +78,7 @@ public class AdminWarehouseController {
     @PostMapping("/{id}/reject")
     @Operation(summary = "Từ chối duyệt kho")
     public ResponseEntity<ApiResponse<WarehouseResponse>> rejectWarehouse(
-            @PathVariable Long id
+            @PathVariable UUID id
     ) {
         WarehouseResponse response = warehouseService.rejectWarehouse(id);
         return ResponseEntity.ok(ApiResponse.success("Từ chối duyệt kho thành công", response));

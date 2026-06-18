@@ -68,7 +68,7 @@ public class DisputeController {
             @RequestPart("request") String requestJson,
             @RequestPart(value = "files", required = false) List<MultipartFile> files
     ) throws IOException {
-        Long userId = getCurrentUser().getId();
+        java.util.UUID userId = getCurrentUser().getId();
 
         CreateDisputeRequest request;
         try {
@@ -106,7 +106,7 @@ public class DisputeController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        Long userId = getCurrentUser().getId();
+        java.util.UUID userId = getCurrentUser().getId();
         Page<DisputeResponse> result = disputeService.getMyDisputes(userId, page, size);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách tranh chấp thành công", result));
     }

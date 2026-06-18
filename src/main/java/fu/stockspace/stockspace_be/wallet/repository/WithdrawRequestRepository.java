@@ -8,6 +8,6 @@ import org.springframework.stereotype.Repository;
 import java.util.UUID;
 @Repository
 public interface WithdrawRequestRepository extends JpaRepository<WithdrawRequest, UUID> {
-    Page<WithdrawRequest> findByUserId(Long userId, Pageable pageable);
+    Page<WithdrawRequest> findByUserId(UUID userId, Pageable pageable);
     Page<WithdrawRequest> findByStatus(ApprovalStatus status, Pageable pageable);
 }

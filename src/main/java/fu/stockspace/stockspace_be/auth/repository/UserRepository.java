@@ -10,18 +10,19 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Repository cho User entity.
  */
 @Repository
-public interface UserRepository extends JpaRepository<User, Long> {
+public interface UserRepository extends JpaRepository<User, UUID> {
 
     /**
      * Tìm user theo email — dùng cho login và load UserDetails.
      */
     @Query("SELECT u FROM User u WHERE u.id = ?1 AND u.isDeleted = false")
-    Optional<User> findById(Long id);
+    Optional<User> findById(UUID id);
 
     @Query("SELECT u FROM User u WHERE u.isDeleted = false")
     List<User> findAll();

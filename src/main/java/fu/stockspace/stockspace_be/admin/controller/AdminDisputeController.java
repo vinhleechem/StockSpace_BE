@@ -51,15 +51,15 @@ public class AdminDisputeController {
     @PostMapping("/{id}/resolve")
     @Operation(summary = "Giải quyết tranh chấp và phân xử tiền đặt cọc")
     public ResponseEntity<ApiResponse<DisputeResponse>> resolve(
-            @PathVariable Long id,
+            @PathVariable java.util.UUID id,
             @Valid @RequestBody ResolveDisputeRequest request
     ) {
-        Long adminId = getCurrentUserId();
+        java.util.UUID adminId = getCurrentUserId();
         DisputeResponse response = adminDisputeService.resolveDispute(id, adminId, request);
         return ResponseEntity.ok(ApiResponse.success("Giải quyết tranh chấp và phân xử tiền cọc thành công", response));
     }
 
-    private Long getCurrentUserId() {
+    private java.util.UUID getCurrentUserId() {
         return SecurityUtil.getCurrentUser()
                 .map(User::getId)
                 .orElseThrow(() -> new UnauthorizedException(ErrorCode.UNAUTHENTICATED));

@@ -9,7 +9,7 @@ import java.util.UUID;
 @Builder
 public class WalletResponse {
     private UUID id;
-    private Long userId;
+    private UUID userId;
     private BigDecimal balance;
     private LocalDateTime updatedAt;
 }

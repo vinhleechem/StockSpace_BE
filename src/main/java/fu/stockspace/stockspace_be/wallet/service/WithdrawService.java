@@ -33,7 +33,7 @@ public class WithdrawService {
      * Tạo yêu cầu rút tiền mới. Khấu trừ số dư ví ngay lập tức để tránh double spending.
      */
     @Transactional
-    public WithdrawResponse submitWithdrawRequest(Long userId, WithdrawRequestDto dto) {
+    public WithdrawResponse submitWithdrawRequest(UUID userId, WithdrawRequestDto dto) {
         // 1. Khóa ví kiểm tra số dư và trừ tiền
         Wallet wallet = walletRepository.findByUserIdWithLock(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WALLET_NOT_FOUND));
@@ -72,7 +72,7 @@ public class WithdrawService {
      * Lấy lịch sử yêu cầu rút tiền của chính user.
      */
     @Transactional(readOnly = true)
-    public Page<WithdrawResponse> getMyWithdrawRequests(Long userId, Pageable pageable) {
+    public Page<WithdrawResponse> getMyWithdrawRequests(UUID userId, Pageable pageable) {
         return withdrawRequestRepository.findByUserId(userId, pageable)
                 .map(this::mapToResponse);
     }
@@ -123,7 +123,7 @@ public class WithdrawService {
             throw new BadRequestException(ErrorCode.WITHDRAW_ALREADY_PROCESSED);
         }
         // Hoàn trả lại tiền vào ví
-        Long userId = request.getUser().getId();
+        UUID userId = request.getUser().getId();
         Wallet wallet = walletRepository.findByUserIdWithLock(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WALLET_NOT_FOUND));
         wallet.setBalance(wallet.getBalance().add(request.getAmount()));

@@ -38,7 +38,7 @@ public class AdminDisputeService {
      * Admin/Inspector giải quyết tranh chấp.
      */
     @Transactional
-    public DisputeResponse resolveDispute(Long disputeId, Long adminId, ResolveDisputeRequest request) {
+    public DisputeResponse resolveDispute(java.util.UUID disputeId, java.util.UUID adminId, ResolveDisputeRequest request) {
         log.info("Admin {} resolving dispute {} with decision {}", adminId, disputeId, request.getDepositResolution());
         return disputeService.resolveDispute(disputeId, adminId, request.getAdminNote(), request.getDepositResolution());
     }

@@ -10,6 +10,8 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
+import java.util.UUID;
+
 /**
  * Entity Warehouse — đại diện cho một kho bãi được đăng trên hệ thống.
  * Map với bảng: warehouses
@@ -32,9 +34,9 @@ import java.util.List;
 public class Warehouse extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", updatable = false, nullable = false)
-    private Long id;
+    private UUID id;
 
     // ==================== Relations ====================
 

@@ -44,7 +44,7 @@ public class TenantBookingController {
     public ResponseEntity<ApiResponse<BookingResponse>> sendRequest(
             @Valid @RequestBody CreateBookingRequest request
     ) {
-        Long tenantId = getCurrentUserId();
+        java.util.UUID tenantId = getCurrentUserId();
         BookingResponse response = bookingService.sendBookingRequest(tenantId, request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Gửi yêu cầu thuê kho thành công. Đang chờ Owner xét duyệt.", response));
@@ -60,7 +60,7 @@ public class TenantBookingController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        Long tenantId = getCurrentUserId();
+        java.util.UUID tenantId = getCurrentUserId();
         PagedBookingResponse result = bookingService.getMyBookings(tenantId, page, size);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách booking thành công", result));
     }
@@ -71,13 +71,13 @@ public class TenantBookingController {
      */
     @DeleteMapping("/{id}")
     @Operation(summary = "Huỷ yêu cầu thuê kho")
-    public ResponseEntity<ApiResponse<Void>> cancel(@PathVariable Long id) {
-        Long tenantId = getCurrentUserId();
+    public ResponseEntity<ApiResponse<Void>> cancel(@PathVariable java.util.UUID id) {
+        java.util.UUID tenantId = getCurrentUserId();
         bookingService.cancelBooking(tenantId, id);
         return ResponseEntity.ok(ApiResponse.success("Huỷ yêu cầu thuê kho thành công", null));
     }
 
-    private Long getCurrentUserId() {
+    private java.util.UUID getCurrentUserId() {
         return SecurityUtil.getCurrentUser()
                 .map(User::getId)
                 .orElseThrow(() -> new UnauthorizedException(ErrorCode.UNAUTHENTICATED));

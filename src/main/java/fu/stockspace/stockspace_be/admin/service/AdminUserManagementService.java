@@ -26,6 +26,7 @@ import org.springframework.util.StringUtils;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -110,7 +111,7 @@ public class AdminUserManagementService {
      * Xem chi tiết thông tin một User theo ID.
      */
     @Transactional(readOnly = true)
-    public UserResponse getUserById(Long id) {
+    public UserResponse getUserById(UUID id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
         log.info("Admin fetched user detail for ID: {}", id);
@@ -159,7 +160,7 @@ public class AdminUserManagementService {
      * Để thay đổi role → dùng API assign/remove role trong AdminRoleController.
      */
     @Transactional
-    public UserResponse updateUser(Long id, UpdateUserRequest request) {
+    public UserResponse updateUser(UUID id, UpdateUserRequest request) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
 
@@ -191,7 +192,7 @@ public class AdminUserManagementService {
      * @param activate true = mở khóa, false = khóa
      */
     @Transactional
-    public UserResponse setUserStatus(Long id, boolean activate) {
+    public UserResponse setUserStatus(UUID id, boolean activate) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
 
@@ -225,7 +226,7 @@ public class AdminUserManagementService {
      * Không cần biết mật khẩu cũ — quyền Admin.
      */
     @Transactional
-    public void resetPassword(Long id, ResetPasswordRequest request) {
+    public void resetPassword(UUID id, ResetPasswordRequest request) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
 
@@ -252,7 +253,7 @@ public class AdminUserManagementService {
      * - Không thể xóa chính mình
      */
     @Transactional
-    public void deleteUser(Long id) {
+    public void deleteUser(UUID id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
 
