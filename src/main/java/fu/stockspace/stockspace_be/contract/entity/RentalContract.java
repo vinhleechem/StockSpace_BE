@@ -8,6 +8,8 @@ import lombok.experimental.SuperBuilder;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+import java.util.UUID;
+
 /**
  * Entity RentalContract — hợp đồng thuê kho được tạo tự động khi Owner approve Booking.
  * Map với bảng: rental_contracts
@@ -26,9 +28,9 @@ import java.time.LocalDateTime;
 public class RentalContract extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", updatable = false, nullable = false)
-    private Long id;
+    private UUID id;
 
     /** 1-1 với BookingRequest */
     @OneToOne(fetch = FetchType.LAZY)

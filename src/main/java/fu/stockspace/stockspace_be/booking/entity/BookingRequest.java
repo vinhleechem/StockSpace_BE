@@ -9,6 +9,8 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 import java.math.BigDecimal;
 
+import java.util.UUID;
+
 /**
  * Entity BookingRequest — yêu cầu thuê kho từ Tenant.
  * Map với bảng: booking_requests
@@ -32,9 +34,9 @@ import java.math.BigDecimal;
 public class BookingRequest extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", updatable = false, nullable = false)
-    private Long id;
+    private UUID id;
 
     // ==================== Relations ====================
 

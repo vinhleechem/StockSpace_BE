@@ -201,7 +201,7 @@ public class RoleManagementService {
      * Gán vai trò cho User (thêm vào user_roles).
      */
     @Transactional
-    public void assignRoleToUser(Long userId, AssignRoleRequest request) {
+    public void assignRoleToUser(java.util.UUID userId, AssignRoleRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
 
@@ -218,7 +218,7 @@ public class RoleManagementService {
      * Xóa vai trò khỏi User.
      */
     @Transactional
-    public void removeRoleFromUser(Long userId, Long roleId) {
+    public void removeRoleFromUser(java.util.UUID userId, Long roleId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
 

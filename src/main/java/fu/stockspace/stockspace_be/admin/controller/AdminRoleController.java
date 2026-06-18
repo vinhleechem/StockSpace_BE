@@ -119,7 +119,7 @@ public class AdminRoleController {
     @PostMapping("/users/{userId}/roles")
     @Operation(summary = "Gán thêm vai trò (Role) cho người dùng (User)")
     public ResponseEntity<ApiResponse<Void>> assignRoleToUser(
-            @PathVariable Long userId,
+            @PathVariable java.util.UUID userId,
             @Valid @RequestBody AssignRoleRequest request
     ) {
         roleManagementService.assignRoleToUser(userId, request);
@@ -133,7 +133,7 @@ public class AdminRoleController {
     @DeleteMapping("/users/{userId}/roles/{roleId}")
     @Operation(summary = "Xóa vai trò (Role) khỏi người dùng (User)")
     public ResponseEntity<ApiResponse<Void>> removeRoleFromUser(
-            @PathVariable Long userId,
+            @PathVariable java.util.UUID userId,
             @PathVariable Long roleId
     ) {
         roleManagementService.removeRoleFromUser(userId, roleId);

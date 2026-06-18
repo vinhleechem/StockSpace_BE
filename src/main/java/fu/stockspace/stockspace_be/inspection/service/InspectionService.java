@@ -32,6 +32,8 @@ import java.time.LocalDateTime;
  *   2. Admin gán Inspector → IN_PROGRESS
  *   3. Inspector nộp báo cáo → PASSED (verify kho) | FAILED
  */
+import java.util.UUID;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -50,7 +52,7 @@ public class InspectionService {
      * Mỗi kho chỉ có 1 yêu cầu PENDING tại một thời điểm.
      */
     @Transactional
-    public InspectionReportResponse requestInspection(Long ownerId, Long warehouseId) {
+    public InspectionReportResponse requestInspection(UUID ownerId, UUID warehouseId) {
         Warehouse warehouse = warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId)
                 .orElseThrow(() -> new ForbiddenException(ErrorCode.WAREHOUSE_NOT_OWNED));
 
@@ -76,7 +78,7 @@ public class InspectionService {
      * Owner xem lịch sử kiểm định kho của mình.
      */
     @Transactional(readOnly = true)
-    public Page<InspectionReportResponse> getMyInspections(Long ownerId, int page, int size) {
+    public Page<InspectionReportResponse> getMyInspections(UUID ownerId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         return inspectionRepository.findByWarehouseOwnerId(ownerId, pageable)
                 .map(this::mapToResponse);
@@ -88,7 +90,7 @@ public class InspectionService {
      * Inspector xem danh sách inspection được gán (phân trang).
      */
     @Transactional(readOnly = true)
-    public Page<InspectionReportResponse> getAssignedInspections(Long inspectorId, int page, int size) {
+    public Page<InspectionReportResponse> getAssignedInspections(UUID inspectorId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         return inspectionRepository.findByInspectorId(inspectorId, pageable)
                 .map(this::mapToResponse);
@@ -99,7 +101,7 @@ public class InspectionService {
      * Nếu FAILED → Warehouse.isVerified = false (chưa/không đạt kiểm định)
      */
     @Transactional
-    public InspectionReportResponse submitReport(Long inspectorId, Long inspectionId,
+    public InspectionReportResponse submitReport(UUID inspectorId, UUID inspectionId,
                                                   SubmitInspectionRequest request) {
         InspectionReport report = inspectionRepository.findById(inspectionId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.INSPECTION_NOT_FOUND));
@@ -156,7 +158,7 @@ public class InspectionService {
      * Đổi status → IN_PROGRESS.
      */
     @Transactional
-    public InspectionReportResponse assignInspector(Long inspectionId, Long inspectorId) {
+    public InspectionReportResponse assignInspector(UUID inspectionId, UUID inspectorId) {
         InspectionReport report = inspectionRepository.findById(inspectionId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.INSPECTION_NOT_FOUND));
 

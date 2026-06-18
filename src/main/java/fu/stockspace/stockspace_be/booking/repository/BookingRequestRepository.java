@@ -11,18 +11,23 @@ import org.springframework.data.repository.query.Param;
 import java.util.Optional;
 
 
-public interface BookingRequestRepository extends JpaRepository<BookingRequest, Long> {
+import java.util.UUID;
+
+public interface BookingRequestRepository extends JpaRepository<BookingRequest, UUID> {
 
     // ==================== Tenant ====================
 
-    Page<BookingRequest> findByTenantId(Long tenantId, Pageable pageable);
+    Page<BookingRequest> findByTenantId(UUID tenantId, Pageable pageable);
 
-    Optional<BookingRequest> findByIdAndTenantId(Long id, Long tenantId);
+    Optional<BookingRequest> findByIdAndTenantId(UUID id, UUID tenantId);
 
     /**
      * Kiểm tra Tenant đã có booking PENDING cho kho này chưa (tránh spam).
      */
-    boolean existsByTenantIdAndWarehouseIdAndStatus(Long tenantId, Long warehouseId, ApprovalStatus status);
+    boolean existsByTenantIdAndWarehouseIdAndStatus(UUID tenantId, UUID warehouseId, ApprovalStatus status);
+
+    @Query("SELECT COUNT(b) > 0 FROM BookingRequest b WHERE b.warehouse.id = :warehouseId AND b.status IN :statuses")
+    boolean existsByWarehouseIdAndStatusIn(@Param("warehouseId") UUID warehouseId, @Param("statuses") java.util.List<ApprovalStatus> statuses);
 
     // ==================== Owner ====================
 
@@ -34,15 +39,15 @@ public interface BookingRequestRepository extends JpaRepository<BookingRequest, 
             WHERE b.warehouse.owner.id = :ownerId
             ORDER BY b.createdAt DESC
             """)
-    Page<BookingRequest> findByWarehouseOwnerId(@Param("ownerId") Long ownerId, Pageable pageable);
+    Page<BookingRequest> findByWarehouseOwnerId(@Param("ownerId") UUID ownerId, Pageable pageable);
 
     @Query("""
             SELECT b FROM BookingRequest b
             WHERE b.id = :bookingId
               AND b.warehouse.owner.id = :ownerId
             """)
-    Optional<BookingRequest> findByIdAndOwnerId(@Param("bookingId") Long bookingId,
-                                                @Param("ownerId") Long ownerId);
+    Optional<BookingRequest> findByIdAndOwnerId(@Param("bookingId") UUID bookingId,
+                                                @Param("ownerId") UUID ownerId);
 
     // ==================== Admin ====================
 

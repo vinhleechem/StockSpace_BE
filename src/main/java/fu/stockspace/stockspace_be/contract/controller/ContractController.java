@@ -66,8 +66,8 @@ public class ContractController {
      */
     @GetMapping("/{id}")
     @Operation(summary = "Chi tiết hợp đồng thuê kho")
-    public ResponseEntity<ApiResponse<RentalContractResponse>> getById(@PathVariable Long id) {
-        Long userId = getCurrentUser().getId();
+    public ResponseEntity<ApiResponse<RentalContractResponse>> getById(@PathVariable java.util.UUID id) {
+        java.util.UUID userId = getCurrentUser().getId();
         RentalContractResponse response = contractService.getContractById(id, userId);
         return ResponseEntity.ok(ApiResponse.success("Lấy thông tin hợp đồng thành công", response));
     }
@@ -79,8 +79,8 @@ public class ContractController {
      */
     @PatchMapping("/{id}/confirm-handover")
     @Operation(summary = "Xác nhận bàn giao kho (Owner / Tenant)")
-    public ResponseEntity<ApiResponse<RentalContractResponse>> confirmHandover(@PathVariable Long id) {
-        Long userId = getCurrentUser().getId();
+    public ResponseEntity<ApiResponse<RentalContractResponse>> confirmHandover(@PathVariable java.util.UUID id) {
+        java.util.UUID userId = getCurrentUser().getId();
         RentalContractResponse response = contractService.confirmHandover(userId, id);
         return ResponseEntity.ok(ApiResponse.success("Xác nhận bàn giao thành công", response));
     }
@@ -93,10 +93,10 @@ public class ContractController {
     @Operation(summary = "Owner nộp thông tin & ảnh chụp hợp đồng giấy (Owner)")
     @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
     public ResponseEntity<ApiResponse<RentalContractResponse>> submitOnline(
-            @PathVariable Long id,
+            @PathVariable java.util.UUID id,
             @Valid @RequestBody SubmitContractRequest request
     ) {
-        Long ownerId = getCurrentUser().getId();
+        java.util.UUID ownerId = getCurrentUser().getId();
         RentalContractResponse response = contractService.submitOnlineContract(ownerId, id, request);
         return ResponseEntity.ok(ApiResponse.success("Nộp thông tin hợp đồng online thành công. Chờ Tenant xác nhận.", response));
     }
@@ -108,8 +108,8 @@ public class ContractController {
     @PostMapping("/{id}/tenant-confirm")
     @Operation(summary = "Tenant xác nhận kích hoạt hợp đồng (Tenant)")
     @PreAuthorize("hasAnyRole('TENANT', 'ADMIN')")
-    public ResponseEntity<ApiResponse<RentalContractResponse>> tenantConfirm(@PathVariable Long id) {
-        Long tenantId = getCurrentUser().getId();
+    public ResponseEntity<ApiResponse<RentalContractResponse>> tenantConfirm(@PathVariable java.util.UUID id) {
+        java.util.UUID tenantId = getCurrentUser().getId();
         RentalContractResponse response = contractService.tenantConfirmContract(tenantId, id);
         return ResponseEntity.ok(ApiResponse.success("Xác nhận kích hoạt hợp đồng thành công", response));
     }
@@ -122,10 +122,10 @@ public class ContractController {
     @Operation(summary = "Tenant báo cáo deal thất bại / báo lỗi hợp đồng (Tenant)")
     @PreAuthorize("hasAnyRole('TENANT', 'ADMIN')")
     public ResponseEntity<ApiResponse<RentalContractResponse>> tenantReportFailed(
-            @PathVariable Long id,
+            @PathVariable java.util.UUID id,
             @Valid @RequestBody TenantReportFailedRequest request
     ) {
-        Long tenantId = getCurrentUser().getId();
+        java.util.UUID tenantId = getCurrentUser().getId();
         RentalContractResponse response = contractService.tenantReportFailed(tenantId, id, request);
         return ResponseEntity.ok(ApiResponse.success("Đã gửi báo cáo tranh chấp lên hệ thống. Inspector sẽ xem xét.", response));
     }
@@ -138,10 +138,10 @@ public class ContractController {
     @Operation(summary = "Owner đề xuất hủy deal thương lượng (Owner)")
     @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
     public ResponseEntity<ApiResponse<RentalContractResponse>> ownerCancel(
-            @PathVariable Long id,
+            @PathVariable java.util.UUID id,
             @Valid @RequestBody OwnerCancelRequest request
     ) {
-        Long ownerId = getCurrentUser().getId();
+        java.util.UUID ownerId = getCurrentUser().getId();
         RentalContractResponse response = contractService.ownerRequestCancel(ownerId, id, request);
         return ResponseEntity.ok(ApiResponse.success("Gửi đề xuất hủy deal thành công. Đang chờ Tenant phản hồi.", response));
     }
@@ -154,10 +154,10 @@ public class ContractController {
     @Operation(summary = "Tenant phản hồi yêu cầu hủy deal (Tenant)")
     @PreAuthorize("hasAnyRole('TENANT', 'ADMIN')")
     public ResponseEntity<ApiResponse<RentalContractResponse>> tenantRespondCancel(
-            @PathVariable Long id,
+            @PathVariable java.util.UUID id,
             @Valid @RequestBody TenantRespondCancelRequest request
     ) {
-        Long tenantId = getCurrentUser().getId();
+        java.util.UUID tenantId = getCurrentUser().getId();
         RentalContractResponse response = contractService.tenantRespondCancel(tenantId, id, request.getAgree());
         String msg = request.getAgree() ? "Đã đồng ý hủy deal thương thảo. Đặt cọc đã được hoàn." : "Không đồng ý hủy deal. Hợp đồng đã chuyển sang Tranh chấp.";
         return ResponseEntity.ok(ApiResponse.success(msg, response));

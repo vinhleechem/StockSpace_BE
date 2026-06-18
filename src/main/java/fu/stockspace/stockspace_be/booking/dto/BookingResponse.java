@@ -10,30 +10,32 @@ import java.time.LocalDateTime;
 /**
  * DTO trả về thông tin BookingRequest.
  */
+import java.util.UUID;
+
 @Getter
 @Builder
 public class BookingResponse {
 
-    private Long id;
+    private UUID id;
     private String status;
     private BigDecimal depositAmount;
     private String rejectReason;
 
     // Tenant info
-    private Long tenantId;
+    private UUID tenantId;
     private String tenantName;
     private String tenantEmail;
     private String tenantPhone;
 
     // Warehouse info
-    private Long warehouseId;
+    private UUID warehouseId;
     private String warehouseName;
     private String warehouseAddress;
-    private Long ownerId;
+    private UUID ownerId;
     private String ownerName;
 
     /** Phiên bản cam kết ràng buộc */
-    private Long policyId;
+    private UUID policyId;
     private String policyVersion;
 
     private LocalDateTime createdAt;

@@ -9,27 +9,29 @@ import java.time.LocalDateTime;
 /**
  * DTO trả về thông tin InspectionReport.
  */
+import java.util.UUID;
+
 @Getter
 @Builder
 public class InspectionReportResponse {
 
-    private Long id;
+    private UUID id;
     private String status;
     private String checklistData;
     private String notes;
     private LocalDateTime inspectedAt;
 
     // Warehouse info
-    private Long warehouseId;
+    private UUID warehouseId;
     private String warehouseName;
     private String warehouseAddress;
 
     // Inspector info
-    private Long inspectorId;
+    private UUID inspectorId;
     private String inspectorName;
 
     // Owner info
-    private Long ownerId;
+    private UUID ownerId;
     private String ownerName;
 
     private LocalDateTime createdAt;

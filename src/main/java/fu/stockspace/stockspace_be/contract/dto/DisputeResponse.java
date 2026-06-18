@@ -9,25 +9,27 @@ import java.time.LocalDateTime;
 /**
  * DTO trả về thông tin DisputeTicket.
  */
+import java.util.UUID;
+
 @Getter
 @Builder
 public class DisputeResponse {
 
-    private Long id;
+    private UUID id;
     private String status;
     private String reason;
     private String evidenceImages;
     private String adminNote;
 
     // Contract info
-    private Long contractId;
+    private UUID contractId;
 
     // Raised by
-    private Long raisedById;
+    private UUID raisedById;
     private String raisedByName;
 
     // Handled by
-    private Long handledById;
+    private UUID handledById;
     private String handledByName;
 
     private LocalDateTime createdAt;

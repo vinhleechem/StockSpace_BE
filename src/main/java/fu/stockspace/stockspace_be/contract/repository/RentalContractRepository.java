@@ -10,9 +10,11 @@ import org.springframework.data.repository.query.Param;
 import java.util.Optional;
 
 
-public interface RentalContractRepository extends JpaRepository<RentalContract, Long> {
+import java.util.UUID;
 
-    Optional<RentalContract> findByBookingId(Long bookingId);
+public interface RentalContractRepository extends JpaRepository<RentalContract, UUID> {
+
+    Optional<RentalContract> findByBookingId(UUID bookingId);
 
     /** Hợp đồng của Tenant */
     @Query("""
@@ -20,7 +22,7 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
             WHERE c.booking.tenant.id = :tenantId
             ORDER BY c.createdAt DESC
             """)
-    Page<RentalContract> findByTenantId(@Param("tenantId") Long tenantId, Pageable pageable);
+    Page<RentalContract> findByTenantId(@Param("tenantId") UUID tenantId, Pageable pageable);
 
     /** Hợp đồng liên quan đến kho của Owner */
     @Query("""
@@ -28,5 +30,8 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
             WHERE c.booking.warehouse.owner.id = :ownerId
             ORDER BY c.createdAt DESC
             """)
-    Page<RentalContract> findByOwnerId(@Param("ownerId") Long ownerId, Pageable pageable);
+    Page<RentalContract> findByOwnerId(@Param("ownerId") UUID ownerId, Pageable pageable);
+
+    @Query("SELECT c FROM RentalContract c WHERE c.status = :status AND c.submittedAt < :dateTime")
+    java.util.List<RentalContract> findByStatusAndSubmittedAtBefore(@Param("status") fu.stockspace.stockspace_be.contract.entity.ContractStatus status, @Param("dateTime") java.time.LocalDateTime dateTime);
 }

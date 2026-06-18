@@ -1,4 +1,5 @@
 package fu.stockspace.stockspace_be.contract.service;
+import java.util.UUID;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
@@ -49,7 +50,7 @@ public class DisputeService {
      * - Mỗi hợp đồng chỉ có 1 dispute tại một thời điểm
      */
     @Transactional
-    public DisputeResponse raiseDispute(Long userId, CreateDisputeRequest request) {
+    public DisputeResponse raiseDispute(UUID userId, CreateDisputeRequest request) {
         RentalContract contract = contractRepository.findById(request.getContractId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
         // Chỉ cho phép dispute khi contract chưa hoàn thành/hủy và chưa có dispute
@@ -64,8 +65,8 @@ public class DisputeService {
             throw new ResourceConflictException(ErrorCode.DISPUTE_ALREADY_OPEN);
         }
         // Kiểm tra user là tenant hoặc owner của hợp đồng
-        Long tenantId = contract.getBooking().getTenant().getId();
-        Long ownerId = contract.getBooking().getWarehouse().getOwner().getId();
+        UUID tenantId = contract.getBooking().getTenant().getId();
+        UUID ownerId = contract.getBooking().getWarehouse().getOwner().getId();
         if (!userId.equals(tenantId) && !userId.equals(ownerId)) {
             throw new BadRequestException(ErrorCode.FORBIDDEN);
         }
@@ -92,7 +93,7 @@ public class DisputeService {
      * Xem danh sách dispute của user hiện tại.
      */
     @Transactional(readOnly = true)
-    public Page<DisputeResponse> getMyDisputes(Long userId, int page, int size) {
+    public Page<DisputeResponse> getMyDisputes(UUID userId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         return disputeRepository.findByRaisedById(userId, pageable)
                 .map(this::mapToResponse);
@@ -103,7 +104,7 @@ public class DisputeService {
      * Gọi từ AdminDisputeService.
      */
     @Transactional
-    public DisputeResponse resolveDispute(Long disputeId, Long adminId, String adminNote, String depositResolution) {
+    public DisputeResponse resolveDispute(UUID disputeId, UUID adminId, String adminNote, String depositResolution) {
         DisputeTicket ticket = disputeRepository.findById(disputeId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.DISPUTE_NOT_FOUND));
         User admin = userRepository.findById(adminId)

@@ -32,9 +32,9 @@ public class AdminInspectionController {
     @PostMapping("/{id}/assign")
     @Operation(summary = "Phân công Inspector kiểm định kho bãi (Admin)")
     public ResponseEntity<ApiResponse<InspectionReportResponse>> assignInspector(
-            @PathVariable Long id,
+            @PathVariable java.util.UUID id,
             @Parameter(description = "ID của Inspector được phân công")
-            @RequestParam Long inspectorId
+            @RequestParam java.util.UUID inspectorId
     ) {
         InspectionReportResponse response = inspectionService.assignInspector(id, inspectorId);
         return ResponseEntity.ok(ApiResponse.success("Phân công Inspector thành công. Trạng thái kiểm định chuyển sang Đang thực hiện.", response));

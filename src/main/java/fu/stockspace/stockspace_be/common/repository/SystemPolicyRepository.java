@@ -8,7 +8,9 @@ import org.springframework.data.jpa.repository.Query;
 import java.util.List;
 import java.util.Optional;
 
-public interface SystemPolicyRepository extends JpaRepository<SystemPolicy, Long> {
+import java.util.UUID;
+
+public interface SystemPolicyRepository extends JpaRepository<SystemPolicy, UUID> {
     
     /**
      * Tìm chính sách hệ thống đang hiệu lực và mới nhất theo thời gian tạo.

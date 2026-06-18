@@ -11,6 +11,6 @@ import java.util.UUID;
 @Repository
 public interface SubscriptionRepository extends JpaRepository<Subscription, UUID> {
     Optional<Subscription> findFirstByTenantIdAndStatusAndEndDateGreaterThanEqualOrderByEndDateDesc(
-            Long tenantId, SubscriptionStatus status, LocalDate date);
-    Page<Subscription> findByTenantId(Long tenantId, Pageable pageable);
+            UUID tenantId, SubscriptionStatus status, LocalDate date);
+    Page<Subscription> findByTenantId(UUID tenantId, Pageable pageable);
 }

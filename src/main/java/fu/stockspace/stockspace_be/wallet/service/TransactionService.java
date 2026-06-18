@@ -25,7 +25,7 @@ public class TransactionService {
      * Xem lịch sử giao dịch của ví người dùng hiện tại (phân trang).
      */
     @Transactional(readOnly = true)
-    public PagedTransactionResponse getMyTransactions(Long userId, Pageable pageable) {
+    public PagedTransactionResponse getMyTransactions(UUID userId, Pageable pageable) {
         Wallet wallet = walletRepository.findByUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WALLET_NOT_FOUND));
         Page<Transaction> page = transactionRepository.findByWalletId(wallet.getId(), pageable);

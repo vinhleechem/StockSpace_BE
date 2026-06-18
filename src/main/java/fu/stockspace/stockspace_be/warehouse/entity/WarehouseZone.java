@@ -6,6 +6,8 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 import java.math.BigDecimal;
 
+import java.util.UUID;
+
 /**
  * Entity WarehouseZone — khu vực trong layout kho (Zone A, Zone B, v.v.)
  * Map với bảng: warehouse_zones
@@ -20,9 +22,9 @@ import java.math.BigDecimal;
 public class WarehouseZone extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", updatable = false, nullable = false)
-    private Long id;
+    private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "layout_id", nullable = false)

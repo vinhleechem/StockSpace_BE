@@ -1,4 +1,5 @@
 package fu.stockspace.stockspace_be.contract.service;
+import java.util.UUID;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.booking.entity.BookingRequest;
@@ -50,7 +51,7 @@ public class ContractService {
      * Gọi từ BookingService.approveBooking().
      */
     @Transactional
-    public RentalContract createContractFromBooking(Long bookingId) {
+    public RentalContract createContractFromBooking(UUID bookingId) {
         BookingRequest booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.BOOKING_NOT_FOUND));
         RentalContract contract = RentalContract.builder()
@@ -70,7 +71,7 @@ public class ContractService {
      * Xem danh sách hợp đồng của Tenant (phân trang).
      */
     @Transactional(readOnly = true)
-    public Page<RentalContractResponse> getMyContractsAsTenant(Long tenantId, int page, int size) {
+    public Page<RentalContractResponse> getMyContractsAsTenant(UUID tenantId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         return contractRepository.findByTenantId(tenantId, pageable)
                 .map(this::mapToResponse);
@@ -79,7 +80,7 @@ public class ContractService {
      * Xem danh sách hợp đồng của Owner (phân trang).
      */
     @Transactional(readOnly = true)
-    public Page<RentalContractResponse> getMyContractsAsOwner(Long ownerId, int page, int size) {
+    public Page<RentalContractResponse> getMyContractsAsOwner(UUID ownerId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         return contractRepository.findByOwnerId(ownerId, pageable)
                 .map(this::mapToResponse);
@@ -88,11 +89,11 @@ public class ContractService {
      * Xem chi tiết hợp đồng — chỉ Owner hoặc Tenant liên quan mới xem được.
      */
     @Transactional(readOnly = true)
-    public RentalContractResponse getContractById(Long contractId, Long userId) {
+    public RentalContractResponse getContractById(UUID contractId, UUID userId) {
         RentalContract contract = contractRepository.findById(contractId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
-        Long tenantId = contract.getBooking().getTenant().getId();
-        Long ownerId = contract.getBooking().getWarehouse().getOwner().getId();
+        UUID tenantId = contract.getBooking().getTenant().getId();
+        UUID ownerId = contract.getBooking().getWarehouse().getOwner().getId();
         if (!userId.equals(tenantId) && !userId.equals(ownerId)) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
@@ -107,14 +108,14 @@ public class ContractService {
      * - Warehouse status → AVAILABLE
      */
     @Transactional
-    public RentalContractResponse confirmHandover(Long userId, Long contractId) {
+    public RentalContractResponse confirmHandover(UUID userId, UUID contractId) {
         RentalContract contract = contractRepository.findById(contractId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
         if (contract.getStatus() == ContractStatus.COMPLETED) {
             throw new BadRequestException(ErrorCode.CONTRACT_ALREADY_CONFIRMED);
         }
-        Long tenantId = contract.getBooking().getTenant().getId();
-        Long ownerId = contract.getBooking().getWarehouse().getOwner().getId();
+        UUID tenantId = contract.getBooking().getTenant().getId();
+        UUID ownerId = contract.getBooking().getWarehouse().getOwner().getId();
         if (userId.equals(tenantId)) {
             if (contract.isTenantConfirmed()) {
                 throw new BadRequestException(ErrorCode.CONTRACT_ALREADY_CONFIRMED);
@@ -147,7 +148,7 @@ public class ContractService {
      * Admin / Dispute handler: set contract status = DISPUTED.
      */
     @Transactional
-    public void setDisputed(Long contractId) {
+    public void setDisputed(UUID contractId) {
         RentalContract contract = contractRepository.findById(contractId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
         contract.setStatus(ContractStatus.DISPUTED);
@@ -189,11 +190,11 @@ public class ContractService {
      * Owner cấu hình hợp đồng online sau khi ký hợp đồng giấy thành công.
      */
     @Transactional
-    public RentalContractResponse submitOnlineContract(Long ownerId, Long contractId, SubmitContractRequest request) {
+    public RentalContractResponse submitOnlineContract(UUID ownerId, UUID contractId, SubmitContractRequest request) {
         log.info("Owner {} submitting online contract for contract {}", ownerId, contractId);
         RentalContract contract = contractRepository.findById(contractId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
-        Long actualOwnerId = contract.getBooking().getWarehouse().getOwner().getId();
+        UUID actualOwnerId = contract.getBooking().getWarehouse().getOwner().getId();
         if (!ownerId.equals(actualOwnerId)) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
@@ -216,11 +217,11 @@ public class ContractService {
      * Tenant xác nhận kích hoạt hợp đồng (trong hạn 7 ngày).
      */
     @Transactional
-    public RentalContractResponse tenantConfirmContract(Long tenantId, Long contractId) {
+    public RentalContractResponse tenantConfirmContract(UUID tenantId, UUID contractId) {
         log.info("Tenant {} confirming contract {}", tenantId, contractId);
         RentalContract contract = contractRepository.findById(contractId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
-        Long actualTenantId = contract.getBooking().getTenant().getId();
+        UUID actualTenantId = contract.getBooking().getTenant().getId();
         if (!tenantId.equals(actualTenantId)) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
@@ -259,11 +260,11 @@ public class ContractService {
      * Tenant báo thương thảo thất bại (report trước hoặc sau khi owner submit hợp đồng).
      */
     @Transactional
-    public RentalContractResponse tenantReportFailed(Long tenantId, Long contractId, TenantReportFailedRequest request) {
+    public RentalContractResponse tenantReportFailed(UUID tenantId, UUID contractId, TenantReportFailedRequest request) {
         log.info("Tenant {} reporting contract failed: {}", tenantId, contractId);
         RentalContract contract = contractRepository.findById(contractId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
-        Long actualTenantId = contract.getBooking().getTenant().getId();
+        UUID actualTenantId = contract.getBooking().getTenant().getId();
         if (!tenantId.equals(actualTenantId)) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
@@ -295,11 +296,11 @@ public class ContractService {
      * Owner đề xuất hủy thương lượng (Cancel deal).
      */
     @Transactional
-    public RentalContractResponse ownerRequestCancel(Long ownerId, Long contractId, OwnerCancelRequest request) {
+    public RentalContractResponse ownerRequestCancel(UUID ownerId, UUID contractId, OwnerCancelRequest request) {
         log.info("Owner {} requesting cancellation for contract {}", ownerId, contractId);
         RentalContract contract = contractRepository.findById(contractId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
-        Long actualOwnerId = contract.getBooking().getWarehouse().getOwner().getId();
+        UUID actualOwnerId = contract.getBooking().getWarehouse().getOwner().getId();
         if (!ownerId.equals(actualOwnerId)) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
@@ -319,11 +320,11 @@ public class ContractService {
      * Tenant phản hồi yêu cầu hủy deal của Owner.
      */
     @Transactional
-    public RentalContractResponse tenantRespondCancel(Long tenantId, Long contractId, boolean agree) {
+    public RentalContractResponse tenantRespondCancel(UUID tenantId, UUID contractId, boolean agree) {
         log.info("Tenant {} responding to cancel request for contract {}, agree={}", tenantId, contractId, agree);
         RentalContract contract = contractRepository.findById(contractId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
-        Long actualTenantId = contract.getBooking().getTenant().getId();
+        UUID actualTenantId = contract.getBooking().getTenant().getId();
         if (!tenantId.equals(actualTenantId)) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }

@@ -45,9 +45,9 @@ public class Transaction extends BaseEntity {
     /** ID giao dịch đối tác / SePay phục vụ đối soát và tránh trùng lặp */
     @Column(name = "reference_id", unique = true, length = 100)
     private String referenceId;
-    /** ID của booking liên quan (nếu có) - Loose coupling kiểu Long */
+    /** ID của booking liên quan (nếu có) - Loose coupling kiểu UUID */
     @Column(name = "booking_id")
-    private Long bookingId;
+    private UUID bookingId;
     /** ID của subscription liên quan (nếu có) - Loose coupling kiểu UUID */
     @Column(name = "subscription_id")
     private UUID subscriptionId;
