@@ -7,6 +7,7 @@ import fu.stockspace.stockspace_be.booking.service.BookingService;
 import fu.stockspace.stockspace_be.common.dto.ApiResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.UnauthorizedException;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -40,12 +41,12 @@ public class OwnerBookingController {
      */
     @GetMapping
     @Operation(summary = "Xem danh sách yêu cầu thuê kho đến (Owner)")
-    public ResponseEntity<ApiResponse<PagedBookingResponse>> getIncomingRequests(
+    public ResponseEntity<ApiResponse<PagedResponse<BookingResponse>>> getIncomingRequests(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
         java.util.UUID ownerId = getCurrentUserId();
-        PagedBookingResponse result = bookingService.getIncomingRequests(ownerId, page, size);
+        PagedResponse<BookingResponse> result = bookingService.getIncomingRequests(ownerId, page, size);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách yêu cầu thuê thành công", result));
     }
 
