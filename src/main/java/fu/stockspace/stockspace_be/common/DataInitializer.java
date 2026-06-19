@@ -37,6 +37,7 @@ public class DataInitializer implements CommandLineRunner {
     private final WalletService walletService;
     private final ServicePackageRepository packageRepository;
     private final SystemConfigRepository systemConfigRepository;
+    private final fu.stockspace.stockspace_be.wallet.repository.WalletRepository walletRepository;
     @Override
     @Transactional
     public void run(String... args) throws Exception {
@@ -78,11 +79,11 @@ public class DataInitializer implements CommandLineRunner {
         Set<Permission> inspectorPermissions = Set.of(whRead, inspectRead, inspectCreate, inspectApprove);
         getOrCreateRole(RoleType.ROLE_INSPECTOR.name(), "Thanh tra kho bãi (Inspector)", inspectorPermissions);
         // 3. Khởi tạo default users để tiện test
-        createDefaultUser("admin@stockspace.com", "Password123", "System Admin", "0987654321", RoleType.ROLE_ADMIN.name());
-        createDefaultUser("owner@stockspace.com", "Password123", "Nguyen Owner", "0987654322", RoleType.ROLE_OWNER.name());
-        createDefaultUser("tenant@stockspace.com", "Password123", "Tran Tenant", "0987654323", RoleType.ROLE_TENANT.name());
-        createDefaultUser("staff@stockspace.com", "Password123", "Le Staff", "0987654324", RoleType.ROLE_STAFF.name());
-        createDefaultUser("inspector@stockspace.com", "Password123", "Pham Inspector", "0987654325", RoleType.ROLE_INSPECTOR.name());
+        createDefaultUser("admin@stockspace.com", "Password123", "System Admin", "0987654321", RoleType.ROLE_ADMIN.name(), BigDecimal.ZERO);
+        createDefaultUser("owner@stockspace.com", "Password123", "Nguyen Owner", "0987654322", RoleType.ROLE_OWNER.name(), new BigDecimal("200000000.00"));
+        createDefaultUser("tenant@stockspace.com", "Password123", "Tran Tenant", "0987654323", RoleType.ROLE_TENANT.name(), new BigDecimal("100000000.00"));
+        createDefaultUser("staff@stockspace.com", "Password123", "Le Staff", "0987654324", RoleType.ROLE_STAFF.name(), BigDecimal.ZERO);
+        createDefaultUser("inspector@stockspace.com", "Password123", "Pham Inspector", "0987654325", RoleType.ROLE_INSPECTOR.name(), BigDecimal.ZERO);
         // 4. Khởi tạo chính sách/cam kết ràng buộc mặc định
         seedDefaultSystemPolicy();
         // 5. Khởi tạo các gói dịch vụ mặc định
@@ -117,7 +118,7 @@ public class DataInitializer implements CommandLineRunner {
         roleRepository.save(role);
         log.info("Seeding role: {} with {} permissions", name, permissions.size());
     }
-    private void createDefaultUser(String email, String rawPassword, String fullName, String phone, String roleName) {
+    private void createDefaultUser(String email, String rawPassword, String fullName, String phone, String roleName, BigDecimal initialBalance) {
         if (!userRepository.existsByEmail(email)) {
             Role role = roleRepository.findByName(roleName)
                     .orElseThrow(() -> new IllegalStateException("Role not found during user seeding: " + roleName));
@@ -131,8 +132,12 @@ public class DataInitializer implements CommandLineRunner {
                     .build();
             userRepository.save(user);
             user = userRepository.save(user);
-            walletService.getOrCreateWallet(user.getId());
-            log.info("Seeded default user: {} with role {}", email, roleName);
+            fu.stockspace.stockspace_be.wallet.entity.Wallet wallet = walletService.getOrCreateWallet(user.getId());
+            if (initialBalance.compareTo(BigDecimal.ZERO) > 0) {
+                wallet.setBalance(initialBalance);
+                walletRepository.save(wallet);
+            }
+            log.info("Seeded default user: {} with role {} and balance {}", email, roleName, initialBalance);
         }
     }
     private void seedDefaultSystemPolicy() {
