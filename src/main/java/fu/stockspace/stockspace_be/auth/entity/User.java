@@ -20,8 +20,6 @@ import java.util.UUID;
  * tránh phải tạo wrapper class riêng.
  */
 @Entity
-@org.hibernate.annotations.SQLDelete(sql = "UPDATE users SET is_deleted = true WHERE id = ?")
-@org.hibernate.annotations.SQLRestriction("is_deleted = false")
 @Table(name = "users")
 @Getter
 @Setter
