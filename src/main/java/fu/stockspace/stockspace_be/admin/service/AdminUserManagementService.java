@@ -1,6 +1,7 @@
 package fu.stockspace.stockspace_be.admin.service;
 
 import fu.stockspace.stockspace_be.admin.dto.*;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.auth.entity.Role;
 import fu.stockspace.stockspace_be.auth.entity.RoleType;
 import fu.stockspace.stockspace_be.auth.entity.User;
@@ -64,7 +65,7 @@ public class AdminUserManagementService {
      * @param sortDir  Chiều sắp xếp (asc/desc)
      */
     @Transactional(readOnly = true)
-    public PagedUserResponse getUsers(String keyword, String roleName, Boolean isActive,
+    public PagedResponse<UserResponse> getUsers(String keyword, String roleName, Boolean isActive,
                                       int page, int size, String sortBy, String sortDir) {
 
         Sort sort = "asc".equalsIgnoreCase(sortDir)
@@ -97,7 +98,7 @@ public class AdminUserManagementService {
                 .map(this::mapToUserResponse)
                 .collect(Collectors.toList());
 
-        return PagedUserResponse.builder()
+        return PagedResponse.<UserResponse>builder()
                 .content(content)
                 .page(userPage.getNumber())
                 .size(userPage.getSize())
@@ -324,14 +325,14 @@ public class AdminUserManagementService {
     }
 
     /**
-     * Build PagedUserResponse từ danh sách đã filter sẵn (dùng khi kết hợp 2 filter).
+     * Build PagedResponse từ danh sách đã filter sẵn (dùng khi kết hợp 2 filter).
      */
-    private PagedUserResponse buildPagedResponse(List<User> users, int page, int size,
+    private PagedResponse<UserResponse> buildPagedResponse(List<User> users, int page, int size,
                                                   long total, int totalPages) {
         List<UserResponse> content = users.stream()
                 .map(this::mapToUserResponse)
                 .collect(Collectors.toList());
-        return PagedUserResponse.builder()
+        return PagedResponse.<UserResponse>builder()
                 .content(content)
                 .page(page)
                 .size(size)

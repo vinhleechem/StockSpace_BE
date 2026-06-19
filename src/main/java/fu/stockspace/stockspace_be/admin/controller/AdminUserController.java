@@ -3,6 +3,7 @@ package fu.stockspace.stockspace_be.admin.controller;
 import fu.stockspace.stockspace_be.admin.dto.*;
 import fu.stockspace.stockspace_be.admin.service.AdminUserManagementService;
 import fu.stockspace.stockspace_be.common.dto.ApiResponse;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -46,7 +47,7 @@ public class AdminUserController {
      */
     @GetMapping
     @Operation(summary = "Lấy danh sách người dùng (phân trang, tìm kiếm, lọc)")
-    public ResponseEntity<ApiResponse<PagedUserResponse>> getUsers(
+    public ResponseEntity<ApiResponse<PagedResponse<UserResponse>>> getUsers(
             @Parameter(description = "Từ khóa tìm kiếm (email/tên/SĐT)")
             @RequestParam(required = false) String keyword,
 
@@ -61,7 +62,7 @@ public class AdminUserController {
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir
     ) {
-        PagedUserResponse result = userManagementService.getUsers(
+        PagedResponse<UserResponse> result = userManagementService.getUsers(
                 keyword, roleName, isActive, page, size, sortBy, sortDir);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách người dùng thành công", result));
     }
