@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -35,13 +36,13 @@ public class AdminDisputeController {
      */
     @GetMapping
     @Operation(summary = "Xem danh sách các tranh chấp (phân trang, lọc trạng thái)")
-    public ResponseEntity<ApiResponse<Page<DisputeResponse>>> getAllDisputes(
+    public ResponseEntity<ApiResponse<PagedResponse<DisputeResponse>>> getAllDisputes(
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
         Page<DisputeResponse> result = adminDisputeService.getAllDisputes(status, page, size);
-        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách tranh chấp thành công", result));
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách tranh chấp thành công", PagedResponse.fromPage(result)));
     }
 
     /**

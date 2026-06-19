@@ -4,6 +4,7 @@ import fu.stockspace.stockspace_be.common.dto.ApiResponse;
 import fu.stockspace.stockspace_be.common.dto.CreateSystemPolicyRequest;
 import fu.stockspace.stockspace_be.common.dto.SystemPolicyResponse;
 import fu.stockspace.stockspace_be.common.service.SystemPolicyService;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -46,11 +47,11 @@ public class AdminSystemPolicyController {
      */
     @GetMapping
     @Operation(summary = "Xem lịch sử tất cả các phiên bản cam kết ràng buộc (Admin)")
-    public ResponseEntity<ApiResponse<Page<SystemPolicyResponse>>> getAllPolicies(
+    public ResponseEntity<ApiResponse<PagedResponse<SystemPolicyResponse>>> getAllPolicies(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
         Page<SystemPolicyResponse> result = systemPolicyService.getAllPolicies(page, size);
-        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách lịch sử chính sách thành công", result));
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách lịch sử chính sách thành công", PagedResponse.fromPage(result)));
     }
 }

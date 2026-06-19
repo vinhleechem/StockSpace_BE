@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -45,7 +46,7 @@ public class ContractController {
      */
     @GetMapping
     @Operation(summary = "Danh sách hợp đồng của mình")
-    public ResponseEntity<ApiResponse<Page<RentalContractResponse>>> getMyContracts(
+    public ResponseEntity<ApiResponse<PagedResponse<RentalContractResponse>>> getMyContracts(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
@@ -57,7 +58,7 @@ public class ContractController {
                 ? contractService.getMyContractsAsOwner(user.getId(), page, size)
                 : contractService.getMyContractsAsTenant(user.getId(), page, size);
 
-        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách hợp đồng thành công", result));
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách hợp đồng thành công", PagedResponse.fromPage(result)));
     }
 
     /**

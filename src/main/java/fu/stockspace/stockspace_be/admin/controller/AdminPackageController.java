@@ -1,5 +1,6 @@
 package fu.stockspace.stockspace_be.admin.controller;
 import fu.stockspace.stockspace_be.common.dto.ApiResponse;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.subscription.dto.CreatePackageRequest;
 import fu.stockspace.stockspace_be.subscription.dto.ServicePackageResponse;
 import fu.stockspace.stockspace_be.subscription.dto.SubscriptionResponse;
