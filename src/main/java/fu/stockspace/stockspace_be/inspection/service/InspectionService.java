@@ -22,6 +22,7 @@ import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -33,6 +34,9 @@ import java.time.LocalDateTime;
  *   3. Inspector nộp báo cáo → PASSED (verify kho) | FAILED
  */
 import java.util.UUID;
+import fu.stockspace.stockspace_be.wallet.service.WalletService;
+import fu.stockspace.stockspace_be.common.service.SystemConfigService;
+import fu.stockspace.stockspace_be.wallet.entity.TransactionType;
 
 @Slf4j
 @Service
@@ -44,6 +48,8 @@ public class InspectionService {
     private final UserRepository userRepository;
     private final WarehouseService warehouseService;
     private final ObjectMapper objectMapper;
+    private final WalletService walletService;
+    private final SystemConfigService systemConfigService;
 
     // ==================== Owner ====================
 
@@ -64,13 +70,26 @@ public class InspectionService {
             throw new BadRequestException(ErrorCode.INSPECTION_ALREADY_SUBMITTED);
         }
 
+        // Khấu trừ phí gửi yêu cầu kiểm định
+        BigDecimal fee = systemConfigService.getBigDecimalValue("inspection_fee", new BigDecimal("40000"));
+        if (fee.compareTo(BigDecimal.ZERO) > 0) {
+            walletService.deductBalance(
+                    ownerId,
+                    fee,
+                    TransactionType.COMMISSION,
+                    "Trừ phí yêu cầu kiểm định cho kho: " + warehouse.getName(),
+                    null,
+                    null
+            );
+        }
+
         InspectionReport report = InspectionReport.builder()
                 .warehouse(warehouse)
                 .status(InspectionStatus.PENDING)
                 .build();
 
         report = inspectionRepository.save(report);
-        log.info("Owner {} requested inspection for warehouse {}", ownerId, warehouseId);
+        log.info("Owner {} requested inspection for warehouse {} with fee {}", ownerId, warehouseId, fee);
         return mapToResponse(report);
     }
 

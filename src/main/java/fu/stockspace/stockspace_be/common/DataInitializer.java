@@ -209,5 +209,14 @@ public class DataInitializer implements CommandLineRunner {
                     .build());
             log.info("Seeded default system configurations successfully");
         }
+
+        if (systemConfigRepository.findByConfigKey("inspection_fee").isEmpty()) {
+            systemConfigRepository.save(SystemConfig.builder()
+                    .configKey("inspection_fee")
+                    .configValue("40000")
+                    .description("Phí gửi yêu cầu kiểm định kho bãi")
+                    .build());
+            log.info("Seeded inspection_fee system configuration successfully");
+        }
     }
 }
