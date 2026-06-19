@@ -42,5 +42,5 @@ public class CreateUserRequest {
      * Danh sách role ID sẽ gán cho user mới (ít nhất 1).
      */
     @jakarta.validation.constraints.NotEmpty(message = "Người dùng phải có ít nhất một vai trò")
-    private java.util.Set<Long> roleIds;
+    private java.util.Set<java.util.UUID> roleIds;
 }

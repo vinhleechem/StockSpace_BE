@@ -18,7 +18,7 @@ import java.util.List;
 public class CreateWarehouseRequest {
 
     @NotNull(message = "Loại kho không được để trống")
-    private Integer typeId;
+    private java.util.UUID typeId;
 
     @NotBlank(message = "Tên kho không được để trống")
     @Size(max = 255, message = "Tên kho tối đa 255 ký tự")

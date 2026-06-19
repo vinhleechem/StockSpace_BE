@@ -29,7 +29,7 @@ public class PublicPackageController {
     }
     @GetMapping("/{id}")
     @Operation(summary = "Xem chi tiết một gói dịch vụ")
-    public ResponseEntity<ApiResponse<ServicePackageResponse>> getPackageById(@PathVariable Integer id) {
+    public ResponseEntity<ApiResponse<ServicePackageResponse>> getPackageById(@PathVariable java.util.UUID id) {
         ServicePackageResponse response = packageService.getPackageById(id);
         return ResponseEntity.ok(ApiResponse.success("Lấy chi tiết gói dịch vụ thành công", response));
     }

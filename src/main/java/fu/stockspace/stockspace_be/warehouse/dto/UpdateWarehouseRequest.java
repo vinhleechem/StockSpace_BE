@@ -28,5 +28,5 @@ public class UpdateWarehouseRequest {
     @DecimalMin(value = "0.0", inclusive = false, message = "Giá thuê phải lớn hơn 0")
     private BigDecimal pricePerMonth;
 
-    private Integer typeId;
+    private java.util.UUID typeId;
 }

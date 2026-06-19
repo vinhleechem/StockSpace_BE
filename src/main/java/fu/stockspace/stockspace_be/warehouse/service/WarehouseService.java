@@ -88,7 +88,7 @@ public class WarehouseService {
         String pkgIdStr = systemConfigService.getValue("warehouse_publish_package_id", null);
         if (pkgIdStr != null) {
             try {
-                Integer pkgId = Integer.parseInt(pkgIdStr.trim());
+                UUID pkgId = UUID.fromString(pkgIdStr.trim());
                 ServicePackage publishPkg = servicePackageRepository.findById(pkgId)
                         .orElseThrow(() -> new ResourceNotFoundException("Gói dịch vụ phí đăng bài không tồn tại"));
                 
@@ -101,8 +101,8 @@ public class WarehouseService {
                         null
                 );
                 log.info("Deducted posting fee of {} from owner {} for warehouse {}", publishPkg.getPrice(), ownerId, request.getName());
-            } catch (NumberFormatException e) {
-                log.error("Invalid warehouse_publish_package_id system config: {}", pkgIdStr, e);
+            } catch (IllegalArgumentException e) {
+                log.error("Invalid warehouse_publish_package_id system config (expected UUID): {}", pkgIdStr, e);
             }
         }
 

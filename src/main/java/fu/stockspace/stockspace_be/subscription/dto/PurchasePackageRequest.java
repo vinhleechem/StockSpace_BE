@@ -7,5 +7,5 @@ import lombok.*;
 @Builder
 public class PurchasePackageRequest {
     @NotNull(message = "ID gói dịch vụ không được để trống")
-    private Integer packageId;
+    private java.util.UUID packageId;
 }

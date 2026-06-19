@@ -89,7 +89,7 @@ public class RoleManagementService {
      * Cập nhật thông tin vai trò.
      */
     @Transactional
-    public RoleResponse updateRole(Long id, CreateRoleRequest request) {
+    public RoleResponse updateRole(java.util.UUID id, CreateRoleRequest request) {
         Role role = roleRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.ROLE_NOT_FOUND));
 
@@ -127,7 +127,7 @@ public class RoleManagementService {
      * Xóa vai trò.
      */
     @Transactional
-    public void deleteRole(Long id) {
+    public void deleteRole(java.util.UUID id) {
         Role role = roleRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.ROLE_NOT_FOUND));
 
@@ -158,7 +158,7 @@ public class RoleManagementService {
      * Gán thêm một Permission vào Role.
      */
     @Transactional
-    public RoleResponse assignPermissionToRole(Long roleId, AssignPermissionRequest request) {
+    public RoleResponse assignPermissionToRole(java.util.UUID roleId, AssignPermissionRequest request) {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.ROLE_NOT_FOUND));
 
@@ -177,7 +177,7 @@ public class RoleManagementService {
      * Gỡ bỏ Permission khỏi Role.
      */
     @Transactional
-    public RoleResponse removePermissionFromRole(Long roleId, Long permissionId) {
+    public RoleResponse removePermissionFromRole(java.util.UUID roleId, java.util.UUID permissionId) {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.ROLE_NOT_FOUND));
 
@@ -218,7 +218,7 @@ public class RoleManagementService {
      * Xóa vai trò khỏi User.
      */
     @Transactional
-    public void removeRoleFromUser(java.util.UUID userId, Long roleId) {
+    public void removeRoleFromUser(java.util.UUID userId, java.util.UUID roleId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
 

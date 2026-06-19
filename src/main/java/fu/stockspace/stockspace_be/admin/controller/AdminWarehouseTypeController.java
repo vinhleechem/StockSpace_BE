@@ -57,7 +57,7 @@ public class AdminWarehouseTypeController {
     @GetMapping("/{id}")
     @Operation(summary = "Xem chi tiết loại kho theo ID")
     public ResponseEntity<ApiResponse<WarehouseTypeResponse>> getTypeById(
-            @PathVariable Integer id
+            @PathVariable java.util.UUID id
     ) {
         WarehouseTypeResponse type = warehouseTypeService.getTypeById(id);
         return ResponseEntity.ok(ApiResponse.success("Lấy thông tin loại kho thành công", type));
@@ -84,7 +84,7 @@ public class AdminWarehouseTypeController {
     @PutMapping("/{id}")
     @Operation(summary = "Cập nhật loại kho")
     public ResponseEntity<ApiResponse<WarehouseTypeResponse>> updateType(
-            @PathVariable Integer id,
+            @PathVariable java.util.UUID id,
             @Valid @RequestBody CreateWarehouseTypeRequest request
     ) {
         WarehouseTypeResponse type = warehouseTypeService.updateType(id, request);
@@ -98,7 +98,7 @@ public class AdminWarehouseTypeController {
     @DeleteMapping("/{id}")
     @Operation(summary = "Xóa loại kho")
     public ResponseEntity<ApiResponse<Void>> deleteType(
-            @PathVariable Integer id
+            @PathVariable java.util.UUID id
     ) {
         warehouseTypeService.deleteType(id);
         return ResponseEntity.ok(ApiResponse.success("Xóa loại kho thành công", null));

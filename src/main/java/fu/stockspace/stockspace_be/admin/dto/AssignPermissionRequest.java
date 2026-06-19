@@ -16,5 +16,5 @@ import lombok.NoArgsConstructor;
 public class AssignPermissionRequest {
 
     @NotNull(message = "Permission ID is required")
-    private Long permissionId;
+    private java.util.UUID permissionId;
 }

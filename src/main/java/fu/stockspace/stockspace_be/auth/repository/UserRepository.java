@@ -49,7 +49,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      * Tìm danh sách người dùng được gán một role cụ thể.
      */
     @Query("SELECT u FROM User u JOIN u.roles r WHERE r.id = :roleId AND u.isDeleted = false")
-    List<User> findUsersByRoleId(@Param("roleId") Long roleId);
+    List<User> findUsersByRoleId(@Param("roleId") java.util.UUID roleId);
 
     /**
      * Tìm kiếm user theo email / fullName / phone với phân trang.

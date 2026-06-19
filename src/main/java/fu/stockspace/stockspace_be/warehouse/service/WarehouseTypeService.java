@@ -49,7 +49,7 @@ public class WarehouseTypeService {
     }
 
     @Transactional
-    public WarehouseTypeResponse updateType(Integer id, CreateWarehouseTypeRequest request) {
+    public WarehouseTypeResponse updateType(java.util.UUID id, CreateWarehouseTypeRequest request) {
         log.info("Updating warehouse type ID: {}", id);
         WarehouseType warehouseType = warehouseTypeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_TYPE_NOT_FOUND));
@@ -67,7 +67,7 @@ public class WarehouseTypeService {
     }
 
     @Transactional
-    public void deleteType(Integer id) {
+    public void deleteType(java.util.UUID id) {
         log.info("Deleting warehouse type ID: {}", id);
         WarehouseType warehouseType = warehouseTypeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_TYPE_NOT_FOUND));
@@ -82,7 +82,7 @@ public class WarehouseTypeService {
     }
 
     @Transactional(readOnly = true)
-    public WarehouseTypeResponse getTypeById(Integer id) {
+    public WarehouseTypeResponse getTypeById(java.util.UUID id) {
         WarehouseType warehouseType = warehouseTypeRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_TYPE_NOT_FOUND));
         return mapToResponse(warehouseType);

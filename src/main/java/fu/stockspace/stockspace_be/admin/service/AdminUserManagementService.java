@@ -281,9 +281,9 @@ public class AdminUserManagementService {
     /**
      * Load và validate danh sách Role từ set roleId.
      */
-    private Set<Role> loadRoles(Set<Long> roleIds) {
+    private Set<Role> loadRoles(Set<java.util.UUID> roleIds) {
         Set<Role> roles = new HashSet<>();
-        for (Long roleId : roleIds) {
+        for (java.util.UUID roleId : roleIds) {
             Role role = roleRepository.findById(roleId)
                     .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.ROLE_NOT_FOUND));
             roles.add(role);

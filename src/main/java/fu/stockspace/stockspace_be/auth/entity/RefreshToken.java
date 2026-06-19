@@ -24,8 +24,8 @@ import java.time.LocalDateTime;
 public class RefreshToken extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private java.util.UUID id;
 
     /**
      * Token value — UUID random, unique.

@@ -16,7 +16,7 @@ import java.util.Set;
 @AllArgsConstructor
 public class RoleResponse {
 
-    private Long id;
+    private java.util.UUID id;
     private String name;
     private String description;
     private Set<PermissionResponse> permissions;
