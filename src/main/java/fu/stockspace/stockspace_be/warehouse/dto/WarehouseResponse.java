@@ -27,7 +27,7 @@ public class WarehouseResponse {
     private boolean isVerified;
 
     /** Thông tin loại kho */
-    private Integer typeId;
+    private java.util.UUID typeId;
     private String typeName;
 
     /** Thông tin chủ kho (summary) */

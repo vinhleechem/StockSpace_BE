@@ -9,7 +9,7 @@ import lombok.Getter;
 @Getter
 @Builder
 public class WarehouseTypeResponse {
-    private Integer id;
+    private java.util.UUID id;
     private String name;
     private String description;
 }

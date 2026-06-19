@@ -19,9 +19,9 @@ import lombok.experimental.SuperBuilder;
 public class WarehouseType extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", updatable = false, nullable = false)
-    private Integer id;
+    private java.util.UUID id;
 
     @Column(name = "name", unique = true, nullable = false, length = 100)
     private String name;

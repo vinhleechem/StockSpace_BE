@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class PermissionResponse {
 
-    private Long id;
+    private java.util.UUID id;
     private String name;
     private String description;
 }

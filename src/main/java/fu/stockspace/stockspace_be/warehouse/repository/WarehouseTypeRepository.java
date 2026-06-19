@@ -10,9 +10,9 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 
-public interface WarehouseTypeRepository extends JpaRepository<WarehouseType, Integer> {
+public interface WarehouseTypeRepository extends JpaRepository<WarehouseType, java.util.UUID> {
     @Query("SELECT wt FROM WarehouseType wt WHERE wt.id = ?1 AND wt.isDeleted = false")
-    Optional<WarehouseType> findById(Integer id);
+    Optional<WarehouseType> findById(java.util.UUID id);
 
     @Query("SELECT wt FROM WarehouseType wt WHERE wt.isDeleted = false")
     java.util.List<WarehouseType> findAll();

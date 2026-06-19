@@ -91,5 +91,5 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
     boolean existsByIdAndOwnerId(UUID id, UUID ownerId);
 
     @Query("SELECT COUNT(w) > 0 FROM Warehouse w WHERE w.type.id = ?1 AND w.isDeleted = false")
-    boolean existsByTypeId(Integer typeId);
+    boolean existsByTypeId(java.util.UUID typeId);
 }

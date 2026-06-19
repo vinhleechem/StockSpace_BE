@@ -25,7 +25,7 @@ public class ServicePackageService {
                 .toList();
     }
     @Transactional(readOnly = true)
-    public ServicePackageResponse getPackageById(Integer id) {
+    public ServicePackageResponse getPackageById(java.util.UUID id) {
         ServicePackage servicePackage = packageRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.PACKAGE_NOT_FOUND));
         return mapToResponse(servicePackage);
@@ -47,7 +47,7 @@ public class ServicePackageService {
         return mapToResponse(servicePackage);
     }
     @Transactional
-    public ServicePackageResponse updatePackage(Integer id, UpdatePackageRequest request) {
+    public ServicePackageResponse updatePackage(java.util.UUID id, UpdatePackageRequest request) {
         ServicePackage servicePackage = packageRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.PACKAGE_NOT_FOUND));
         if (request.getName() != null && !request.getName().equals(servicePackage.getName())) {
@@ -70,7 +70,7 @@ public class ServicePackageService {
         return mapToResponse(servicePackage);
     }
     @Transactional
-    public void deletePackage(Integer id) {
+    public void deletePackage(java.util.UUID id) {
         ServicePackage servicePackage = packageRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.PACKAGE_NOT_FOUND));
         // Soft delete bằng cách set isActive = false

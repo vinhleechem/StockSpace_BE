@@ -16,5 +16,5 @@ import lombok.NoArgsConstructor;
 public class AssignRoleRequest {
 
     @NotNull(message = "Role ID is required")
-    private Long roleId;
+    private java.util.UUID roleId;
 }

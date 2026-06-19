@@ -39,14 +39,14 @@ public class AdminPackageController {
     @PutMapping("/packages/{id}")
     @Operation(summary = "Cập nhật thông tin một gói dịch vụ")
     public ResponseEntity<ApiResponse<ServicePackageResponse>> updatePackage(
-            @PathVariable Integer id,
+            @PathVariable java.util.UUID id,
             @Valid @RequestBody UpdatePackageRequest request) {
         ServicePackageResponse response = packageService.updatePackage(id, request);
         return ResponseEntity.ok(ApiResponse.success("Cập nhật gói dịch vụ thành công", response));
     }
     @DeleteMapping("/packages/{id}")
     @Operation(summary = "Xóa (Ngừng cung cấp) một gói dịch vụ")
-    public ResponseEntity<ApiResponse<Void>> deletePackage(@PathVariable Integer id) {
+    public ResponseEntity<ApiResponse<Void>> deletePackage(@PathVariable java.util.UUID id) {
         packageService.deletePackage(id);
         return ResponseEntity.ok(ApiResponse.success("Xóa gói dịch vụ thành công", null));
     }

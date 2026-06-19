@@ -10,7 +10,7 @@ import java.util.Optional;
  * Repository cho Permission entity.
  */
 @Repository
-public interface PermissionRepository extends JpaRepository<Permission, Long> {
+public interface PermissionRepository extends JpaRepository<Permission, java.util.UUID> {
 
     /**
      * Tìm Permission theo tên.

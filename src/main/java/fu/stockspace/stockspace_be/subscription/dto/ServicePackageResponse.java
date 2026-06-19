@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 @Builder
 public class ServicePackageResponse {
-    private Integer id;
+    private java.util.UUID id;
     private String name;
     private String features;
     private BigDecimal price;

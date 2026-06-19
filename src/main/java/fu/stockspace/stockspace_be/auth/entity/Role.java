@@ -26,8 +26,8 @@ import java.util.Set;
 public class Role extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private java.util.UUID id;
 
     /**
      * Tên role — luôn có prefix ROLE_ để Spring Security nhận diện.

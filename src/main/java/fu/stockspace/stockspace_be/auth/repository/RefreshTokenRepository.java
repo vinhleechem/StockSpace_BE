@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 @Repository
-public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long> {
+public interface RefreshTokenRepository extends JpaRepository<RefreshToken, java.util.UUID> {
 
     /**
      * Tìm token theo giá trị — dùng khi client gửi refresh request.

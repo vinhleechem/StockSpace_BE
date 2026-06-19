@@ -16,9 +16,9 @@ import java.math.BigDecimal;
 @SuperBuilder
 public class ServicePackage extends BaseEntity {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", updatable = false, nullable = false)
-    private Integer id;
+    private java.util.UUID id;
     @Column(name = "name", nullable = false, unique = true, length = 150)
     private String name;
     /** Danh sách tính năng (lưu trữ dưới dạng chuỗi JSON hoặc TEXT mô tả) */

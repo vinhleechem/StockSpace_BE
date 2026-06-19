@@ -24,8 +24,8 @@ import fu.stockspace.stockspace_be.common.entity.BaseEntity;
 public class Permission extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private java.util.UUID id;
 
     /**
      * Tên permission — unique, viết HOA, dùng _ phân cách.
