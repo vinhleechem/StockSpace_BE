@@ -23,6 +23,15 @@ import fu.stockspace.stockspace_be.wallet.entity.TransactionType;
 import fu.stockspace.stockspace_be.common.service.SystemConfigService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import java.util.List;
+import java.util.stream.Collectors;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -147,7 +156,7 @@ public class BookingService {
      * Tenant xem lịch sử booking của mình (phân trang).
      */
     @Transactional(readOnly = true)
-    public PagedBookingResponse getMyBookings(UUID tenantId, int page, int size) {
+    public PagedResponse<BookingResponse> getMyBookings(UUID tenantId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         Page<BookingRequest> bookingPage = bookingRepository.findByTenantId(tenantId, pageable);
         return toPagedResponse(bookingPage);
@@ -157,7 +166,7 @@ public class BookingService {
      * Owner xem danh sách yêu cầu thuê đến kho của mình (phân trang).
      */
     @Transactional(readOnly = true)
-    public PagedBookingResponse getIncomingRequests(UUID ownerId, int page, int size) {
+    public PagedResponse<BookingResponse> getIncomingRequests(UUID ownerId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         Page<BookingRequest> bookingPage = bookingRepository.findByWarehouseOwnerId(ownerId, pageable);
         return toPagedResponse(bookingPage);
@@ -244,11 +253,11 @@ public class BookingService {
                 .updatedAt(b.getUpdatedAt())
                 .build();
     }
-    private PagedBookingResponse toPagedResponse(Page<BookingRequest> page) {
+    private PagedResponse<BookingResponse> toPagedResponse(Page<BookingRequest> page) {
         List<BookingResponse> content = page.getContent().stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
-        return PagedBookingResponse.builder()
+        return PagedResponse.<BookingResponse>builder()
                 .content(content)
                 .page(page.getNumber())
                 .size(page.getSize())

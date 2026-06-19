@@ -2,6 +2,7 @@ package fu.stockspace.stockspace_be.wallet.controller;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.util.SecurityUtil;
 import fu.stockspace.stockspace_be.common.dto.ApiResponse;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.UnauthorizedException;
 import fu.stockspace.stockspace_be.wallet.dto.*;
@@ -66,13 +67,13 @@ public class WalletController {
     }
     @GetMapping("/withdrawals")
     @Operation(summary = "Xem lịch sử các yêu cầu rút tiền của mình (phân trang)")
-    public ResponseEntity<ApiResponse<Page<WithdrawResponse>>> getMyWithdrawals(
+    public ResponseEntity<ApiResponse<PagedResponse<WithdrawResponse>>> getMyWithdrawals(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         User user = getCurrentUser();
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         Page<WithdrawResponse> response = withdrawService.getMyWithdrawRequests(user.getId(), pageable);
-        return ResponseEntity.ok(ApiResponse.success("Lấy lịch sử yêu cầu rút tiền thành công", response));
+        return ResponseEntity.ok(ApiResponse.success("Lấy lịch sử yêu cầu rút tiền thành công", PagedResponse.fromPage(response)));
     }
     private User getCurrentUser() {
         return SecurityUtil.getCurrentUser()
