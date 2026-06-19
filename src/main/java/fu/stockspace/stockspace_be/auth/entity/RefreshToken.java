@@ -15,8 +15,6 @@ import java.time.LocalDateTime;
  * Khi logout all devices → xóa hết token của user đó.
  */
 @Entity
-@org.hibernate.annotations.SQLDelete(sql = "UPDATE refresh_tokens SET is_deleted = true WHERE id = ?")
-@org.hibernate.annotations.SQLRestriction("is_deleted = false")
 @Table(name = "refresh_tokens")
 @Getter
 @Setter
