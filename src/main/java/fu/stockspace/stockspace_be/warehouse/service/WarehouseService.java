@@ -10,6 +10,7 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundE
 import fu.stockspace.stockspace_be.warehouse.dto.*;
 import fu.stockspace.stockspace_be.warehouse.entity.*;
 import fu.stockspace.stockspace_be.warehouse.repository.*;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.entity.SystemPolicy;
 import fu.stockspace.stockspace_be.common.repository.SystemPolicyRepository;
 import lombok.RequiredArgsConstructor;
@@ -189,7 +190,7 @@ public class WarehouseService {
      * Owner xem danh sách kho của mình (phân trang).
      */
     @Transactional(readOnly = true)
-    public PagedWarehouseResponse getMyWarehouses(UUID ownerId, int page, int size, String sortBy, String sortDir) {
+    public PagedResponse<WarehouseResponse> getMyWarehouses(UUID ownerId, int page, int size, String sortBy, String sortDir) {
         Sort sort = "asc".equalsIgnoreCase(sortDir)
                 ? Sort.by(sortBy).ascending()
                 : Sort.by(sortBy).descending();
@@ -240,7 +241,7 @@ public class WarehouseService {
      * Tìm kiếm kho công khai — chỉ trả về kho đã verified.
      */
     @Transactional(readOnly = true)
-    public PagedWarehouseResponse searchWarehouses(WarehouseSearchRequest request,
+    public PagedResponse<WarehouseResponse> searchWarehouses(WarehouseSearchRequest request,
                                                     int page, int size, String sortBy, String sortDir) {
         Sort sort = "asc".equalsIgnoreCase(sortDir)
                 ? Sort.by(sortBy).ascending()
@@ -318,7 +319,7 @@ public class WarehouseService {
      * Admin / Inspector xem tất cả kho (không lọc verified).
      */
     @Transactional(readOnly = true)
-    public PagedWarehouseResponse getAllWarehouses(WarehouseSearchRequest request,
+    public PagedResponse<WarehouseResponse> getAllWarehouses(WarehouseSearchRequest request,
                                                    int page, int size, String sortBy, String sortDir) {
         Sort sort = "asc".equalsIgnoreCase(sortDir)
                 ? Sort.by(sortBy).ascending()
@@ -439,12 +440,12 @@ public class WarehouseService {
                 .build();
     }
 
-    private PagedWarehouseResponse toPagedResponse(Page<Warehouse> page) {
+    private PagedResponse<WarehouseResponse> toPagedResponse(Page<Warehouse> page) {
         List<WarehouseResponse> content = page.getContent().stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
 
-        return PagedWarehouseResponse.builder()
+        return PagedResponse.<WarehouseResponse>builder()
                 .content(content)
                 .page(page.getNumber())
                 .size(page.getSize())

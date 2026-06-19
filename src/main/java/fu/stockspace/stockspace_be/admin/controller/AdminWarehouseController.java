@@ -1,7 +1,7 @@
 package fu.stockspace.stockspace_be.admin.controller;
 
 import fu.stockspace.stockspace_be.common.dto.ApiResponse;
-import fu.stockspace.stockspace_be.warehouse.dto.PagedWarehouseResponse;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.warehouse.dto.WarehouseResponse;
 import fu.stockspace.stockspace_be.warehouse.dto.WarehouseSearchRequest;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
@@ -34,7 +34,7 @@ public class AdminWarehouseController {
      */
     @GetMapping
     @Operation(summary = "Lấy danh sách tất cả các kho (phân trang, tìm kiếm, lọc)")
-    public ResponseEntity<ApiResponse<PagedWarehouseResponse>> getAllWarehouses(
+    public ResponseEntity<ApiResponse<PagedResponse<WarehouseResponse>>> getAllWarehouses(
             @Parameter(description = "Từ khóa tìm kiếm (tên kho / địa chỉ)")
             @RequestParam(required = false) String keyword,
 
@@ -54,7 +54,7 @@ public class AdminWarehouseController {
         request.setStatus(status);
         request.setIsVerified(isVerified);
 
-        PagedWarehouseResponse result = warehouseService.getAllWarehouses(request, page, size, sortBy, sortDir);
+        PagedResponse<WarehouseResponse> result = warehouseService.getAllWarehouses(request, page, size, sortBy, sortDir);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách kho thành công", result));
     }
 

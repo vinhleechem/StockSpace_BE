@@ -3,6 +3,7 @@ package fu.stockspace.stockspace_be.warehouse.controller;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.util.SecurityUtil;
 import fu.stockspace.stockspace_be.common.dto.ApiResponse;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.UnauthorizedException;
 import fu.stockspace.stockspace_be.warehouse.dto.*;
@@ -111,14 +112,14 @@ public class OwnerWarehouseController {
      */
     @GetMapping
     @Operation(summary = "Danh sách kho của Owner (phân trang)")
-    public ResponseEntity<ApiResponse<PagedWarehouseResponse>> getMyWarehouses(
+    public ResponseEntity<ApiResponse<PagedResponse<WarehouseResponse>>> getMyWarehouses(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir
     ) {
         UUID ownerId = getCurrentUserId();
-        PagedWarehouseResponse result = warehouseService.getMyWarehouses(ownerId, page, size, sortBy, sortDir);
+        PagedResponse<WarehouseResponse> result = warehouseService.getMyWarehouses(ownerId, page, size, sortBy, sortDir);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách kho thành công", result));
     }
 

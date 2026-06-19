@@ -1,6 +1,7 @@
 package fu.stockspace.stockspace_be.warehouse.controller;
 
 import fu.stockspace.stockspace_be.common.dto.ApiResponse;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.warehouse.dto.*;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseService;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseTypeService;
@@ -49,7 +50,7 @@ public class PublicWarehouseController {
      */
     @GetMapping
     @Operation(summary = "Tìm kiếm kho bãi công khai")
-    public ResponseEntity<ApiResponse<PagedWarehouseResponse>> search(
+    public ResponseEntity<ApiResponse<PagedResponse<WarehouseResponse>>> search(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) BigDecimal minPrice,
             @RequestParam(required = false) BigDecimal maxPrice,
@@ -65,7 +66,7 @@ public class PublicWarehouseController {
         request.setMaxPrice(maxPrice);
         request.setMinCapacity(minCapacity);
 
-        PagedWarehouseResponse result = warehouseService.searchWarehouses(request, page, size, sortBy, sortDir);
+        PagedResponse<WarehouseResponse> result = warehouseService.searchWarehouses(request, page, size, sortBy, sortDir);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách kho thành công", result));
     }
 
