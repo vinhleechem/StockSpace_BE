@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -102,13 +103,13 @@ public class DisputeController {
      */
     @GetMapping("/mine")
     @Operation(summary = "Xem danh sách tranh chấp của mình")
-    public ResponseEntity<ApiResponse<Page<DisputeResponse>>> getMyDisputes(
+    public ResponseEntity<ApiResponse<PagedResponse<DisputeResponse>>> getMyDisputes(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
         java.util.UUID userId = getCurrentUser().getId();
         Page<DisputeResponse> result = disputeService.getMyDisputes(userId, page, size);
-        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách tranh chấp thành công", result));
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách tranh chấp thành công", PagedResponse.fromPage(result)));
     }
 
     private User getCurrentUser() {

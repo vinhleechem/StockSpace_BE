@@ -7,6 +7,7 @@ import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.UnauthorizedException;
 import fu.stockspace.stockspace_be.inspection.dto.InspectionReportResponse;
 import fu.stockspace.stockspace_be.inspection.service.InspectionService;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -23,30 +24,30 @@ import org.springframework.web.bind.annotation.*;
  *
  * Endpoints:
  *   POST /api/owner/inspections          — Gửi yêu cầu kiểm định
- *   GET  /api/owner/inspections          — Xem lịch sử kiểm định của kho mình
+ *   GET  /api/owner/inspections          — Xem lịch sử kiểm định (phân trang)
  */
-@Tag(name = "Owner — Inspection", description = "API yêu cầu kiểm định kho của Owner")
+@Tag(name = "Owner — Inspection", description = "API quản lý yêu cầu kiểm định kho bãi của Owner")
 @RestController
 @RequestMapping("/api/owner/inspections")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+@PreAuthorize("hasRole('OWNER')")
 public class OwnerInspectionController {
 
     private final InspectionService inspectionService;
 
     /**
-     * POST /api/owner/inspections?warehouseId=...
-     * Gửi yêu cầu kiểm định cho kho.
+     * POST /api/owner/inspections
+     * Gửi yêu cầu kiểm định cho Warehouse.
      */
     @PostMapping
-    @Operation(summary = "Gửi yêu cầu kiểm định kho")
+    @Operation(summary = "Gửi yêu cầu kiểm định chất lượng kho bãi")
     public ResponseEntity<ApiResponse<InspectionReportResponse>> requestInspection(
             @RequestParam java.util.UUID warehouseId
     ) {
         java.util.UUID ownerId = getCurrentUser().getId();
         InspectionReportResponse response = inspectionService.requestInspection(ownerId, warehouseId);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Gửi yêu cầu kiểm định thành công. Admin sẽ sắp xếp Inspector sớm.", response));
+                .body(ApiResponse.success("Gửi yêu cầu kiểm định thành công. Đang chờ phân công Inspector.", response));
     }
 
     /**
@@ -55,13 +56,13 @@ public class OwnerInspectionController {
      */
     @GetMapping
     @Operation(summary = "Xem lịch sử kiểm định kho của mình")
-    public ResponseEntity<ApiResponse<Page<InspectionReportResponse>>> getMyInspections(
+    public ResponseEntity<ApiResponse<PagedResponse<InspectionReportResponse>>> getMyInspections(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
         java.util.UUID ownerId = getCurrentUser().getId();
         Page<InspectionReportResponse> result = inspectionService.getMyInspections(ownerId, page, size);
-        return ResponseEntity.ok(ApiResponse.success("Lấy lịch sử kiểm định thành công", result));
+        return ResponseEntity.ok(ApiResponse.success("Lấy lịch sử kiểm định thành công", PagedResponse.fromPage(result)));
     }
 
     private User getCurrentUser() {

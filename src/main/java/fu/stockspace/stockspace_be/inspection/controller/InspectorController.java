@@ -8,6 +8,7 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.UnauthorizedExcep
 import fu.stockspace.stockspace_be.inspection.dto.InspectionReportResponse;
 import fu.stockspace.stockspace_be.inspection.dto.SubmitInspectionRequest;
 import fu.stockspace.stockspace_be.inspection.service.InspectionService;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -41,13 +42,13 @@ public class InspectorController {
      */
     @GetMapping
     @Operation(summary = "Xem danh sách kiểm định được phân công")
-    public ResponseEntity<ApiResponse<Page<InspectionReportResponse>>> getAssigned(
+    public ResponseEntity<ApiResponse<PagedResponse<InspectionReportResponse>>> getAssigned(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
         java.util.UUID inspectorId = getCurrentUser().getId();
         Page<InspectionReportResponse> result = inspectionService.getAssignedInspections(inspectorId, page, size);
-        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách kiểm định thành công", result));
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách kiểm định thành công", PagedResponse.fromPage(result)));
     }
 
     /**

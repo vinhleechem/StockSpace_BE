@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -46,13 +47,13 @@ public class AdminInspectionController {
      */
     @GetMapping
     @Operation(summary = "Xem tất cả danh sách yêu cầu kiểm định (Admin)")
-    public ResponseEntity<ApiResponse<Page<InspectionReportResponse>>> getAllInspections(
+    public ResponseEntity<ApiResponse<PagedResponse<InspectionReportResponse>>> getAllInspections(
             @Parameter(description = "Lọc theo trạng thái kiểm định (PENDING, IN_PROGRESS, PASSED, FAILED)")
             @RequestParam(required = false) InspectionStatus status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
         Page<InspectionReportResponse> result = inspectionService.getAllInspections(status, page, size);
-        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách yêu cầu kiểm định thành công", result));
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách yêu cầu kiểm định thành công", PagedResponse.fromPage(result)));
     }
 }
