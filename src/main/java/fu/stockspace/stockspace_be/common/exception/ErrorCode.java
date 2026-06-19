@@ -76,7 +76,13 @@ public enum ErrorCode {
 
     // Dispute Errors
     DISPUTE_NOT_FOUND("Tranh chấp không tồn tại", HttpStatus.NOT_FOUND),
-    DISPUTE_ALREADY_OPEN("Đã có tranh chấp đang mở cho hợp đồng này", HttpStatus.CONFLICT);
+    DISPUTE_ALREADY_OPEN("Đã có tranh chấp đang mở cho hợp đồng này", HttpStatus.CONFLICT),
+
+    // Notification Errors
+    NOTIFICATION_NOT_FOUND("Không tìm thấy thông báo", HttpStatus.NOT_FOUND),
+
+    // Bin Errors
+    WAREHOUSE_BIN_NOT_FOUND("Ô chứa không tồn tại trong hệ thống", HttpStatus.NOT_FOUND);
 
     private final String message;
     private final HttpStatus status;
