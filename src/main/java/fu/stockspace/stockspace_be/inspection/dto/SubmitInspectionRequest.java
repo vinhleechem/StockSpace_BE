@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -21,6 +22,8 @@ public class SubmitInspectionRequest {
     private Map<String, Object> checklistData;
 
     private String notes;
+
+    private List<String> images;
 
     @NotNull(message = "Kết quả kiểm định không được để trống")
     private InspectionStatus status; // PASSED hoặc FAILED

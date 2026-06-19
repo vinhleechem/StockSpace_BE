@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 /**
  * DTO trả về thông tin InspectionReport.
  */
+import java.util.List;
 import java.util.UUID;
 
 @Getter
@@ -19,6 +20,7 @@ public class InspectionReportResponse {
     private String status;
     private String checklistData;
     private String notes;
+    private List<String> images;
     private LocalDateTime inspectedAt;
 
     // Warehouse info

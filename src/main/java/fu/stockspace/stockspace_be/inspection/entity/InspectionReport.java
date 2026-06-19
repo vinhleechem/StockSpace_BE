@@ -8,6 +8,8 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 import java.time.LocalDateTime;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -59,6 +61,12 @@ public class InspectionReport extends BaseEntity {
 
     @Column(name = "notes", columnDefinition = "TEXT")
     private String notes;
+
+    @ElementCollection
+    @CollectionTable(name = "inspection_report_images", joinColumns = @JoinColumn(name = "inspection_report_id"))
+    @Column(name = "image_url", columnDefinition = "TEXT")
+    @Builder.Default
+    private List<String> images = new ArrayList<>();
 
     @Column(name = "inspected_at")
     private LocalDateTime inspectedAt;

@@ -135,6 +135,10 @@ public class InspectionService {
         report.setStatus(request.getStatus());
         report.setNotes(request.getNotes());
         report.setChecklistData(checklistJson);
+        if (request.getImages() != null) {
+            report.getImages().clear();
+            report.getImages().addAll(request.getImages());
+        }
         report.setInspectedAt(LocalDateTime.now());
         report = inspectionRepository.save(report);
 
@@ -199,6 +203,7 @@ public class InspectionService {
                 .status(r.getStatus().name())
                 .checklistData(r.getChecklistData())
                 .notes(r.getNotes())
+                .images(r.getImages())
                 .inspectedAt(r.getInspectedAt())
                 .warehouseId(warehouse != null ? warehouse.getId() : null)
                 .warehouseName(warehouse != null ? warehouse.getName() : null)
