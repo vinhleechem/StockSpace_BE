@@ -82,7 +82,19 @@ public enum ErrorCode {
     NOTIFICATION_NOT_FOUND("Không tìm thấy thông báo", HttpStatus.NOT_FOUND),
 
     // Bin Errors
-    WAREHOUSE_BIN_NOT_FOUND("Ô chứa không tồn tại trong hệ thống", HttpStatus.NOT_FOUND);
+    WAREHOUSE_BIN_NOT_FOUND("Ô chứa không tồn tại trong hệ thống", HttpStatus.NOT_FOUND),
+    LAYOUT_NOT_FOUND("Sơ đồ layout không tồn tại", HttpStatus.NOT_FOUND),
+    LAYOUT_INVALID_COORDINATES("Tọa độ hoặc kích thước vượt giới hạn cho phép", HttpStatus.BAD_REQUEST),
+    WAREHOUSE_BIN_NOT_EMPTY("Không thể xóa khu vực, kệ hoặc ô chứa này vì vẫn còn hàng tồn kho", HttpStatus.BAD_REQUEST),
+    ZONE_NOT_FOUND("Khu vực không tồn tại trong hệ thống", HttpStatus.NOT_FOUND),
+    RACK_NOT_FOUND("Kệ hàng không tồn tại trong hệ thống", HttpStatus.NOT_FOUND),
+
+    // Stock & WMS Errors (shared with future tasks)
+    PRODUCT_CATEGORY_NOT_FOUND("Không tìm thấy danh mục sản phẩm", HttpStatus.NOT_FOUND),
+    SKU_NOT_FOUND("Không tìm thấy SKU", HttpStatus.NOT_FOUND),
+    SKU_CODE_DUPLICATE("Mã SKU đã tồn tại", HttpStatus.CONFLICT),
+    STOCK_BATCH_NOT_FOUND("Không tìm thấy lô hàng tồn kho", HttpStatus.NOT_FOUND),
+    STOCK_INSUFFICIENT_QUANTITY("Số dư tồn kho không đủ", HttpStatus.BAD_REQUEST);
 
     private final String message;
     private final HttpStatus status;
