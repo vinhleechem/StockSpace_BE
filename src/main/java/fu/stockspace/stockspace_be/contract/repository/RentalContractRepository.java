@@ -34,4 +34,12 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
 
     @Query("SELECT c FROM RentalContract c WHERE c.status = :status AND c.submittedAt < :dateTime")
     java.util.List<RentalContract> findByStatusAndSubmittedAtBefore(@Param("status") fu.stockspace.stockspace_be.contract.entity.ContractStatus status, @Param("dateTime") java.time.LocalDateTime dateTime);
+
+    @Query("""
+            SELECT COUNT(c) > 0 FROM RentalContract c
+            WHERE c.booking.tenant.id = :tenantId
+              AND c.booking.warehouse.id = :warehouseId
+              AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
+            """)
+    boolean existsByTenantIdAndWarehouseIdAndStatusActive(@Param("tenantId") UUID tenantId, @Param("warehouseId") UUID warehouseId);
 }

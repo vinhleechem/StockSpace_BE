@@ -5,6 +5,7 @@ import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.UnauthorizedException;
+import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import fu.stockspace.stockspace_be.wallet.dto.*;
 import fu.stockspace.stockspace_be.wallet.entity.*;
 import fu.stockspace.stockspace_be.wallet.repository.TransactionRepository;
@@ -28,6 +29,7 @@ public class WalletService {
     private final WalletRepository walletRepository;
     private final TransactionRepository transactionRepository;
     private final UserRepository userRepository;
+    private final NotificationService notificationService;
     @Value("${app.sepay.webhook-token:MySecretSePayWebhookToken123}")
     private String sepayWebhookToken;
     @Value("${app.sepay.bank-id:MB}")
@@ -107,18 +109,31 @@ public class WalletService {
      */
     @Transactional
     public void processSePayWebhook(String authHeader, SePayWebhookRequest payload) {
-        // 1. Xác thực Webhook Token
-        String expectedAuth = "Apikey " + sepayWebhookToken;
-        if (authHeader == null || !authHeader.equals(expectedAuth)) {
-            log.error("SePay Webhook unauthorized. Received: {}, Expected: Apikey <secret>", authHeader);
+        // 1. Xác thực Webhook Token (Case-insensitive & Safe extraction)
+        if (authHeader == null) {
+            log.error("SePay Webhook unauthorized: Missing Authorization header");
             throw new UnauthorizedException(ErrorCode.UNAUTHENTICATED);
         }
-        // 2. Chống trùng lặp (Deduplication)
+        String token = authHeader.trim();
+        if (token.toLowerCase().startsWith("apikey ")) {
+            token = token.substring(7).trim();
+        }
+        if (!token.equals(sepayWebhookToken)) {
+            log.error("SePay Webhook unauthorized. Received token: {}, Expected: {}", token, sepayWebhookToken);
+            throw new UnauthorizedException(ErrorCode.UNAUTHENTICATED);
+        }
+
+        // 2. Chống trùng lặp & Check null ID (Deduplication)
+        if (payload.getId() == null) {
+            log.error("SePay Webhook error: Missing transaction ID (payload.id is null)");
+            throw new BadRequestException("Thiếu ID giao dịch SePay");
+        }
         String referenceId = payload.getId().toString();
         if (transactionRepository.existsByReferenceId(referenceId)) {
             log.info("SePay Webhook: Transaction referenceId {} already processed. Skipping.", referenceId);
             return;
         }
+
         // 3. Phân tích nội dung chuyển khoản để tìm mã STSPxxxxxx
         String paymentCode = extractPaymentCode(payload.getCode(), payload.getContent());
         if (paymentCode == null) {
@@ -126,6 +141,7 @@ public class WalletService {
                     payload.getCode(), payload.getContent());
             return;
         }
+
         // 4. Tìm kiếm transaction PENDING trong hệ thống
         Transaction transaction = transactionRepository.findByPaymentCode(paymentCode)
                 .orElse(null);
@@ -137,6 +153,7 @@ public class WalletService {
             log.warn("SePay Webhook: Transaction {} is already in status {}. Skipping.", paymentCode, transaction.getStatus());
             return;
         }
+
         // 5. Khóa ví và cộng tiền vào tài khoản
         UUID userId = transaction.getWallet().getUser().getId();
         Wallet wallet = walletRepository.findByUserIdWithLock(userId)
@@ -144,13 +161,23 @@ public class WalletService {
         BigDecimal transferAmount = payload.getTransferAmount();
         wallet.setBalance(wallet.getBalance().add(transferAmount));
         walletRepository.save(wallet);
+
         // 6. Cập nhật transaction thành SUCCESS
         transaction.setStatus(TransactionStatus.SUCCESS);
         transaction.setAmount(transferAmount); // ghi nhận số tiền thực tế nhận được
         transaction.setReferenceId(referenceId);
         transactionRepository.save(transaction);
+
         log.info("SePay Webhook: Successfully processed transaction {} (referenceId: {}). Credited {} VND to user {}.",
                 paymentCode, referenceId, transferAmount, userId);
+
+        // 7. Gửi thông báo đẩy đến người dùng
+        notificationService.push(
+                userId,
+                "Nạp tiền thành công",
+                "Ví của bạn đã được nạp " + transferAmount + " VND từ giao dịch chuyển khoản ngân hàng.",
+                "PAYMENT"
+        );
     }
     /**
      * Khấu trừ số dư ví người dùng (dùng cho thanh toán cọc hoặc gói dịch vụ).

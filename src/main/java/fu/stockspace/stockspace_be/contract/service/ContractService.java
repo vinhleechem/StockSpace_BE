@@ -15,6 +15,7 @@ import fu.stockspace.stockspace_be.contract.entity.RentalContract;
 import fu.stockspace.stockspace_be.contract.repository.DisputeTicketRepository;
 import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseService;
+import fu.stockspace.stockspace_be.warehouse.service.WarehouseLayoutService;
 import fu.stockspace.stockspace_be.wallet.service.WalletService;
 import fu.stockspace.stockspace_be.wallet.entity.TransactionType;
 import lombok.RequiredArgsConstructor;
@@ -44,6 +45,7 @@ public class ContractService {
     private final DisputeTicketRepository disputeRepository;
     private final UserRepository userRepository;
     private final WalletService walletService;
+    private final WarehouseLayoutService warehouseLayoutService;
     // ==================== Internal ====================
     /**
      * Tạo RentalContract từ BookingRequest đã được APPROVED.
@@ -235,6 +237,13 @@ public class ContractService {
         contract.setTenantConfirmed(true);
         contract.setOwnerConfirmed(true);
         contract.setStatus(ContractStatus.ACTIVE);
+
+        try {
+            warehouseLayoutService.cloneLayout(contract.getBooking().getWarehouse().getId(), actualTenantId);
+        } catch (Exception e) {
+            log.error("Failed to auto-clone layout for tenant {} after contract activation: {}", actualTenantId, e.getMessage());
+        }
+
         // =========================================================
         // [INTEGRATION POINT — Dev B]
         // Chuyển tiền cọc sang ví Owner khi Tenant confirm:

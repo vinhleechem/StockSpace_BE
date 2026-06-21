@@ -31,8 +31,8 @@ Sprint 2 đã hoàn thành: Auth · Warehouse (CRUD, 2D layout, kiểm định) 
 
 > Thực hiện ngay ngày 1 để không block nhau.
 
-- [ ] **Dev A tạo skeleton `WarehouseBin.java`** (entity + UUID field) trước khi Dev B dùng FK `bin_id` trong `StockBatch`
-- [ ] **Dev A expose `NotificationService.push(userId, title, message, type)`** là internal method trước khi Dev B hook vào các luồng Wallet/Subscription
+- [x] **Dev A tạo skeleton `WarehouseBin.java`** (entity + UUID field) trước khi Dev B dùng FK `bin_id` trong `StockBatch`
+- [x] **Dev A expose `NotificationService.push(userId, title, message, type)`** là internal method trước khi Dev B hook vào các luồng Wallet/Subscription
 - [ ] **Cả 2 thêm ErrorCode mới vào `ErrorCode.java`** — xem danh sách mục cuối file
 
 ---

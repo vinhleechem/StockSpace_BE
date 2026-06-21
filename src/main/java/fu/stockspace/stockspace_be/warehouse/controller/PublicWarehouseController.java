@@ -5,6 +5,9 @@ import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.warehouse.dto.*;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseService;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseTypeService;
+import fu.stockspace.stockspace_be.warehouse.service.WarehouseLayoutService;
+import fu.stockspace.stockspace_be.auth.entity.User;
+import fu.stockspace.stockspace_be.auth.util.SecurityUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +35,7 @@ public class PublicWarehouseController {
 
     private final WarehouseService warehouseService;
     private final WarehouseTypeService warehouseTypeService;
+    private final WarehouseLayoutService warehouseLayoutService;
 
     // ==================== Search ====================
 
@@ -81,6 +85,37 @@ public class PublicWarehouseController {
     public ResponseEntity<ApiResponse<WarehouseResponse>> getDetail(@PathVariable UUID id) {
         WarehouseResponse response = warehouseService.getWarehouseDetail(id);
         return ResponseEntity.ok(ApiResponse.success("Lấy thông tin kho thành công", response));
+    }
+
+    // ==================== Layout ====================
+
+    /**
+     * GET /api/warehouses/{id}/layout
+     * Lấy sơ đồ layout 2D của kho (tự động trả về bản tùy biến nếu là Tenant của kho đó, hoặc default)
+     */
+    @GetMapping("/{id}/layout")
+    @Operation(summary = "Lấy sơ đồ layout kho bãi (Public / Guest / Tenant)")
+    public ResponseEntity<ApiResponse<WarehouseLayoutResponse>> getLayout(@PathVariable UUID id) {
+        UUID userId = null;
+        String role = "PUBLIC";
+
+        var currentUserOpt = SecurityUtil.getCurrentUser();
+        if (currentUserOpt.isPresent()) {
+            User user = currentUserOpt.get();
+            userId = user.getId();
+            boolean isTenant = user.getAuthorities().stream()
+                    .anyMatch(a -> a.getAuthority().equals("ROLE_TENANT"));
+            boolean isOwner = user.getAuthorities().stream()
+                    .anyMatch(a -> a.getAuthority().equals("ROLE_OWNER") || a.getAuthority().equals("ROLE_ADMIN"));
+            if (isTenant) {
+                role = "TENANT";
+            } else if (isOwner) {
+                role = "OWNER";
+            }
+        }
+
+        WarehouseLayoutResponse response = warehouseLayoutService.getLayoutTree(id, userId, role);
+        return ResponseEntity.ok(ApiResponse.success("Lấy sơ đồ layout kho thành công", response));
     }
 
     // ==================== Types ====================
