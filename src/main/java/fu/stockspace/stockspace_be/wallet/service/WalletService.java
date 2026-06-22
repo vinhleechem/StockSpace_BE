@@ -1,10 +1,10 @@
 package fu.stockspace.stockspace_be.wallet.service;
+
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
-import fu.stockspace.stockspace_be.common.exception.exceptions.UnauthorizedException;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import fu.stockspace.stockspace_be.wallet.dto.*;
 import fu.stockspace.stockspace_be.wallet.entity.*;
@@ -12,32 +12,25 @@ import fu.stockspace.stockspace_be.wallet.repository.TransactionRepository;
 import fu.stockspace.stockspace_be.wallet.repository.WalletRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.math.BigDecimal;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class WalletService {
+
     private final WalletRepository walletRepository;
     private final TransactionRepository transactionRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
-    @Value("${app.sepay.webhook-token:MySecretSePayWebhookToken123}")
-    private String sepayWebhookToken;
-    @Value("${app.sepay.bank-id:MB}")
-    private String sepayBankId;
-    @Value("${app.sepay.bank-account-no:123456789}")
-    private String sepayBankAccountNo;
-    @Value("${app.sepay.account-holder:CONG TY STOCKSPACE}")
-    private String sepayAccountHolder;
+    private final VnPayService vnPayService;
+
     /**
      * Lấy ví của người dùng, tự động tạo nếu chưa tồn tại.
      */
@@ -56,25 +49,25 @@ public class WalletService {
                     return walletRepository.save(newWallet);
                 });
     }
+
     /**
      * Lấy thông tin ví của người dùng.
      */
     @Transactional(readOnly = true)
     public WalletResponse getWalletInfo(UUID userId) {
         Wallet wallet = walletRepository.findByUserId(userId)
-                .orElseGet(() -> {
-                    // Cần tạo transaction mới để lưu ví nên gọi qua method có Transaction
-                    return getOrCreateWallet(userId);
-                });
+                .orElseGet(() -> getOrCreateWallet(userId));
         return mapToWalletResponse(wallet);
     }
+
     /**
-     * Tạo yêu cầu nạp tiền, lưu transaction PENDING và trả về thông tin thanh toán VietQR.
+     * Tạo yêu cầu nạp tiền, lưu transaction PENDING và trả về thông tin thanh toán VNPAY.
      */
     @Transactional
-    public TopUpResponse createTopUpRequest(UUID userId, TopUpRequest request) {
+    public TopUpResponse createTopUpRequest(UUID userId, TopUpRequest request, String ipAddress) {
         Wallet wallet = getOrCreateWallet(userId);
         String paymentCode = generatePaymentCode();
+
         Transaction transaction = Transaction.builder()
                 .wallet(wallet)
                 .amount(request.getAmount())
@@ -84,101 +77,81 @@ public class WalletService {
                 .paymentCode(paymentCode)
                 .build();
         transaction = transactionRepository.save(transaction);
-        // Sinh link VietQR (chuyển đổi ký tự đặc biệt của tên chủ tài khoản nếu cần)
-        String encodedHolder = URLEncoder.encode(sepayAccountHolder, StandardCharsets.UTF_8);
-        String qrCodeUrl = String.format(
-                "https://img.vietqr.io/image/%s-%s-compact.png?amount=%s&addInfo=%s&accountName=%s",
-                sepayBankId,
-                sepayBankAccountNo,
-                request.getAmount().toPlainString(),
-                paymentCode,
-                encodedHolder
-        );
+
+        // Sinh link thanh toán VNPAY
+        String paymentUrl = vnPayService.createPaymentUrl(paymentCode, request.getAmount(), ipAddress);
+
         return TopUpResponse.builder()
                 .transactionId(transaction.getId())
-                .paymentCode(paymentCode)
+                .paymentUrl(paymentUrl)
                 .amount(request.getAmount())
-                .bankName(sepayBankId)
-                .bankAccountNumber(sepayBankAccountNo)
-                .bankAccountHolder(sepayAccountHolder)
-                .qrCodeUrl(qrCodeUrl)
                 .build();
     }
+
     /**
-     * Xử lý webhook từ SePay gửi về để cộng tiền ví.
+     * Xử lý callback/IPN từ VNPAY gửi về để cập nhật số dư ví.
      */
     @Transactional
-    public void processSePayWebhook(String authHeader, SePayWebhookRequest payload) {
-        // 1. Xác thực Webhook Token (Case-insensitive & Safe extraction)
-        if (authHeader == null) {
-            log.error("SePay Webhook unauthorized: Missing Authorization header");
-            throw new UnauthorizedException(ErrorCode.UNAUTHENTICATED);
-        }
-        String token = authHeader.trim();
-        if (token.toLowerCase().startsWith("apikey ")) {
-            token = token.substring(7).trim();
-        }
-        if (!token.equals(sepayWebhookToken)) {
-            log.error("SePay Webhook unauthorized. Received token: {}, Expected: {}", token, sepayWebhookToken);
-            throw new UnauthorizedException(ErrorCode.UNAUTHENTICATED);
+    public void processVnPayPayment(Map<String, String> params) {
+        log.info("Processing VNPAY payment callback: {}", params);
+
+        // 1. Xác thực chữ ký bảo mật từ VNPAY
+        boolean isSignatureValid = vnPayService.verifySignature(params);
+        if (!isSignatureValid) {
+            throw new BadRequestException("Chữ ký bảo mật VNPAY không hợp lệ");
         }
 
-        // 2. Chống trùng lặp & Check null ID (Deduplication)
-        if (payload.getId() == null) {
-            log.error("SePay Webhook error: Missing transaction ID (payload.id is null)");
-            throw new BadRequestException("Thiếu ID giao dịch SePay");
-        }
-        String referenceId = payload.getId().toString();
-        if (transactionRepository.existsByReferenceId(referenceId)) {
-            log.info("SePay Webhook: Transaction referenceId {} already processed. Skipping.", referenceId);
-            return;
-        }
+        String paymentCode = params.get("vnp_TxnRef");
+        String vnpResponseCode = params.get("vnp_ResponseCode");
+        String transactionNo = params.get("vnp_TransactionNo");
 
-        // 3. Phân tích nội dung chuyển khoản để tìm mã STSPxxxxxx
-        String paymentCode = extractPaymentCode(payload.getCode(), payload.getContent());
-        if (paymentCode == null) {
-            log.warn("SePay Webhook: Cannot parse payment code from SePay payload (code: '{}', content: '{}'). Skipping.", 
-                    payload.getCode(), payload.getContent());
-            return;
-        }
-
-        // 4. Tìm kiếm transaction PENDING trong hệ thống
+        // 2. Tìm giao dịch trong DB
         Transaction transaction = transactionRepository.findByPaymentCode(paymentCode)
-                .orElse(null);
-        if (transaction == null) {
-            log.warn("SePay Webhook: Payment code {} matched pattern but no transaction found in DB. Skipping.", paymentCode);
-            return;
-        }
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.SYSTEM_ERROR, "Không tìm thấy mã giao dịch: " + paymentCode));
+
+        // 3. Nếu giao dịch đã xử lý xong rồi thì bỏ qua (tránh trùng lặp giữa IPN và Callback)
         if (transaction.getStatus() != TransactionStatus.PENDING) {
-            log.warn("SePay Webhook: Transaction {} is already in status {}. Skipping.", paymentCode, transaction.getStatus());
+            log.info("Transaction {} already processed. Status: {}", paymentCode, transaction.getStatus());
             return;
         }
 
-        // 5. Khóa ví và cộng tiền vào tài khoản
-        UUID userId = transaction.getWallet().getUser().getId();
-        Wallet wallet = walletRepository.findByUserIdWithLock(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WALLET_NOT_FOUND));
-        BigDecimal transferAmount = payload.getTransferAmount();
-        wallet.setBalance(wallet.getBalance().add(transferAmount));
-        walletRepository.save(wallet);
+        // 4. Kiểm tra trạng thái thanh toán từ VNPAY
+        if ("00".equals(vnpResponseCode)) {
+            // Thanh toán thành công -> Cộng tiền ví
+            UUID userId = transaction.getWallet().getUser().getId();
+            Wallet wallet = walletRepository.findByUserIdWithLock(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WALLET_NOT_FOUND));
 
-        // 6. Cập nhật transaction thành SUCCESS
-        transaction.setStatus(TransactionStatus.SUCCESS);
-        transaction.setAmount(transferAmount); // ghi nhận số tiền thực tế nhận được
-        transaction.setReferenceId(referenceId);
-        transactionRepository.save(transaction);
+            // Số tiền VNPAY gửi về nhân với 100, cần chia lại cho 100
+            BigDecimal rawAmount = new BigDecimal(params.get("vnp_Amount"));
+            BigDecimal actualAmount = rawAmount.divide(new BigDecimal(100));
 
-        log.info("SePay Webhook: Successfully processed transaction {} (referenceId: {}). Credited {} VND to user {}.",
-                paymentCode, referenceId, transferAmount, userId);
+            wallet.setBalance(wallet.getBalance().add(actualAmount));
+            walletRepository.save(wallet);
 
-        // 7. Gửi thông báo đẩy đến người dùng
-        notificationService.push(
-                userId,
-                "Nạp tiền thành công",
-                "Ví của bạn đã được nạp " + transferAmount + " VND từ giao dịch chuyển khoản ngân hàng.",
-                "PAYMENT"
-        );
+            transaction.setStatus(TransactionStatus.SUCCESS);
+            transaction.setAmount(actualAmount);
+            transaction.setReferenceId(transactionNo);
+            transactionRepository.save(transaction);
+
+            log.info("Successfully credited {} VND to user {} (txnRef: {})", actualAmount, userId, paymentCode);
+
+            // Gửi thông báo
+            notificationService.push(
+                    userId,
+                    "Nạp tiền thành công",
+                    "Ví của bạn đã được nạp " + actualAmount + " VND thành công qua cổng thanh toán VNPAY.",
+                    "PAYMENT"
+            );
+        } else {
+            // Thanh toán thất bại
+            transaction.setStatus(TransactionStatus.FAILED);
+            transaction.setReferenceId(transactionNo);
+            transactionRepository.save(transaction);
+            log.warn("VNPAY transaction failed with response code: {} (txnRef: {})", vnpResponseCode, paymentCode);
+        }
     }
+
     /**
      * Khấu trừ số dư ví người dùng (dùng cho thanh toán cọc hoặc gói dịch vụ).
      * Yêu cầu phương thức gọi phải có @Transactional và nên gọi trong service có lock.
@@ -205,6 +178,7 @@ public class WalletService {
         log.info("Wallet Service: Deducted {} VND from user {} for {}.", amount, userId, description);
         return transactionRepository.save(transaction);
     }
+
     /**
      * Hoàn tiền hoặc cộng số dư vào ví người dùng (dùng cho hoàn cọc, phân xử tranh chấp).
      * Yêu cầu phương thức gọi phải có @Transactional và nên gọi trong service có lock.
@@ -228,6 +202,7 @@ public class WalletService {
         log.info("Wallet Service: Refunded {} VND to user {} for {}.", amount, userId, description);
         return transactionRepository.save(transaction);
     }
+
     // ==================== Private Helpers ====================
     private String generatePaymentCode() {
         String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -241,22 +216,7 @@ public class WalletService {
         } while (transactionRepository.findByPaymentCode(sb.toString()).isPresent());
         return sb.toString();
     }
-    private String extractPaymentCode(String code, String content) {
-        Pattern pattern = Pattern.compile("STSP[A-Z0-9]{6}", Pattern.CASE_INSENSITIVE);
-        if (code != null) {
-            Matcher matcher = pattern.matcher(code);
-            if (matcher.find()) {
-                return matcher.group().toUpperCase();
-            }
-        }
-        if (content != null) {
-            Matcher matcher = pattern.matcher(content);
-            if (matcher.find()) {
-                return matcher.group().toUpperCase();
-            }
-        }
-        return null;
-    }
+
     private WalletResponse mapToWalletResponse(Wallet wallet) {
         return WalletResponse.builder()
                 .id(wallet.getId())

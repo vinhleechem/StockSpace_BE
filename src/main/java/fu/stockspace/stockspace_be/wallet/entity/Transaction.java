@@ -42,7 +42,7 @@ public class Transaction extends BaseEntity {
     /** Mã chuyển khoản duy nhất (ví dụ: STSPX7F2A) */
     @Column(name = "payment_code", unique = true, length = 50)
     private String paymentCode;
-    /** ID giao dịch đối tác / SePay phục vụ đối soát và tránh trùng lặp */
+    /** ID giao dịch đối tác (VNPAY, Momo, v.v.) phục vụ đối soát và tránh trùng lặp */
     @Column(name = "reference_id", unique = true, length = 100)
     private String referenceId;
     /** ID của booking liên quan (nếu có) - Loose coupling kiểu UUID */
