@@ -8,10 +8,6 @@ import java.util.UUID;
 @Builder
 public class TopUpResponse {
     private UUID transactionId;
-    private String paymentCode;
+    private String paymentUrl;
     private BigDecimal amount;
-    private String bankName;
-    private String bankAccountNumber;
-    private String bankAccountHolder;
-    private String qrCodeUrl;
 }
