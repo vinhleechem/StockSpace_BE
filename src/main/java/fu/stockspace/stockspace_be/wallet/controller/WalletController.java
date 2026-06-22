@@ -40,12 +40,33 @@ public class WalletController {
         return ResponseEntity.ok(ApiResponse.success("Lấy thông tin ví thành công", response));
     }
     @PostMapping("/top-up")
-    @Operation(summary = "Tạo yêu cầu nạp tiền (Sinh mã chuyển khoản & link QR VietQR)")
-    public ResponseEntity<ApiResponse<TopUpResponse>> topUp(@Valid @RequestBody TopUpRequest request) {
+    @Operation(summary = "Tạo yêu cầu nạp tiền (Sinh mã thanh toán & link redirect VNPAY)")
+    public ResponseEntity<ApiResponse<TopUpResponse>> topUp(
+            @Valid @RequestBody TopUpRequest request,
+            jakarta.servlet.http.HttpServletRequest servletRequest
+    ) {
         User user = getCurrentUser();
-        TopUpResponse response = walletService.createTopUpRequest(user.getId(), request);
+        String ipAddress = getClientIpAddress(servletRequest);
+        TopUpResponse response = walletService.createTopUpRequest(user.getId(), request, ipAddress);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Tạo yêu cầu nạp tiền thành công. Vui lòng chuyển khoản đúng nội dung.", response));
+                .body(ApiResponse.success("Tạo yêu cầu nạp tiền thành công. Vui lòng hoàn tất thanh toán qua link.", response));
+    }
+
+    private String getClientIpAddress(jakarta.servlet.http.HttpServletRequest request) {
+        String ipAddress = request.getHeader("X-Forwarded-For");
+        if (ipAddress == null || ipAddress.isEmpty() || "unknown".equalsIgnoreCase(ipAddress)) {
+            ipAddress = request.getHeader("Proxy-Client-IP");
+        }
+        if (ipAddress == null || ipAddress.isEmpty() || "unknown".equalsIgnoreCase(ipAddress)) {
+            ipAddress = request.getHeader("WL-Proxy-Client-IP");
+        }
+        if (ipAddress == null || ipAddress.isEmpty() || "unknown".equalsIgnoreCase(ipAddress)) {
+            ipAddress = request.getRemoteAddr();
+        }
+        if (ipAddress != null && ipAddress.contains(",")) {
+            ipAddress = ipAddress.split(",")[0].trim();
+        }
+        return ipAddress != null ? ipAddress : "127.0.0.1";
     }
     @GetMapping("/transactions")
     @Operation(summary = "Xem lịch sử giao dịch ví (phân trang)")
