@@ -45,6 +45,16 @@ public class User extends BaseEntity implements UserDetails {
     @Column(name = "phone", length = 20)
     private String phone;
 
+    /** Provider đăng nhập: LOCAL hoặc GOOGLE */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "provider", nullable = false, length = 20)
+    @Builder.Default
+    private AuthProvider provider = AuthProvider.LOCAL;
+
+    /** URL ảnh đại diện (lấy từ Google khi login bằng OAuth) */
+    @Column(name = "avatar_url", length = 500)
+    private String avatarUrl;
+
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "user_roles",

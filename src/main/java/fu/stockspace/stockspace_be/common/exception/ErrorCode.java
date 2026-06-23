@@ -18,6 +18,15 @@ public enum ErrorCode {
     INVALID_REFRESH_TOKEN("Refresh token không hợp lệ, đã hết hạn hoặc đã bị sử dụng lại", HttpStatus.UNAUTHORIZED),
     USER_LOCKED("Tài khoản đã bị khóa. Vui lòng liên hệ Admin", HttpStatus.LOCKED),
 
+    // OTP / Password Reset Errors
+    INVALID_RESET_TOKEN("Đường dẫn đặt lại mật khẩu không hợp lệ hoặc đã hết hạn", HttpStatus.BAD_REQUEST),
+    RESET_TOKEN_EXPIRED("Đường dẫn đặt lại mật khẩu đã hết hạn. Vui lòng yêu cầu lại", HttpStatus.BAD_REQUEST),
+
+    // Google OAuth Errors
+    GOOGLE_AUTH_FAILED("Đăng nhập Google thất bại. Vui lòng thử lại", HttpStatus.BAD_REQUEST),
+    CANNOT_LOGIN_GOOGLE_WITH_PASSWORD("Tài khoản này đã đăng ký qua Google. Vui lòng đăng nhập bằng Google", HttpStatus.CONFLICT),
+    CANNOT_LOGIN_PASSWORD_WITH_GOOGLE("Tài khoản này đã đăng ký bằng email/mật khẩu. Vui lòng đăng nhập bằng email và mật khẩu", HttpStatus.CONFLICT),
+
     // Authorization Errors
     FORBIDDEN("Bạn không có quyền truy cập tài nguyên này", HttpStatus.FORBIDDEN),
 
