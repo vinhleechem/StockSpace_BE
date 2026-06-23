@@ -55,6 +55,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Auth endpoints — public hoàn toàn
                         .requestMatchers("/api/auth/**").permitAll()
+                        
+                        // Cụ thể permit Google Callback
+                        .requestMatchers(HttpMethod.GET, "/api/auth/google/callback").permitAll()
 
                         // Swagger UI & OpenApi docs — public để test
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
@@ -90,8 +93,7 @@ public class SecurityConfig {
 
         // ⚠️ Đổi thành domain frontend thật khi deploy
         config.setAllowedOrigins(List.of(
-                "http://localhost:3000",   // React dev server
-                "http://localhost:5173"    // Vite dev server
+                "http://localhost:5173"    // Vite/React dev server
         ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
