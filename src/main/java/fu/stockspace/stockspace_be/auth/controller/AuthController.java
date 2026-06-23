@@ -1,13 +1,14 @@
 package fu.stockspace.stockspace_be.auth.controller;
 
-import fu.stockspace.stockspace_be.auth.dto.LoginRequest;
-import fu.stockspace.stockspace_be.auth.dto.LoginResponse;
-import fu.stockspace.stockspace_be.auth.dto.RegisterRequest;
+import fu.stockspace.stockspace_be.auth.dto.*;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.service.AuthService;
 import fu.stockspace.stockspace_be.auth.service.RefreshTokenService;
 import fu.stockspace.stockspace_be.auth.util.SecurityUtil;
 import fu.stockspace.stockspace_be.common.dto.ApiResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -16,23 +17,27 @@ import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import io.swagger.v3.oas.annotations.Parameter;
+
 import java.util.UUID;
 
 /**
  * Controller xử lý authentication endpoints.
  *
  * Endpoints:
- *   POST /api/auth/register       — Đăng ký (OWNER / TENANT)
- *   POST /api/auth/login          — Đăng nhập
- *   POST /api/auth/refresh        — Lấy access token mới bằng refresh token (cookie)
- *   POST /api/auth/logout         — Logout thiết bị hiện tại
- *   POST /api/auth/logout-all     — Logout tất cả thiết bị
- *   GET  /api/auth/me             — Thông tin user hiện tại
+ *   POST /api/auth/register              — Đăng ký (OWNER / TENANT)
+ *   POST /api/auth/login                 — Đăng nhập
+ *   POST /api/auth/refresh               — Lấy access token mới
+ *   POST /api/auth/logout                — Logout thiết bị hiện tại
+ *   POST /api/auth/logout-all            — Logout tất cả thiết bị
+ *   GET  /api/auth/me                    — Thông tin user hiện tại
+ *   POST /api/auth/forgot-password       — Gửi OTP đặt lại mật khẩu
+ *   POST /api/auth/reset-password        — Đặt lại mật khẩu bằng OTP
+ *   GET  /api/auth/google/callback       — Đăng nhập bằng Google OAuth
  */
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
+@Tag(name = "Authentication", description = "Đăng ký, đăng nhập, quên mật khẩu, Google OAuth")
 public class AuthController {
 
     private final AuthService authService;
@@ -40,16 +45,8 @@ public class AuthController {
 
     // ==================== Register ====================
 
-    /**
-     * POST /api/auth/register
-     * Body: { "email", "password", "fullName", "phone", "role" }
-     * Role chỉ chấp nhận: ROLE_OWNER, ROLE_TENANT
-     *
-     * Response:
-     *   - Body: accessToken + user info
-     *   - Cookie: refreshToken (HttpOnly)
-     */
     @PostMapping("/register")
+    @Operation(summary = "Đăng ký tài khoản mới (OWNER / TENANT). Gửi email chào mừng sau khi đăng ký thành công.")
     public ResponseEntity<ApiResponse<LoginResponse>> register(
             @Valid @RequestBody RegisterRequest request
     ) {
@@ -59,15 +56,8 @@ public class AuthController {
 
     // ==================== Login ====================
 
-    /**
-     * POST /api/auth/login
-     * Body: { "email", "password" }
-     *
-     * Response:
-     *   - Body: accessToken + user info
-     *   - Cookie: refreshToken (HttpOnly, 7 ngày)
-     */
     @PostMapping("/login")
+    @Operation(summary = "Đăng nhập bằng email và mật khẩu")
     public ResponseEntity<ApiResponse<LoginResponse>> login(
             @Valid @RequestBody LoginRequest request
     ) {
@@ -75,19 +65,59 @@ public class AuthController {
         return buildAuthResponse(result, HttpStatus.OK, "Login successful");
     }
 
-    // ==================== Refresh Token ====================
+    // ==================== Google OAuth ====================
 
     /**
-     * POST /api/auth/refresh
-     * Cookie: refreshToken (tự động gửi bởi browser)
+     * GET /api/auth/google/callback?code=...
      *
-     * Response:
-     *   - Body: accessToken mới
-     *   - Cookie: refreshToken mới (Rotation — token cũ bị xóa)
-     *
-     * FE không cần gửi gì trong body — browser tự gửi cookie.
+     * Frontend redirect user đến Google login → Google redirect về đây với code.
+     * Backend exchange code → access token → user info → trả JWT về FE.
      */
+    @GetMapping("/google/callback")
+    @Operation(summary = "Đăng nhập / Đăng ký bằng Google OAuth. FE redirect về đây sau khi Google xác thực.")
+    public ResponseEntity<ApiResponse<LoginResponse>> googleCallback(
+            @RequestParam("code") String code
+    ) {
+        AuthService.AuthResult result = authService.loginWithGoogle(code);
+        return buildAuthResponse(result, HttpStatus.OK, "Google login successful");
+    }
+
+    // ==================== Forgot Password ====================
+
+    /**
+     * POST /api/auth/forgot-password
+     * Body: { "email": "user@example.com" }
+     *
+     * Gửi đường dẫn đặt lại mật khẩu về email. Luôn trả 200 dù email không tồn tại (bảo mật).
+     */
+    @PostMapping("/forgot-password")
+    @Operation(summary = "Yêu cầu đặt lại mật khẩu — gửi đường dẫn đặt lại mật khẩu về email")
+    public ResponseEntity<ApiResponse<Void>> forgotPassword(
+            @Valid @RequestBody ForgotPasswordRequest request
+    ) {
+        authService.forgotPassword(request.getEmail());
+        return ResponseEntity.ok(ApiResponse.success(
+                "Nếu email tồn tại trong hệ thống, chúng tôi đã gửi đường dẫn đặt lại mật khẩu đến hộp thư của bạn.", null));
+    }
+
+    /**
+     * POST /api/auth/reset-password
+     * Body: { "email": "...", "token": "...", "newPassword": "..." }
+     */
+    @PostMapping("/reset-password")
+    @Operation(summary = "Đặt lại mật khẩu bằng mã token nhận qua email")
+    public ResponseEntity<ApiResponse<Void>> resetPassword(
+            @Valid @RequestBody ResetPasswordRequest request
+    ) {
+        authService.resetPassword(request);
+        return ResponseEntity.ok(ApiResponse.success(
+                "Mật khẩu đã được đặt lại thành công. Vui lòng đăng nhập lại.", null));
+    }
+
+    // ==================== Refresh Token ====================
+
     @PostMapping("/refresh")
+    @Operation(summary = "Lấy access token mới bằng refresh token (cookie)")
     public ResponseEntity<ApiResponse<LoginResponse>> refresh(
             @Parameter(hidden = true)
             @CookieValue(name = RefreshTokenService.REFRESH_TOKEN_COOKIE_NAME, required = false)
@@ -104,23 +134,15 @@ public class AuthController {
 
     // ==================== Logout ====================
 
-    /**
-     * POST /api/auth/logout
-     * Cookie: refreshToken
-     *
-     * Logout thiết bị hiện tại — xóa refresh token này.
-     * Cookie bị xóa phía client bằng Set-Cookie maxAge=0.
-     */
     @PostMapping("/logout")
     @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Logout khỏi thiết bị hiện tại")
     public ResponseEntity<ApiResponse<Void>> logout(
             @Parameter(hidden = true)
             @CookieValue(name = RefreshTokenService.REFRESH_TOKEN_COOKIE_NAME, required = false)
             String refreshTokenValue
     ) {
         authService.logout(refreshTokenValue);
-
-        // Xóa cookie phía client
         ResponseCookie clearCookie = refreshTokenService.buildClearRefreshTokenCookie();
 
         return ResponseEntity.ok()
@@ -128,13 +150,9 @@ public class AuthController {
                 .body(ApiResponse.success("Logged out successfully", null));
     }
 
-    /**
-     * POST /api/auth/logout-all
-     *
-     * Logout tất cả thiết bị — xóa hết refresh token của user trong DB.
-     */
     @PostMapping("/logout-all")
     @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Logout khỏi tất cả thiết bị")
     public ResponseEntity<ApiResponse<Void>> logoutAll(
             @CookieValue(name = RefreshTokenService.REFRESH_TOKEN_COOKIE_NAME, required = false)
             String refreshTokenValue
@@ -143,8 +161,6 @@ public class AuthController {
                 .orElseThrow(() -> new IllegalStateException("Not authenticated"));
 
         authService.logoutAll(user);
-
-        // Xóa cookie thiết bị hiện tại
         ResponseCookie clearCookie = refreshTokenService.buildClearRefreshTokenCookie();
 
         return ResponseEntity.ok()
@@ -154,14 +170,9 @@ public class AuthController {
 
     // ==================== Me ====================
 
-    /**
-     * GET /api/auth/me
-     * Header: Authorization: Bearer <accessToken>
-     *
-     * Dùng để FE kiểm tra token còn hợp lệ và lấy thông tin user.
-     */
     @GetMapping("/me")
     @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Lấy thông tin user đang đăng nhập")
     public ResponseEntity<ApiResponse<UserInfoResponse>> getCurrentUser() {
         User user = SecurityUtil.getCurrentUser()
                 .orElseThrow(() -> new IllegalStateException("Not authenticated"));
@@ -177,6 +188,8 @@ public class AuthController {
                 user.getFullName(),
                 user.getPhone(),
                 primaryRole,
+                user.getProvider() != null ? user.getProvider().name() : "LOCAL",
+                user.getAvatarUrl(),
                 user.isActive(),
                 user.getCreatedAt() != null ? user.getCreatedAt().toString() : null
         );
@@ -186,9 +199,6 @@ public class AuthController {
 
     // ==================== Private helpers ====================
 
-    /**
-     * Build response với accessToken trong body + refreshToken trong HttpOnly Cookie.
-     */
     private ResponseEntity<ApiResponse<LoginResponse>> buildAuthResponse(
             AuthService.AuthResult result,
             HttpStatus status,
@@ -209,6 +219,8 @@ public class AuthController {
             String fullName,
             String phone,
             String role,
+            String provider,
+            String avatarUrl,
             boolean isActive,
             String createdAt
     ) {}
