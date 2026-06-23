@@ -149,7 +149,7 @@ public class VnPayService {
                     try {
                         return URLEncoder.encode(entry.getKey(), StandardCharsets.US_ASCII.toString())
                                 + "="
-                                + URLEncoder.encode(entry.getValue(), StandardCharsets.US_ASCII.toString());
+                                + URLEncoder.encode(entry.getValue(), StandardCharsets.US_ASCII.toString()).replace("+", "%20");
                     } catch (Exception e) {
                         return "";
                     }
@@ -166,7 +166,7 @@ public class VnPayService {
                 .sorted(Map.Entry.comparingByKey())
                 .map(entry -> {
                     try {
-                        return entry.getKey() + "=" + URLEncoder.encode(entry.getValue(), StandardCharsets.US_ASCII.toString());
+                        return entry.getKey() + "=" + URLEncoder.encode(entry.getValue(), StandardCharsets.US_ASCII.toString()).replace("+", "%20");
                     } catch (Exception e) {
                         return "";
                     }
