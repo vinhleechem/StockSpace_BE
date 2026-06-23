@@ -147,9 +147,10 @@ public class VnPayService {
                 .sorted(Map.Entry.comparingByKey())
                 .map(entry -> {
                     try {
-                        return URLEncoder.encode(entry.getKey(), StandardCharsets.US_ASCII.toString())
+                        return URLEncoder.encode(entry.getKey(), StandardCharsets.UTF_8.toString()).replace("+", "%20")
                                 + "="
-                                + URLEncoder.encode(entry.getValue(), StandardCharsets.US_ASCII.toString()).replace("+", "%20");
+                                + URLEncoder.encode(entry.getValue(), StandardCharsets.US_ASCII.toString()).replace("+",
+                                        "%20");
                     } catch (Exception e) {
                         return "";
                     }
@@ -166,7 +167,8 @@ public class VnPayService {
                 .sorted(Map.Entry.comparingByKey())
                 .map(entry -> {
                     try {
-                        return entry.getKey() + "=" + URLEncoder.encode(entry.getValue(), StandardCharsets.US_ASCII.toString()).replace("+", "%20");
+                        return entry.getKey() + "=" + URLEncoder
+                                .encode(entry.getValue(), StandardCharsets.US_ASCII.toString()).replace("+", "%20");
                     } catch (Exception e) {
                         return "";
                     }

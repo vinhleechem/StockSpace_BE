@@ -33,7 +33,7 @@ public class VnPayCallbackController {
     private final VnPayService vnPayService;
     private final TransactionRepository transactionRepository;
 
-    @Value("${app.vnpay.frontend-callback-url:http://localhost:3000/wallet/callback}")
+    @Value("${app.vnpay.frontend-callback-url:http://localhost:5173/wallet/callback}")
     private String frontendCallbackUrl;
 
     /**
