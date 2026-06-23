@@ -41,6 +41,8 @@ class VnPayServiceTest {
         
         // 500000 * 100 = 50000000
         assertTrue(url.contains("vnp_Amount=50000000"));
+        assertTrue(url.contains("vnp_OrderInfo=Nap%20tien%20vi%20StockSpace%20" + txnRef));
+        assertFalse(url.contains("vnp_OrderInfo=Nap+tien+vi+StockSpace+" + txnRef));
         assertTrue(url.contains("vnp_SecureHash="));
 
         // Phân tích ngược các tham số từ URL
