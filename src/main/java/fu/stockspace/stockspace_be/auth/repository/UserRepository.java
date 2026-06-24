@@ -56,7 +56,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      * Dùng cho trang quản lý người dùng của Admin.
      */
     @Query("SELECT u FROM User u WHERE u.isDeleted = false AND " +
-           "(:keyword IS NULL OR LOWER(u.email) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+           "(:keyword = '' OR LOWER(u.email) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
            "OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
            "OR u.phone LIKE CONCAT('%', :keyword, '%'))")
     Page<User> searchUsers(@Param("keyword") String keyword, Pageable pageable);
@@ -66,7 +66,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      */
     @Query("SELECT DISTINCT u FROM User u JOIN u.roles r WHERE u.isDeleted = false AND " +
            "r.name = :roleName AND " +
-           "(:keyword IS NULL OR LOWER(u.email) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+           "(:keyword = '' OR LOWER(u.email) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
            "OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
            "OR u.phone LIKE CONCAT('%', :keyword, '%'))")
     Page<User> searchUsersByRole(@Param("keyword") String keyword,
@@ -78,7 +78,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      */
     @Query("SELECT u FROM User u WHERE u.isDeleted = false AND " +
            "u.isActive = :isActive AND " +
-           "(:keyword IS NULL OR LOWER(u.email) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+           "(:keyword = '' OR LOWER(u.email) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
            "OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
            "OR u.phone LIKE CONCAT('%', :keyword, '%'))")
     Page<User> searchUsersByStatus(@Param("keyword") String keyword,
