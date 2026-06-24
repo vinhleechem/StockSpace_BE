@@ -68,17 +68,16 @@ public class AuthController {
     // ==================== Google OAuth ====================
 
     /**
-     * GET /api/auth/google/callback?code=...
+     * POST /api/auth/google
      *
-     * Frontend redirect user đến Google login → Google redirect về đây với code.
-     * Backend exchange code → access token → user info → trả JWT về FE.
+     * Frontend gọi Google SDK để lấy auth code, sau đó gửi body JSON chứa code về backend.
      */
-    @GetMapping("/google/callback")
-    @Operation(summary = "Đăng nhập / Đăng ký bằng Google OAuth. FE redirect về đây sau khi Google xác thực.")
-    public ResponseEntity<ApiResponse<LoginResponse>> googleCallback(
-            @RequestParam("code") String code
+    @PostMapping("/google")
+    @Operation(summary = "Đăng nhập / Đăng ký bằng Google OAuth. FE gửi authorization code lên.")
+    public ResponseEntity<ApiResponse<LoginResponse>> googleLogin(
+            @Valid @RequestBody GoogleLoginRequest request
     ) {
-        AuthService.AuthResult result = authService.loginWithGoogle(code);
+        AuthService.AuthResult result = authService.loginWithGoogle(request.getCode());
         return buildAuthResponse(result, HttpStatus.OK, "Google login successful");
     }
 

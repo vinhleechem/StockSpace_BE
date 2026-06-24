@@ -20,6 +20,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
@@ -147,13 +149,12 @@ public class AuthService {
     public AuthResult loginWithGoogle(String code) {
         try {
             // Bước 1: Exchange code → access token
-            ExchangeTokenRequest tokenRequest = ExchangeTokenRequest.builder()
-                    .code(code)
-                    .clientId(googleClientId)
-                    .clientSecret(googleClientSecret)
-                    .redirectUri(googleRedirectUri)
-                    .grantType(GOOGLE_GRANT_TYPE)
-                    .build();
+            MultiValueMap<String, String> tokenRequest = new LinkedMultiValueMap<>();
+            tokenRequest.add("code", code);
+            tokenRequest.add("client_id", googleClientId);
+            tokenRequest.add("client_secret", googleClientSecret);
+            tokenRequest.add("redirect_uri", googleRedirectUri);
+            tokenRequest.add("grant_type", GOOGLE_GRANT_TYPE);
 
             ExchangeTokenResponse tokenResponse = outboundAuthClient.exchangeToken(tokenRequest);
 
