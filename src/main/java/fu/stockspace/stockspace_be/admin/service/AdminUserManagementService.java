@@ -73,8 +73,8 @@ public class AdminUserManagementService {
                 : Sort.by(sortBy).descending();
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        // Normalize keyword: blank → null để JPQL IS NULL check pass
-        String kw = StringUtils.hasText(keyword) ? keyword.trim() : null;
+        // Normalize keyword: blank → "" để tránh lỗi null bytea trên PostgreSQL
+        String kw = StringUtils.hasText(keyword) ? keyword.trim() : "";
 
         Page<User> userPage;
         if (StringUtils.hasText(roleName) && isActive != null) {
@@ -309,6 +309,13 @@ public class AdminUserManagementService {
                         .id(role.getId())
                         .name(role.getName())
                         .description(role.getDescription())
+                        .permissions(role.getPermissions() == null ? null : role.getPermissions().stream()
+                                .map(p -> PermissionResponse.builder()
+                                        .id(p.getId())
+                                        .name(p.getName())
+                                        .description(p.getDescription())
+                                        .build())
+                                .collect(Collectors.toSet()))
                         .build())
                 .collect(Collectors.toSet());
 

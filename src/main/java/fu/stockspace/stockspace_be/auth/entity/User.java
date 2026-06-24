@@ -47,7 +47,7 @@ public class User extends BaseEntity implements UserDetails {
 
     /** Provider đăng nhập: LOCAL hoặc GOOGLE */
     @Enumerated(EnumType.STRING)
-    @Column(name = "provider", nullable = false, length = 20)
+    @Column(name = "provider", nullable = false, length = 20, columnDefinition = "varchar(20) default 'LOCAL'")
     @Builder.Default
     private AuthProvider provider = AuthProvider.LOCAL;
 
