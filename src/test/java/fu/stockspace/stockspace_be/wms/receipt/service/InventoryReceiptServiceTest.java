@@ -1,0 +1,370 @@
+package fu.stockspace.stockspace_be.wms.receipt.service;
+
+import fu.stockspace.stockspace_be.auth.entity.User;
+import fu.stockspace.stockspace_be.auth.repository.UserRepository;
+import fu.stockspace.stockspace_be.booking.entity.ApprovalStatus;
+import fu.stockspace.stockspace_be.common.exception.ErrorCode;
+import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
+import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
+import fu.stockspace.stockspace_be.warehouse.entity.*;
+import fu.stockspace.stockspace_be.warehouse.repository.WarehouseBinRepository;
+import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRackRepository;
+import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
+import fu.stockspace.stockspace_be.warehouse.repository.WarehouseZoneRepository;
+import fu.stockspace.stockspace_be.wms.product.entity.ProductSku;
+import fu.stockspace.stockspace_be.wms.product.repository.ProductSkuRepository;
+import fu.stockspace.stockspace_be.wms.receipt.dto.*;
+import fu.stockspace.stockspace_be.wms.receipt.entity.DocumentType;
+import fu.stockspace.stockspace_be.wms.receipt.entity.InventoryReceipt;
+import fu.stockspace.stockspace_be.wms.receipt.entity.InventoryReceiptItem;
+import fu.stockspace.stockspace_be.wms.receipt.entity.InventoryTransaction;
+import fu.stockspace.stockspace_be.wms.receipt.repository.InventoryReceiptItemRepository;
+import fu.stockspace.stockspace_be.wms.receipt.repository.InventoryReceiptRepository;
+import fu.stockspace.stockspace_be.wms.receipt.repository.InventoryTransactionRepository;
+import fu.stockspace.stockspace_be.wms.stock.entity.StockBatch;
+import fu.stockspace.stockspace_be.wms.stock.repository.StockBatchRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.time.LocalDateTime;
+import java.util.*;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class InventoryReceiptServiceTest {
+
+    @Mock private InventoryReceiptRepository receiptRepository;
+    @Mock private InventoryReceiptItemRepository receiptItemRepository;
+    @Mock private InventoryTransactionRepository transactionRepository;
+    @Mock private StockBatchRepository stockBatchRepository;
+    @Mock private WarehouseRepository warehouseRepository;
+    @Mock private UserRepository userRepository;
+    @Mock private ProductSkuRepository productSkuRepository;
+    @Mock private WarehouseZoneRepository zoneRepository;
+    @Mock private WarehouseRackRepository rackRepository;
+    @Mock private WarehouseBinRepository binRepository;
+    @Mock private SubscriptionService subscriptionService;
+
+    @InjectMocks
+    private InventoryReceiptService receiptService;
+
+    private UUID userId;
+    private User tenantUser;
+    private UUID warehouseId;
+    private Warehouse warehouse;
+    private WarehouseLayout layout;
+    private UUID skuId;
+    private ProductSku productSku;
+    private UUID zoneId, rackId, binId;
+    private WarehouseZone zone;
+    private WarehouseRack rack;
+    private WarehouseBin bin;
+
+    @BeforeEach
+    void setUp() {
+        userId = UUID.randomUUID();
+        tenantUser = User.builder().id(userId).email("tenant@test.com").fullName("Tenant User").build();
+        warehouseId = UUID.randomUUID();
+        warehouse = Warehouse.builder().id(warehouseId).name("Test Warehouse").build();
+        layout = WarehouseLayout.builder().id(UUID.randomUUID()).warehouse(warehouse).build();
+
+        skuId = UUID.randomUUID();
+        productSku = ProductSku.builder().id(skuId).skuCode("SKU123").name("Product 1").build();
+
+        zoneId = UUID.randomUUID();
+        zone = WarehouseZone.builder().id(zoneId).layout(layout).name("Zone A").build();
+
+        rackId = UUID.randomUUID();
+        rack = WarehouseRack.builder().id(rackId).zone(zone).name("Rack 1").build();
+
+        binId = UUID.randomUUID();
+        bin = WarehouseBin.builder().id(binId).rack(rack).name("Bin 1").build();
+    }
+
+    @Test
+    void testCreateReceipt_Success() {
+        when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
+        when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(productSkuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(productSku));
+        when(zoneRepository.findById(zoneId)).thenReturn(Optional.of(zone));
+        when(rackRepository.findById(rackId)).thenReturn(Optional.of(rack));
+        when(binRepository.findById(binId)).thenReturn(Optional.of(bin));
+
+        InventoryReceipt receipt = InventoryReceipt.builder()
+                .id(UUID.randomUUID())
+                .warehouse(warehouse)
+                .createdBy(tenantUser)
+                .type(DocumentType.INBOUND)
+                .status(ApprovalStatus.PENDING)
+                .build();
+        when(receiptRepository.save(any(InventoryReceipt.class))).thenReturn(receipt);
+
+        InventoryReceiptItem item = InventoryReceiptItem.builder()
+                .id(UUID.randomUUID())
+                .receipt(receipt)
+                .sku(productSku)
+                .quantity(10)
+                .zone(zone)
+                .rack(rack)
+                .bin(bin)
+                .build();
+        when(receiptItemRepository.save(any(InventoryReceiptItem.class))).thenReturn(item);
+
+        ReceiptItemRequest itemRequest = ReceiptItemRequest.builder()
+                .skuId(skuId)
+                .quantity(10)
+                .zoneId(zoneId)
+                .rackId(rackId)
+                .binId(binId)
+                .build();
+
+        CreateInventoryReceiptRequest request = CreateInventoryReceiptRequest.builder()
+                .warehouseId(warehouseId)
+                .type(DocumentType.INBOUND)
+                .items(List.of(itemRequest))
+                .build();
+
+        InventoryReceiptResponse response = receiptService.createReceipt(userId, request);
+
+        assertNotNull(response);
+        assertEquals(ApprovalStatus.PENDING, response.getStatus());
+        assertEquals(DocumentType.INBOUND, response.getType());
+        assertEquals(1, response.getItems().size());
+        assertEquals("SKU123", response.getItems().get(0).getSkuCode());
+        verify(receiptRepository, times(1)).save(any(InventoryReceipt.class));
+    }
+
+    @Test
+    void testCreateReceipt_SubscriptionRequired() {
+        when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
+        when(subscriptionService.hasActiveSubscription(userId)).thenReturn(false);
+
+        CreateInventoryReceiptRequest request = CreateInventoryReceiptRequest.builder()
+                .warehouseId(warehouseId)
+                .type(DocumentType.INBOUND)
+                .build();
+
+        assertThrows(ForbiddenException.class, () -> receiptService.createReceipt(userId, request));
+    }
+
+    @Test
+    void testCreateReceipt_InvalidCoordinates_ZoneNotInWarehouse() {
+        when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
+        when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(productSkuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(productSku));
+
+        Warehouse alternateWarehouse = Warehouse.builder().id(UUID.randomUUID()).build();
+        WarehouseLayout alternateLayout = WarehouseLayout.builder().id(UUID.randomUUID()).warehouse(alternateWarehouse).build();
+        WarehouseZone invalidZone = WarehouseZone.builder().id(zoneId).layout(alternateLayout).build();
+        when(zoneRepository.findById(zoneId)).thenReturn(Optional.of(invalidZone));
+
+        ReceiptItemRequest itemRequest = ReceiptItemRequest.builder()
+                .skuId(skuId)
+                .quantity(10)
+                .zoneId(zoneId)
+                .rackId(rackId)
+                .binId(binId)
+                .build();
+
+        CreateInventoryReceiptRequest request = CreateInventoryReceiptRequest.builder()
+                .warehouseId(warehouseId)
+                .type(DocumentType.INBOUND)
+                .items(List.of(itemRequest))
+                .build();
+
+        assertThrows(BadRequestException.class, () -> receiptService.createReceipt(userId, request));
+    }
+
+    @Test
+    void testApproveReceipt_Success_Inbound_NewBatch() {
+        UUID approverId = UUID.randomUUID();
+        User approver = User.builder().id(approverId).email("approver@test.com").build();
+        when(userRepository.findById(approverId)).thenReturn(Optional.of(approver));
+
+        InventoryReceipt receipt = InventoryReceipt.builder()
+                .id(UUID.randomUUID())
+                .warehouse(warehouse)
+                .createdBy(tenantUser)
+                .type(DocumentType.INBOUND)
+                .status(ApprovalStatus.PENDING)
+                .build();
+        when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
+        when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
+
+        InventoryReceiptItem item = InventoryReceiptItem.builder()
+                .id(UUID.randomUUID())
+                .receipt(receipt)
+                .sku(productSku)
+                .quantity(50)
+                .zone(zone)
+                .rack(rack)
+                .bin(bin)
+                .build();
+        when(receiptItemRepository.findByReceiptId(receipt.getId())).thenReturn(List.of(item));
+
+        when(stockBatchRepository.findBySkuIdAndWarehouseIdAndZoneIdAndRackIdAndBinIdAndIsDeletedFalse(
+                skuId, warehouseId, zoneId, rackId, binId)).thenReturn(Optional.empty());
+
+        when(receiptRepository.save(any(InventoryReceipt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        InventoryReceiptResponse response = receiptService.approveReceipt(approverId, receipt.getId());
+
+        assertNotNull(response);
+        assertEquals(ApprovalStatus.APPROVED, response.getStatus());
+        verify(stockBatchRepository, times(1)).save(any(StockBatch.class));
+        verify(transactionRepository, times(1)).save(any(InventoryTransaction.class));
+    }
+
+    @Test
+    void testApproveReceipt_Success_Inbound_ExistingBatch() {
+        UUID approverId = UUID.randomUUID();
+        User approver = User.builder().id(approverId).build();
+        when(userRepository.findById(approverId)).thenReturn(Optional.of(approver));
+
+        InventoryReceipt receipt = InventoryReceipt.builder()
+                .id(UUID.randomUUID())
+                .warehouse(warehouse)
+                .createdBy(tenantUser)
+                .type(DocumentType.INBOUND)
+                .status(ApprovalStatus.PENDING)
+                .build();
+        when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
+        when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
+
+        InventoryReceiptItem item = InventoryReceiptItem.builder()
+                .id(UUID.randomUUID())
+                .receipt(receipt)
+                .sku(productSku)
+                .quantity(50)
+                .zone(zone)
+                .rack(rack)
+                .bin(bin)
+                .build();
+        when(receiptItemRepository.findByReceiptId(receipt.getId())).thenReturn(List.of(item));
+
+        StockBatch existingBatch = StockBatch.builder()
+                .id(UUID.randomUUID())
+                .skuId(skuId)
+                .warehouse(warehouse)
+                .zone(zone)
+                .rack(rack)
+                .bin(bin)
+                .quantity(100)
+                .build();
+        when(stockBatchRepository.findBySkuIdAndWarehouseIdAndZoneIdAndRackIdAndBinIdAndIsDeletedFalse(
+                skuId, warehouseId, zoneId, rackId, binId)).thenReturn(Optional.of(existingBatch));
+
+        when(receiptRepository.save(any(InventoryReceipt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        InventoryReceiptResponse response = receiptService.approveReceipt(approverId, receipt.getId());
+
+        assertNotNull(response);
+        assertEquals(ApprovalStatus.APPROVED, response.getStatus());
+        assertEquals(150, existingBatch.getQuantity());
+        verify(stockBatchRepository, times(1)).save(existingBatch);
+        verify(transactionRepository, times(1)).save(any(InventoryTransaction.class));
+    }
+
+    @Test
+    void testApproveReceipt_Success_Outbound() {
+        UUID approverId = UUID.randomUUID();
+        User approver = User.builder().id(approverId).build();
+        when(userRepository.findById(approverId)).thenReturn(Optional.of(approver));
+
+        InventoryReceipt receipt = InventoryReceipt.builder()
+                .id(UUID.randomUUID())
+                .warehouse(warehouse)
+                .createdBy(tenantUser)
+                .type(DocumentType.OUTBOUND)
+                .status(ApprovalStatus.PENDING)
+                .build();
+        when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
+        when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
+
+        InventoryReceiptItem item = InventoryReceiptItem.builder()
+                .id(UUID.randomUUID())
+                .receipt(receipt)
+                .sku(productSku)
+                .quantity(30)
+                .zone(zone)
+                .rack(rack)
+                .bin(bin)
+                .build();
+        when(receiptItemRepository.findByReceiptId(receipt.getId())).thenReturn(List.of(item));
+
+        StockBatch existingBatch = StockBatch.builder()
+                .id(UUID.randomUUID())
+                .skuId(skuId)
+                .warehouse(warehouse)
+                .zone(zone)
+                .rack(rack)
+                .bin(bin)
+                .quantity(100)
+                .build();
+        when(stockBatchRepository.findBySkuIdAndWarehouseIdAndZoneIdAndRackIdAndBinIdAndIsDeletedFalse(
+                skuId, warehouseId, zoneId, rackId, binId)).thenReturn(Optional.of(existingBatch));
+
+        when(receiptRepository.save(any(InventoryReceipt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        InventoryReceiptResponse response = receiptService.approveReceipt(approverId, receipt.getId());
+
+        assertNotNull(response);
+        assertEquals(ApprovalStatus.APPROVED, response.getStatus());
+        assertEquals(70, existingBatch.getQuantity());
+        verify(stockBatchRepository, times(1)).save(existingBatch);
+        verify(transactionRepository, times(1)).save(any(InventoryTransaction.class));
+    }
+
+    @Test
+    void testApproveReceipt_Outbound_InsufficientQuantity() {
+        UUID approverId = UUID.randomUUID();
+        User approver = User.builder().id(approverId).build();
+        when(userRepository.findById(approverId)).thenReturn(Optional.of(approver));
+
+        InventoryReceipt receipt = InventoryReceipt.builder()
+                .id(UUID.randomUUID())
+                .warehouse(warehouse)
+                .createdBy(tenantUser)
+                .type(DocumentType.OUTBOUND)
+                .status(ApprovalStatus.PENDING)
+                .build();
+        when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
+        when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
+
+        InventoryReceiptItem item = InventoryReceiptItem.builder()
+                .id(UUID.randomUUID())
+                .receipt(receipt)
+                .sku(productSku)
+                .quantity(150)
+                .zone(zone)
+                .rack(rack)
+                .bin(bin)
+                .build();
+        when(receiptItemRepository.findByReceiptId(receipt.getId())).thenReturn(List.of(item));
+
+        StockBatch existingBatch = StockBatch.builder()
+                .id(UUID.randomUUID())
+                .skuId(skuId)
+                .warehouse(warehouse)
+                .zone(zone)
+                .rack(rack)
+                .bin(bin)
+                .quantity(100)
+                .build();
+        when(stockBatchRepository.findBySkuIdAndWarehouseIdAndZoneIdAndRackIdAndBinIdAndIsDeletedFalse(
+                skuId, warehouseId, zoneId, rackId, binId)).thenReturn(Optional.of(existingBatch));
+
+        assertThrows(BadRequestException.class, () -> receiptService.approveReceipt(approverId, receipt.getId()));
+    }
+}

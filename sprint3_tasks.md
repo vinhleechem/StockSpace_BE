@@ -367,7 +367,7 @@ public enum DocumentType {
 | 2 | ⬜ `NotificationController` + Hook thông báo vào Warehouse/Inspection flow | ⬜ `ProductCategory` + `ProductSku` entity + service + controller |
 | 3 | ⬜ `OwnerLayoutController` (Zone/Rack/Bin CRUD) + endpoint sơ đồ 2D | ⬜ `AdjustmentNote` entity + service + controller |
 | 4 | ⬜ `ProductCategoryService` + `ProductSkuService` + `TenantProductController` | ⬜ Hook Notification vào Booking/Wallet/Contract flow |
-| 5 | ⬜ `InventoryReceipt` + `InventoryReceiptItem` entity + service | ⬜ `InventoryTransaction` entity + audit trail service |
-| 6 | ⬜ `InventoryReceiptController` + wire update StockBatch | ⬜ `AdminInventoryController` |
-| 7 | ⬜ Integration test: luồng nhập/xuất kho đầy đủ | ⬜ Integration test: tồn kho + thông báo end-to-end |
+| 5 | ✅ `InventoryReceipt` + `InventoryReceiptItem` entity + service | ✅ `InventoryTransaction` entity + audit trail service |
+| 6 | ✅ `InventoryReceiptController` + wire update StockBatch | ⬜ `AdminInventoryController` |
+| 7 | ✅ Integration test: luồng nhập/xuất kho đầy đủ | ⬜ Integration test: tồn kho + thông báo end-to-end |
 | 8+ | ⬜ End-to-end test toàn bộ WMS Phase 2 | ⬜ Fix bugs + Performance test |
