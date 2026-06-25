@@ -12,7 +12,9 @@ import java.util.UUID;
  * Map với bảng: notifications
  */
 @Entity
-@Table(name = "notifications")
+@Table(name = "notifications", indexes = {
+        @Index(name = "idx_notifications_user_id", columnList = "user_id")
+})
 @Getter
 @Setter
 @NoArgsConstructor
