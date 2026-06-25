@@ -25,6 +25,7 @@ import fu.stockspace.stockspace_be.wallet.entity.TransactionType;
 import fu.stockspace.stockspace_be.common.service.SystemConfigService;
 import fu.stockspace.stockspace_be.subscription.entity.ServicePackage;
 import fu.stockspace.stockspace_be.subscription.repository.ServicePackageRepository;
+import fu.stockspace.stockspace_be.notification.service.NotificationService;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -52,6 +53,7 @@ public class WarehouseService {
     private final WalletService walletService;
     private final SystemConfigService systemConfigService;
     private final ServicePackageRepository servicePackageRepository;
+    private final NotificationService notificationService;
 
     // ==================== Owner: CRUD ====================
 
@@ -296,6 +298,15 @@ public class WarehouseService {
         warehouse.setStatus(WarehouseStatus.AVAILABLE);
         warehouse = warehouseRepository.save(warehouse);
 
+        if (warehouse.getOwner() != null) {
+            notificationService.push(
+                    warehouse.getOwner().getId(),
+                    "Bài đăng kho bãi đã được duyệt",
+                    "Chúc mừng! Yêu cầu đăng kho bãi '" + warehouse.getName() + "' của bạn đã được duyệt thành công và hiện đang hiển thị trên hệ thống.",
+                    "SYSTEM"
+            );
+        }
+
         log.info("Admin approved listing for warehouse {}", warehouseId);
         return mapToResponse(warehouse);
     }
@@ -310,6 +321,15 @@ public class WarehouseService {
 
         warehouse.setStatus(WarehouseStatus.INACTIVE);
         warehouse = warehouseRepository.save(warehouse);
+
+        if (warehouse.getOwner() != null) {
+            notificationService.push(
+                    warehouse.getOwner().getId(),
+                    "Bài đăng kho bãi không được duyệt",
+                    "Yêu cầu đăng kho bãi '" + warehouse.getName() + "' của bạn không được phê duyệt. Vui lòng kiểm tra lại thông tin.",
+                    "SYSTEM"
+            );
+        }
 
         log.info("Admin rejected warehouse listing {}", warehouseId);
         return mapToResponse(warehouse);
