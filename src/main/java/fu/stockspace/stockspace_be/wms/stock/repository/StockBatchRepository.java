@@ -21,4 +21,6 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
     boolean existsByRackIdAndQuantityGreaterThanAndIsDeletedFalse(UUID rackId, int quantity);
 
     boolean existsByZoneIdAndQuantityGreaterThanAndIsDeletedFalse(UUID zoneId, int quantity);
+
+    boolean existsBySkuIdAndIsDeletedFalse(UUID skuId);
 }
