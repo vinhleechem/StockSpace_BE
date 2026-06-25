@@ -81,35 +81,31 @@ Sprint 2 đã hoàn thành: Auth · Warehouse (CRUD, 2D layout, kiểm định) 
 ### ═══ MODULE 2: Warehouse Bin (Hoàn thiện cấu trúc 2D) ═══
 
 #### 2.1. Entity
-- [ ] **`WarehouseBin.java`** ⚠️ (Tạo skeleton ngay ngày 1) — `@Entity @Table("warehouse_bins")`, fields: `id (uuid)`, `rack_id FK→WarehouseRack`, `name`, `code`, `maxWeight`, `maxVolume`, `coordinateX`, `coordinateY`, `width`, `height`, extend `BaseEntity`
+- [x] **`WarehouseBin.java`** ⚠️ (Tạo skeleton ngay ngày 1) — `@Entity @Table("warehouse_bins")`, fields: `id (uuid)`, `rack_id FK→WarehouseRack`, `name`, `code`, `maxWeight`, `maxVolume`, `coordinateX`, `coordinateY`, `width`, `height`, extend `BaseEntity`
 
 #### 2.2. Repository
-- [ ] **`WarehouseBinRepository.java`** — `findAllByRackId(UUID)`, `findByCode(String)`
+- [x] **`WarehouseBinRepository.java`** — `findAllByRackId(UUID)`, `findByCode(String)`
 
 #### 2.3. DTOs
-- [ ] **`WarehouseBinResponse.java`** — `id`, `rackId`, `name`, `code`, `maxWeight`, `maxVolume`, `coordinateX`, `coordinateY`, `width`, `height`
-- [ ] **`CreateWarehouseBinRequest.java`** — `name`, `code`, `maxWeight`, `maxVolume`, `coordinateX`, `coordinateY`, `width`, `height`
-- [ ] **`UpdateWarehouseBinRequest.java`**
+- [x] **`WarehouseBinResponse.java`** — `id`, `rackId`, `name`, `code`, `maxWeight`, `maxVolume`, `coordinateX`, `coordinateY`, `width`, `height`
+- [x] **`CreateWarehouseBinRequest.java`** — `name`, `code`, `maxWeight`, `maxVolume`, `coordinateX`, `coordinateY`, `width`, `height`
+- [x] **`UpdateWarehouseBinRequest.java`**
 
 #### 2.4. Service (thêm method vào `WarehouseService` hoặc tạo `WarehouseLayoutService`)
-- [ ] `getBinsByRack(UUID rackId)` → `List<WarehouseBinResponse>` — Tenant/Owner xem các Bin trong kệ
-- [ ] `createBin(UUID ownerId, UUID rackId, CreateWarehouseBinRequest)` → `WarehouseBinResponse`
-- [ ] `updateBin(UUID ownerId, UUID binId, UpdateWarehouseBinRequest)` → `WarehouseBinResponse`
-- [ ] `deleteBin(UUID ownerId, UUID binId)`
+- [x] `getBinsByRack(UUID rackId)` → `List<WarehouseBinResponse>` — Tenant/Owner xem các Bin trong kệ (đã tích hợp vào cây sơ đồ `getLayoutTree`)
+- [x] `createBin(UUID ownerId, UUID rackId, CreateWarehouseBinRequest)` → `WarehouseBinResponse` (đã tối ưu bằng giải pháp Bulk Smart Sync lưu hàng loạt sơ đồ)
+- [x] `updateBin(UUID ownerId, UUID binId, UpdateWarehouseBinRequest)` → `WarehouseBinResponse` (đã tối ưu bằng giải pháp Bulk Smart Sync)
+- [x] `deleteBin(UUID ownerId, UUID binId)` (đã tối ưu bằng giải pháp Bulk Smart Sync kèm kiểm tra hàng tồn kho)
 
 #### 2.5. Controller (gộp vào `OwnerWarehouseController` hoặc tạo `OwnerLayoutController`)
-- [ ] **`OwnerLayoutController.java`** — `@RequestMapping("/api/owner/warehouses/{warehouseId}/layout")`, `@PreAuthorize("hasRole('OWNER')")`
+- [x] **`OwnerLayoutController.java`** — `@RequestMapping("/api/owner/warehouses/{warehouseId}/layout")`, `@PreAuthorize("hasRole('OWNER')")`
 
   | Method | Path | Mô tả |
   |--------|------|--------|
-  | `GET` | `/api/owner/warehouses/{id}/layout/zones` | Xem danh sách Zone |
-  | `GET` | `/api/owner/warehouses/{id}/layout/zones/{zoneId}/racks` | Xem danh sách Rack trong Zone |
-  | `GET` | `/api/owner/warehouses/{id}/layout/racks/{rackId}/bins` | Xem danh sách Bin trong Rack |
-  | `POST` | `/api/owner/warehouses/{id}/layout/bins` | Thêm Bin vào Rack |
-  | `PUT` | `/api/owner/warehouses/{id}/layout/bins/{binId}` | Cập nhật Bin |
-  | `DELETE` | `/api/owner/warehouses/{id}/layout/bins/{binId}` | Xóa Bin |
+  | `GET` | `/api/owner/warehouses/{id}/layout` | Lấy sơ đồ layout mặc định (Owner) |
+  | `PUT` | `/api/owner/warehouses/{id}/layout` | Lưu/cập nhật hàng loạt sơ đồ layout mặc định (Owner) |
 
-- [ ] **`PublicWarehouseController`** — thêm endpoint lấy full sơ đồ 2D
+- [x] **`PublicWarehouseController`** — thêm endpoint lấy full sơ đồ 2D
 
   | Method | Path | Mô tả |
   |--------|------|--------|
