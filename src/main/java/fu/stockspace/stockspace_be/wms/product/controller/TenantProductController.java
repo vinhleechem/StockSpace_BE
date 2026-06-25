@@ -66,7 +66,7 @@ public class TenantProductController {
         UUID tenantId = SecurityUtil.getCurrentUserId();
         checkSubscription(tenantId);
         categoryService.deleteCategory(tenantId, id);
-        return ResponseEntity.ok(ApiResponse.success("Xóa danh mục thành công"));
+        return ResponseEntity.ok(ApiResponse.success("Xóa danh mục thành công", null));
     }
 
     // ==================== SKU APIs ====================
@@ -122,6 +122,6 @@ public class TenantProductController {
         UUID tenantId = SecurityUtil.getCurrentUserId();
         checkSubscription(tenantId);
         skuService.deleteSku(tenantId, id);
-        return ResponseEntity.ok(ApiResponse.success("Xóa SKU thành công"));
+        return ResponseEntity.ok(ApiResponse.success("Xóa SKU thành công", null));
     }
 }
