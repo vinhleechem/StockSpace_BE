@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -23,4 +24,7 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
     boolean existsByZoneIdAndQuantityGreaterThanAndIsDeletedFalse(UUID zoneId, int quantity);
 
     boolean existsBySkuIdAndIsDeletedFalse(UUID skuId);
+
+    Optional<StockBatch> findBySkuIdAndWarehouseIdAndZoneIdAndRackIdAndBinIdAndIsDeletedFalse(
+            UUID skuId, UUID warehouseId, UUID zoneId, UUID rackId, UUID binId);
 }
