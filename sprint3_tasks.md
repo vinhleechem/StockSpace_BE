@@ -42,17 +42,17 @@ Sprint 2 đã hoàn thành: Auth · Warehouse (CRUD, 2D layout, kiểm định) 
 ### ═══ MODULE 1: Notification Subsystem ═══
 
 #### 1.1. Entity & Enum
-- [ ] **`Notification.java`** — `@Entity @Table("notifications")`, fields: `id (uuid)`, `user_id FK→User`, `title`, `message`, `type (varchar 50)`, `isRead (boolean, default false)`, `createdAt`
+- [x] **`Notification.java`** — `@Entity @Table("notifications")`, fields: `id (uuid)`, `user_id FK→User`, `title`, `message`, `type (varchar 50)`, `isRead (boolean, default false)`, `createdAt`
 
 #### 1.2. Repository
-- [ ] **`NotificationRepository.java`** — `findByUserIdOrderByCreatedAtDesc(UUID, Pageable)`, `countByUserIdAndIsReadFalse(UUID)`, `markAllAsRead(UUID)` (custom `@Modifying @Query`)
+- [x] **`NotificationRepository.java`** — `findByUserIdOrderByCreatedAtDesc(UUID, Pageable)`, `countByUserIdAndIsReadFalse(UUID)`, `markAllAsRead(UUID)` (custom `@Modifying @Query`)
 
 #### 1.3. DTOs
-- [ ] **`NotificationResponse.java`** — `id`, `title`, `message`, `type`, `isRead`, `createdAt`
-- [ ] **`PagedNotificationResponse.java`**
+- [x] **`NotificationResponse.java`** — `id`, `title`, `message`, `type`, `isRead`, `createdAt`
+- [x] **`PagedNotificationResponse.java`**
 
 #### 1.4. Service
-- [ ] **`NotificationService.java`** — methods:
+- [x] **`NotificationService.java`** — methods:
   - **`push(UUID userId, String title, String message, String type)`** ← ⚠️ internal, Dev B cần hook vào đây
   - `getMyNotifications(UUID userId, Pageable)` → `PagedNotificationResponse`
   - `markAsRead(UUID userId, UUID notificationId)`
@@ -60,7 +60,7 @@ Sprint 2 đã hoàn thành: Auth · Warehouse (CRUD, 2D layout, kiểm định) 
   - `countUnread(UUID userId)` → `long`
 
 #### 1.5. Controller
-- [ ] **`NotificationController.java`** — `@RequestMapping("/api/notifications")`, `@PreAuthorize("isAuthenticated()")`
+- [x] **`NotificationController.java`** — `@RequestMapping("/api/notifications")`, `@PreAuthorize("isAuthenticated()")`
 
   | Method | Path | Mô tả |
   |--------|------|--------|
@@ -70,11 +70,11 @@ Sprint 2 đã hoàn thành: Auth · Warehouse (CRUD, 2D layout, kiểm định) 
   | `PATCH` | `/api/notifications/read-all` | Đánh dấu tất cả đã đọc |
 
 #### 1.6. Hook thông báo vào các luồng hiện có (Sửa service sẵn có)
-- [ ] **`WarehouseService.verifyWarehouse()`** → push cho Owner: `"Bài đăng kho {name} đã được Admin duyệt!"`
-- [ ] **`WarehouseService.rejectWarehouse()`** → push cho Owner: `"Bài đăng kho {name} bị từ chối duyệt"`
-- [ ] **`InspectionService.assignInspector()`** → push cho Inspector: `"Bạn được phân công kiểm định kho {name}"`
-- [ ] **`InspectionService.submitReport()`** → push cho Owner nếu PASSED/FAILED
-- [ ] **`ContractExpiryScheduler.expireContracts()`** → push cho Tenant: cảnh báo khi hợp đồng bị hủy tự động
+- [x] **`WarehouseService.verifyWarehouse()`** → push cho Owner: `"Bài đăng kho {name} đã được Admin duyệt!"`
+- [x] **`WarehouseService.rejectWarehouse()`** → push cho Owner: `"Bài đăng kho {name} bị từ chối duyệt"`
+- [x] **`InspectionService.assignInspector()`** → push cho Inspector: `"Bạn được phân công kiểm định kho {name}"`
+- [x] **`InspectionService.submitReport()`** → push cho Owner nếu PASSED/FAILED
+- [x] **`ContractExpiryScheduler.expireContracts()`** → push cho Tenant: cảnh báo khi hợp đồng bị hủy tự động
 
 ---
 

@@ -37,6 +37,7 @@ import java.util.UUID;
 import fu.stockspace.stockspace_be.wallet.service.WalletService;
 import fu.stockspace.stockspace_be.common.service.SystemConfigService;
 import fu.stockspace.stockspace_be.wallet.entity.TransactionType;
+import fu.stockspace.stockspace_be.notification.service.NotificationService;
 
 @Slf4j
 @Service
@@ -50,6 +51,7 @@ public class InspectionService {
     private final ObjectMapper objectMapper;
     private final WalletService walletService;
     private final SystemConfigService systemConfigService;
+    private final NotificationService notificationService;
 
     // ==================== Owner ====================
 
@@ -171,6 +173,26 @@ public class InspectionService {
                     inspectorId, report.getWarehouse().getId());
         }
 
+        if (report.getWarehouse() != null && report.getWarehouse().getOwner() != null) {
+            String warehouseName = report.getWarehouse().getName();
+            UUID ownerId = report.getWarehouse().getOwner().getId();
+            if (request.getStatus() == InspectionStatus.PASSED) {
+                notificationService.push(
+                        ownerId,
+                        "Kết quả kiểm định kho bãi",
+                        "Kho bãi '" + warehouseName + "' của bạn đã đạt kiểm định (PASSED) và được gắn nhãn xác minh thành công.",
+                        "SYSTEM"
+                );
+            } else {
+                notificationService.push(
+                        ownerId,
+                        "Kết quả kiểm định kho bãi",
+                        "Yêu cầu kiểm định kho bãi '" + warehouseName + "' của bạn đã bị từ chối (FAILED). Lý do: " + (request.getNotes() != null ? request.getNotes() : "Không có ghi chú thêm"),
+                        "SYSTEM"
+                );
+            }
+        }
+
         return mapToResponse(report);
     }
 
@@ -195,6 +217,15 @@ public class InspectionService {
         report.setInspector(inspector);
         report.setStatus(InspectionStatus.IN_PROGRESS);
         report = inspectionRepository.save(report);
+
+        if (report.getInspector() != null && report.getWarehouse() != null) {
+            notificationService.push(
+                    report.getInspector().getId(),
+                    "Yêu cầu kiểm định mới",
+                    "Bạn đã được phân công kiểm định kho bãi '" + report.getWarehouse().getName() + "'. Vui lòng kiểm tra thông tin chi tiết.",
+                    "SYSTEM"
+            );
+        }
 
         log.info("Admin assigned inspector {} to inspection {}", inspectorId, inspectionId);
         return mapToResponse(report);
