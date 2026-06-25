@@ -33,7 +33,7 @@ Sprint 2 đã hoàn thành: Auth · Warehouse (CRUD, 2D layout, kiểm định) 
 
 - [x] **Dev A tạo skeleton `WarehouseBin.java`** (entity + UUID field) trước khi Dev B dùng FK `bin_id` trong `StockBatch`
 - [x] **Dev A expose `NotificationService.push(userId, title, message, type)`** là internal method trước khi Dev B hook vào các luồng Wallet/Subscription
-- [ ] **Cả 2 thêm ErrorCode mới vào `ErrorCode.java`** — xem danh sách mục cuối file
+- [x] **Cả 2 thêm ErrorCode mới vào `ErrorCode.java`** — xem danh sách mục cuối file
 
 ---
 
@@ -116,27 +116,27 @@ Sprint 2 đã hoàn thành: Auth · Warehouse (CRUD, 2D layout, kiểm định) 
 ### ═══ MODULE 3: WMS — Sản phẩm & Danh mục ═══
 
 #### 3.1. Entities
-- [ ] **`ProductCategory.java`** — `@Entity @Table("product_categories")`, fields: `id (uuid)`, `tenant_id FK→User`, `name`, `defaultAttributes (jsonb)`, `createdAt`
-- [ ] **`ProductSku.java`** — `@Entity @Table("product_skus")`, fields: `id (uuid)`, `tenant_id FK→User`, `category_id FK→ProductCategory (null)`, `skuCode (unique)`, `name`, `unit`, `specifications (jsonb)`, extend `BaseEntity`
+- [x] **`ProductCategory.java`** — `@Entity @Table("product_categories")`, fields: `id (uuid)`, `tenant_id FK→User`, `name`, `defaultAttributes (jsonb)`, `createdAt`
+- [x] **`ProductSku.java`** — `@Entity @Table("product_skus")`, fields: `id (uuid)`, `tenant_id FK→User`, `category_id FK→ProductCategory (null)`, `skuCode (unique)`, `name`, `unit`, `specifications (jsonb)`, extend `BaseEntity`
 
 #### 3.2. Repositories
-- [ ] **`ProductCategoryRepository.java`** — `findAllByTenantId(UUID)`
-- [ ] **`ProductSkuRepository.java`** — `findAllByTenantId(UUID, Pageable)`, `findBySkuCodeAndTenantId(String, UUID)`, `existsBySkuCodeAndTenantId(String, UUID)`
+- [x] **`ProductCategoryRepository.java`** — `findAllByTenantId(UUID)`
+- [x] **`ProductSkuRepository.java`** — `findAllByTenantId(UUID, Pageable)`, `findBySkuCodeAndTenantId(String, UUID)`, `existsBySkuCodeAndTenantId(String, UUID)`
 
 #### 3.3. DTOs
-- [ ] **`ProductCategoryResponse.java`** — `id`, `name`, `defaultAttributes`
-- [ ] **`CreateCategoryRequest.java`** — `name`, `defaultAttributes (Map<String,Object>)`
-- [ ] **`ProductSkuResponse.java`** — `id`, `skuCode`, `name`, `unit`, `specifications`, `categoryName`
-- [ ] **`CreateSkuRequest.java`** — `categoryId`, `skuCode`, `name`, `unit`, `specifications`
-- [ ] **`UpdateSkuRequest.java`**
-- [ ] **`PagedSkuResponse.java`**
+- [x] **`ProductCategoryResponse.java`** — `id`, `name`, `defaultAttributes`
+- [x] **`CreateCategoryRequest.java`** — `name`, `defaultAttributes (Map<String,Object>)`
+- [x] **`ProductSkuResponse.java`** — `id`, `skuCode`, `name`, `unit`, `specifications`, `categoryName`
+- [x] **`CreateSkuRequest.java`** — `categoryId`, `skuCode`, `name`, `unit`, `specifications`
+- [x] **`UpdateSkuRequest.java`**
+- [x] **`PagedSkuResponse.java`**
 
 #### 3.4. Services
-- [ ] **`ProductCategoryService.java`** — methods:
+- [x] **`ProductCategoryService.java`** — methods:
   - `getMyCategories(UUID tenantId)` → `List<ProductCategoryResponse>`
   - `createCategory(UUID tenantId, CreateCategoryRequest)` → `ProductCategoryResponse`
   - `deleteCategory(UUID tenantId, UUID categoryId)`
-- [ ] **`ProductSkuService.java`** — methods:
+- [x] **`ProductSkuService.java`** — methods:
   - `getMySKUs(UUID tenantId, Pageable)` → `PagedSkuResponse`
   - `getSkuDetail(UUID tenantId, UUID skuId)` → `ProductSkuResponse`
   - `createSku(UUID tenantId, CreateSkuRequest)` → `ProductSkuResponse` — validate `skuCode` unique per tenant
@@ -144,7 +144,7 @@ Sprint 2 đã hoàn thành: Auth · Warehouse (CRUD, 2D layout, kiểm định) 
   - `deleteSku(UUID tenantId, UUID skuId)` — validate không có StockBatch đang dùng SKU này
 
 #### 3.5. Controllers
-- [ ] **`TenantProductController.java`** — `@RequestMapping("/api/tenant/products")`, `@PreAuthorize("hasRole('TENANT')")`
+- [x] **`TenantProductController.java`** — `@RequestMapping("/api/tenant/products")`, `@PreAuthorize("hasRole('TENANT')")`
 
   | Method | Path | Mô tả |
   |--------|------|--------|
