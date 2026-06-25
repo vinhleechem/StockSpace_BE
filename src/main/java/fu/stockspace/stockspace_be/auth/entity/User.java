@@ -55,6 +55,11 @@ public class User extends BaseEntity implements UserDetails {
     @Column(name = "avatar_url", length = 500)
     private String avatarUrl;
 
+    /** Liên kết tới Tenant (chỉ dành cho STAFF, null đối với TENANT/ADMIN) */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tenant_id")
+    private User tenant; // null for tenants/owners/admins, points to parent tenant for STAFF
+    
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "user_roles",
