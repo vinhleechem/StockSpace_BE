@@ -9,6 +9,7 @@ import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.wallet.entity.TransactionType;
 import fu.stockspace.stockspace_be.wallet.service.WalletService;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseService;
+import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -28,6 +29,7 @@ public class ContractExpiryScheduler {
     private final WarehouseService warehouseService;
     private final WalletService walletService;
     private final SystemConfigService systemConfigService;
+    private final NotificationService notificationService;
 
     @Scheduled(cron = "0 0 0 * * ?")
     @Transactional
@@ -58,11 +60,7 @@ public class ContractExpiryScheduler {
                 );
                 log.info("Forfeited deposit of {} to Owner {}", contract.getBooking().getDepositAmount(), owner.getId());
 
-                // 2. Suspend/Deactivate Tenant account
                 User tenant = contract.getBooking().getTenant();
-                tenant.setActive(false);
-                userRepository.save(tenant);
-                log.info("Deactivated tenant account: ID = {}, Email = {}", tenant.getId(), tenant.getEmail());
 
                 // 3. Mark contract as CANCELLED
                 contract.setStatus(ContractStatus.CANCELLED);
@@ -71,6 +69,26 @@ public class ContractExpiryScheduler {
 
                 // 4. Reset warehouse status to AVAILABLE
                 warehouseService.markAsAvailable(contract.getBooking().getWarehouse().getId());
+
+                // 5. Send notifications
+                if (tenant != null) {
+                    notificationService.push(
+                            tenant.getId(),
+                            "Hợp đồng thuê kho bị hủy tự động",
+                            "Yêu cầu thuê kho '" + contract.getBooking().getWarehouse().getName() + "' đã bị hủy tự động do quá hạn ký hợp đồng (" + expiryDays + " ngày). Tiền cọc đã được khấu trừ sang cho Chủ kho.",
+                            "RENTAL"
+                    );
+                }
+
+                if (owner != null) {
+                    notificationService.push(
+                            owner.getId(),
+                            "Hợp đồng thuê kho bị hủy tự động",
+                            "Khách thuê đã quá hạn ký hợp đồng thuê kho '" + contract.getBooking().getWarehouse().getName() + "' (" + expiryDays + " ngày). Giao dịch đã bị hủy, tiền cọc đã được cộng vào ví của bạn và kho bãi hiện đã khả dụng trở lại.",
+                            "RENTAL"
+                    );
+                }
+
                 log.info("Contract {} processed successfully", contract.getId());
             } catch (Exception e) {
                 log.error("Error processing expired contract ID = {}", contract.getId(), e);
