@@ -1,0 +1,32 @@
+package fu.stockspace.stockspace_be.wms.receipt.dto;
+
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
+import lombok.*;
+
+import java.util.UUID;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class ReceiptItemRequest {
+
+    @NotNull(message = "Mã SKU không được để trống")
+    private UUID skuId;
+
+    @Min(value = 1, message = "Số lượng phải lớn hơn hoặc bằng 1")
+    private int quantity;
+
+    @NotNull(message = "Khu vực (zone) không được để trống")
+    private UUID zoneId;
+
+    @NotNull(message = "Kệ hàng (rack) không được để trống")
+    private UUID rackId;
+
+    @NotNull(message = "Ô chứa (bin) không được để trống")
+    private UUID binId;
+
+    private String note;
+}
