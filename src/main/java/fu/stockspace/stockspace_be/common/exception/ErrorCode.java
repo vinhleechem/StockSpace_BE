@@ -106,7 +106,9 @@ public enum ErrorCode {
     STOCK_INSUFFICIENT_QUANTITY("Số dư tồn kho không đủ", HttpStatus.BAD_REQUEST),
     SUBSCRIPTION_REQUIRED("Yêu cầu gói dịch vụ (Subscription) còn hiệu lực để thực hiện hành động này", HttpStatus.FORBIDDEN),
     PRODUCT_CATEGORY_IN_USE("Không thể xóa danh mục sản phẩm vì đang có SKU liên kết", HttpStatus.BAD_REQUEST),
-    SKU_IN_USE("Không thể xóa SKU vì đang có lô hàng tồn kho liên kết", HttpStatus.BAD_REQUEST);
+    SKU_IN_USE("Không thể xóa SKU vì đang có lô hàng tồn kho liên kết", HttpStatus.BAD_REQUEST),
+    RECEIPT_NOT_FOUND("Không tìm thấy phiếu xuất nhập kho", HttpStatus.NOT_FOUND),
+    RECEIPT_ALREADY_PROCESSED("Phiếu xuất nhập kho đã được xử lý", HttpStatus.BAD_REQUEST);
 
     private final String message;
     private final HttpStatus status;
