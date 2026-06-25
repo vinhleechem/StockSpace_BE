@@ -103,7 +103,10 @@ public enum ErrorCode {
     SKU_NOT_FOUND("Không tìm thấy SKU", HttpStatus.NOT_FOUND),
     SKU_CODE_DUPLICATE("Mã SKU đã tồn tại", HttpStatus.CONFLICT),
     STOCK_BATCH_NOT_FOUND("Không tìm thấy lô hàng tồn kho", HttpStatus.NOT_FOUND),
-    STOCK_INSUFFICIENT_QUANTITY("Số dư tồn kho không đủ", HttpStatus.BAD_REQUEST);
+    STOCK_INSUFFICIENT_QUANTITY("Số dư tồn kho không đủ", HttpStatus.BAD_REQUEST),
+    SUBSCRIPTION_REQUIRED("Yêu cầu gói dịch vụ (Subscription) còn hiệu lực để thực hiện hành động này", HttpStatus.FORBIDDEN),
+    PRODUCT_CATEGORY_IN_USE("Không thể xóa danh mục sản phẩm vì đang có SKU liên kết", HttpStatus.BAD_REQUEST),
+    SKU_IN_USE("Không thể xóa SKU vì đang có lô hàng tồn kho liên kết", HttpStatus.BAD_REQUEST);
 
     private final String message;
     private final HttpStatus status;
