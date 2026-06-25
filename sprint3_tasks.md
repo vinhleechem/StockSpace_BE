@@ -162,25 +162,25 @@ Sprint 2 đã hoàn thành: Auth · Warehouse (CRUD, 2D layout, kiểm định) 
 ### ═══ MODULE 4: WMS — Phiếu Nhập/Xuất Kho ═══
 
 #### 4.1. Entities
-- [ ] **`InventoryReceipt.java`** — `@Entity @Table("inventory_receipts")`, fields: `id (uuid)`, `warehouse_id FK→Warehouse`, `created_by FK→User`, `type (DocumentType: INBOUND/OUTBOUND)`, `signatureData (text)`, `status (ApprovalStatus)`, `createdAt`
-- [ ] **`InventoryReceiptItem.java`** (nếu cần chi tiết từng dòng) — `id`, `receipt_id FK`, `sku_id FK`, `quantity`, `zone_id FK (null)`, `rack_id FK (null)`, `bin_id FK (null)`, `note`
+- [x] **`InventoryReceipt.java`** — `@Entity @Table("inventory_receipts")`, fields: `id (uuid)`, `warehouse_id FK→Warehouse`, `created_by FK→User`, `type (DocumentType: INBOUND/OUTBOUND)`, `signatureData (text)`, `status (ApprovalStatus)`, `createdAt`
+- [x] **`InventoryReceiptItem.java`** (nếu cần chi tiết từng dòng) — `id`, `receipt_id FK`, `sku_id FK`, `quantity`, `zone_id FK (null)`, `rack_id FK (null)`, `bin_id FK (null)`, `note`
 
 #### 4.2. Repository
-- [ ] **`InventoryReceiptRepository.java`** — `findByWarehouseIdAndType(UUID, DocumentType, Pageable)`, `findByCreatedBy(UUID, Pageable)`
+- [x] **`InventoryReceiptRepository.java`** — `findByWarehouseIdAndType(UUID, DocumentType, Pageable)`, `findByCreatedBy(UUID, Pageable)`
 
 #### 4.3. DTOs
-- [ ] **`CreateInventoryReceiptRequest.java`** — `warehouseId`, `type`, `items: List<{skuId, quantity, zoneId, rackId, binId, note}>`
-- [ ] **`InventoryReceiptResponse.java`** — đầy đủ thông tin phiếu + danh sách dòng hàng
-- [ ] **`PagedReceiptResponse.java`**
+- [x] **`CreateInventoryReceiptRequest.java`** — `warehouseId`, `type`, `items: List<{skuId, quantity, zoneId, rackId, binId, note}>`
+- [x] **`InventoryReceiptResponse.java`** — đầy đủ thông tin phiếu + danh sách dòng hàng
+- [x] **`PagedReceiptResponse.java`**
 
 #### 4.4. Services
-- [ ] **`InventoryReceiptService.java`** — methods:
+- [x] **`InventoryReceiptService.java`** — methods:
   - `createReceipt(UUID userId, CreateInventoryReceiptRequest)` → `InventoryReceiptResponse` 🔗 cập nhật `StockBatch`
   - `approveReceipt(UUID staffId, UUID receiptId)` → `InventoryReceiptResponse`
   - `getReceiptsByWarehouse(UUID warehouseId, DocumentType, Pageable)` → `PagedReceiptResponse`
 
 #### 4.5. Controllers
-- [ ] **`InventoryReceiptController.java`** — `@RequestMapping("/api/tenant/inventory/receipts")`, `@PreAuthorize("hasRole('TENANT')")`
+- [x] **`InventoryReceiptController.java`** — `@RequestMapping("/api/tenant/inventory/receipts")`, `@PreAuthorize("hasRole('TENANT')")`
 
   | Method | Path | Mô tả |
   |--------|------|--------|
@@ -367,7 +367,7 @@ public enum DocumentType {
 | 2 | ⬜ `NotificationController` + Hook thông báo vào Warehouse/Inspection flow | ⬜ `ProductCategory` + `ProductSku` entity + service + controller |
 | 3 | ⬜ `OwnerLayoutController` (Zone/Rack/Bin CRUD) + endpoint sơ đồ 2D | ⬜ `AdjustmentNote` entity + service + controller |
 | 4 | ⬜ `ProductCategoryService` + `ProductSkuService` + `TenantProductController` | ⬜ Hook Notification vào Booking/Wallet/Contract flow |
-| 5 | ⬜ `InventoryReceipt` + `InventoryReceiptItem` entity + service | ⬜ `InventoryTransaction` entity + audit trail service |
-| 6 | ⬜ `InventoryReceiptController` + wire update StockBatch | ⬜ `AdminInventoryController` |
-| 7 | ⬜ Integration test: luồng nhập/xuất kho đầy đủ | ⬜ Integration test: tồn kho + thông báo end-to-end |
+| 5 | ✅ `InventoryReceipt` + `InventoryReceiptItem` entity + service | ✅ `InventoryTransaction` entity + audit trail service |
+| 6 | ✅ `InventoryReceiptController` + wire update StockBatch | ⬜ `AdminInventoryController` |
+| 7 | ✅ Integration test: luồng nhập/xuất kho đầy đủ | ⬜ Integration test: tồn kho + thông báo end-to-end |
 | 8+ | ⬜ End-to-end test toàn bộ WMS Phase 2 | ⬜ Fix bugs + Performance test |
