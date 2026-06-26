@@ -11,15 +11,16 @@ import fu.stockspace.stockspace_be.common.repository.SystemConfigRepository;
 import fu.stockspace.stockspace_be.subscription.repository.ServicePackageRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Service
@@ -29,25 +30,28 @@ public class SystemConfigService {
     private final SystemConfigRepository configRepository;
     private final ServicePackageRepository packageRepository;
 
-    @Cacheable(value = "system_configs", key = "#key")
+    // Local in-memory cache to optimize configurations lookups
+    private final Map<String, String> cache = new ConcurrentHashMap<>();
+
     @Transactional(readOnly = true)
     public String getValue(String key, String defaultValue) {
-        Optional<SystemConfig> configOpt = configRepository.findByConfigKey(key);
-        if (configOpt.isPresent()) {
-            return configOpt.get().getConfigValue();
-        }
-        return SystemConfigKey.fromKey(key)
-                .map(SystemConfigKey::getDefaultValue)
-                .orElse(defaultValue);
+        return cache.computeIfAbsent(key, k -> {
+            Optional<SystemConfig> configOpt = configRepository.findByConfigKey(k);
+            if (configOpt.isPresent()) {
+                return configOpt.get().getConfigValue();
+            }
+            return SystemConfigKey.fromKey(k)
+                    .map(SystemConfigKey::getDefaultValue)
+                    .orElse(defaultValue);
+        });
     }
 
-    @Cacheable(value = "system_configs", key = "#key")
     @Transactional(readOnly = true)
     public int getIntValue(String key, int defaultValue) {
         try {
-            Optional<SystemConfig> configOpt = configRepository.findByConfigKey(key);
-            if (configOpt.isPresent()) {
-                return Integer.parseInt(configOpt.get().getConfigValue().trim());
+            String value = getValue(key, null);
+            if (value != null) {
+                return Integer.parseInt(value.trim());
             }
             return SystemConfigKey.fromKey(key)
                     .map(k -> Integer.parseInt(k.getDefaultValue().trim()))
@@ -58,13 +62,12 @@ public class SystemConfigService {
         }
     }
 
-    @Cacheable(value = "system_configs", key = "#key")
     @Transactional(readOnly = true)
     public BigDecimal getBigDecimalValue(String key, BigDecimal defaultValue) {
         try {
-            Optional<SystemConfig> configOpt = configRepository.findByConfigKey(key);
-            if (configOpt.isPresent()) {
-                return new BigDecimal(configOpt.get().getConfigValue().trim());
+            String value = getValue(key, null);
+            if (value != null) {
+                return new BigDecimal(value.trim());
             }
             return SystemConfigKey.fromKey(key)
                     .map(k -> new BigDecimal(k.getDefaultValue().trim()))
@@ -75,7 +78,6 @@ public class SystemConfigService {
         }
     }
 
-    @CacheEvict(value = "system_configs", key = "#key")
     @Transactional
     public void setValue(String key, String value, String description) {
         SystemConfig config = configRepository.findByConfigKey(key)
@@ -85,7 +87,8 @@ public class SystemConfigService {
             config.setDescription(description);
         }
         configRepository.save(config);
-        log.info("SystemConfig updated and cache evicted: {} = {}", key, value);
+        cache.put(key, value); // Update local cache
+        log.info("SystemConfig updated and local cache updated: {} = {}", key, value);
     }
 
     @Transactional(readOnly = true)
@@ -115,7 +118,6 @@ public class SystemConfigService {
         return responses;
     }
 
-    @CacheEvict(value = "system_configs", key = "#key")
     @Transactional
     public SystemConfigResponse updateConfig(String key, UpdateSystemConfigRequest request) {
         SystemConfigKey configKey = SystemConfigKey.fromKey(key)
@@ -134,7 +136,8 @@ public class SystemConfigService {
         }
 
         config = configRepository.save(config);
-        log.info("SystemConfig updated via Admin API and cache evicted: {} = {}", configKey.getKey(), config.getConfigValue());
+        cache.put(configKey.getKey(), config.getConfigValue()); // Update local cache
+        log.info("SystemConfig updated via Admin API and local cache updated: {} = {}", configKey.getKey(), config.getConfigValue());
 
         return SystemConfigResponse.builder()
                 .id(config.getId())
@@ -176,15 +179,12 @@ public class SystemConfigService {
             }
         } else if (key.equals("warehouse_publish_package_id")) {
             try {
-                int val = Integer.parseInt(value.trim());
-                if (val <= 0) {
-                    throw new BadRequestException(ErrorCode.CONFIG_INVALID_VALUE, "ID gói đăng bài phải là số nguyên lớn hơn 0");
-                }
-                if (!packageRepository.existsById(val)) {
+                UUID packageId = UUID.fromString(value.trim());
+                if (!packageRepository.existsById(packageId)) {
                     throw new BadRequestException(ErrorCode.PACKAGE_NOT_FOUND, "Gói dịch vụ đăng bài không tồn tại trong hệ thống");
                 }
-            } catch (NumberFormatException e) {
-                throw new BadRequestException(ErrorCode.CONFIG_INVALID_VALUE, "ID gói dịch vụ đăng bài phải là số nguyên");
+            } catch (IllegalArgumentException e) {
+                throw new BadRequestException(ErrorCode.CONFIG_INVALID_VALUE, "ID gói dịch vụ đăng bài phải là định dạng UUID hợp lệ");
             }
         }
     }
