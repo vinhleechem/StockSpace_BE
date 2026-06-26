@@ -108,7 +108,9 @@ public enum ErrorCode {
     PRODUCT_CATEGORY_IN_USE("Không thể xóa danh mục sản phẩm vì đang có SKU liên kết", HttpStatus.BAD_REQUEST),
     SKU_IN_USE("Không thể xóa SKU vì đang có lô hàng tồn kho liên kết", HttpStatus.BAD_REQUEST),
     RECEIPT_NOT_FOUND("Không tìm thấy phiếu xuất nhập kho", HttpStatus.NOT_FOUND),
-    RECEIPT_ALREADY_PROCESSED("Phiếu xuất nhập kho đã được xử lý", HttpStatus.BAD_REQUEST);
+    RECEIPT_ALREADY_PROCESSED("Phiếu xuất nhập kho đã được xử lý", HttpStatus.BAD_REQUEST),
+    CONFIG_NOT_FOUND("Cấu hình hệ thống không tồn tại", HttpStatus.NOT_FOUND),
+    CONFIG_INVALID_VALUE("Giá trị cấu hình không hợp lệ", HttpStatus.BAD_REQUEST);
 
     private final String message;
     private final HttpStatus status;
