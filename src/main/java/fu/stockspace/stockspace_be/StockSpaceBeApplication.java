@@ -7,12 +7,10 @@ import java.util.TimeZone;
 
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.cloud.openfeign.EnableFeignClients;
-import org.springframework.cache.annotation.EnableCaching;
 
 @SpringBootApplication
 @EnableScheduling
 @EnableFeignClients
-@EnableCaching
 public class StockSpaceBeApplication {
 
     @PostConstruct
