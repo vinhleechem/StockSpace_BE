@@ -143,10 +143,10 @@ public class AuthService {
      *  3. Tìm user theo email:
      *     - Đã tồn tại (LOCAL): ném lỗi → "dùng email/password"
      *     - Đã tồn tại (GOOGLE): login bình thường
-     *     - Chưa có: tạo mới với role TENANT
+     *     - Chưa có: tạo mới với role do FE truyền lên (OWNER hoặc TENANT), mặc định TENANT
      */
     @Transactional
-    public AuthResult loginWithGoogle(String code) {
+    public AuthResult loginWithGoogle(String code, String requestedRole) {
         try {
             // Bước 1: Exchange code → access token
             MultiValueMap<String, String> tokenRequest = new LinkedMultiValueMap<>();
@@ -177,9 +177,13 @@ public class AuthService {
                         return userRepository.save(existing);
                     })
                     .orElseGet(() -> {
-                        // Tạo user mới với role ROLE_TENANT
-                        Role tenantRole = roleRepository.findByName(RoleType.ROLE_TENANT.name())
+                        // Xác định role: FE truyền lên ROLE_OWNER hoặc ROLE_TENANT; mặc định ROLE_TENANT
+                        RoleType roleType = RoleType.ROLE_OWNER.name().equals(requestedRole)
+                                ? RoleType.ROLE_OWNER
+                                : RoleType.ROLE_TENANT;
+                        Role assignedRole = roleRepository.findByName(roleType.name())
                                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.ROLE_NOT_FOUND));
+                        log.info("Google OAuth: assigning role [{}] to new user", roleType.name());
 
                         // Build fullName từ givenName + familyName hoặc dùng name
                         String fullName = userInfo.getName() != null ? userInfo.getName()
@@ -193,7 +197,7 @@ public class AuthService {
                                 .fullName(fullName)
                                 .avatarUrl(userInfo.getPicture())
                                 .provider(AuthProvider.GOOGLE)
-                                .roles(Set.of(tenantRole))
+                                .roles(Set.of(assignedRole))
                                 .isActive(true)
                                 .build();
 
