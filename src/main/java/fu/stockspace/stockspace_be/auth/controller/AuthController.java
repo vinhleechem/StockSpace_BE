@@ -77,7 +77,7 @@ public class AuthController {
     public ResponseEntity<ApiResponse<LoginResponse>> googleLogin(
             @Valid @RequestBody GoogleLoginRequest request
     ) {
-        AuthService.AuthResult result = authService.loginWithGoogle(request.getCode());
+        AuthService.AuthResult result = authService.loginWithGoogle(request.getCode(), request.getRole());
         return buildAuthResponse(result, HttpStatus.OK, "Google login successful");
     }
 
