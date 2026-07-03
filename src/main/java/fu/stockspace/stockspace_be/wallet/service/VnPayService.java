@@ -159,7 +159,9 @@ public class VnPayService {
     }
 
     /**
-     * Tạo chuỗi dữ liệu để tính hash
+     * Tạo chuỗi dữ liệu để tính hash theo chuẩn VNPAY v2.1.0.
+     * URL encode value bằng US_ASCII nhưng KHÔNG replace "+" thành "%20"
+     * (VNPAY dùng "+" cho space khi tính hash phía server của họ)
      */
     public static String buildHashData(Map<String, String> paramsMap) {
         return paramsMap.entrySet().stream()
@@ -167,10 +169,10 @@ public class VnPayService {
                 .sorted(Map.Entry.comparingByKey())
                 .map(entry -> {
                     try {
-                        return entry.getKey() + "=" + URLEncoder
-                                .encode(entry.getValue(), StandardCharsets.US_ASCII.toString()).replace("+", "%20");
+                        // Dùng US_ASCII, GIỮ NGUYÊN "+" (không replace thành "%20")
+                        return entry.getKey() + "=" + URLEncoder.encode(entry.getValue(), StandardCharsets.US_ASCII.toString());
                     } catch (Exception e) {
-                        return "";
+                        return entry.getKey() + "=" + entry.getValue();
                     }
                 })
                 .collect(Collectors.joining("&"));
