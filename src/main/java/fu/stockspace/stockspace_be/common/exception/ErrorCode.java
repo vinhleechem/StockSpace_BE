@@ -73,6 +73,7 @@ public enum ErrorCode {
     // Wallet & Transaction Errors
     WALLET_NOT_FOUND("Ví điện tử không tồn tại", HttpStatus.NOT_FOUND),
     WALLET_INSUFFICIENT_BALANCE("Số dư ví không đủ để thực hiện giao dịch", HttpStatus.BAD_REQUEST),
+    TRANSACTION_NOT_FOUND("Giao dịch không tồn tại", HttpStatus.NOT_FOUND),
 
     // Service Package & Subscription Errors
     PACKAGE_NOT_FOUND("Gói dịch vụ không tồn tại", HttpStatus.NOT_FOUND),

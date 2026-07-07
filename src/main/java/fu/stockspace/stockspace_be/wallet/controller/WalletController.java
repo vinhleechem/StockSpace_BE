@@ -78,6 +78,15 @@ public class WalletController {
         PagedTransactionResponse response = transactionService.getMyTransactions(user.getId(), pageable);
         return ResponseEntity.ok(ApiResponse.success("Lấy lịch sử giao dịch thành công", response));
     }
+
+    @GetMapping("/transactions/{paymentCode}/status")
+    @Operation(summary = "Xem trạng thái giao dịch theo mã paymentCode")
+    public ResponseEntity<ApiResponse<TransactionResponse>> getTransactionStatus(@PathVariable String paymentCode) {
+        User user = getCurrentUser();
+        TransactionResponse response = transactionService.getTransactionStatus(user.getId(), paymentCode);
+        return ResponseEntity.ok(ApiResponse.success("Lấy trạng thái giao dịch thành công", response));
+    }
+
     @PostMapping("/withdraw")
     @Operation(summary = "Gửi yêu cầu rút tiền về ngân hàng")
     public ResponseEntity<ApiResponse<WithdrawResponse>> withdraw(@Valid @RequestBody WithdrawRequestDto requestDto) {

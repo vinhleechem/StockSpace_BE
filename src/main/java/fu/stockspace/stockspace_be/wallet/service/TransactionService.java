@@ -61,6 +61,23 @@ public class TransactionService {
                 .last(page.isLast())
                 .build();
     }
+
+    /**
+     * Lấy thông tin trạng thái giao dịch theo mã paymentCode.
+     * Kiểm tra quyền sở hữu ví của người dùng.
+     */
+    @Transactional(readOnly = true)
+    public TransactionResponse getTransactionStatus(UUID userId, String paymentCode) {
+        Transaction transaction = transactionRepository.findByPaymentCode(paymentCode)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.TRANSACTION_NOT_FOUND));
+        
+        if (!transaction.getWallet().getUser().getId().equals(userId)) {
+            throw new fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException(ErrorCode.FORBIDDEN);
+        }
+        
+        return mapToResponse(transaction);
+    }
+
     private TransactionResponse mapToResponse(Transaction t) {
         return TransactionResponse.builder()
                 .id(t.getId())
