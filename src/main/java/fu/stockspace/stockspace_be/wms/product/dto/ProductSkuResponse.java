@@ -17,6 +17,8 @@ public class ProductSkuResponse {
     private String categoryName;
     private String skuCode;
     private String name;
-    private String unit;
+    private UUID uomId;
+    private String uomCode;
+    private String uomName;
     private Map<String, Object> specifications;
 }
