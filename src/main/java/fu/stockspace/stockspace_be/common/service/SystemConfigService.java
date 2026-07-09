@@ -188,4 +188,63 @@ public class SystemConfigService {
             }
         }
     }
+
+    @Transactional(readOnly = true)
+    public List<SystemConfigResponse> getPublicConfigs() {
+        List<SystemConfigResponse> responses = new ArrayList<>();
+        for (SystemConfigKey configKey : SystemConfigKey.values()) {
+            if (configKey.isPublic()) {
+                Optional<SystemConfig> configOpt = configRepository.findByConfigKey(configKey.getKey());
+                if (configOpt.isPresent()) {
+                    SystemConfig config = configOpt.get();
+                    responses.add(SystemConfigResponse.builder()
+                            .id(config.getId())
+                            .configKey(config.getConfigKey())
+                            .configValue(config.getConfigValue())
+                            .description(config.getDescription())
+                            .updatedAt(config.getUpdatedAt() != null ? config.getUpdatedAt() : config.getCreatedAt())
+                            .build());
+                } else {
+                    responses.add(SystemConfigResponse.builder()
+                            .id(null)
+                            .configKey(configKey.getKey())
+                            .configValue(configKey.getDefaultValue())
+                            .description(configKey.getDefaultDescription())
+                            .updatedAt(null)
+                            .build());
+                }
+            }
+        }
+        return responses;
+    }
+
+    @Transactional(readOnly = true)
+    public SystemConfigResponse getPublicConfigByKey(String key) {
+        SystemConfigKey configKey = SystemConfigKey.fromKey(key)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONFIG_NOT_FOUND));
+
+        if (!configKey.isPublic()) {
+            throw new ResourceNotFoundException(ErrorCode.CONFIG_NOT_FOUND);
+        }
+
+        Optional<SystemConfig> configOpt = configRepository.findByConfigKey(configKey.getKey());
+        if (configOpt.isPresent()) {
+            SystemConfig config = configOpt.get();
+            return SystemConfigResponse.builder()
+                    .id(config.getId())
+                    .configKey(config.getConfigKey())
+                    .configValue(config.getConfigValue())
+                    .description(config.getDescription())
+                    .updatedAt(config.getUpdatedAt() != null ? config.getUpdatedAt() : config.getCreatedAt())
+                    .build();
+        } else {
+            return SystemConfigResponse.builder()
+                    .id(null)
+                    .configKey(configKey.getKey())
+                    .configValue(configKey.getDefaultValue())
+                    .description(configKey.getDefaultDescription())
+                    .updatedAt(null)
+                    .build();
+        }
+    }
 }
