@@ -239,4 +239,40 @@ class SystemConfigServiceTest {
         assertThrows(ResourceNotFoundException.class, () ->
                 configService.updateConfig("non_existent_key", request));
     }
+
+    @Test
+    void testGetPublicConfigs_Success() {
+        when(configRepository.findByConfigKey(SystemConfigKey.DEPOSIT_PERCENTAGE.getKey()))
+                .thenReturn(Optional.of(depositConfig));
+        when(configRepository.findByConfigKey(SystemConfigKey.INSPECTION_FEE.getKey()))
+                .thenReturn(Optional.of(feeConfig));
+        when(configRepository.findByConfigKey(SystemConfigKey.CONTRACT_EXPIRY_DAYS.getKey()))
+                .thenReturn(Optional.empty());
+
+        List<SystemConfigResponse> responses = configService.getPublicConfigs();
+
+        assertNotNull(responses);
+        assertEquals(3, responses.size());
+
+        boolean hasPackageId = responses.stream()
+                .anyMatch(r -> r.getConfigKey().equals(SystemConfigKey.WAREHOUSE_PUBLISH_PACKAGE_ID.getKey()));
+        assertFalse(hasPackageId);
+    }
+
+    @Test
+    void testGetPublicConfigByKey_Success_PublicConfig() {
+        when(configRepository.findByConfigKey(SystemConfigKey.DEPOSIT_PERCENTAGE.getKey()))
+                .thenReturn(Optional.of(depositConfig));
+
+        SystemConfigResponse response = configService.getPublicConfigByKey(SystemConfigKey.DEPOSIT_PERCENTAGE.getKey());
+
+        assertNotNull(response);
+        assertEquals("15", response.getConfigValue());
+    }
+
+    @Test
+    void testGetPublicConfigByKey_Failure_PrivateConfig() {
+        assertThrows(ResourceNotFoundException.class, () ->
+                configService.getPublicConfigByKey(SystemConfigKey.WAREHOUSE_PUBLISH_PACKAGE_ID.getKey()));
+    }
 }
