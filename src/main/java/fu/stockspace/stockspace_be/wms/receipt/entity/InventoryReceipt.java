@@ -43,4 +43,7 @@ public class InventoryReceipt extends BaseEntity {
     @Column(name = "status", nullable = false, length = 20)
     @Builder.Default
     private ApprovalStatus status = ApprovalStatus.PENDING;
+
+    @Column(name = "reference_id")
+    private UUID referenceId;
 }

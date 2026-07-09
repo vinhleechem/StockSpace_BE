@@ -10,9 +10,12 @@ import fu.stockspace.stockspace_be.wms.product.dto.ProductSkuResponse;
 import fu.stockspace.stockspace_be.wms.product.dto.UpdateSkuRequest;
 import fu.stockspace.stockspace_be.wms.product.entity.ProductCategory;
 import fu.stockspace.stockspace_be.wms.product.entity.ProductSku;
+import fu.stockspace.stockspace_be.wms.product.entity.UnitOfMeasure;
 import fu.stockspace.stockspace_be.wms.product.repository.ProductCategoryRepository;
 import fu.stockspace.stockspace_be.wms.product.repository.ProductSkuRepository;
+import fu.stockspace.stockspace_be.wms.product.repository.UnitOfMeasureRepository;
 import fu.stockspace.stockspace_be.wms.stock.repository.StockBatchRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -20,7 +23,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 
 import java.util.Collections;
 import java.util.Optional;
@@ -45,8 +47,22 @@ class ProductSkuServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private UnitOfMeasureRepository uomRepository;
+
     @InjectMocks
     private ProductSkuService skuService;
+
+    private UnitOfMeasure defaultUom;
+
+    @BeforeEach
+    void setUp() {
+        defaultUom = UnitOfMeasure.builder()
+                .id(UUID.randomUUID())
+                .code("PCS")
+                .name("Cái")
+                .build();
+    }
 
     @Test
     void testGetMySKUs_Success() {
@@ -55,7 +71,7 @@ class ProductSkuServiceTest {
                 .id(UUID.randomUUID())
                 .skuCode("SKU123")
                 .name("Test SKU")
-                .unit("PCS")
+                .uom(defaultUom)
                 .tenant(User.builder().id(tenantId).build())
                 .build();
 
@@ -78,6 +94,7 @@ class ProductSkuServiceTest {
         ProductSku sku = ProductSku.builder()
                 .id(skuId)
                 .skuCode("SKU-OK")
+                .uom(defaultUom)
                 .tenant(User.builder().id(tenantId).build())
                 .build();
 
@@ -97,6 +114,7 @@ class ProductSkuServiceTest {
         ProductSku sku = ProductSku.builder()
                 .id(skuId)
                 .skuCode("SKU-OTHER")
+                .uom(defaultUom)
                 .tenant(User.builder().id(otherTenantId).build())
                 .build();
 
@@ -115,12 +133,13 @@ class ProductSkuServiceTest {
                 .categoryId(catId)
                 .skuCode("NEW-SKU")
                 .name("New product")
-                .unit("BOX")
+                .uomId(defaultUom.getId())
                 .specifications(Collections.singletonMap("weight", "1kg"))
                 .build();
 
         when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
         when(categoryRepository.findByIdAndIsDeletedFalse(catId)).thenReturn(Optional.of(category));
+        when(uomRepository.findByIdAndIsDeletedFalse(defaultUom.getId())).thenReturn(Optional.of(defaultUom));
         when(skuRepository.existsBySkuCodeAndTenantOrSystem("NEW-SKU", tenantId)).thenReturn(false);
         when(skuRepository.save(any(ProductSku.class))).thenAnswer(invocation -> {
             ProductSku sku = invocation.getArgument(0);
@@ -133,7 +152,8 @@ class ProductSkuServiceTest {
         assertNotNull(response);
         assertEquals("NEW-SKU", response.getSkuCode());
         assertEquals("New product", response.getName());
-        assertEquals("BOX", response.getUnit());
+        assertEquals(defaultUom.getId(), response.getUomId());
+        assertEquals("PCS", response.getUomCode());
         assertEquals("1kg", response.getSpecifications().get("weight"));
         verify(skuRepository, times(1)).save(any(ProductSku.class));
     }
@@ -145,10 +165,11 @@ class ProductSkuServiceTest {
         CreateSkuRequest request = CreateSkuRequest.builder()
                 .skuCode("DUP-SKU")
                 .name("Duplicate SKU")
-                .unit("PCS")
+                .uomId(defaultUom.getId())
                 .build();
 
         when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+        when(uomRepository.findByIdAndIsDeletedFalse(defaultUom.getId())).thenReturn(Optional.of(defaultUom));
         when(skuRepository.existsBySkuCodeAndTenantOrSystem("DUP-SKU", tenantId)).thenReturn(true);
 
         assertThrows(BadRequestException.class, () -> skuService.createSku(tenantId, request));
@@ -165,21 +186,30 @@ class ProductSkuServiceTest {
                 .skuCode("SKU-TO-UPDATE")
                 .tenant(tenant)
                 .name("Old Name")
-                .unit("PCS")
+                .uom(defaultUom)
                 .build();
+
+        UnitOfMeasure newUom = UnitOfMeasure.builder()
+                .id(UUID.randomUUID())
+                .code("BOX")
+                .name("Thùng")
+                .build();
+
         UpdateSkuRequest request = UpdateSkuRequest.builder()
                 .name("New Name")
-                .unit("BOX")
+                .uomId(newUom.getId())
                 .build();
 
         when(skuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(sku));
+        when(uomRepository.findByIdAndIsDeletedFalse(newUom.getId())).thenReturn(Optional.of(newUom));
         when(skuRepository.save(any(ProductSku.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ProductSkuResponse response = skuService.updateSku(tenantId, skuId, request);
 
         assertNotNull(response);
         assertEquals("New Name", response.getName());
-        assertEquals("BOX", response.getUnit());
+        assertEquals(newUom.getId(), response.getUomId());
+        assertEquals("BOX", response.getUomCode());
     }
 
     @Test
@@ -191,11 +221,11 @@ class ProductSkuServiceTest {
                 .skuCode("SYS-SKU")
                 .tenant(null) // System SKU
                 .name("System Sku Name")
-                .unit("PCS")
+                .uom(defaultUom)
                 .build();
         UpdateSkuRequest request = UpdateSkuRequest.builder()
                 .name("Try Update")
-                .unit("BOX")
+                .uomId(defaultUom.getId())
                 .build();
 
         when(skuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(systemSku));
@@ -212,6 +242,7 @@ class ProductSkuServiceTest {
                 .id(skuId)
                 .skuCode("SKU-TO-DELETE")
                 .tenant(tenant)
+                .uom(defaultUom)
                 .build();
 
         when(skuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(sku));
@@ -233,6 +264,7 @@ class ProductSkuServiceTest {
                 .id(skuId)
                 .skuCode("SKU-IN-USE")
                 .tenant(tenant)
+                .uom(defaultUom)
                 .build();
 
         when(skuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(sku));
