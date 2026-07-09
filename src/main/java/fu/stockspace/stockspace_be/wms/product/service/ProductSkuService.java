@@ -13,6 +13,8 @@ import fu.stockspace.stockspace_be.wms.product.entity.ProductCategory;
 import fu.stockspace.stockspace_be.wms.product.entity.ProductSku;
 import fu.stockspace.stockspace_be.wms.product.repository.ProductCategoryRepository;
 import fu.stockspace.stockspace_be.wms.product.repository.ProductSkuRepository;
+import fu.stockspace.stockspace_be.wms.product.entity.UnitOfMeasure;
+import fu.stockspace.stockspace_be.wms.product.repository.UnitOfMeasureRepository;
 import fu.stockspace.stockspace_be.wms.stock.repository.StockBatchRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -33,6 +35,7 @@ public class ProductSkuService {
     private final ProductCategoryRepository categoryRepository;
     private final StockBatchRepository stockBatchRepository;
     private final UserRepository userRepository;
+    private final UnitOfMeasureRepository uomRepository;
 
     public PagedSkuResponse getMySKUs(UUID tenantId, Pageable pageable) {
         Page<ProductSku> page = skuRepository.findAllActiveByTenantOrSystem(tenantId, pageable);
@@ -78,6 +81,14 @@ public class ProductSkuService {
             }
         }
 
+        UnitOfMeasure uom = uomRepository.findByIdAndIsDeletedFalse(request.getUomId())
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.UOM_NOT_FOUND));
+
+        // UOM must be visible to the tenant
+        if (uom.getTenant() != null && !uom.getTenant().getId().equals(tenantId)) {
+            throw new BadRequestException(ErrorCode.FORBIDDEN);
+        }
+
         // Validate uniqueness of skuCode per tenant
         if (skuRepository.existsBySkuCodeAndTenantOrSystem(request.getSkuCode(), tenantId)) {
             throw new BadRequestException(ErrorCode.SKU_CODE_DUPLICATE);
@@ -88,7 +99,7 @@ public class ProductSkuService {
                 .category(category)
                 .skuCode(request.getSkuCode())
                 .name(request.getName())
-                .unit(request.getUnit())
+                .uom(uom)
                 .specifications(request.getSpecifications())
                 .build();
 
@@ -122,9 +133,17 @@ public class ProductSkuService {
             }
         }
 
+        UnitOfMeasure uom = uomRepository.findByIdAndIsDeletedFalse(request.getUomId())
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.UOM_NOT_FOUND));
+
+        // UOM must be visible to the tenant
+        if (uom.getTenant() != null && !uom.getTenant().getId().equals(tenantId)) {
+            throw new BadRequestException(ErrorCode.FORBIDDEN);
+        }
+
         sku.setCategory(category);
         sku.setName(request.getName());
-        sku.setUnit(request.getUnit());
+        sku.setUom(uom);
         sku.setSpecifications(request.getSpecifications());
 
         ProductSku saved = skuRepository.save(sku);
@@ -164,7 +183,9 @@ public class ProductSkuService {
                 .categoryName(sku.getCategory() != null ? sku.getCategory().getName() : null)
                 .skuCode(sku.getSkuCode())
                 .name(sku.getName())
-                .unit(sku.getUnit())
+                .uomId(sku.getUom() != null ? sku.getUom().getId() : null)
+                .uomCode(sku.getUom() != null ? sku.getUom().getCode() : null)
+                .uomName(sku.getUom() != null ? sku.getUom().getName() : null)
                 .specifications(sku.getSpecifications())
                 .build();
     }

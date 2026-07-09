@@ -18,8 +18,8 @@ public class UpdateSkuRequest {
     @NotBlank(message = "Tên sản phẩm không được để trống")
     private String name;
 
-    @NotBlank(message = "Đơn vị tính không được để trống")
-    private String unit;
+    @jakarta.validation.constraints.NotNull(message = "Đơn vị tính không được để trống")
+    private UUID uomId;
 
     private Map<String, Object> specifications;
 }
