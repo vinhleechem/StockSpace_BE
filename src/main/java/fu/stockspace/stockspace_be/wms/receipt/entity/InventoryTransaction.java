@@ -25,11 +25,8 @@ public class InventoryTransaction extends BaseEntity {
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "receipt_id")
+    @JoinColumn(name = "receipt_id", nullable = false)
     private InventoryReceipt receipt;
-
-    @Column(name = "adjustment_id")
-    private UUID adjustmentId; // Will be linked to AdjustmentNote in future module
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "batch_id", nullable = false)
