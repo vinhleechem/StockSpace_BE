@@ -42,8 +42,9 @@ public class ProductSku extends BaseEntity {
     @Column(name = "name", nullable = false)
     private String name;
 
-    @Column(name = "unit", nullable = false)
-    private String unit;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "uom_id", nullable = false)
+    private UnitOfMeasure uom;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "specifications", columnDefinition = "jsonb")

@@ -111,7 +111,8 @@ public enum ErrorCode {
     RECEIPT_NOT_FOUND("Không tìm thấy phiếu xuất nhập kho", HttpStatus.NOT_FOUND),
     RECEIPT_ALREADY_PROCESSED("Phiếu xuất nhập kho đã được xử lý", HttpStatus.BAD_REQUEST),
     CONFIG_NOT_FOUND("Cấu hình hệ thống không tồn tại", HttpStatus.NOT_FOUND),
-    CONFIG_INVALID_VALUE("Giá trị cấu hình không hợp lệ", HttpStatus.BAD_REQUEST);
+    CONFIG_INVALID_VALUE("Giá trị cấu hình không hợp lệ", HttpStatus.BAD_REQUEST),
+    UOM_NOT_FOUND("Không tìm thấy đơn vị tính", HttpStatus.NOT_FOUND);
 
     private final String message;
     private final HttpStatus status;
