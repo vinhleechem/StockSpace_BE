@@ -65,6 +65,9 @@ public class SecurityConfig {
                         // Warehouse search/view — public (Guest có thể xem)
                         .requestMatchers(HttpMethod.GET, "/api/warehouses/**").permitAll()
 
+                        // Public configurations — public (Guest can view system configs like deposit percentage, etc.)
+                        .requestMatchers(HttpMethod.GET, "/api/configs/**").permitAll()
+
                         // Tất cả còn lại cần authenticate
                         .anyRequest().authenticated()
                 )
