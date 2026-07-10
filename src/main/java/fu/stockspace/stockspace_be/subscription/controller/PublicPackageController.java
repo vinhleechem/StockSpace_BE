@@ -18,7 +18,6 @@ import java.util.List;
 @RequestMapping("/api/packages")
 @RequiredArgsConstructor
 @Tag(name = "Public — Packages", description = "Các API xem thông tin gói dịch vụ")
-@PreAuthorize("isAuthenticated()")
 public class PublicPackageController {
     private final ServicePackageService packageService;
     @GetMapping

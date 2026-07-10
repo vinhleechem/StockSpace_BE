@@ -68,6 +68,9 @@ public class SecurityConfig {
                         // Public configurations — public (Guest can view system configs like deposit percentage, etc.)
                         .requestMatchers(HttpMethod.GET, "/api/configs/**").permitAll()
 
+                        // Public packages — public
+                        .requestMatchers(HttpMethod.GET, "/api/packages/**").permitAll()
+
                         // Tất cả còn lại cần authenticate
                         .anyRequest().authenticated()
                 )
