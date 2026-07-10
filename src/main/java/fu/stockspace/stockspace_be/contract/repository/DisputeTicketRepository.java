@@ -18,6 +18,9 @@ public interface DisputeTicketRepository extends JpaRepository<DisputeTicket, UU
 
     Page<DisputeTicket> findByRaisedById(UUID userId, Pageable pageable);
 
+    @Query("SELECT d FROM DisputeTicket d WHERE d.contract.booking.tenant.id = :userId OR d.contract.booking.warehouse.owner.id = :userId")
+    Page<DisputeTicket> findByInvolvedUserId(@Param("userId") UUID userId, Pageable pageable);
+
     Page<DisputeTicket> findByStatus(String status, Pageable pageable);
 
     @Query("SELECT d FROM DisputeTicket d WHERE d.status = :status OR :status IS NULL")

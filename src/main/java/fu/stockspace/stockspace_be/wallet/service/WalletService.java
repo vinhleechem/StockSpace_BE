@@ -190,6 +190,7 @@ public class WalletService {
         Wallet wallet = walletRepository.findByUserIdWithLock(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WALLET_NOT_FOUND));
         wallet.setBalance(wallet.getBalance().add(amount));
+        log.info("Wallet Service: Updating balance for user {} by adding {}. New balance: {}", userId, amount, wallet.getBalance());
         walletRepository.save(wallet);
         Transaction transaction = Transaction.builder()
                 .wallet(wallet)
