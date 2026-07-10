@@ -158,6 +158,7 @@ public class WalletService {
      */
     @Transactional
     public Transaction deductBalance(UUID userId, BigDecimal amount, TransactionType type, String description, UUID bookingId, UUID subscriptionId) {
+        getOrCreateWallet(userId);
         Wallet wallet = walletRepository.findByUserIdWithLock(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WALLET_NOT_FOUND));
         if (wallet.getBalance().compareTo(amount) < 0) {
@@ -185,6 +186,7 @@ public class WalletService {
      */
     @Transactional
     public Transaction refundBalance(UUID userId, BigDecimal amount, TransactionType type, String description, UUID bookingId, UUID subscriptionId) {
+        getOrCreateWallet(userId);
         Wallet wallet = walletRepository.findByUserIdWithLock(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WALLET_NOT_FOUND));
         wallet.setBalance(wallet.getBalance().add(amount));

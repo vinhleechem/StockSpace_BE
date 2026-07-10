@@ -85,8 +85,12 @@ public class WarehouseLayoutService {
             return;
         }
 
-        WarehouseLayout defaultLayout = layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.LAYOUT_NOT_FOUND));
+        Optional<WarehouseLayout> defaultLayoutOpt = layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId);
+        if (defaultLayoutOpt.isEmpty()) {
+            log.warn("Warehouse {} has no default layout to clone. Skipping cloning.", warehouseId);
+            return;
+        }
+        WarehouseLayout defaultLayout = defaultLayoutOpt.get();
 
         User tenantUser = userRepository.findById(tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
