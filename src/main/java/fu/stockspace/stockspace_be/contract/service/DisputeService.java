@@ -95,7 +95,7 @@ public class DisputeService {
     @Transactional(readOnly = true)
     public Page<DisputeResponse> getMyDisputes(UUID userId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        return disputeRepository.findByInvolvedUserId(userId, pageable)
+        return disputeRepository.findByRaisedById(userId, pageable)
                 .map(this::mapToResponse);
     }
     // ==================== Admin internal ====================
