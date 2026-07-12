@@ -7,6 +7,33 @@ Sprint 2 đã hoàn thành: Auth · Warehouse (CRUD, 2D layout, kiểm định) 
 
 ---
 
+## 🆕 Thay Đổi Lớn Sau Review Mentor (Cập nhật 2026-07)
+
+> [!IMPORTANT]
+> Mentor đã yêu cầu 2 cải tiến thiết kế DB quan trọng. **Dev A đã hoàn thành refactor code tương ứng, Dev B cần nắm rõ trước khi bắt đầu code.**
+
+### ① Unit of Measure (UOM)
+- Bảng `unit_of_measures` đã được thêm vào DB.
+- Entity `ProductSku` đã **KHÔNG CÒN** trường `unit (String)` — thay bằng FK `uom_id → UnitOfMeasure.id`.
+- Entity mới: [`UnitOfMeasure.java`](src/main/java/fu/stockspace/stockspace_be/wms/product/entity/UnitOfMeasure.java) (`id`, `name`, `symbol`, `type`).
+- Repository mới: [`UnitOfMeasureRepository.java`](src/main/java/fu/stockspace/stockspace_be/wms/product/repository/UnitOfMeasureRepository.java).
+- Toàn bộ DTO (`CreateSkuRequest`, `UpdateSkuRequest`, `ProductSkuResponse`) và `ProductSkuService` đã được cập nhật.
+- **Dev B cần biết**: Khi code `StockBatchResponse`, trường hiển thị đơn vị tính phải lấy từ `sku.getUom().getSymbol()` thay vì `sku.getUnit()`.
+
+### ② Quy trình Kiểm Kê Kho thay thế Adjustment Note
+- **Xóa hoàn toàn khái niệm `AdjustmentNote`** — Module 6 trong task cũ đã được **viết lại thành Module Kiểm kê (Inventory Audit)**.
+- Thiết kế nghiệp vụ mới:
+  1. Tenant/Staff tạo phiếu kiểm kê `InventoryAudit` (status `PENDING`).
+  2. Điền số lượng thực tế vào từng `InventoryAuditItem`.
+  3. Nộp kiểm kê (`submitAudit`) — status chuyển sang `SUBMITTED`.
+  4. Cấp trên duyệt (`approveAudit`):
+     - Nếu có chênh lệch, **tự động sinh phiếu nhập/xuất điều chỉnh** (`InventoryReceipt` với `referenceId = audit.id`) và tự động cập nhật `StockBatch.quantity`.
+  5. Mọi thay đổi số lượng đều được ghi nhận vào `InventoryTransaction` với `receipt_id` bắt buộc.
+- Entity `InventoryReceipt` đã được thêm trường `referenceId (UUID, nullable)` để liên kết với `InventoryAudit.id`.
+- Entity `InventoryTransaction` đã **xóa cột `adjustment_id`** — `receipt_id` bắt buộc NOT NULL.
+
+---
+
 ## 🗺️ Tổng Quan Luồng Còn Lại
 
 ```
@@ -18,9 +45,9 @@ Sprint 2 đã hoàn thành: Auth · Warehouse (CRUD, 2D layout, kiểm định) 
         │
   ┌─────┴──────────────────────────────────────────────────────────────┐
   │                                                                    │
-[ProductCategory + ProductSKU]                             [StockBatch + Inventory Receipt]
+[ProductCategory + ProductSKU + UnitOfMeasure]             [StockBatch + Inventory Receipt]
   │                                                                    │
-[Stock Batch với vị trí Bin]                               [Adjustment Note + Inventory Transaction]
+[Stock Batch với vị trí Bin]                       [InventoryAudit → Auto Receipt → Transaction]
         │
 [API Tra cứu & Báo cáo tồn kho]
 ```
@@ -34,6 +61,8 @@ Sprint 2 đã hoàn thành: Auth · Warehouse (CRUD, 2D layout, kiểm định) 
 - [x] **Dev A tạo skeleton `WarehouseBin.java`** (entity + UUID field) trước khi Dev B dùng FK `bin_id` trong `StockBatch`
 - [x] **Dev A expose `NotificationService.push(userId, title, message, type)`** là internal method trước khi Dev B hook vào các luồng Wallet/Subscription
 - [x] **Cả 2 thêm ErrorCode mới vào `ErrorCode.java`** — xem danh sách mục cuối file
+- [x] **Dev A refactor `ProductSku` sang dùng `UnitOfMeasure` (FK `uom_id`)** — Dev B cần dùng `sku.getUom().getSymbol()` khi build DTO
+- [x] **Dev A thêm `referenceId` vào `InventoryReceipt`** — Dev B dùng khi tạo phiếu điều chỉnh auto từ kết quả kiểm kê
 
 ---
 
@@ -115,19 +144,23 @@ Sprint 2 đã hoàn thành: Auth · Warehouse (CRUD, 2D layout, kiểm định) 
 
 ### ═══ MODULE 3: WMS — Sản phẩm & Danh mục ═══
 
+> ⚠️ **Cập nhật sau review Mentor**: Trường `unit (String)` trong `ProductSku` đã được thay bằng FK `uom_id → UnitOfMeasure`. Xem thêm trong mục **"Thay Đổi Lớn Sau Review Mentor"** ở đầu file.
+
 #### 3.1. Entities
+- [x] **`UnitOfMeasure.java`** (MỚI — Dev A đã tạo) — `@Entity @Table("unit_of_measures")`, fields: `id (uuid)`, `name (varchar 100, not null)`, `symbol (varchar 20, not null)`, `type (varchar 50)` — ví dụ: WEIGHT, VOLUME, COUNT
 - [x] **`ProductCategory.java`** — `@Entity @Table("product_categories")`, fields: `id (uuid)`, `tenant_id FK→User`, `name`, `defaultAttributes (jsonb)`, `createdAt`
-- [x] **`ProductSku.java`** — `@Entity @Table("product_skus")`, fields: `id (uuid)`, `tenant_id FK→User`, `category_id FK→ProductCategory (null)`, `skuCode (unique)`, `name`, `unit`, `specifications (jsonb)`, extend `BaseEntity`
+- [x] **`ProductSku.java`** — `@Entity @Table("product_skus")`, fields: `id (uuid)`, `tenant_id FK→User`, `category_id FK→ProductCategory (null)`, `skuCode (unique)`, `name`, ~~`unit (String)`~~ **→ `uom_id FK→UnitOfMeasure (not null)`**, `specifications (jsonb)`, extend `BaseEntity`
 
 #### 3.2. Repositories
+- [x] **`UnitOfMeasureRepository.java`** (MỚI — Dev A đã tạo) — `findBySymbolIgnoreCase(String)`, `findAll()`
 - [x] **`ProductCategoryRepository.java`** — `findAllByTenantId(UUID)`
 - [x] **`ProductSkuRepository.java`** — `findAllByTenantId(UUID, Pageable)`, `findBySkuCodeAndTenantId(String, UUID)`, `existsBySkuCodeAndTenantId(String, UUID)`
 
 #### 3.3. DTOs
 - [x] **`ProductCategoryResponse.java`** — `id`, `name`, `defaultAttributes`
 - [x] **`CreateCategoryRequest.java`** — `name`, `defaultAttributes (Map<String,Object>)`
-- [x] **`ProductSkuResponse.java`** — `id`, `skuCode`, `name`, `unit`, `specifications`, `categoryName`
-- [x] **`CreateSkuRequest.java`** — `categoryId`, `skuCode`, `name`, `unit`, `specifications`
+- [x] **`ProductSkuResponse.java`** — `id`, `skuCode`, `name`, ~~`unit`~~ **→ `uomId`, `uomSymbol`, `uomName`**, `specifications`, `categoryName`
+- [x] **`CreateSkuRequest.java`** — `categoryId`, `skuCode`, `name`, ~~`unit`~~ **→ `uomId (UUID, not null)`**, `specifications`
 - [x] **`UpdateSkuRequest.java`**
 - [x] **`PagedSkuResponse.java`**
 
@@ -139,7 +172,7 @@ Sprint 2 đã hoàn thành: Auth · Warehouse (CRUD, 2D layout, kiểm định) 
 - [x] **`ProductSkuService.java`** — methods:
   - `getMySKUs(UUID tenantId, Pageable)` → `PagedSkuResponse`
   - `getSkuDetail(UUID tenantId, UUID skuId)` → `ProductSkuResponse`
-  - `createSku(UUID tenantId, CreateSkuRequest)` → `ProductSkuResponse` — validate `skuCode` unique per tenant
+  - `createSku(UUID tenantId, CreateSkuRequest)` → `ProductSkuResponse` — validate `skuCode` unique per tenant, validate `uomId` tồn tại
   - `updateSku(UUID tenantId, UUID skuId, UpdateSkuRequest)` → `ProductSkuResponse`
   - `deleteSku(UUID tenantId, UUID skuId)` — validate không có StockBatch đang dùng SKU này
 
@@ -156,14 +189,17 @@ Sprint 2 đã hoàn thành: Auth · Warehouse (CRUD, 2D layout, kiểm định) 
   | `POST` | `/api/tenant/products/skus` | Tạo SKU mới |
   | `PUT` | `/api/tenant/products/skus/{id}` | Cập nhật SKU |
   | `DELETE` | `/api/tenant/products/skus/{id}` | Xóa SKU |
+  | `GET` | `/api/tenant/products/uoms` | Danh sách đơn vị tính (UOM) để hiển thị dropdown tạo SKU |
 
 ---
 
 ### ═══ MODULE 4: WMS — Phiếu Nhập/Xuất Kho ═══
 
+> ⚠️ **Cập nhật sau review Mentor**: `InventoryReceipt` đã được bổ sung trường `referenceId (UUID, nullable)` để liên kết ngược về phiếu kiểm kê (`InventoryAudit`) khi phiếu nhập/xuất được sinh tự động từ quy trình phê duyệt kiểm kê.
+
 #### 4.1. Entities
-- [x] **`InventoryReceipt.java`** — `@Entity @Table("inventory_receipts")`, fields: `id (uuid)`, `warehouse_id FK→Warehouse`, `created_by FK→User`, `type (DocumentType: INBOUND/OUTBOUND)`, `signatureData (text)`, `status (ApprovalStatus)`, `createdAt`
-- [x] **`InventoryReceiptItem.java`** (nếu cần chi tiết từng dòng) — `id`, `receipt_id FK`, `sku_id FK`, `quantity`, `zone_id FK (null)`, `rack_id FK (null)`, `bin_id FK (null)`, `note`
+- [x] **`InventoryReceipt.java`** — `@Entity @Table("inventory_receipts")`, fields: `id (uuid)`, `warehouse_id FK→Warehouse`, `created_by FK→User`, `type (DocumentType: INBOUND/OUTBOUND)`, `signatureData (text)`, `status (ApprovalStatus)`, **`referenceId (UUID, nullable)`** — liên kết đến `InventoryAudit.id` nếu phiếu được sinh từ kiểm kê, `createdAt`
+- [x] **`InventoryReceiptItem.java`** — `id`, `receipt_id FK`, `sku_id FK`, `quantity`, `zone_id FK (null)`, `rack_id FK (null)`, `bin_id FK (null)`, `note`
 
 #### 4.2. Repository
 - [x] **`InventoryReceiptRepository.java`** — `findByWarehouseIdAndType(UUID, DocumentType, Pageable)`, `findByCreatedBy(UUID, Pageable)`
@@ -176,6 +212,7 @@ Sprint 2 đã hoàn thành: Auth · Warehouse (CRUD, 2D layout, kiểm định) 
 #### 4.4. Services
 - [x] **`InventoryReceiptService.java`** — methods:
   - `createReceipt(UUID userId, CreateInventoryReceiptRequest)` → `InventoryReceiptResponse` 🔗 cập nhật `StockBatch`
+  - `createAdjustmentReceipt(UUID userId, UUID auditId, UUID warehouseId, List<{skuId, quantity, binId}> items)` → `InventoryReceiptResponse` — **internal**, được gọi bởi `InventoryAuditService.approveAudit()` để sinh phiếu điều chỉnh tự động với `referenceId = auditId`
   - `approveReceipt(UUID staffId, UUID receiptId)` → `InventoryReceiptResponse`
   - `getReceiptsByWarehouse(UUID warehouseId, DocumentType, Pageable)` → `PagedReceiptResponse`
 
@@ -191,7 +228,7 @@ Sprint 2 đã hoàn thành: Auth · Warehouse (CRUD, 2D layout, kiểm định) 
 
 ---
 
-## 🅱 DEV B — WMS Stock · Adjustment · Báo cáo tồn kho · Hook Notification
+## 🅱 DEV B — WMS Stock · Inventory Audit · Báo cáo tồn kho · Hook Notification
 
 ### ═══ MODULE 5: WMS — Lô Hàng Tồn Kho ═══
 
@@ -202,15 +239,15 @@ Sprint 2 đã hoàn thành: Auth · Warehouse (CRUD, 2D layout, kiểm định) 
 - [ ] **`StockBatchRepository.java`** — `findBySkuIdAndWarehouseId(UUID, UUID)`, `findByWarehouseId(UUID, Pageable)`, `findByBinId(UUID)`, `sumQuantityBySkuId(UUID)` (native/jpql query)
 
 #### 5.3. DTOs
-- [ ] **`StockBatchResponse.java`** — `id`, `skuCode`, `skuName`, `warehouseName`, `zoneName`, `rackName`, `binName`, `quantity`, `arrivalDate`
+- [ ] **`StockBatchResponse.java`** — `id`, `skuCode`, `skuName`, `uomSymbol` *(lấy từ `sku.getUom().getSymbol()`)*, `warehouseName`, `zoneName`, `rackName`, `binName`, `quantity`, `arrivalDate`
 - [ ] **`PagedStockBatchResponse.java`**
-- [ ] **`StockSummaryResponse.java`** — `skuId`, `skuCode`, `skuName`, `totalQuantity`, `locations[]`
+- [ ] **`StockSummaryResponse.java`** — `skuId`, `skuCode`, `skuName`, `uomSymbol`, `totalQuantity`, `locations[]`
 
 #### 5.4. Services
 - [ ] **`StockBatchService.java`** — methods:
   - `getStockByWarehouse(UUID tenantId, UUID warehouseId, Pageable)` → `PagedStockBatchResponse`
   - `getStockSummaryBySku(UUID tenantId, UUID skuId)` → `StockSummaryResponse` — tổng hợp số lượng theo SKU
-  - `adjustQuantity(UUID batchId, int delta)` — **internal**, gọi từ InventoryReceiptService và AdjustmentNoteService
+  - `adjustQuantity(UUID batchId, int delta)` — **internal**, gọi từ `InventoryReceiptService` khi approve phiếu INBOUND/OUTBOUND
   - `findOrCreateBatch(UUID skuId, UUID warehouseId, UUID zoneId, UUID rackId, UUID binId)` → `StockBatch` — **internal**
 
 #### 5.5. Controllers
@@ -224,47 +261,95 @@ Sprint 2 đã hoàn thành: Auth · Warehouse (CRUD, 2D layout, kiểm định) 
 
 ---
 
-### ═══ MODULE 6: WMS — Phiếu Điều Chỉnh Kho ═══
+### ═══ MODULE 6: WMS — Kiểm Kê Kho ═══
 
-#### 6.1. Entity
-- [ ] **`AdjustmentNote.java`** — `@Entity @Table("adjustment_notes")`, fields: `id (uuid)`, `batch_id FK→StockBatch`, `requested_by FK→User`, `approved_by FK→User (null)`, `quantityChange (int)`, `reason (text)`, `status (ApprovalStatus)`, `createdAt`
+> ⚠️ **THAY ĐỔI QUAN TRỌNG**: Module này đã **hoàn toàn thay thế** khái niệm "Phiếu Điều Chỉnh (`AdjustmentNote`)" theo yêu cầu của Mentor.
+> Khi phát hiện sai lệch sau kiểm kê, hệ thống **tự động sinh phiếu nhập/xuất điều chỉnh** thay vì dùng một bảng riêng.
 
-#### 6.2. Repository
-- [ ] **`AdjustmentNoteRepository.java`** — `findByRequestedBy(UUID, Pageable)`, `findByBatchId(UUID)`, `findByStatus(ApprovalStatus, Pageable)`
+#### 6.1. Entities
+- [ ] **`InventoryAudit.java`** — `@Entity @Table("inventory_audits")`, fields:
+  - `id (uuid, PK)`
+  - `warehouse_id FK→Warehouse (NOT NULL)`
+  - `requested_by FK→User (NOT NULL)` — Tenant/Staff yêu cầu kiểm kê
+  - `approved_by FK→User (null)` — Người duyệt kiểm kê
+  - `status (AuditStatus: PENDING / SUBMITTED / APPROVED / REJECTED)` — xem Enum bên dưới
+  - `note (text, null)` — ghi chú lý do kiểm kê
+  - `createdAt`, extend `BaseEntity`
+
+- [ ] **`InventoryAuditItem.java`** — `@Entity @Table("inventory_audit_items")`, fields:
+  - `id (uuid, PK)`
+  - `audit_id FK→InventoryAudit (NOT NULL)`
+  - `batch_id FK→StockBatch (NOT NULL)`
+  - `expectedQuantity (int)` — số lượng hệ thống đang ghi nhận tại thời điểm tạo phiếu
+  - `actualQuantity (int)` — số lượng thực đếm được
+  - `discrepancy (int, computed: actualQuantity - expectedQuantity)` — âm = thiếu, dương = thừa
+  - `note (text, null)` — ghi chú cho dòng hàng cụ thể
+
+- [ ] **`AuditStatus.java`** (Enum) — `PENDING`, `SUBMITTED`, `APPROVED`, `REJECTED`
+
+#### 6.2. Repositories
+- [ ] **`InventoryAuditRepository.java`** — `findByWarehouseId(UUID, Pageable)`, `findByRequestedBy(UUID, Pageable)`, `findByStatus(AuditStatus, Pageable)`
+- [ ] **`InventoryAuditItemRepository.java`** — `findByAuditId(UUID)`, `findByBatchId(UUID)`
 
 #### 6.3. DTOs
-- [ ] **`CreateAdjustmentRequest.java`** — `batchId`, `quantityChange (int, có thể âm nếu xuất)`, `reason`
-- [ ] **`AdjustmentNoteResponse.java`** — `id`, `batchInfo`, `quantityChange`, `reason`, `status`, `requestedBy`, `approvedBy`, `createdAt`
+- [ ] **`CreateInventoryAuditRequest.java`** — `warehouseId`, `note`
+- [ ] **`SubmitAuditRequest.java`** — `items: List<{batchId, actualQuantity, note}>`
+- [ ] **`InventoryAuditItemResponse.java`** — `id`, `batchId`, `skuCode`, `skuName`, `uomSymbol`, `expectedQuantity`, `actualQuantity`, `discrepancy`, `note`
+- [ ] **`InventoryAuditResponse.java`** — `id`, `warehouseId`, `warehouseName`, `status`, `note`, `requestedBy`, `approvedBy`, `createdAt`, `items: List<InventoryAuditItemResponse>`
+- [ ] **`PagedAuditResponse.java`**
 
-#### 6.4. Services
-- [ ] **`AdjustmentNoteService.java`** — methods:
-  - `requestAdjustment(UUID userId, CreateAdjustmentRequest)` → `AdjustmentNoteResponse`
-  - `approveAdjustment(UUID approverId, UUID adjustmentId)` → `AdjustmentNoteResponse` 🔗 gọi `StockBatchService.adjustQuantity()`
-  - `rejectAdjustment(UUID approverId, UUID adjustmentId, String reason)` → `AdjustmentNoteResponse`
-  - `getMyAdjustments(UUID userId, Pageable)` → `Page<AdjustmentNoteResponse>`
+#### 6.4. Service
+- [ ] **`InventoryAuditService.java`** — methods:
+  - `createAudit(UUID userId, CreateInventoryAuditRequest)` → `InventoryAuditResponse`
+    - Tạo phiếu kiểm kê với status `PENDING`.
+    - Tự động snapshot `expectedQuantity` từ `StockBatch.quantity` hiện tại cho từng lô hàng trong kho.
+  - `submitAudit(UUID userId, UUID auditId, SubmitAuditRequest)` → `InventoryAuditResponse`
+    - Người dùng điền số lượng thực tế `actualQuantity` và tính toán `discrepancy` cho từng dòng.
+    - Chuyển status sang `SUBMITTED`.
+  - `approveAudit(UUID approverId, UUID auditId)` → `InventoryAuditResponse`
+    - **Luồng chính:** Duyệt kiểm kê và tự động điều chỉnh tồn kho nếu có sai lệch.
+    - Với mỗi `InventoryAuditItem` có `discrepancy != 0`:
+      - Nếu `discrepancy > 0` (thừa): Tạo phiếu `InventoryReceipt` loại `INBOUND` điều chỉnh thông qua `inventoryReceiptService.createAdjustmentReceipt()` với `referenceId = auditId`.
+      - Nếu `discrepancy < 0` (thiếu): Tạo phiếu `InventoryReceipt` loại `OUTBOUND` điều chỉnh tương tự.
+    - Phiếu nhập/xuất tự động này sẽ được `InventoryReceiptService` xử lý và cập nhật `StockBatch.quantity` + ghi `InventoryTransaction`.
+    - Chuyển status sang `APPROVED`.
+  - `rejectAudit(UUID approverId, UUID auditId, String reason)` → `InventoryAuditResponse`
+    - Từ chối, chuyển status sang `REJECTED`.
+  - `getMyAudits(UUID userId, Pageable)` → `PagedAuditResponse`
+  - `getAuditDetail(UUID userId, UUID auditId)` → `InventoryAuditResponse`
 
-#### 6.5. Controllers
-- [ ] **`AdjustmentNoteController.java`** — `@RequestMapping("/api/tenant/inventory/adjustments")`, `@PreAuthorize("hasRole('TENANT')")`
+#### 6.5. Controller
+- [ ] **`InventoryAuditController.java`** — `@RequestMapping("/api/tenant/inventory/audits")`, `@PreAuthorize("hasRole('TENANT')")`
 
   | Method | Path | Mô tả |
   |--------|------|--------|
-  | `POST` | `/api/tenant/inventory/adjustments` | Tạo phiếu điều chỉnh số lượng |
-  | `GET` | `/api/tenant/inventory/adjustments` | Danh sách phiếu điều chỉnh |
-  | `PATCH` | `/api/tenant/inventory/adjustments/{id}/approve` | Duyệt điều chỉnh |
-  | `PATCH` | `/api/tenant/inventory/adjustments/{id}/reject` | Từ chối điều chỉnh |
+  | `POST` | `/api/tenant/inventory/audits` | Tạo phiếu kiểm kê mới |
+  | `GET` | `/api/tenant/inventory/audits` | Danh sách phiếu kiểm kê (phân trang) |
+  | `GET` | `/api/tenant/inventory/audits/{id}` | Chi tiết phiếu kiểm kê |
+  | `POST` | `/api/tenant/inventory/audits/{id}/submit` | Nộp kết quả kiểm đếm thực tế |
+  | `PATCH` | `/api/tenant/inventory/audits/{id}/approve` | Duyệt kiểm kê (tự động điều chỉnh tồn kho) |
+  | `PATCH` | `/api/tenant/inventory/audits/{id}/reject` | Từ chối kiểm kê |
 
 ---
 
 ### ═══ MODULE 7: WMS — Giao dịch Tồn Kho (Audit Trail) ═══
 
+> ⚠️ **THAY ĐỔI**: Cột `adjustment_id` đã bị **xóa**. Cột `receipt_id` bắt buộc `NOT NULL`.
+> Mọi thay đổi số lượng kho phải đi qua `InventoryReceipt` — kể cả các thay đổi phát sinh từ kiểm kê.
+
 #### 7.1. Entity
-- [ ] **`InventoryTransaction.java`** — `@Entity @Table("inventory_transactions")`, fields: `id (uuid)`, `receipt_id FK→InventoryReceipt (null)`, `adjustment_id FK→AdjustmentNote (null)`, `batch_id FK→StockBatch`, `quantityChanged (int)`, `createdAt`
+- [ ] **`InventoryTransaction.java`** — `@Entity @Table("inventory_transactions")`, fields:
+  - `id (uuid, PK)`
+  - `receipt_id FK→InventoryReceipt (NOT NULL)` — mọi giao dịch **bắt buộc** có phiếu nhập/xuất nguồn gốc (bao gồm cả phiếu tự động sinh từ kiểm kê)
+  - `batch_id FK→StockBatch (NOT NULL)`
+  - `quantityChanged (int)` — số dương: nhập thêm; số âm: xuất ra
+  - `createdAt`
 
 #### 7.2. Repository
 - [ ] **`InventoryTransactionRepository.java`** — `findByBatchId(UUID, Pageable)`, `findByReceiptId(UUID)`
 
-#### 7.3. Service (thêm method vào `InventoryReceiptService` hoặc tách riêng)
-- [ ] `recordTransaction(UUID receiptId, UUID adjustmentId, UUID batchId, int qty)` — **internal**
+#### 7.3. Service (thêm method vào `InventoryReceiptService`)
+- [ ] `recordTransaction(UUID receiptId, UUID batchId, int qty)` — **internal**, gọi sau khi approve phiếu nhập/xuất
 - [ ] `getTransactionsByBatch(UUID batchId, Pageable)` → `Page<InventoryTransactionResponse>`
 
 #### 7.4. Controller (gộp vào StockBatchController hoặc tách riêng)
@@ -283,6 +368,8 @@ Sprint 2 đã hoàn thành: Auth · Warehouse (CRUD, 2D layout, kiểm định) 
 - [ ] **`DisputeService.raiseDispute()`** → push cho Admin/Inspector: `"Có tranh chấp mới cần xử lý"`
 - [ ] **`WalletService.topUp()`** (sau khi webhook SePay xác nhận) → push cho User: `"Ví đã được nạp {amount} VNĐ thành công"`
 - [ ] **`WithdrawService.approveWithdraw()`** → push cho User: `"Yêu cầu rút tiền {amount} VNĐ đã được duyệt"`
+- [ ] **`InventoryAuditService.approveAudit()`** → push cho User yêu cầu kiểm kê: `"Phiếu kiểm kê kho {warehouseName} đã được duyệt. Tồn kho đã được điều chỉnh tự động."`
+- [ ] **`InventoryAuditService.rejectAudit()`** → push cho User yêu cầu kiểm kê: `"Phiếu kiểm kê kho {warehouseName} bị từ chối. Lý do: {reason}"`
 
 ---
 
@@ -294,7 +381,7 @@ Sprint 2 đã hoàn thành: Auth · Warehouse (CRUD, 2D layout, kiểm định) 
   | Method | Path | Mô tả |
   |--------|------|--------|
   | `GET` | `/api/admin/inventory/receipts` | Xem tất cả phiếu nhập/xuất kho toàn hệ thống |
-  | `GET` | `/api/admin/inventory/adjustments` | Xem tất cả phiếu điều chỉnh toàn hệ thống |
+  | `GET` | `/api/admin/inventory/audits` | Xem tất cả phiếu kiểm kê toàn hệ thống |
   | `GET` | `/api/admin/inventory/stock` | Tổng hợp tồn kho toàn hệ thống theo warehouse |
 
 ---
@@ -302,12 +389,17 @@ Sprint 2 đã hoàn thành: Auth · Warehouse (CRUD, 2D layout, kiểm định) 
 ## 🔧 DÙNG CHUNG — Cả 2 Dev cần làm
 
 ### ErrorCode mới (thêm vào `ErrorCode.java`)
-- [ ] **Notification:** `NOTIFICATION_NOT_FOUND`
-- [ ] **Product:** `PRODUCT_CATEGORY_NOT_FOUND`, `SKU_NOT_FOUND`, `SKU_CODE_DUPLICATE`
-- [ ] **Stock:** `STOCK_BATCH_NOT_FOUND`, `STOCK_INSUFFICIENT_QUANTITY`
-- [ ] **Receipt:** `INVENTORY_RECEIPT_NOT_FOUND`, `INVENTORY_RECEIPT_ALREADY_APPROVED`
-- [ ] **Adjustment:** `ADJUSTMENT_NOT_FOUND`, `ADJUSTMENT_ALREADY_PROCESSED`
-- [ ] **Bin:** `WAREHOUSE_BIN_NOT_FOUND`
+
+#### ✅ Dev A đã thêm (không cần làm lại)
+- `NOTIFICATION_NOT_FOUND`
+- `PRODUCT_CATEGORY_NOT_FOUND`, `SKU_NOT_FOUND`, `SKU_CODE_DUPLICATE`
+- `INVENTORY_RECEIPT_NOT_FOUND`, `INVENTORY_RECEIPT_ALREADY_APPROVED`
+- `WAREHOUSE_BIN_NOT_FOUND`
+- `UOM_NOT_FOUND` *(mới thêm cùng với refactor UOM)*
+
+#### ⬜ Dev B cần thêm
+- **Stock:** `STOCK_BATCH_NOT_FOUND`, `STOCK_INSUFFICIENT_QUANTITY`
+- **Audit:** `AUDIT_NOT_FOUND`, `AUDIT_ALREADY_PROCESSED`, `AUDIT_INVALID_STATUS`
 
 ---
 
@@ -319,20 +411,20 @@ wms/
   product/
     controller/     — TenantProductController
     dto/
-    entity/         — ProductCategory, ProductSku
-    repository/
+    entity/         — ProductCategory, ProductSku, UnitOfMeasure
+    repository/     — ProductCategoryRepository, ProductSkuRepository, UnitOfMeasureRepository
     service/        — ProductCategoryService, ProductSkuService
   stock/
-    controller/     — StockBatchController, AdjustmentNoteController
+    controller/     — StockBatchController, InventoryAuditController
     dto/
-    entity/         — StockBatch, AdjustmentNote, InventoryTransaction
-    repository/
-    service/        — StockBatchService, AdjustmentNoteService
+    entity/         — StockBatch, InventoryAudit, InventoryAuditItem, AuditStatus
+    repository/     — StockBatchRepository, InventoryAuditRepository, InventoryAuditItemRepository
+    service/        — StockBatchService, InventoryAuditService
   receipt/
     controller/     — InventoryReceiptController
     dto/
-    entity/         — InventoryReceipt, InventoryReceiptItem
-    repository/
+    entity/         — InventoryReceipt, InventoryReceiptItem, InventoryTransaction
+    repository/     — InventoryReceiptRepository, InventoryTransactionRepository
     service/        — InventoryReceiptService
 notification/
   controller/       — NotificationController
@@ -357,17 +449,37 @@ public enum DocumentType {
 }
 ```
 
+### AuditStatus Enum (MỚI — Dev B tạo)
+```java
+public enum AuditStatus {
+    PENDING,    // Vừa tạo, chưa điền kết quả
+    SUBMITTED,  // Đã nộp kết quả kiểm đếm, chờ duyệt
+    APPROVED,   // Đã duyệt, tồn kho đã được điều chỉnh
+    REJECTED    // Bị từ chối
+}
+```
+
+### Lưu ý khi build DTO liên quan đến SKU (QUAN TRỌNG cho Dev B)
+```java
+// SAI — unit không còn là String nữa
+String unit = sku.getUnit();
+
+// ĐÚNG — lấy từ thực thể UnitOfMeasure
+String uomSymbol = sku.getUom().getSymbol(); // ví dụ: "kg", "cái", "thùng"
+String uomName   = sku.getUom().getName();   // ví dụ: "Kilogram", "Cái", "Thùng"
+```
+
 ---
 
-## 🚀 Thứ Tự Implement Đề Xuất
+## 🚀 Thứ Tự Implement Đề Xuất (Cập nhật)
 
 | Ngày | Dev A | Dev B |
 |------|-------|-------|
-| 1 | ⬜ `WarehouseBin` entity + repo (sync point) + `NotificationService` skeleton | ⬜ `StockBatch` entity + repo + service skeleton |
-| 2 | ⬜ `NotificationController` + Hook thông báo vào Warehouse/Inspection flow | ⬜ `ProductCategory` + `ProductSku` entity + service + controller |
-| 3 | ⬜ `OwnerLayoutController` (Zone/Rack/Bin CRUD) + endpoint sơ đồ 2D | ⬜ `AdjustmentNote` entity + service + controller |
-| 4 | ⬜ `ProductCategoryService` + `ProductSkuService` + `TenantProductController` | ⬜ Hook Notification vào Booking/Wallet/Contract flow |
+| 1 | ✅ `WarehouseBin` entity + repo (sync point) + `NotificationService` skeleton | ⬜ `StockBatch` entity + repo + service skeleton |
+| 2 | ✅ `NotificationController` + Hook thông báo vào Warehouse/Inspection flow | ⬜ `InventoryAudit` + `InventoryAuditItem` entity + repo |
+| 3 | ✅ `OwnerLayoutController` (Zone/Rack/Bin CRUD) + endpoint sơ đồ 2D | ⬜ `InventoryAuditService` (createAudit, submitAudit, approveAudit với auto-receipt) |
+| 4 | ✅ `ProductCategoryService` + `ProductSkuService` + `TenantProductController` | ⬜ `InventoryAuditController` + `StockBatchController` |
 | 5 | ✅ `InventoryReceipt` + `InventoryReceiptItem` entity + service | ✅ `InventoryTransaction` entity + audit trail service |
-| 6 | ✅ `InventoryReceiptController` + wire update StockBatch | ⬜ `AdminInventoryController` |
-| 7 | ✅ Integration test: luồng nhập/xuất kho đầy đủ | ⬜ Integration test: tồn kho + thông báo end-to-end |
-| 8+ | ⬜ End-to-end test toàn bộ WMS Phase 2 | ⬜ Fix bugs + Performance test |
+| 6 | ✅ `InventoryReceiptController` + wire update StockBatch | ⬜ Hook Notification vào Booking/Wallet/Contract + Audit flow |
+| 7 | ✅ Integration test: luồng nhập/xuất kho đầy đủ | ⬜ `AdminInventoryController` |
+| 8+ | ⬜ End-to-end test toàn bộ WMS Phase 2 | ⬜ Integration test: tồn kho + kiểm kê + thông báo end-to-end |
