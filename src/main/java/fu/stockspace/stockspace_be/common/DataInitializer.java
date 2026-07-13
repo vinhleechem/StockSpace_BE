@@ -13,6 +13,8 @@ import fu.stockspace.stockspace_be.subscription.entity.ServicePackage;
 import fu.stockspace.stockspace_be.subscription.repository.ServicePackageRepository;
 import fu.stockspace.stockspace_be.common.entity.SystemConfig;
 import fu.stockspace.stockspace_be.common.repository.SystemConfigRepository;
+import fu.stockspace.stockspace_be.wms.product.entity.UnitOfMeasure;
+import fu.stockspace.stockspace_be.wms.product.repository.UnitOfMeasureRepository;
 import java.math.BigDecimal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +40,7 @@ public class DataInitializer implements CommandLineRunner {
     private final ServicePackageRepository packageRepository;
     private final SystemConfigRepository systemConfigRepository;
     private final fu.stockspace.stockspace_be.wallet.repository.WalletRepository walletRepository;
+    private final UnitOfMeasureRepository uomRepository;
     @Override
     @Transactional
     public void run(String... args) throws Exception {
@@ -90,6 +93,8 @@ public class DataInitializer implements CommandLineRunner {
         seedDefaultPackages();
         // 6. Khởi tạo cấu hình hệ thống mặc định
         seedSystemConfig();
+        // 7. Khởi tạo Đơn vị tính (UOM) mặc định
+        seedDefaultUoms();
         log.info("DataInitializer finished seeding successfully!");
     }
     private Permission getOrCreatePermission(String name, String description) {
@@ -217,6 +222,18 @@ public class DataInitializer implements CommandLineRunner {
                     .description("Phí gửi yêu cầu kiểm định kho bãi")
                     .build());
             log.info("Seeded inspection_fee system configuration successfully");
+        }
+    }
+
+    private void seedDefaultUoms() {
+        if (uomRepository.count() == 0) {
+            log.info("Seeding default UOMs...");
+            uomRepository.save(UnitOfMeasure.builder().code("CAI").name("Cái/Chiếc").description("Đơn vị đếm lẻ").build());
+            uomRepository.save(UnitOfMeasure.builder().code("THUNG").name("Thùng").description("Đơn vị đóng thùng").build());
+            uomRepository.save(UnitOfMeasure.builder().code("HOP").name("Hộp").description("Đơn vị đóng hộp").build());
+            uomRepository.save(UnitOfMeasure.builder().code("KG").name("Kg").description("Kilogram").build());
+            uomRepository.save(UnitOfMeasure.builder().code("BAO").name("Bao").description("Đơn vị đóng bao").build());
+            uomRepository.save(UnitOfMeasure.builder().code("KHOI").name("Khối").description("Mét khối (m3)").build());
         }
     }
 }
