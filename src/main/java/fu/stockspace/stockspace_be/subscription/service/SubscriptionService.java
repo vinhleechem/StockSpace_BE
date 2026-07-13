@@ -45,23 +45,14 @@ public class SubscriptionService {
         if (hasActive) {
             throw new BadRequestException(ErrorCode.SUBSCRIPTION_ALREADY_ACTIVE);
         }
-        UUID subscriptionId = UUID.randomUUID();
-        // 2. Trừ tiền ví (nếu thiếu tiền, walletService sẽ tự ném lỗi WALLET_INSUFFICIENT_BALANCE)
-        walletService.deductBalance(
-                tenantId,
-                servicePackage.getPrice(),
-                TransactionType.PACKAGE_PAYMENT,
-                "Mua gói dịch vụ: " + servicePackage.getName(),
-                null,
-                subscriptionId
-        );
-        // 3. Kích hoạt Subscription mới
+        // 2. Kích hoạt Subscription mới (Lưu trước để Hibernate tự generate ID)
         User tenant = userRepository.findById(tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+
         LocalDate startDate = LocalDate.now();
         LocalDate endDate = startDate.plusDays(servicePackage.getDurationDays());
+
         Subscription subscription = Subscription.builder()
-                .id(subscriptionId)
                 .tenant(tenant)
                 .servicePackage(servicePackage)
                 .startDate(startDate)
@@ -69,8 +60,20 @@ public class SubscriptionService {
                 .status(SubscriptionStatus.ACTIVE)
                 .build();
         subscription = subscriptionRepository.save(subscription);
+
+        // 3. Trừ tiền ví (Truyền ID của gói vừa tạo vào reference)
+        walletService.deductBalance(
+                tenantId,
+                servicePackage.getPrice(),
+                TransactionType.PACKAGE_PAYMENT,
+                "Mua gói dịch vụ: " + servicePackage.getName(),
+                null,
+                subscription.getId()
+        );
+
         log.info("Subscription Service: Tenant {} purchased package '{}' successfully. Subscription ID: {}", 
-                tenantId, servicePackage.getName(), subscriptionId);
+                tenantId, servicePackage.getName(), subscription.getId());
+
         return mapToResponse(subscription);
     }
     /**
