@@ -112,7 +112,12 @@ public enum ErrorCode {
     RECEIPT_ALREADY_PROCESSED("Phiếu xuất nhập kho đã được xử lý", HttpStatus.BAD_REQUEST),
     CONFIG_NOT_FOUND("Cấu hình hệ thống không tồn tại", HttpStatus.NOT_FOUND),
     CONFIG_INVALID_VALUE("Giá trị cấu hình không hợp lệ", HttpStatus.BAD_REQUEST),
-    UOM_NOT_FOUND("Không tìm thấy đơn vị tính", HttpStatus.NOT_FOUND);
+    UOM_NOT_FOUND("Không tìm thấy đơn vị tính", HttpStatus.NOT_FOUND),
+
+    // Inventory Audit Errors (Dev B)
+    AUDIT_NOT_FOUND("Không tìm thấy phiếu kiểm kê", HttpStatus.NOT_FOUND),
+    AUDIT_ALREADY_PROCESSED("Phiếu kiểm kê đã được xử lý (APPROVED/REJECTED)", HttpStatus.BAD_REQUEST),
+    AUDIT_INVALID_STATUS("Trạng thái phiếu kiểm kê không hợp lệ để thực hiện hành động này", HttpStatus.BAD_REQUEST);
 
     private final String message;
     private final HttpStatus status;

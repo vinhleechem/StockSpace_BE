@@ -1,0 +1,212 @@
+package fu.stockspace.stockspace_be.wms.stock.service;
+
+import fu.stockspace.stockspace_be.common.exception.ErrorCode;
+import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
+import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
+import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
+import fu.stockspace.stockspace_be.warehouse.entity.WarehouseBin;
+import fu.stockspace.stockspace_be.warehouse.entity.WarehouseRack;
+import fu.stockspace.stockspace_be.warehouse.entity.WarehouseZone;
+import fu.stockspace.stockspace_be.warehouse.repository.WarehouseBinRepository;
+import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRackRepository;
+import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
+import fu.stockspace.stockspace_be.warehouse.repository.WarehouseZoneRepository;
+import fu.stockspace.stockspace_be.wms.product.entity.ProductSku;
+import fu.stockspace.stockspace_be.wms.product.entity.UnitOfMeasure;
+import fu.stockspace.stockspace_be.wms.product.repository.ProductSkuRepository;
+import fu.stockspace.stockspace_be.wms.stock.dto.PagedStockBatchResponse;
+import fu.stockspace.stockspace_be.wms.stock.dto.StockBatchResponse;
+import fu.stockspace.stockspace_be.wms.stock.dto.StockLocationDto;
+import fu.stockspace.stockspace_be.wms.stock.dto.StockSummaryResponse;
+import fu.stockspace.stockspace_be.wms.stock.entity.StockBatch;
+import fu.stockspace.stockspace_be.wms.stock.repository.StockBatchRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class StockBatchService {
+
+    private final StockBatchRepository stockBatchRepository;
+    private final WarehouseRepository warehouseRepository;
+    private final ProductSkuRepository productSkuRepository;
+    private final WarehouseZoneRepository zoneRepository;
+    private final WarehouseRackRepository rackRepository;
+    private final WarehouseBinRepository binRepository;
+    private final SubscriptionService subscriptionService;
+
+    /**
+     * Lấy danh sách toàn bộ tồn kho trong 1 kho (phân trang).
+     * Tenant phải có subscription active.
+     */
+    @Transactional(readOnly = true)
+    public PagedStockBatchResponse getStockByWarehouse(UUID tenantId, UUID warehouseId, Pageable pageable) {
+        if (!subscriptionService.hasActiveSubscription(tenantId)) {
+            throw new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED);
+        }
+
+        Warehouse warehouse = warehouseRepository.findById(warehouseId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
+
+        Page<StockBatch> page = stockBatchRepository.findByWarehouseIdAndIsDeletedFalse(warehouseId, pageable);
+
+        List<StockBatchResponse> content = page.getContent().stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+
+        return PagedStockBatchResponse.builder()
+                .content(content)
+                .pageNo(page.getNumber())
+                .pageSize(page.getSize())
+                .totalElements(page.getTotalElements())
+                .totalPages(page.getTotalPages())
+                .last(page.isLast())
+                .build();
+    }
+
+    /**
+     * Tổng hợp tồn kho theo SKU — tổng số lượng + danh sách vị trí phân tán.
+     */
+    @Transactional(readOnly = true)
+    public StockSummaryResponse getStockSummaryBySku(UUID tenantId, UUID skuId) {
+        if (!subscriptionService.hasActiveSubscription(tenantId)) {
+            throw new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED);
+        }
+
+        ProductSku sku = productSkuRepository.findByIdAndIsDeletedFalse(skuId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.SKU_NOT_FOUND));
+
+        UnitOfMeasure uom = sku.getUom();
+        List<StockBatch> batches = stockBatchRepository.findBySkuIdAndIsDeletedFalse(skuId);
+        int totalQuantity = batches.stream().mapToInt(StockBatch::getQuantity).sum();
+
+        List<StockLocationDto> locations = batches.stream()
+                .map(b -> StockLocationDto.builder()
+                        .batchId(b.getId())
+                        .zoneName(b.getZone() != null ? b.getZone().getName() : null)
+                        .rackName(b.getRack() != null ? b.getRack().getName() : null)
+                        .binName(b.getBin() != null ? b.getBin().getName() : null)
+                        .quantity(b.getQuantity())
+                        .build())
+                .collect(Collectors.toList());
+
+        return StockSummaryResponse.builder()
+                .skuId(sku.getId())
+                .skuCode(sku.getSkuCode())
+                .skuName(sku.getName())
+                .uomSymbol(uom != null ? uom.getCode() : null)
+                .uomName(uom != null ? uom.getName() : null)
+                .totalQuantity(totalQuantity)
+                .locations(locations)
+                .build();
+    }
+
+    /**
+     * Điều chỉnh số lượng lô hàng (internal — được gọi từ InventoryReceiptService).
+     */
+    @Transactional
+    public void adjustQuantity(UUID batchId, int delta) {
+        StockBatch batch = stockBatchRepository.findByIdAndIsDeletedFalse(batchId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STOCK_BATCH_NOT_FOUND));
+        int newQty = batch.getQuantity() + delta;
+        if (newQty < 0) {
+            throw new BadRequestException(ErrorCode.STOCK_INSUFFICIENT_QUANTITY);
+        }
+        batch.setQuantity(newQty);
+        stockBatchRepository.save(batch);
+        log.info("WMS Stock: Adjusted batch {} quantity by {} → new qty={}", batchId, delta, newQty);
+    }
+
+    /**
+     * Tìm lô hàng theo vị trí hoặc tạo mới nếu chưa tồn tại (internal).
+     */
+    @Transactional
+    public StockBatch findOrCreateBatch(UUID skuId, UUID warehouseId, UUID zoneId, UUID rackId, UUID binId) {
+        return stockBatchRepository
+                .findBySkuIdAndWarehouseIdAndZoneIdAndRackIdAndBinIdAndIsDeletedFalse(
+                        skuId, warehouseId, zoneId, rackId, binId)
+                .orElseGet(() -> {
+                    Warehouse warehouse = warehouseRepository.findById(warehouseId)
+                            .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
+                    WarehouseZone zone = zoneId != null
+                            ? zoneRepository.findById(zoneId).orElse(null)
+                            : null;
+                    WarehouseRack rack = rackId != null
+                            ? rackRepository.findById(rackId).orElse(null)
+                            : null;
+                    WarehouseBin bin = binId != null
+                            ? binRepository.findById(binId).orElse(null)
+                            : null;
+
+                    StockBatch newBatch = StockBatch.builder()
+                            .skuId(skuId)
+                            .warehouse(warehouse)
+                            .zone(zone)
+                            .rack(rack)
+                            .bin(bin)
+                            .quantity(0)
+                            .arrivalDate(LocalDateTime.now())
+                            .build();
+                    return stockBatchRepository.save(newBatch);
+                });
+    }
+
+    // ==================== Mapper ====================
+
+    public StockBatchResponse mapToResponse(StockBatch b) {
+        ProductSku sku = productSkuRepository.findByIdAndIsDeletedFalse(b.getSkuId()).orElse(null);
+        UnitOfMeasure uom = sku != null ? sku.getUom() : null;
+
+        return StockBatchResponse.builder()
+                .id(b.getId())
+                .skuId(b.getSkuId())
+                .skuCode(sku != null ? sku.getSkuCode() : null)
+                .skuName(sku != null ? sku.getName() : null)
+                .uomSymbol(uom != null ? uom.getCode() : null)
+                .uomName(uom != null ? uom.getName() : null)
+                .warehouseId(b.getWarehouse() != null ? b.getWarehouse().getId() : null)
+                .warehouseName(b.getWarehouse() != null ? b.getWarehouse().getName() : null)
+                .zoneId(b.getZone() != null ? b.getZone().getId() : null)
+                .zoneName(b.getZone() != null ? b.getZone().getName() : null)
+                .rackId(b.getRack() != null ? b.getRack().getId() : null)
+                .rackName(b.getRack() != null ? b.getRack().getName() : null)
+                .binId(b.getBin() != null ? b.getBin().getId() : null)
+                .binName(b.getBin() != null ? b.getBin().getName() : null)
+                .quantity(b.getQuantity())
+                .arrivalDate(b.getArrivalDate())
+                .createdAt(b.getCreatedAt())
+                .updatedAt(b.getUpdatedAt())
+                .build();
+    }
+
+    /**
+     * Admin xem tồn kho theo warehouse — không cần kiểm tra subscription.
+     */
+    @Transactional(readOnly = true)
+    public PagedStockBatchResponse getAdminStockByWarehouse(UUID warehouseId, Pageable pageable) {
+        Page<StockBatch> page = stockBatchRepository.findByWarehouseIdAndIsDeletedFalse(warehouseId, pageable);
+        List<StockBatchResponse> content = page.getContent().stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+        return PagedStockBatchResponse.builder()
+                .content(content)
+                .pageNo(page.getNumber())
+                .pageSize(page.getSize())
+                .totalElements(page.getTotalElements())
+                .totalPages(page.getTotalPages())
+                .last(page.isLast())
+                .build();
+    }
+}

@@ -18,6 +18,7 @@ import fu.stockspace.stockspace_be.warehouse.service.WarehouseService;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseLayoutService;
 import fu.stockspace.stockspace_be.wallet.service.WalletService;
 import fu.stockspace.stockspace_be.wallet.entity.TransactionType;
+import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
@@ -46,6 +47,7 @@ public class ContractService {
     private final UserRepository userRepository;
     private final WalletService walletService;
     private final WarehouseLayoutService warehouseLayoutService;
+    private final NotificationService notificationService;
     // ==================== Internal ====================
     /**
      * Tạo RentalContract từ BookingRequest đã được APPROVED.
@@ -213,6 +215,21 @@ public class ContractService {
         contract.setSubmittedAt(LocalDateTime.now());
         contract = contractRepository.save(contract);
         log.info("Contract {} status updated to PENDING_TENANT_CONFIRM", contractId);
+
+        // Push thông báo cho Tenant (Module 8 — Dev B)
+        try {
+            UUID tenantId = contract.getBooking().getTenant().getId();
+            String warehouseName = contract.getBooking().getWarehouse().getName();
+            notificationService.push(
+                    tenantId,
+                    "Hợp đồng cần xác nhận",
+                    "Owner đã cập nhật hợp đồng kho " + warehouseName + ". Bạn có 7 ngày để ký xác nhận.",
+                    "CONTRACT"
+            );
+        } catch (Exception e) {
+            log.warn("Failed to push contract notification to tenant: {}", e.getMessage());
+        }
+
         return mapToResponse(contract);
     }
     /**

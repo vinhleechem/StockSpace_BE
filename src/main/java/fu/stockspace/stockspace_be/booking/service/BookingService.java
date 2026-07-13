@@ -21,6 +21,7 @@ import fu.stockspace.stockspace_be.warehouse.service.WarehouseService;
 import fu.stockspace.stockspace_be.wallet.service.WalletService;
 import fu.stockspace.stockspace_be.wallet.entity.TransactionType;
 import fu.stockspace.stockspace_be.common.service.SystemConfigService;
+import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -62,6 +63,7 @@ public class BookingService {
     private final SystemPolicyRepository systemPolicyRepository;
     private final WalletService walletService;
     private final SystemConfigService systemConfigService;
+    private final NotificationService notificationService;
     // ==================== Tenant ====================
     /**
      * Tenant gửi yêu cầu thuê kho.
@@ -121,6 +123,18 @@ public class BookingService {
                 booking.getId(),
                 null
         );
+
+        // Push thông báo cho Owner
+        try {
+            notificationService.push(
+                    warehouse.getOwner().getId(),
+                    "Có yêu cầu thuê kho mới",
+                    "Có yêu cầu thuê kho mới cho " + warehouse.getName() + ". Vui lòng xem và phản hồi.",
+                    "BOOKING"
+            );
+        } catch (Exception e) {
+            log.warn("Failed to push notification to owner {}: {}", warehouse.getOwner().getId(), e.getMessage());
+        }
 
         log.info("Booking request created & deposit deducted: {} (tenant={}, warehouse={}, depositAmount={})",
                 booking.getId(), tenantId, warehouse.getId(), depositAmount);
@@ -192,6 +206,19 @@ public class BookingService {
         contractService.createContractFromBooking(booking.getId());
         // Đổi warehouse sang RENTED
         warehouseService.markAsRented(booking.getWarehouse().getId());
+
+        // Push thông báo cho Tenant
+        try {
+            notificationService.push(
+                    booking.getTenant().getId(),
+                    "Yêu cầu thuê kho được chấp nhận",
+                    "Yêu cầu thuê kho " + booking.getWarehouse().getName() + " đã được chấp nhận!",
+                    "BOOKING"
+            );
+        } catch (Exception e) {
+            log.warn("Failed to push approve notification to tenant: {}", e.getMessage());
+        }
+
         log.info("Owner {} approved booking {} — warehouse {} is now RENTED",
                 ownerId, bookingId, booking.getWarehouse().getId());
         return mapToResponse(booking);
@@ -216,6 +243,18 @@ public class BookingService {
                 booking.getId(),
                 null
         );
+
+        // Push thông báo cho Tenant
+        try {
+            notificationService.push(
+                    booking.getTenant().getId(),
+                    "Yêu cầu thuê kho bị từ chối",
+                    "Yêu cầu thuê kho " + booking.getWarehouse().getName() + " bị từ chối.",
+                    "BOOKING"
+            );
+        } catch (Exception e) {
+            log.warn("Failed to push reject notification to tenant: {}", e.getMessage());
+        }
 
         log.info("Owner {} rejected booking {} (reason: {})", ownerId, bookingId, reason);
         return mapToResponse(booking);

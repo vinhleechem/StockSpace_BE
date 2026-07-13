@@ -19,6 +19,7 @@ import fu.stockspace.stockspace_be.warehouse.repository.WarehouseZoneRepository;
 import fu.stockspace.stockspace_be.wms.product.entity.ProductSku;
 import fu.stockspace.stockspace_be.wms.product.repository.ProductSkuRepository;
 import fu.stockspace.stockspace_be.wms.receipt.dto.*;
+import fu.stockspace.stockspace_be.wms.receipt.dto.InventoryTransactionResponse;
 import fu.stockspace.stockspace_be.wms.receipt.entity.DocumentType;
 import fu.stockspace.stockspace_be.wms.receipt.entity.InventoryReceipt;
 import fu.stockspace.stockspace_be.wms.receipt.entity.InventoryReceiptItem;
@@ -268,5 +269,106 @@ public class InventoryReceiptService {
                 .createdAt(receipt.getCreatedAt())
                 .updatedAt(receipt.getUpdatedAt())
                 .build();
+    }
+
+    // ========== MODULE 7 / Dev B: Adjustment Receipt + Transaction Audit Trail ==========
+
+    /**
+     * Tạo phiếu nhập/xuất điều chỉnh tự động từ kết quả kiểm kê.
+     * Internal — chỉ được gọi bởi InventoryAuditService.approveAudit().
+     */
+    @Transactional
+    public InventoryReceipt createAdjustmentReceipt(
+            UUID userId, UUID auditId, UUID warehouseId,
+            DocumentType type, UUID batchId, int quantity) {
+
+        User creator = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+        Warehouse warehouse = warehouseRepository.findById(warehouseId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
+
+        // Tạo phiếu điều chỉnh — tự động duyệt ngay, referenceId = auditId
+        InventoryReceipt receipt = InventoryReceipt.builder()
+                .warehouse(warehouse)
+                .createdBy(creator)
+                .type(type)
+                .signatureData(null)
+                .status(ApprovalStatus.APPROVED)
+                .referenceId(auditId)
+                .build();
+        receipt = receiptRepository.save(receipt);
+
+        // Lấy StockBatch
+        StockBatch batch = stockBatchRepository.findById(batchId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STOCK_BATCH_NOT_FOUND));
+        ProductSku sku = productSkuRepository.findByIdAndIsDeletedFalse(batch.getSkuId())
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.SKU_NOT_FOUND));
+
+        InventoryReceiptItem item = InventoryReceiptItem.builder()
+                .receipt(receipt)
+                .sku(sku)
+                .quantity(quantity)
+                .zone(batch.getZone())
+                .rack(batch.getRack())
+                .bin(batch.getBin())
+                .note("Điều chỉnh tự động từ kiểm kê #" + auditId)
+                .build();
+        receiptItemRepository.save(item);
+
+        // Cập nhật StockBatch.quantity
+        int delta = (type == DocumentType.INBOUND) ? quantity : -quantity;
+        batch.setQuantity(batch.getQuantity() + delta);
+        stockBatchRepository.save(batch);
+
+        // Ghi InventoryTransaction
+        InventoryTransaction transaction = InventoryTransaction.builder()
+                .receipt(receipt)
+                .batch(batch)
+                .quantityChanged(delta)
+                .build();
+        transactionRepository.save(transaction);
+
+        log.info("WMS AdjustmentReceipt: Created {} receipt for audit {} (batch={}, qty={})",
+                type, auditId, batchId, quantity);
+        return receipt;
+    }
+
+    /**
+     * Ghi nhật ký giao dịch kho (internal helper).
+     */
+    @Transactional
+    public void recordTransaction(UUID receiptId, UUID batchId, int qty) {
+        InventoryReceipt receipt = receiptRepository.findById(receiptId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RECEIPT_NOT_FOUND));
+        StockBatch batch = stockBatchRepository.findById(batchId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STOCK_BATCH_NOT_FOUND));
+        InventoryTransaction tx = InventoryTransaction.builder()
+                .receipt(receipt)
+                .batch(batch)
+                .quantityChanged(qty)
+                .build();
+        transactionRepository.save(tx);
+    }
+
+    /**
+     * Xem lịch sử biến động số lượng của một lô hàng (Module 7 endpoint).
+     */
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<InventoryTransactionResponse> getTransactionsByBatch(
+            UUID batchId, org.springframework.data.domain.Pageable pageable) {
+        return transactionRepository.findByBatchId(batchId, pageable)
+                .map(t -> {
+                    ProductSku sku = productSkuRepository
+                            .findByIdAndIsDeletedFalse(t.getBatch().getSkuId()).orElse(null);
+                    return InventoryTransactionResponse.builder()
+                            .id(t.getId())
+                            .receiptId(t.getReceipt().getId())
+                            .batchId(t.getBatch().getId())
+                            .skuCode(sku != null ? sku.getSkuCode() : null)
+                            .skuName(sku != null ? sku.getName() : null)
+                            .quantityChanged(t.getQuantityChanged())
+                            .createdAt(t.getCreatedAt())
+                            .build();
+                });
     }
 }

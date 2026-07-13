@@ -11,6 +11,7 @@ import fu.stockspace.stockspace_be.wallet.entity.*;
 import fu.stockspace.stockspace_be.wallet.repository.TransactionRepository;
 import fu.stockspace.stockspace_be.wallet.repository.WalletRepository;
 import fu.stockspace.stockspace_be.wallet.repository.WithdrawRequestRepository;
+import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -29,6 +30,7 @@ public class WithdrawService {
     private final TransactionRepository transactionRepository;
     private final UserRepository userRepository;
     private final WalletService walletService;
+    private final NotificationService notificationService;
     /**
      * Tạo yêu cầu rút tiền mới. Khấu trừ số dư ví ngay lập tức để tránh double spending.
      */
@@ -110,6 +112,21 @@ public class WithdrawService {
         }
         request = withdrawRequestRepository.save(request);
         log.info("Withdraw Service: Admin approved withdraw request ID: {}. Transaction confirmed.", requestId);
+
+        // Push thông báo cho User (Module 8 — Dev B)
+        try {
+            UUID userId = request.getUser().getId();
+            String amountStr = request.getAmount().toPlainString();
+            notificationService.push(
+                    userId,
+                    "Yêu cầu rút tiền được duyệt",
+                    "Yêu cầu rút tiền " + amountStr + " VNĐ của bạn đã được duyệt thành công.",
+                    "WALLET"
+            );
+        } catch (Exception e) {
+            log.warn("Failed to push withdraw approval notification: {}", e.getMessage());
+        }
+
         return mapToResponse(request);
     }
     /**
