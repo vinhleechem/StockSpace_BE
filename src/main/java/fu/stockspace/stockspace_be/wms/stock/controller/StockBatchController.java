@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
-@Tag(name = "WMS Stock Batch Management", description = "Các API quản lý tồn kho (Stock Batch) dành cho Tenant")
+@Tag(name = "Tenant — WMS Stock Batch Management", description = "Các API quản lý tồn kho (Stock Batch) dành cho Tenant")
 @RestController
 @RequestMapping("/api/tenant/inventory/stock")
 @RequiredArgsConstructor
