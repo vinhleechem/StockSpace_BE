@@ -17,6 +17,7 @@ import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseService;
 import fu.stockspace.stockspace_be.wallet.service.WalletService;
 import fu.stockspace.stockspace_be.wallet.entity.TransactionType;
+import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
@@ -40,6 +41,7 @@ public class DisputeService {
     private final UserRepository userRepository;
     private final WarehouseService warehouseService;
     private final WalletService walletService;
+    private final NotificationService notificationService;
     // ==================== User ====================
     /**
      * Mở tranh chấp cho hợp đồng.
@@ -86,6 +88,21 @@ public class DisputeService {
         ticket = disputeRepository.save(ticket);
         // Đổi contract → DISPUTED
         contractService.setDisputed(contract.getId());
+
+        // Push thông báo cho bên kia trong hợp đồng (owner hoặc tenant)
+        try {
+            UUID notifyUserId = userId.equals(tenantId) ? ownerId : tenantId;
+            String warehouseName = contract.getBooking().getWarehouse().getName();
+            notificationService.push(
+                    notifyUserId,
+                    "Có tranh chấp mới cần xử lý",
+                    "Một tranh chấp mới đã được mở cho hợp đồng kho " + warehouseName + ". Vui lòng kiểm tra.",
+                    "DISPUTE"
+            );
+        } catch (Exception e) {
+            log.warn("Failed to push dispute notification: {}", e.getMessage());
+        }
+
         log.info("Dispute {} opened by user {} for contract {}", ticket.getId(), userId, contract.getId());
         return mapToResponse(ticket);
     }

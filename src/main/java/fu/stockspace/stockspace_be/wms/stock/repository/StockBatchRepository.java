@@ -1,7 +1,11 @@
 package fu.stockspace.stockspace_be.wms.stock.repository;
 
 import fu.stockspace.stockspace_be.wms.stock.entity.StockBatch;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -27,4 +31,14 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
 
     Optional<StockBatch> findBySkuIdAndWarehouseIdAndZoneIdAndRackIdAndBinIdAndIsDeletedFalse(
             UUID skuId, UUID warehouseId, UUID zoneId, UUID rackId, UUID binId);
+
+    // Dev B — Module 5
+    Page<StockBatch> findByWarehouseIdAndIsDeletedFalse(UUID warehouseId, Pageable pageable);
+
+    List<StockBatch> findBySkuIdAndIsDeletedFalse(UUID skuId);
+
+    @Query("SELECT COALESCE(SUM(b.quantity), 0) FROM StockBatch b WHERE b.skuId = :skuId AND b.isDeleted = false")
+    int sumQuantityBySkuId(@Param("skuId") UUID skuId);
+
+    Optional<StockBatch> findByIdAndIsDeletedFalse(UUID id);
 }
