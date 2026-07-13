@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 import java.util.UUID;
 
-@Tag(name = "WMS Inventory Audit", description = "Các API quản lý phiếu kiểm kê kho dành cho Tenant")
+@Tag(name = "Tenant — WMS Inventory Audit", description = "Các API quản lý phiếu kiểm kê kho dành cho Tenant")
 @RestController
 @RequestMapping("/api/tenant/inventory/audits")
 @RequiredArgsConstructor
