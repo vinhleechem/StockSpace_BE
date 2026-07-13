@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
-@Tag(name = "WMS Inventory Receipt Management", description = "Các API WMS quản lý Phiếu nhập/xuất kho dành cho Tenant & Staff")
+@Tag(name = "Tenant — WMS Inventory Receipt Management", description = "Các API WMS quản lý Phiếu nhập/xuất kho dành cho Tenant & Staff")
 @RestController
 @RequestMapping("/api/tenant/inventory/receipts")
 @RequiredArgsConstructor
