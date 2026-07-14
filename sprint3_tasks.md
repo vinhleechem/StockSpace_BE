@@ -475,11 +475,11 @@ String uomName   = sku.getUom().getName();   // ví dụ: "Kilogram", "Cái", "T
 
 | Ngày | Dev A | Dev B |
 |------|-------|-------|
-| 1 | ✅ `WarehouseBin` entity + repo (sync point) + `NotificationService` skeleton | ⬜ `StockBatch` entity + repo + service skeleton |
-| 2 | ✅ `NotificationController` + Hook thông báo vào Warehouse/Inspection flow | ⬜ `InventoryAudit` + `InventoryAuditItem` entity + repo |
-| 3 | ✅ `OwnerLayoutController` (Zone/Rack/Bin CRUD) + endpoint sơ đồ 2D | ⬜ `InventoryAuditService` (createAudit, submitAudit, approveAudit với auto-receipt) |
-| 4 | ✅ `ProductCategoryService` + `ProductSkuService` + `TenantProductController` | ⬜ `InventoryAuditController` + `StockBatchController` |
+| 1 | ✅ `WarehouseBin` entity + repo (sync point) + `NotificationService` skeleton | ✅ `StockBatch` entity + repo + service skeleton |
+| 2 | ✅ `NotificationController` + Hook thông báo vào Warehouse/Inspection flow | ✅ `InventoryAudit` + `InventoryAuditItem` entity + repo |
+| 3 | ✅ `OwnerLayoutController` (Zone/Rack/Bin CRUD) + endpoint sơ đồ 2D | ✅ `InventoryAuditService` (createAudit, submitAudit, approveAudit với auto-receipt) |
+| 4 | ✅ `ProductCategoryService` + `ProductSkuService` + `TenantProductController` | ✅ `InventoryAuditController` + `StockBatchController` |
 | 5 | ✅ `InventoryReceipt` + `InventoryReceiptItem` entity + service | ✅ `InventoryTransaction` entity + audit trail service |
-| 6 | ✅ `InventoryReceiptController` + wire update StockBatch | ⬜ Hook Notification vào Booking/Wallet/Contract + Audit flow |
-| 7 | ✅ Integration test: luồng nhập/xuất kho đầy đủ | ⬜ `AdminInventoryController` |
-| 8+ | ⬜ End-to-end test toàn bộ WMS Phase 2 | ⬜ Integration test: tồn kho + kiểm kê + thông báo end-to-end |
+| 6 | ✅ `InventoryReceiptController` + wire update StockBatch | ✅ Hook Notification vào Booking/Wallet/Contract + Audit flow |
+| 7 | ✅ Integration test: luồng nhập/xuất kho đầy đủ | ✅ `AdminInventoryController` |
+| 8+ | ✅ End-to-end test toàn bộ WMS Phase 2 | ✅ Integration test: tồn kho + kiểm kê + thông báo end-to-end |
