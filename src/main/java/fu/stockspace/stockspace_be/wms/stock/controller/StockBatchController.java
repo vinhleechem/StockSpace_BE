@@ -1,6 +1,7 @@
 package fu.stockspace.stockspace_be.wms.stock.controller;
 
 import fu.stockspace.stockspace_be.auth.util.SecurityUtil;
+import fu.stockspace.stockspace_be.auth.util.TenantContextUtil;
 import fu.stockspace.stockspace_be.common.dto.ApiResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
@@ -31,11 +32,6 @@ public class StockBatchController {
     private final StockBatchService stockBatchService;
     private final InventoryReceiptService inventoryReceiptService;
 
-    private UUID getCurrentTenantId() {
-        var user = SecurityUtil.getCurrentUser()
-                .orElseThrow(() -> new ForbiddenException(ErrorCode.UNAUTHENTICATED));
-        return user.getTenant() != null ? user.getTenant().getId() : user.getId();
-    }
 
     @GetMapping
     @Operation(summary = "Xem toàn bộ tồn kho trong kho đang thuê (phân trang theo warehouseId)")
@@ -44,7 +40,7 @@ public class StockBatchController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        UUID tenantId = getCurrentTenantId();
+        UUID tenantId = TenantContextUtil.getCurrentTenantId();
         Pageable pageable = PageRequest.of(page, size);
         PagedStockBatchResponse response = stockBatchService.getStockByWarehouse(tenantId, warehouseId, pageable);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách tồn kho thành công", response));
@@ -53,7 +49,7 @@ public class StockBatchController {
     @GetMapping("/sku/{skuId}")
     @Operation(summary = "Xem tồn kho chi tiết theo SKU — tổng hợp tất cả vị trí lưu trữ")
     public ResponseEntity<ApiResponse<StockSummaryResponse>> getStockBySku(@PathVariable UUID skuId) {
-        UUID tenantId = getCurrentTenantId();
+        UUID tenantId = TenantContextUtil.getCurrentTenantId();
         StockSummaryResponse response = stockBatchService.getStockSummaryBySku(tenantId, skuId);
         return ResponseEntity.ok(ApiResponse.success("Lấy tồn kho theo SKU thành công", response));
     }
@@ -61,7 +57,7 @@ public class StockBatchController {
     @GetMapping("/summary")
     @Operation(summary = "Tổng hợp tồn kho theo SKU — lấy theo skuId")
     public ResponseEntity<ApiResponse<StockSummaryResponse>> getStockSummary(@RequestParam UUID skuId) {
-        UUID tenantId = getCurrentTenantId();
+        UUID tenantId = TenantContextUtil.getCurrentTenantId();
         StockSummaryResponse response = stockBatchService.getStockSummaryBySku(tenantId, skuId);
         return ResponseEntity.ok(ApiResponse.success("Tổng hợp tồn kho theo SKU thành công", response));
     }

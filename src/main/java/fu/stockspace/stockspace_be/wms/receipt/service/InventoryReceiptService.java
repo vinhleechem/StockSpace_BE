@@ -2,6 +2,7 @@ package fu.stockspace.stockspace_be.wms.receipt.service;
 
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
+import fu.stockspace.stockspace_be.auth.util.TenantContextUtil;
 import fu.stockspace.stockspace_be.booking.entity.ApprovalStatus;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
@@ -58,14 +59,18 @@ public class InventoryReceiptService {
     private final WarehouseRackRepository rackRepository;
     private final WarehouseBinRepository binRepository;
     private final SubscriptionService subscriptionService;
+    private final fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository tenantMemberRepository;
 
     @Transactional
     public InventoryReceiptResponse createReceipt(UUID userId, CreateInventoryReceiptRequest request) {
         User creator = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
 
-        // Subscription check based on creator's tenant
-        UUID tenantId = creator.getTenant() != null ? creator.getTenant().getId() : creator.getId();
+        // Resolve tenantId từ TenantMember DB để hỗ trợ cả unit test và thread bất đồng bộ
+        UUID tenantId = tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(userId)
+                .map(member -> member.getTenant().getId())
+                .orElse(userId);
+
         if (!subscriptionService.hasActiveSubscription(tenantId)) {
             throw new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED);
         }
@@ -135,8 +140,12 @@ public class InventoryReceiptService {
             throw new BadRequestException(ErrorCode.RECEIPT_ALREADY_PROCESSED);
         }
 
-        // Check active subscription of creator's tenant
-        UUID creatorTenantId = receipt.getCreatedBy().getTenant() != null ? receipt.getCreatedBy().getTenant().getId() : receipt.getCreatedBy().getId();
+        // Check active subscription: tenantId của người tạo phiếu (creator)
+        UUID creatorId = receipt.getCreatedBy().getId();
+        UUID creatorTenantId = tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(creatorId)
+                .map(member -> member.getTenant().getId())
+                .orElse(creatorId);
+
         if (!subscriptionService.hasActiveSubscription(creatorTenantId)) {
             throw new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED);
         }

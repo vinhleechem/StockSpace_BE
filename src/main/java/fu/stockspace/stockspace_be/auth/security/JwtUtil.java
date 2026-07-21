@@ -32,28 +32,39 @@ public class JwtUtil {
     // ==================== Generate Token ====================
 
     /**
-     * Tạo JWT token từ UserDetails.
-     * Claims gồm: sub (email), userId, role.
+     * Tạo JWT token từ UserDetails (mặc định — không có tenantId riêng, dùng cho TENANT/OWNER/ADMIN).
+     * Claims gồm: sub (email), userId, role, tenantId (= userId với Tenant/Owner).
      */
     public String generateToken(UserDetails userDetails) {
+        return generateToken(userDetails, null);
+    }
+
+    /**
+     * Tạo JWT token có thêm claim `tenantId`.
+     * - Với Staff: tenantId = UUID của Tenant mà Staff đang làm việc cho.
+     * - Với Tenant/Owner/Admin: gọi với tenantId = null → hệ thống tự set tenantId = userId.
+     */
+    public String generateToken(UserDetails userDetails, java.util.UUID tenantId) {
         Map<String, Object> extraClaims = new HashMap<>();
 
-        // Cast để lấy thêm thông tin
         if (userDetails instanceof fu.stockspace.stockspace_be.auth.entity.User user) {
             extraClaims.put("userId", user.getId().toString());
-            
+
             String roles = user.getRoles().stream()
                     .map(fu.stockspace.stockspace_be.auth.entity.Role::getName)
                     .collect(java.util.stream.Collectors.joining(","));
             extraClaims.put("roles", roles);
-            
+
             String primaryRole = user.getRoles().stream()
                     .map(fu.stockspace.stockspace_be.auth.entity.Role::getName)
                     .findFirst()
                     .orElse("");
             extraClaims.put("role", primaryRole);
-            
             extraClaims.put("fullName", user.getFullName());
+
+            // tenantId: nếu Staff → dùng tenantId được truyền vào; ngược lại → chính là userId
+            java.util.UUID resolvedTenantId = (tenantId != null) ? tenantId : user.getId();
+            extraClaims.put("tenantId", resolvedTenantId.toString());
         }
 
         return buildToken(extraClaims, userDetails);
@@ -104,6 +115,15 @@ public class JwtUtil {
 
     public String extractRoles(String token) {
         return extractClaim(token, claims -> claims.get("roles", String.class));
+    }
+
+    /**
+     * Lấy tenantId từ JWT.
+     * Với Tenant/Owner/Admin: bằng với userId.
+     * Với Staff: UUID của Tenant mà Staff đang làm việc.
+     */
+    public String extractTenantId(String token) {
+        return extractClaim(token, claims -> claims.get("tenantId", String.class));
     }
 
     public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
