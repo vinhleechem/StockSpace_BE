@@ -28,4 +28,12 @@ public class ServicePackage extends BaseEntity {
     private BigDecimal price;
     @Column(name = "duration_days", nullable = false)
     private Integer durationDays;
+    /**
+     * Số lượng nhân viên tối đa cho phép (Staff quota).
+     * 0 = không giới hạn (dùng cho gói Enterprise/custom).
+     * Mặc định = 0 (cho gói cũ chưa set).
+     */
+    @Column(name = "max_staff", nullable = false)
+    @Builder.Default
+    private int maxStaff = 0;
 }

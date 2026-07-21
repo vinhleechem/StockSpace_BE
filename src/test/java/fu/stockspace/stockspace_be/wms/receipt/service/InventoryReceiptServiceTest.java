@@ -53,6 +53,7 @@ class InventoryReceiptServiceTest {
     @Mock private WarehouseRackRepository rackRepository;
     @Mock private WarehouseBinRepository binRepository;
     @Mock private SubscriptionService subscriptionService;
+    @Mock private fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository tenantMemberRepository;
 
     @InjectMocks
     private InventoryReceiptService receiptService;

@@ -48,6 +48,7 @@ public class AuthService {
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final OutboundAuthClient outboundAuthClient;
     private final OutboundUserClient outboundUserClient;
+    private final fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository tenantMemberRepository;
 
     @Value("${app.google.client-id}")
     private String googleClientId;
@@ -319,13 +320,25 @@ public class AuthService {
     // ==================== Private helpers ====================
 
     private AuthResult buildAuthResult(User user) {
-        String accessToken = jwtUtil.generateToken(user);
+        // Resolve active tenantId if user is STAFF
+        UUID tenantId = null;
+        boolean isStaff = user.getRoles().stream()
+                .anyMatch(role -> role.getName().equals(fu.stockspace.stockspace_be.auth.entity.RoleType.ROLE_STAFF.name()));
+        if (isStaff) {
+            tenantId = tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(user.getId())
+                    .map(member -> member.getTenant().getId())
+                    .orElse(null);
+        }
+
+        String accessToken = jwtUtil.generateToken(user, tenantId);
         RefreshToken refreshToken = refreshTokenService.createRefreshToken(user);
 
         String primaryRole = user.getRoles().stream()
                 .map(Role::getName)
                 .findFirst()
                 .orElse("");
+
+        UUID resolvedTenantId = (tenantId != null) ? tenantId : user.getId();
 
         LoginResponse loginResponse = LoginResponse.builder()
                 .accessToken(accessToken)
@@ -334,6 +347,7 @@ public class AuthService {
                 .email(user.getEmail())
                 .fullName(user.getFullName())
                 .role(primaryRole)
+                .tenantId(resolvedTenantId)
                 .build();
 
         return new AuthResult(loginResponse, refreshToken.getToken());
