@@ -42,6 +42,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final RefreshTokenService refreshTokenService;
+    private final fu.stockspace.stockspace_be.staff.service.TenantStaffService tenantStaffService;
 
     // ==================== Register ====================
 
@@ -113,6 +114,30 @@ public class AuthController {
                 "Mật khẩu đã được đặt lại thành công. Vui lòng đăng nhập lại.", null));
     }
 
+    // ==================== Staff Invitation Endpoints ====================
+
+    @GetMapping("/staff/invite")
+    @Operation(summary = "Xem trước thông tin lời mời nhân viên kho từ token trong email")
+    public ResponseEntity<ApiResponse<fu.stockspace.stockspace_be.staff.dto.InvitationPreviewResponse>> previewStaffInvitation(
+            @RequestParam String token
+    ) {
+        fu.stockspace.stockspace_be.staff.dto.InvitationPreviewResponse response = tenantStaffService.previewInvitation(token);
+        if (!response.isValid()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error(response.getMessage()));
+        }
+        return ResponseEntity.ok(ApiResponse.success("Xác thực token lời mời thành công", response));
+    }
+
+    @PostMapping("/staff/accept")
+    @Operation(summary = "Nhân viên kho thiết lập mật khẩu và xác nhận tham gia tổ chức")
+    public ResponseEntity<ApiResponse<Void>> acceptStaffInvitation(
+            @Valid @RequestBody fu.stockspace.stockspace_be.staff.dto.AcceptInvitationRequest request
+    ) {
+        tenantStaffService.acceptInvitation(request);
+        return ResponseEntity.ok(ApiResponse.success("Xác nhận tham gia và thiết lập mật khẩu thành công. Vui lòng đăng nhập lại.", null));
+    }
+
     // ==================== Refresh Token ====================
 
     @PostMapping("/refresh")
@@ -181,6 +206,13 @@ public class AuthController {
                 .findFirst()
                 .orElse("");
 
+        UUID tenantId = null;
+        try {
+            tenantId = fu.stockspace.stockspace_be.auth.util.TenantContextUtil.getCurrentTenantId();
+        } catch (Exception e) {
+            // ignore if not resolved (e.g. admin or users with old token)
+        }
+
         UserInfoResponse info = new UserInfoResponse(
                 user.getId(),
                 user.getEmail(),
@@ -190,7 +222,8 @@ public class AuthController {
                 user.getProvider() != null ? user.getProvider().name() : "LOCAL",
                 user.getAvatarUrl(),
                 user.isActive(),
-                user.getCreatedAt() != null ? user.getCreatedAt().toString() : null
+                user.getCreatedAt() != null ? user.getCreatedAt().toString() : null,
+                tenantId
         );
 
         return ResponseEntity.ok(ApiResponse.success("User info retrieved", info));
@@ -221,6 +254,7 @@ public class AuthController {
             String provider,
             String avatarUrl,
             boolean isActive,
-            String createdAt
+            String createdAt,
+            UUID tenantId
     ) {}
 }
