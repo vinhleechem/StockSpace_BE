@@ -2,6 +2,7 @@ package fu.stockspace.stockspace_be.wms.receipt.controller;
 
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.util.SecurityUtil;
+import fu.stockspace.stockspace_be.auth.util.TenantContextUtil;
 import fu.stockspace.stockspace_be.common.dto.ApiResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
@@ -34,9 +35,7 @@ public class InventoryReceiptController {
     private final SubscriptionService subscriptionService;
 
     private void checkSubscription() {
-        User currentUser = SecurityUtil.getCurrentUser()
-                .orElseThrow(() -> new ForbiddenException(ErrorCode.UNAUTHENTICATED));
-        UUID tenantId = currentUser.getTenant() != null ? currentUser.getTenant().getId() : currentUser.getId();
+        UUID tenantId = TenantContextUtil.getCurrentTenantId();
         if (!subscriptionService.hasActiveSubscription(tenantId)) {
             throw new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED);
         }

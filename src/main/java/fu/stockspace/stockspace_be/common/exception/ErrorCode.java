@@ -114,6 +114,15 @@ public enum ErrorCode {
     CONFIG_INVALID_VALUE("Giá trị cấu hình không hợp lệ", HttpStatus.BAD_REQUEST),
     UOM_NOT_FOUND("Không tìm thấy đơn vị tính", HttpStatus.NOT_FOUND),
 
+    // Staff Membership Errors
+    STAFF_LIMIT_EXCEEDED("Số lượng nhân viên đã đạt giới hạn tối đa của gói dịch vụ hiện tại", HttpStatus.BAD_REQUEST),
+    STAFF_INVITATION_NOT_FOUND("Lời mời nhân viên không tồn tại hoặc đã hết hạn", HttpStatus.NOT_FOUND),
+    STAFF_INVITATION_EXPIRED("Lời mời nhân viên đã hết hạn. Vui lòng yêu cầu Tenant gửi lại lời mời mới", HttpStatus.BAD_REQUEST),
+    STAFF_INVITATION_ALREADY_ACCEPTED("Lời mời này đã được sử dụng trước đó", HttpStatus.BAD_REQUEST),
+    STAFF_INVITATION_DUPLICATE("Đã có lời mời đang chờ xác nhận gửi đến email này. Vui lòng kiểm tra hộp thư", HttpStatus.CONFLICT),
+    STAFF_ALREADY_MEMBER("Email này đã là nhân viên kho đang hoạt động trong tổ chức của bạn", HttpStatus.CONFLICT),
+    STAFF_NOT_FOUND("Nhân viên không tồn tại hoặc đã bị xóa khỏi tổ chức", HttpStatus.NOT_FOUND),
+
     // Inventory Audit Errors (Dev B)
     AUDIT_NOT_FOUND("Không tìm thấy phiếu kiểm kê", HttpStatus.NOT_FOUND),
     AUDIT_ALREADY_PROCESSED("Phiếu kiểm kê đã được xử lý (APPROVED/REJECTED)", HttpStatus.BAD_REQUEST),

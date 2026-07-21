@@ -30,6 +30,7 @@ public class SubscriptionService {
     private final UserRepository userRepository;
     private final WalletService walletService;
     private final ServicePackageService packageService;
+    private final fu.stockspace.stockspace_be.staff.service.TenantStaffService tenantStaffService;
     /**
      * Mua gói dịch vụ. Khấu trừ tiền ví Tenant và kích hoạt gói.
      */
@@ -60,6 +61,9 @@ public class SubscriptionService {
                 .status(SubscriptionStatus.ACTIVE)
                 .build();
         subscription = subscriptionRepository.save(subscription);
+
+        // Tự động kiểm tra và khóa bớt Staff nếu vượt quota gói mới mua (downgrade)
+        tenantStaffService.deactivateExcessStaffs(tenantId, servicePackage.getMaxStaff());
 
         // 3. Trừ tiền ví (Truyền ID của gói vừa tạo vào reference)
         walletService.deductBalance(
