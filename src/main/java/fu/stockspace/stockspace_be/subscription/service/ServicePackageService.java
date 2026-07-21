@@ -85,6 +85,7 @@ public class ServicePackageService {
                 .features(p.getFeatures())
                 .price(p.getPrice())
                 .durationDays(p.getDurationDays())
+                .maxStaff(p.getMaxStaff())
                 .build();
     }
 }
