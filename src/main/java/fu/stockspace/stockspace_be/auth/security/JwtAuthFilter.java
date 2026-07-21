@@ -71,10 +71,19 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 // Set vào SecurityContext — từ đây @PreAuthorize sẽ hoạt động
                 SecurityContextHolder.getContext().setAuthentication(authToken);
 
-                log.debug("Authenticated user: {}, role: {}", userEmail, userDetails.getAuthorities());
+                // Lưu tenantId từ JWT claim vào request attribute để TenantContextUtil đọc
+                // Với Tenant/Owner/Admin: tenantId = userId của chính họ
+                // Với Staff: tenantId = UUID của Tenant mà Staff đang làm việc
+                String tenantIdClaim = jwtUtil.extractTenantId(jwt);
+                if (tenantIdClaim != null) {
+                    request.setAttribute("tenantId", tenantIdClaim);
+                }
+
+                log.debug("Authenticated user: {}, role: {}, tenantId: {}", userEmail, userDetails.getAuthorities(), tenantIdClaim);
             }
         }
 
         filterChain.doFilter(request, response);
     }
 }
+
