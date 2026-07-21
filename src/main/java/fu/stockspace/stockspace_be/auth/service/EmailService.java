@@ -166,4 +166,80 @@ public class EmailService {
                 </html>
                 """.formatted(fullName, resetLink, resetLink);
     }
+    // ==================== Staff Invitation ====================
+
+    /**
+     * Gửi email mời nhân viên kho.
+     * Chạy bất đồng bộ — thất bại email không ảnh hưởng luồng chính.
+     *
+     * @param toEmail     Email nhân viên nhận lời mời
+     * @param staffName   Tên nhân viên (Tenant nhập khi mời)
+     * @param tenantName  Tên doanh nghiệp / tên Tenant mời
+     * @param token       Token dùng một lần (UUID random, hết hạn sau 48h)
+     */
+    @Async
+    public void sendStaffInvitationEmail(String toEmail, String staffName, String tenantName, String token) {
+        try {
+            String subject = "[StockSpace] Lời mời tham gia quản lý kho của " + tenantName;
+            String content = buildStaffInvitationEmailContent(staffName, tenantName, toEmail, token);
+            sendHtmlEmail(toEmail, subject, content);
+            log.info("Staff invitation email sent to: {} (tenant: {})", toEmail, tenantName);
+        } catch (Exception e) {
+            log.error("Failed to send staff invitation email to {}: {}", toEmail, e.getMessage());
+        }
+    }
+
+    private String buildStaffInvitationEmailContent(String staffName, String tenantName, String email, String token) {
+        String acceptLink = "%s/staff/accept?token=%s".formatted(frontendUrl, token);
+        return """
+                <!DOCTYPE html>
+                <html lang="vi">
+                <head><meta charset="UTF-8"></head>
+                <body style="font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px;">
+                  <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; padding: 40px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                    <div style="text-align: center; margin-bottom: 30px;">
+                      <h1 style="color: #2563EB; margin: 0;">StockSpace</h1>
+                      <p style="color: #6B7280; font-size: 14px;">Nền tảng quản lý kho bãi thông minh</p>
+                    </div>
+                    <h2 style="color: #1F2937;">Bạn được mời tham gia quản lý kho! 🏭</h2>
+                    <p style="color: #374151; line-height: 1.6;">Xin chào <strong>%s</strong>,</p>
+                    <p style="color: #374151; line-height: 1.6;">
+                      Doanh nghiệp <strong>%s</strong> đã mời bạn tham gia hệ thống quản lý kho trên <strong>StockSpace</strong>
+                      với vai trò <strong>Nhân viên kho (Staff)</strong>.
+                    </p>
+                    <p style="color: #374151; line-height: 1.6;">
+                      Với tài khoản này, bạn có thể:
+                    </p>
+                    <ul style="color: #374151; line-height: 1.8;">
+                      <li>📦 Tạo và duyệt phiếu nhập/xuất kho</li>
+                      <li>📊 Theo dõi tồn kho thời gian thực</li>
+                      <li>🗂️ Quản lý hàng hóa và danh mục</li>
+                    </ul>
+                    <div style="text-align: center; margin: 30px 0;">
+                      <a href="%s" style="background-color: #059669; color: white; padding: 14px 36px; border-radius: 6px; text-decoration: none; font-weight: bold; display: inline-block; font-size: 16px;">
+                        ✅ Xác nhận tham gia
+                      </a>
+                    </div>
+                    <p style="color: #374151; line-height: 1.6;">
+                      Hoặc bạn có thể sao chép đường dẫn dưới đây vào trình duyệt:
+                    </p>
+                    <p style="color: #2563EB; word-break: break-all; font-size: 13px; background-color: #F3F4F6; padding: 10px; border-radius: 4px;">
+                      %s
+                    </p>
+                    <p style="color: #EF4444; font-weight: bold; text-align: center;">
+                      ⏰ Lời mời này có hiệu lực trong <strong>48 giờ</strong>.
+                    </p>
+                    <p style="color: #374151; line-height: 1.6; font-size: 13px;">
+                      Nếu bạn không mong đợi lời mời này, hãy bỏ qua email này. Không cần thực hiện thêm bất kỳ hành động nào.
+                    </p>
+                    <hr style="border: none; border-top: 1px solid #E5E7EB; margin: 30px 0;">
+                    <p style="color: #9CA3AF; font-size: 12px; text-align: center;">
+                      © 2024 StockSpace. All rights reserved.
+                    </p>
+                  </div>
+                </body>
+                </html>
+                """.formatted(staffName, tenantName, acceptLink, acceptLink);
+    }
 }
+
