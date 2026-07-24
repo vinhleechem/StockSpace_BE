@@ -69,6 +69,7 @@ public enum ErrorCode {
     // Inspection Errors
     INSPECTION_NOT_FOUND("Yêu cầu kiểm định không tồn tại", HttpStatus.NOT_FOUND),
     INSPECTION_ALREADY_SUBMITTED("Kiểm định đã được nộp hoặc đang xử lý", HttpStatus.BAD_REQUEST),
+    INSPECTION_CANNOT_BE_REQUESTED_WHEN_RENTED("Không thể gửi yêu cầu kiểm định khi kho đang trong trạng thái cho thuê", HttpStatus.BAD_REQUEST),
 
     // Wallet & Transaction Errors
     WALLET_NOT_FOUND("Ví điện tử không tồn tại", HttpStatus.NOT_FOUND),
@@ -126,7 +127,21 @@ public enum ErrorCode {
     // Inventory Audit Errors (Dev B)
     AUDIT_NOT_FOUND("Không tìm thấy phiếu kiểm kê", HttpStatus.NOT_FOUND),
     AUDIT_ALREADY_PROCESSED("Phiếu kiểm kê đã được xử lý (APPROVED/REJECTED)", HttpStatus.BAD_REQUEST),
-    AUDIT_INVALID_STATUS("Trạng thái phiếu kiểm kê không hợp lệ để thực hiện hành động này", HttpStatus.BAD_REQUEST);
+    AUDIT_INVALID_STATUS("Trạng thái phiếu kiểm kê không hợp lệ để thực hiện hành động này", HttpStatus.BAD_REQUEST),
+
+    // Chatbot Errors
+    CHAT_SESSION_NOT_FOUND("Phiên hội thoại không tồn tại", HttpStatus.NOT_FOUND),
+    CHAT_SESSION_ACCESS_DENIED("Bạn không có quyền truy cập phiên hội thoại này", HttpStatus.FORBIDDEN),
+    GEMINI_API_ERROR("Chatbot tạm thời không khả dụng, vui lòng thử lại sau", HttpStatus.SERVICE_UNAVAILABLE),
+    GEMINI_API_QUOTA_EXCEEDED("Chatbot đang bận, vui lòng thử lại sau ít phút", HttpStatus.TOO_MANY_REQUESTS),
+
+    // Review Errors
+    REVIEW_NOT_FOUND("Đánh giá không tồn tại", HttpStatus.NOT_FOUND),
+    REVIEW_ALREADY_EXISTS("Bạn đã đánh giá kho này cho hợp đồng này rồi", HttpStatus.CONFLICT),
+    REVIEW_NOT_AUTHORIZED("Bạn không có quyền thực hiện thao tác này với đánh giá", HttpStatus.FORBIDDEN),
+    REVIEW_EDIT_EXPIRED("Chỉ được sửa đánh giá trong vòng 7 ngày kể từ ngày tạo", HttpStatus.BAD_REQUEST),
+    REVIEW_CONTRACT_NOT_COMPLETED("Chỉ được đánh giá kho sau khi hợp đồng kết thúc", HttpStatus.BAD_REQUEST),
+    REVIEW_OWNER_ALREADY_REPLIED("Owner đã phản hồi đánh giá này rồi", HttpStatus.CONFLICT);
 
     private final String message;
     private final HttpStatus status;

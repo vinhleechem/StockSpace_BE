@@ -42,9 +42,8 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
      */
     @Query("""
             SELECT w FROM Warehouse w
-            WHERE w.status <> fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus.PENDING_APPROVAL
-              AND w.isDeleted = false
-              AND (:status IS NULL OR w.status = :status)
+            WHERE w.isDeleted = false
+              AND ((:status IS NULL AND w.status = fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus.AVAILABLE) OR (:status IS NOT NULL AND w.status = :status))
               AND (:keyword IS NULL OR LOWER(w.name) LIKE :keyword
                    OR LOWER(w.address) LIKE :keyword)
               AND (:minPrice IS NULL OR w.pricePerMonth >= :minPrice)
