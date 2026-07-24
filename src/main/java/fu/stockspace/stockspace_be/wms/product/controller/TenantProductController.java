@@ -3,12 +3,16 @@ package fu.stockspace.stockspace_be.wms.product.controller;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.util.SecurityUtil;
 import fu.stockspace.stockspace_be.common.dto.ApiResponse;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
 import fu.stockspace.stockspace_be.wms.product.dto.*;
+import fu.stockspace.stockspace_be.wms.product.entity.UnitOfMeasure;
+import fu.stockspace.stockspace_be.wms.product.repository.UnitOfMeasureRepository;
 import fu.stockspace.stockspace_be.wms.product.service.ProductCategoryService;
 import fu.stockspace.stockspace_be.wms.product.service.ProductSkuService;
+import org.springframework.data.domain.Page;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -22,16 +26,23 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
-@Tag(name = "Tenant — WMS Tenant Product Management", description = "Các API WMS quản lý Danh mục & SKU dành cho Tenant")
+@Tag(name = "Tenant — WMS Tenant Product Management", description = "Các API WMS quản lý Danh mục & SKU dành cho Tenant & Staff")
 @RestController
 @RequestMapping("/api/tenant/products")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('TENANT')")
+@PreAuthorize("hasAnyRole('TENANT', 'STAFF')")
 public class TenantProductController {
 
     private final ProductCategoryService categoryService;
     private final ProductSkuService skuService;
     private final SubscriptionService subscriptionService;
+    private final UnitOfMeasureRepository uomRepository;
+
+    private UUID getCurrentTenantId() {
+        User user = SecurityUtil.getCurrentUser()
+                .orElseThrow(() -> new ForbiddenException(ErrorCode.UNAUTHENTICATED));
+        return user.getTenant() != null ? user.getTenant().getId() : user.getId();
+    }
 
     private void checkSubscription(UUID tenantId) {
         if (!subscriptionService.hasActiveSubscription(tenantId)) {
@@ -44,7 +55,7 @@ public class TenantProductController {
     @GetMapping("/categories")
     @Operation(summary = "Lấy danh sách danh mục sản phẩm (bao gồm danh mục đề xuất)")
     public ResponseEntity<ApiResponse<List<ProductCategoryResponse>>> getMyCategories() {
-        UUID tenantId = SecurityUtil.getCurrentUserId();
+        UUID tenantId = getCurrentTenantId();
         checkSubscription(tenantId);
         List<ProductCategoryResponse> response = categoryService.getMyCategories(tenantId);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách danh mục thành công", response));
@@ -54,7 +65,7 @@ public class TenantProductController {
     @Operation(summary = "Tạo danh mục sản phẩm mới")
     public ResponseEntity<ApiResponse<ProductCategoryResponse>> createCategory(
             @Valid @RequestBody CreateCategoryRequest request) {
-        UUID tenantId = SecurityUtil.getCurrentUserId();
+        UUID tenantId = getCurrentTenantId();
         checkSubscription(tenantId);
         ProductCategoryResponse response = categoryService.createCategory(tenantId, request);
         return ResponseEntity.ok(ApiResponse.success("Tạo danh mục thành công", response));
@@ -63,7 +74,7 @@ public class TenantProductController {
     @DeleteMapping("/categories/{id}")
     @Operation(summary = "Xóa mềm danh mục sản phẩm (chỉ khi không có SKU liên kết)")
     public ResponseEntity<ApiResponse<Void>> deleteCategory(@PathVariable UUID id) {
-        UUID tenantId = SecurityUtil.getCurrentUserId();
+        UUID tenantId = getCurrentTenantId();
         checkSubscription(tenantId);
         categoryService.deleteCategory(tenantId, id);
         return ResponseEntity.ok(ApiResponse.success("Xóa danh mục thành công", null));
@@ -76,7 +87,7 @@ public class TenantProductController {
     public ResponseEntity<ApiResponse<PagedSkuResponse>> getMySKUs(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-        UUID tenantId = SecurityUtil.getCurrentUserId();
+        UUID tenantId = getCurrentTenantId();
         checkSubscription(tenantId);
         Pageable pageable = PageRequest.of(page, size);
         PagedSkuResponse response = skuService.getMySKUs(tenantId, pageable);
@@ -86,7 +97,7 @@ public class TenantProductController {
     @GetMapping("/skus/{id}")
     @Operation(summary = "Xem chi tiết SKU sản phẩm")
     public ResponseEntity<ApiResponse<ProductSkuResponse>> getSkuDetail(@PathVariable UUID id) {
-        UUID tenantId = SecurityUtil.getCurrentUserId();
+        UUID tenantId = getCurrentTenantId();
         checkSubscription(tenantId);
         ProductSkuResponse response = skuService.getSkuDetail(tenantId, id);
         return ResponseEntity.ok(ApiResponse.success("Lấy chi tiết SKU thành công", response));
@@ -96,7 +107,7 @@ public class TenantProductController {
     @Operation(summary = "Tạo SKU sản phẩm mới")
     public ResponseEntity<ApiResponse<ProductSkuResponse>> createSku(
             @Valid @RequestBody CreateSkuRequest request) {
-        UUID tenantId = SecurityUtil.getCurrentUserId();
+        UUID tenantId = getCurrentTenantId();
         checkSubscription(tenantId);
         ProductSkuResponse response = skuService.createSku(tenantId, request);
         return ResponseEntity.ok(ApiResponse.success("Tạo SKU thành công", response));
@@ -107,7 +118,7 @@ public class TenantProductController {
     public ResponseEntity<ApiResponse<ProductSkuResponse>> updateSku(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateSkuRequest request) {
-        UUID tenantId = SecurityUtil.getCurrentUserId();
+        UUID tenantId = getCurrentTenantId();
         checkSubscription(tenantId);
         ProductSkuResponse response = skuService.updateSku(tenantId, id, request);
         return ResponseEntity.ok(ApiResponse.success("Cập nhật SKU thành công", response));
@@ -116,7 +127,7 @@ public class TenantProductController {
     @DeleteMapping("/skus/{id}")
     @Operation(summary = "Xóa mềm SKU sản phẩm (chỉ khi không có lô hàng StockBatch liên kết)")
     public ResponseEntity<ApiResponse<Void>> deleteSku(@PathVariable UUID id) {
-        UUID tenantId = SecurityUtil.getCurrentUserId();
+        UUID tenantId = getCurrentTenantId();
         checkSubscription(tenantId);
         skuService.deleteSku(tenantId, id);
         return ResponseEntity.ok(ApiResponse.success("Xóa SKU thành công", null));
@@ -129,14 +140,19 @@ public class TenantProductController {
      */
     @GetMapping("/uoms")
     @Operation(summary = "Lấy danh sách Đơn vị tính (UOM)")
-    public ResponseEntity<ApiResponse<Object>> getUoms(
+    public ResponseEntity<ApiResponse<PagedResponse<UnitOfMeasureResponse>>> getUoms(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
-        UUID tenantId = SecurityUtil.getCurrentUserId();
-        // Since we don't have a UomService or UomResponse DTO ready, we will return the
-        // entities directly for testing
-        // or just rely on a simple query from the repository. I'll just return a
-        // success message telling them to look at the DB for now, or... wait!
-        return ResponseEntity.ok(ApiResponse.success("Vui lòng xem trong DB hoặc dùng ID mặc định", null));
+        UUID tenantId = getCurrentTenantId();
+        checkSubscription(tenantId);
+        Pageable pageable = PageRequest.of(page, size);
+        Page<UnitOfMeasure> uomPage = uomRepository.findAllActiveByTenantOrSystem(tenantId, pageable);
+        PagedResponse<UnitOfMeasureResponse> response = PagedResponse.fromPage(uomPage, uom -> UnitOfMeasureResponse.builder()
+                .id(uom.getId())
+                .name(uom.getName())
+                .code(uom.getCode())
+                .description(uom.getDescription())
+                .build());
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách Đơn vị tính thành công", response));
     }
 }

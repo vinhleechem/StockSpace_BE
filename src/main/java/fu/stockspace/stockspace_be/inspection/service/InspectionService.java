@@ -14,6 +14,7 @@ import fu.stockspace.stockspace_be.inspection.entity.InspectionReport;
 import fu.stockspace.stockspace_be.inspection.entity.InspectionStatus;
 import fu.stockspace.stockspace_be.inspection.repository.InspectionReportRepository;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
+import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseService;
 import lombok.RequiredArgsConstructor;
@@ -63,6 +64,11 @@ public class InspectionService {
     public InspectionReportResponse requestInspection(UUID ownerId, UUID warehouseId) {
         Warehouse warehouse = warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId)
                 .orElseThrow(() -> new ForbiddenException(ErrorCode.WAREHOUSE_NOT_OWNED));
+
+        // Không cho phép gửi yêu cầu kiểm định khi kho đang được thuê
+        if (warehouse.getStatus() == WarehouseStatus.RENTED) {
+            throw new BadRequestException(ErrorCode.INSPECTION_CANNOT_BE_REQUESTED_WHEN_RENTED);
+        }
 
         // Kiểm tra đã có PENDING inspection chưa
         boolean hasPending = inspectionRepository.findByWarehouseId(warehouseId).stream()

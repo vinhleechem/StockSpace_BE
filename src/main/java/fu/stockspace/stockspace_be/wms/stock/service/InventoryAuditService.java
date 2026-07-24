@@ -289,9 +289,10 @@ public class InventoryAuditService {
     }
 
     private void checkSubscription(UUID userId) {
-        // Lấy tenantId từ user nếu là STAFF (tenant là trường parent)
-        // Đơn giản: dùng userId trực tiếp
-        if (!subscriptionService.hasActiveSubscription(userId)) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+        UUID tenantId = user.getTenant() != null ? user.getTenant().getId() : user.getId();
+        if (!subscriptionService.hasActiveSubscription(tenantId)) {
             throw new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED);
         }
     }
