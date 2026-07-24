@@ -7,6 +7,7 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestExcepti
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
+import fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository;
 import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
@@ -48,6 +49,7 @@ public class InventoryAuditService {
     private final InventoryReceiptService inventoryReceiptService;
     private final NotificationService notificationService;
     private final SubscriptionService subscriptionService;
+    private final TenantMemberRepository tenantMemberRepository;
 
     // ==================== Tenant / Staff ====================
 
@@ -291,7 +293,9 @@ public class InventoryAuditService {
     private void checkSubscription(UUID userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
-        UUID tenantId = user.getTenant() != null ? user.getTenant().getId() : user.getId();
+        UUID tenantId = tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(userId)
+                .map(member -> member.getTenant().getId())
+                .orElse(userId);
         if (!subscriptionService.hasActiveSubscription(tenantId)) {
             throw new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED);
         }
