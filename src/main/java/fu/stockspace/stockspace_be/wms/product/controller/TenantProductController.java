@@ -1,7 +1,6 @@
 package fu.stockspace.stockspace_be.wms.product.controller;
 
-import fu.stockspace.stockspace_be.auth.entity.User;
-import fu.stockspace.stockspace_be.auth.util.SecurityUtil;
+import fu.stockspace.stockspace_be.auth.util.TenantContextUtil;
 import fu.stockspace.stockspace_be.common.dto.ApiResponse;
 import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
@@ -39,9 +38,7 @@ public class TenantProductController {
     private final UnitOfMeasureRepository uomRepository;
 
     private UUID getCurrentTenantId() {
-        User user = SecurityUtil.getCurrentUser()
-                .orElseThrow(() -> new ForbiddenException(ErrorCode.UNAUTHENTICATED));
-        return user.getTenant() != null ? user.getTenant().getId() : user.getId();
+        return TenantContextUtil.getCurrentTenantId();
     }
 
     private void checkSubscription(UUID tenantId) {
