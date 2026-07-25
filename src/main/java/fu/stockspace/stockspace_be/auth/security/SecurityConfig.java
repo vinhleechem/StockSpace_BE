@@ -22,6 +22,8 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import org.springframework.beans.factory.annotation.Value;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -38,6 +40,9 @@ public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
     private final UserDetailsServiceImpl userDetailsService;
+
+    @Value("${app.frontend.url:http://localhost:5173}")
+    private String frontendUrl;
 
     /**
      * SecurityFilterChain — định nghĩa rules cho từng endpoint.
@@ -71,6 +76,9 @@ public class SecurityConfig {
                         // Public packages — public
                         .requestMatchers(HttpMethod.GET, "/api/packages/**").permitAll()
 
+                        // Guest Chatbot
+                        .requestMatchers("/api/chat/guest/**").permitAll()
+
                         // Tất cả còn lại cần authenticate
                         .anyRequest().authenticated()
                 )
@@ -97,10 +105,19 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
 
-        // ⚠️ Đổi thành domain frontend thật khi deploy
-        config.setAllowedOrigins(List.of(
-                "http://localhost:5173"    // Vite/React dev server
+        List<String> origins = new ArrayList<>(List.of(
+                "http://localhost:5173",
+                "http://localhost:3000",
+                "https://stock-space-nu.vercel.app"
         ));
+        if (frontendUrl != null && !frontendUrl.isBlank()) {
+            String cleanUrl = frontendUrl.trim().replaceAll("/+$", "");
+            if (!origins.contains(cleanUrl)) {
+                origins.add(cleanUrl);
+            }
+        }
+
+        config.setAllowedOrigins(origins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

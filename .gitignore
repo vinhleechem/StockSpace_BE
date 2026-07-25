@@ -34,3 +34,13 @@ build/
 
 # Local Environment Variables
 .env
+.env.local
+
+# Nginx SSL certificates (never commit private keys)
+nginx/ssl/
+
+# Database backups
+backups/
+
+# History plugin
+.history/

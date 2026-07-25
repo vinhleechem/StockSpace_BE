@@ -102,7 +102,7 @@ public class EmailService {
                       <li>📊 Theo dõi tình trạng kho bãi thời gian thực</li>
                     </ul>
                     <div style="text-align: center; margin: 30px 0;">
-                      <a href="http://localhost:5173" style="background-color: #2563EB; color: white; padding: 12px 30px; border-radius: 6px; text-decoration: none; font-weight: bold;">
+                      <a href="%s" style="background-color: #2563EB; color: white; padding: 12px 30px; border-radius: 6px; text-decoration: none; font-weight: bold;">
                         Bắt đầu sử dụng ngay
                       </a>
                     </div>
@@ -114,7 +114,7 @@ public class EmailService {
                   </div>
                 </body>
                 </html>
-                """.formatted(fullName);
+                """.formatted(frontendUrl);
     }
 
     private String buildPasswordResetEmailContent(String fullName, String email, String token) {
