@@ -1,0 +1,47 @@
+version: '3.8'
+
+# =============================================================================
+# PRODUCTION — Chạy trên VPS
+# Lệnh:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Hoặc dùng script:
+#   bash deploy.sh deploy
+#
+# Khác với dev:
+#   - Nginx làm reverse proxy (port 80/443 → app:8080)
+#   - Port 8080 và 5432 KHÔNG expose ra ngoài
+#   - restart: unless-stopped (auto-restart khi VPS reboot)
+#   - JVM heap lớn hơn (-Xmx768m)
+# =============================================================================
+
+services:
+  postgres:
+    restart: unless-stopped
+    # ⛔ Không expose port 5432 ra ngoài — chỉ internal network
+
+  app:
+    restart: unless-stopped
+    environment:
+      - JAVA_OPTS=-Xmx768m -Xms256m -XX:+UseContainerSupport
+    # ⛔ Không expose port 8080 — Nginx sẽ proxy vào
+
+  # ─── Nginx Reverse Proxy ───────────────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: stockspace-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - app
+    networks:
+      - stockspace-net
+    restart: unless-stopped
+
+volumes:
+  nginx_logs:
