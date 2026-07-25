@@ -123,7 +123,7 @@ deploy() {
     log_info "Đợi ứng dụng khởi động (tối đa 120s)..."
     TIMEOUT=120
     ELAPSED=0
-    until docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T app curl -sf http://localhost:8080/actuator/health > /dev/null 2>&1; do
+    until docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T app wget -q --spider http://localhost:8080/actuator/health > /dev/null 2>&1; do
         sleep 5
         ELAPSED=$((ELAPSED + 5))
         if [ $ELAPSED -ge $TIMEOUT ]; then
