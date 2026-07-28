@@ -6,6 +6,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
@@ -17,7 +18,8 @@ import java.util.UUID;
 @Entity
 @Table(name = "chat_sessions", indexes = {
         @Index(name = "idx_chat_sessions_user_id",       columnList = "user_id"),
-        @Index(name = "idx_chat_sessions_session_token", columnList = "session_token")
+        @Index(name = "idx_chat_sessions_session_token", columnList = "session_token"),
+        @Index(name = "idx_chat_sessions_expires_at", columnList = "expires_at")
 })
 @Getter
 @Setter
@@ -37,13 +39,22 @@ public class ChatSession extends BaseEntity {
     private User user;
 
     /**
-     * Token định danh session cho GUEST (không cần đăng nhập).
+     * SHA-256 hash của token định danh session cho GUEST.
+     * Raw bearer token is only returned to the client and is never persisted.
      * Với user đã đăng nhập: null.
      */
     @Column(name = "session_token", unique = true, length = 64)
     private String sessionToken;
 
+    /** Rolling expiry for anonymous sessions. Null for authenticated sessions. */
+    @Column(name = "expires_at")
+    private LocalDateTime expiresAt;
+
     /** Tiêu đề session — lấy từ 50 ký tự đầu của tin nhắn đầu tiên */
     @Column(name = "title", length = 100)
     private String title;
+
+    /** Prevent silent lost updates when a session is changed concurrently. */
+    @Version
+    private long version;
 }
