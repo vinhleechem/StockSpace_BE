@@ -41,6 +41,8 @@ public class DataInitializer implements CommandLineRunner {
     private final SystemConfigRepository systemConfigRepository;
     private final fu.stockspace.stockspace_be.wallet.repository.WalletRepository walletRepository;
     private final UnitOfMeasureRepository uomRepository;
+    private final fu.stockspace.stockspace_be.chatbot.repository.SystemKnowledgeRepository systemKnowledgeRepository;
+    private final fu.stockspace.stockspace_be.chatbot.client.EmbeddingClient embeddingClient;
     @Override
     @Transactional
     public void run(String... args) throws Exception {
@@ -95,6 +97,8 @@ public class DataInitializer implements CommandLineRunner {
         seedSystemConfig();
         // 7. Khởi tạo Đơn vị tính (UOM) mặc định
         seedDefaultUoms();
+        // 8. Khởi tạo Cơ sở tri thức (Policy & FAQ RAG)
+        seedSystemKnowledge();
         log.info("DataInitializer finished seeding successfully!");
     }
     private Permission getOrCreatePermission(String name, String description) {
@@ -234,6 +238,43 @@ public class DataInitializer implements CommandLineRunner {
             uomRepository.save(UnitOfMeasure.builder().code("KG").name("Kg").description("Kilogram").build());
             uomRepository.save(UnitOfMeasure.builder().code("BAO").name("Bao").description("Đơn vị đóng bao").build());
             uomRepository.save(UnitOfMeasure.builder().code("KHOI").name("Khối").description("Mét khối (m3)").build());
+        }
+    }
+
+    private void seedSystemKnowledge() {
+        if (systemKnowledgeRepository.count() == 0) {
+            log.info("Seeding system knowledge base (Policy & FAQ RAG)...");
+
+            createKnowledgeIfNotExist("POLICY", "Quy định Đặt cọc thuê kho",
+                    "Người thuê kho (Tenant) cần thanh toán khoản tiền cọc cố định là 10% tổng giá trị hợp đồng thuê kho. Khoản tiền cọc này sẽ được giữ an toàn trong hệ thống và hoàn trả lại cho Tenant khi hợp đồng kết thúc mà không phát sinh đền bù hư hỏng.");
+
+            createKnowledgeIfNotExist("CANCELLATION", "Chính sách Hủy hợp đồng thuê kho",
+                    "Nếu Tenant hủy hợp đồng trước thời hạn giao kho, số tiền cọc 10% sẽ không được hoàn lại. Nếu Chủ kho (Owner) tự ý hủy hợp đồng đã được ký kết, Owner sẽ bị phạt đền bù 100% tiền cọc cho Tenant và bị trừ điểm uy tín trên nền tảng.");
+
+            createKnowledgeIfNotExist("INSURANCE", "Bảo hiểm & Đền bù hàng hóa hư hỏng",
+                    "Tất cả các kho bãi đã qua xác minh (IsVerified = true) đều bắt buộc tuân thủ quy định bảo hiểm PCCC và bảo vệ tài sản. Trong trường hợp xảy ra hỏa hoạn, ngập lụt hoặc thất thoát do lỗi vận hành kho, bên quản lý kho chịu trách nhiệm bồi thường theo biên bản kiểm định WMS.");
+
+            createKnowledgeIfNotExist("RENTAL_PROCESS", "Quy trình Thuê kho bãi trên StockSpace",
+                    "Bước 1: Tìm kiếm kho phù hợp và gửi yêu cầu giữ chỗ (Booking). Bước 2: Chủ kho phê duyệt yêu cầu trong vòng 24h. Bước 3: Tenant thanh toán tiền cọc 10% qua ví StockSpace. Bước 4: Ký hợp đồng điện tử và nhận bàn giao kho.");
+
+            createKnowledgeIfNotExist("FAQ", "Làm thế nào để nạp tiền vào ví StockSpace?",
+                    "Bạn có thể nạp tiền vào ví StockSpace nhanh chóng qua cổng thanh toán VNPAY (thẻ ATM nội địa, QR Code, thẻ Visa/Mastercard). Tiền sẽ được cộng vào tài khoản ngay lập tức.");
+
+            log.info("Seeded system knowledge base successfully.");
+        }
+    }
+
+    private void createKnowledgeIfNotExist(String category, String title, String content) {
+        if (!systemKnowledgeRepository.existsByTitle(title)) {
+            var vector = embeddingClient.getEmbedding(title + " " + content);
+            String vectorStr = embeddingClient.toVectorString(vector);
+
+            systemKnowledgeRepository.save(fu.stockspace.stockspace_be.chatbot.entity.SystemKnowledge.builder()
+                    .category(category)
+                    .title(title)
+                    .content(content)
+                    .embeddingStr(vectorStr)
+                    .build());
         }
     }
 }

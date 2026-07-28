@@ -10,7 +10,7 @@ version: '3.8'
 services:
   # ─── PostgreSQL ────────────────────────────────────────────────────────────
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: stockspace-db
     environment:
       POSTGRES_DB: ${DB_NAME:-stockspace}
