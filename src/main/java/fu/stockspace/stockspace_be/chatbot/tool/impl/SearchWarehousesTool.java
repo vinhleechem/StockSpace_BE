@@ -1,9 +1,9 @@
 package fu.stockspace.stockspace_be.chatbot.tool.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import fu.stockspace.stockspace_be.chatbot.client.EmbeddingClient;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatTool;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
+import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,8 +15,8 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Tool: searchWarehouses (Hybrid Vector & Filter Search)
- * Tìm kiếm kho công khai kết hợp lọc giá/diện tích và ngữ nghĩa từ khóa.
+ * Tool: searchWarehouses
+ * Tìm kiếm kho công khai theo từ khóa và bộ lọc giá/diện tích.
  * Trả về tối đa 5 kho phù hợp nhất.
  */
 @Slf4j
@@ -25,7 +25,6 @@ import java.util.stream.Collectors;
 public class SearchWarehousesTool implements ChatTool {
 
     private final WarehouseRepository warehouseRepository;
-    private final EmbeddingClient embeddingClient;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -33,19 +32,19 @@ public class SearchWarehousesTool implements ChatTool {
 
     @Override
     public String getDescription() {
-        return "Tìm kiếm kho bãi đang cho thuê theo thành phố/địa điểm, loại kho, khoảng giá hoặc diện tích tối thiểu. " +
-               "Trả về danh sách tối đa 5 kho phù hợp.";
+        return "Tìm tối đa 5 kho đang sẵn sàng cho thuê theo từ khóa trong tên hoặc địa chỉ, khoảng giá thuê " +
+               "và diện tích tối thiểu. Kết quả được lọc theo dữ liệu có cấu trúc, không phải tìm kiếm ngữ nghĩa.";
     }
 
     @Override
     public Map<String, Object> getParameterSchema() {
         return Map.of(
-                "type", "OBJECT",
+                "type", "object",
                 "properties", Map.of(
-                        "keyword", Map.of("type", "STRING", "description", "Từ khóa tìm kiếm: tên kho, địa chỉ hoặc mô tả ngữ nghĩa (VD: 'kho chứa đồ gỗ thoáng mát')"),
-                        "minPrice", Map.of("type", "NUMBER", "description", "Giá thuê tối thiểu (VNĐ/tháng)"),
-                        "maxPrice", Map.of("type", "NUMBER", "description", "Giá thuê tối đa (VNĐ/tháng)"),
-                        "minArea",  Map.of("type", "NUMBER", "description", "Diện tích tối thiểu (m²)")
+                        "keyword", Map.of("type", "string", "description", "Từ khóa khớp với tên kho hoặc địa chỉ"),
+                        "minPrice", Map.of("type", "number", "description", "Giá thuê tối thiểu (VNĐ/tháng), không âm"),
+                        "maxPrice", Map.of("type", "number", "description", "Giá thuê tối đa (VNĐ/tháng), không âm"),
+                        "minArea",  Map.of("type", "number", "description", "Diện tích tối thiểu (m²), không âm")
                 )
         );
     }
@@ -53,16 +52,20 @@ public class SearchWarehousesTool implements ChatTool {
     @Override
     public String execute(Map<String, Object> params, UUID userId) {
         try {
-            String keyword = getStringParam(params, "keyword");
-            String keywordLike = (keyword != null) ? "%" + keyword.toLowerCase() + "%" : null;
+            Map<String, Object> safeParams = params == null ? Map.of() : params;
+            String keyword = getStringParam(safeParams, "keyword");
+            String keywordLike = keyword != null ? "%" + keyword.toLowerCase(Locale.ROOT) + "%" : null;
 
-            BigDecimal minPrice = getDecimalParam(params, "minPrice");
-            BigDecimal maxPrice = getDecimalParam(params, "maxPrice");
-            BigDecimal minArea  = getDecimalParam(params, "minArea");
+            BigDecimal minPrice = getNonNegativeDecimalParam(safeParams, "minPrice");
+            BigDecimal maxPrice = getNonNegativeDecimalParam(safeParams, "maxPrice");
+            BigDecimal minArea = getNonNegativeDecimalParam(safeParams, "minArea");
+            if (minPrice != null && maxPrice != null && minPrice.compareTo(maxPrice) > 0) {
+                return "{\"error\":\"Giá thuê tối thiểu không được lớn hơn giá thuê tối đa\"}";
+            }
 
             var results = warehouseRepository.searchPublic(
                     keywordLike,
-                    null,  // status = null → default AVAILABLE
+                    WarehouseStatus.AVAILABLE,
                     minPrice,
                     maxPrice,
                     minArea,
@@ -81,9 +84,12 @@ public class SearchWarehousesTool implements ChatTool {
             }
             return objectMapper.writeValueAsString(result);
 
+        } catch (IllegalArgumentException e) {
+            return "{\"error\":\"" + e.getMessage() + "\"}";
         } catch (Exception e) {
-            log.error("[SearchWarehousesTool] Error: {}", e.getMessage(), e);
-            return "{\"error\": \"Không thể tìm kiếm kho lúc này.\"}";
+            log.warn("[SearchWarehousesTool] Search failed (cause={})",
+                    e.getClass().getSimpleName());
+            return "{\"error\":\"Không thể tìm kiếm kho lúc này.\"}";
         }
     }
 
@@ -97,19 +103,33 @@ public class SearchWarehousesTool implements ChatTool {
         map.put("capacity", w.getCapacity());
         map.put("type", w.getType() != null ? w.getType().getName() : null);
         map.put("isVerified", w.isVerified());
-        map.put("status", w.getStatus().name());
+        map.put("status", ChatToolLocalization.warehouseStatus(w.getStatus()));
         return map;
     }
 
     private String getStringParam(Map<String, Object> params, String key) {
         Object val = params.get(key);
-        return (val instanceof String s && !s.isBlank()) ? s : null;
+        return val instanceof String s && !s.isBlank() ? s.trim() : null;
     }
 
-    private BigDecimal getDecimalParam(Map<String, Object> params, String key) {
+    private BigDecimal getNonNegativeDecimalParam(Map<String, Object> params, String key) {
         Object val = params.get(key);
-        if (val == null) return null;
-        try { return new BigDecimal(val.toString()); }
-        catch (Exception e) { return null; }
+        if (val == null) {
+            return null;
+        }
+
+        try {
+            BigDecimal value = new BigDecimal(val.toString());
+            if (value.signum() < 0) {
+                throw new IllegalArgumentException(
+                        ChatToolLocalization.filterLabel(key) + " không được là số âm"
+                );
+            }
+            return value;
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(
+                    ChatToolLocalization.filterLabel(key) + " phải là một số hợp lệ"
+            );
+        }
     }
 }
