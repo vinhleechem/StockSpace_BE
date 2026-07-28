@@ -4,6 +4,7 @@ import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
+import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseBin;
@@ -46,6 +47,7 @@ public class StockBatchService {
     private final WarehouseRackRepository rackRepository;
     private final WarehouseBinRepository binRepository;
     private final SubscriptionService subscriptionService;
+    private final RentalContractRepository contractRepository;
 
     /**
      * Lấy danh sách toàn bộ tồn kho trong 1 kho (phân trang).
@@ -59,8 +61,10 @@ public class StockBatchService {
 
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
+        requireActiveWarehouseContract(tenantId, warehouseId);
 
-        Page<StockBatch> page = stockBatchRepository.findByWarehouseIdAndIsDeletedFalse(warehouseId, pageable);
+        Page<StockBatch> page = stockBatchRepository.findByWarehouseIdAndTenantId(
+                warehouseId, tenantId, pageable);
 
         List<StockBatchResponse> content = page.getContent().stream()
                 .map(this::mapToResponse)
@@ -77,6 +81,32 @@ public class StockBatchService {
     }
 
     /**
+     * Tóm tắt tồn kho của riêng Tenant trong một kho đang có hợp đồng ACTIVE.
+     * Truy vấn aggregate đã lọc theo chủ sở hữu SKU để không trộn dữ liệu Tenant khác.
+     */
+    @Transactional(readOnly = true)
+    public WarehouseStockSummary getStockSummaryByWarehouse(UUID tenantId, UUID warehouseId) {
+        if (!subscriptionService.hasActiveSubscription(tenantId)) {
+            throw new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED);
+        }
+
+        Warehouse warehouse = warehouseRepository.findById(warehouseId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
+        requireActiveWarehouseContract(tenantId, warehouseId);
+
+        StockBatchRepository.WarehouseStockSummaryProjection summary =
+                stockBatchRepository.summarizeByWarehouseIdAndTenantId(warehouseId, tenantId);
+
+        return new WarehouseStockSummary(
+                warehouse.getId(),
+                warehouse.getName(),
+                valueOrZero(summary == null ? null : summary.getProductCount()),
+                valueOrZero(summary == null ? null : summary.getBatchCount()),
+                valueOrZero(summary == null ? null : summary.getTotalQuantity())
+        );
+    }
+
+    /**
      * Tổng hợp tồn kho theo SKU — tổng số lượng + danh sách vị trí phân tán.
      */
     @Transactional(readOnly = true)
@@ -85,11 +115,12 @@ public class StockBatchService {
             throw new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED);
         }
 
-        ProductSku sku = productSkuRepository.findByIdAndIsDeletedFalse(skuId)
+        ProductSku sku = productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.SKU_NOT_FOUND));
 
         UnitOfMeasure uom = sku.getUom();
-        List<StockBatch> batches = stockBatchRepository.findBySkuIdAndIsDeletedFalse(skuId);
+        List<StockBatch> batches =
+                stockBatchRepository.findBySkuIdInActiveTenantWarehouses(skuId, tenantId);
         int totalQuantity = batches.stream().mapToInt(StockBatch::getQuantity).sum();
 
         List<StockLocationDto> locations = batches.stream()
@@ -111,6 +142,25 @@ public class StockBatchService {
                 .totalQuantity(totalQuantity)
                 .locations(locations)
                 .build();
+    }
+
+    private void requireActiveWarehouseContract(UUID tenantId, UUID warehouseId) {
+        if (!contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(tenantId, warehouseId)) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        }
+    }
+
+    private long valueOrZero(Long value) {
+        return value == null ? 0L : value;
+    }
+
+    public record WarehouseStockSummary(
+            UUID warehouseId,
+            String warehouseName,
+            long productCount,
+            long batchCount,
+            long totalQuantity
+    ) {
     }
 
     /**
