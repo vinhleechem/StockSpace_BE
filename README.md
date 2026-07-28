@@ -79,7 +79,8 @@ StockSpace được xây dựng với mục tiêu trở thành một hệ sinh t
    - Tích hợp `DataInitializer` tự động khởi chạy khi deploy ứng dụng:
      - Seed sẵn **18 quyền hạn nghiệp vụ** (Warehouse, Rental Request, Inspection, Inventory, Inbound, Outbound, Staff, Package...).
      - Tạo sẵn **5 vai trò mặc định** kèm cấu hình phân quyền tiêu chuẩn.
-     - Tạo sẵn **5 tài khoản kiểm thử đại diện** ứng với từng vai trò.
+     - Có thể seed **5 tài khoản demo** ở dev khi bật `SEED_DEMO_USERS=true`;
+       production luôn tắt.
 
 4. **🔌 Tài Liệu API Tương Tác Trực Quan (Swagger UI)**
    - Tích hợp **Springdoc OpenAPI v2** hỗ trợ giao diện thử nghiệm API tương tác.
@@ -136,9 +137,12 @@ _(Nếu muốn chạy cả ứng dụng lẫn database hoàn toàn trong môi tr
 
 ---
 
-## 🎯 Danh Sách Tài Khoản Thử Nghiệm (Default Seeded Users)
+## 🎯 Danh Sách Tài Khoản Thử Nghiệm (Opt-in Demo Users)
 
-Tất cả các tài khoản mặc định đều sử dụng chung mật khẩu: **`Password123`**
+Các tài khoản dưới đây **không còn được seed mặc định**. Chỉ môi trường dev
+được phép bật chủ động bằng `SEED_DEMO_USERS=true`; profile production luôn
+tắt và tự vô hiệu account cũ vẫn còn dùng mật khẩu công khai. Khi dev bật seed,
+mật khẩu demo là **`Password123`** và tuyệt đối không được dùng cho dữ liệu thật.
 
 | Email                      | Vai Trò (Role)     | Chức Năng Chính                                                         |
 | -------------------------- | ------------------ | ----------------------------------------------------------------------- |
