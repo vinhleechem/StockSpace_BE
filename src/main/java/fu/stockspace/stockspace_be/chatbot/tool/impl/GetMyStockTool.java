@@ -2,6 +2,7 @@ package fu.stockspace.stockspace_be.chatbot.tool.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatTool;
+import fu.stockspace.stockspace_be.wms.stock.service.StockBatchService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -13,8 +14,6 @@ import java.util.UUID;
 /**
  * Tool: getMyStock
  * Xem tóm tắt tồn kho của Tenant trong một kho cụ thể.
- *
- * ⚠️ PENDING: Chờ Dev B expose StockBatchService.getSummaryByWarehouse(UUID warehouseId)
  */
 @Slf4j
 @Component
@@ -22,25 +21,23 @@ import java.util.UUID;
 public class GetMyStockTool implements ChatTool {
 
     private final ObjectMapper objectMapper;
-
-    // TODO: Inject StockBatchService khi Dev B expose getSummaryByWarehouse()
-    // private final StockBatchService stockBatchService;
+    private final StockBatchService stockBatchService;
 
     @Override
     public String getName() { return "getMyStock"; }
 
     @Override
     public String getDescription() {
-        return "Xem tóm tắt tồn kho của Tenant trong một kho bãi: tổng số sản phẩm, " +
-               "số lô hàng, khối lượng tồn kho hiện tại.";
+        return "Xem tóm tắt tồn kho của người thuê đang đăng nhập tại một kho có hợp đồng đang hiệu lực: " +
+               "số SKU, số lô và tổng số lượng. Không trả tồn kho của người thuê khác.";
     }
 
     @Override
     public Map<String, Object> getParameterSchema() {
         return Map.of(
-                "type", "OBJECT",
+                "type", "object",
                 "properties", Map.of(
-                        "warehouseId", Map.of("type", "STRING", "description", "ID của kho bãi cần xem tồn kho")
+                        "warehouseId", Map.of("type", "string", "description", "Mã kho bãi cần xem tồn kho")
                 ),
                 "required", List.of("warehouseId")
         );
@@ -48,28 +45,28 @@ public class GetMyStockTool implements ChatTool {
 
     @Override
     public String execute(Map<String, Object> params, UUID userId) {
+        if (userId == null) {
+            return "{\"error\":\"Bạn cần đăng nhập để xem tồn kho.\"}";
+        }
+
         try {
-            String warehouseIdStr = (String) params.get("warehouseId");
+            Object rawWarehouseId = params == null ? null : params.get("warehouseId");
+            String warehouseIdStr = rawWarehouseId instanceof String value ? value.trim() : null;
             if (warehouseIdStr == null || warehouseIdStr.isBlank()) {
-                return "{\"error\": \"Thiếu warehouseId\"}";
+                return "{\"error\":\"Thiếu mã kho bãi\"}";
             }
             UUID warehouseId = UUID.fromString(warehouseIdStr);
 
-            // TODO: Uncomment khi Dev B expose method:
-            // Object summary = stockBatchService.getSummaryByWarehouse(warehouseId);
-            // return objectMapper.writeValueAsString(summary);
-
-            return objectMapper.writeValueAsString(Map.of(
-                    "status", "pending_integration",
-                    "warehouseId", warehouseIdStr,
-                    "message", "Chức năng đang được phát triển, vui lòng thử lại sau."
-            ));
+            StockBatchService.WarehouseStockSummary summary =
+                    stockBatchService.getStockSummaryByWarehouse(userId, warehouseId);
+            return objectMapper.writeValueAsString(summary);
 
         } catch (IllegalArgumentException e) {
-            return "{\"error\": \"warehouseId không hợp lệ\"}";
+            return "{\"error\":\"Mã kho bãi không hợp lệ\"}";
         } catch (Exception e) {
-            log.error("[GetMyStockTool] Error: {}", e.getMessage(), e);
-            return "{\"error\": \"Không thể lấy thông tin tồn kho lúc này.\"}";
+            log.warn("[GetMyStockTool] Read failed (cause={})",
+                    e.getClass().getSimpleName());
+            return "{\"error\":\"Không thể lấy thông tin tồn kho lúc này.\"}";
         }
     }
 }

@@ -19,13 +19,13 @@ public class AskLoginPromptTool implements ChatTool {
 
     @Override
     public String getDescription() {
-        return "Dùng khi user chưa đăng nhập nhưng hỏi về thông tin cá nhân như hợp đồng, " +
+        return "Dùng khi người dùng chưa đăng nhập nhưng hỏi về thông tin cá nhân như hợp đồng, " +
                "số dư ví, tồn kho hoặc lịch sử giao dịch. Tool này trả về yêu cầu đăng nhập.";
     }
 
     @Override
     public Map<String, Object> getParameterSchema() {
-        return Map.of("type", "OBJECT", "properties", Map.of());
+        return Map.of("type", "object", "properties", Map.of());
     }
 
     @Override
