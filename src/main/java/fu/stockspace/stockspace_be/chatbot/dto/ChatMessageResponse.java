@@ -8,7 +8,7 @@ import java.util.UUID;
  */
 public record ChatMessageResponse(
         UUID id,
-        String role,       // "user" hoặc "model"
+        String role,       // "user" hoặc "assistant"
         String content,
         LocalDateTime createdAt
 ) {}
