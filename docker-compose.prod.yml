@@ -43,5 +43,15 @@ services:
       - stockspace-net
     restart: unless-stopped
 
+  # ─── Adminer Web DB Management ─────────────────────────────────────────────
+  adminer:
+    image: adminer:latest
+    container_name: stockspace-adminer
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    networks:
+      - stockspace-net
+    restart: unless-stopped
+
 volumes:
   nginx_logs:
