@@ -246,11 +246,4 @@ public class AuthController {
                         String createdAt,
                         UUID tenantId) {
         }
-
-        
-
-        
-        
-        
-        
-        
+}
