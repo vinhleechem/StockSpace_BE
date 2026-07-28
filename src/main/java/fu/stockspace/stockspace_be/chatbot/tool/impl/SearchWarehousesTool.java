@@ -1,9 +1,9 @@
 package fu.stockspace.stockspace_be.chatbot.tool.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import fu.stockspace.stockspace_be.chatbot.client.EmbeddingClient;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatTool;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
-import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,8 +15,8 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Tool: searchWarehouses
- * Tìm kiếm kho công khai theo bộ lọc (city/keyword, loại, giá, diện tích).
+ * Tool: searchWarehouses (Hybrid Vector & Filter Search)
+ * Tìm kiếm kho công khai kết hợp lọc giá/diện tích và ngữ nghĩa từ khóa.
  * Trả về tối đa 5 kho phù hợp nhất.
  */
 @Slf4j
@@ -25,6 +25,7 @@ import java.util.stream.Collectors;
 public class SearchWarehousesTool implements ChatTool {
 
     private final WarehouseRepository warehouseRepository;
+    private final EmbeddingClient embeddingClient;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -41,7 +42,7 @@ public class SearchWarehousesTool implements ChatTool {
         return Map.of(
                 "type", "OBJECT",
                 "properties", Map.of(
-                        "keyword", Map.of("type", "STRING", "description", "Từ khóa tìm kiếm: tên kho hoặc địa chỉ/thành phố"),
+                        "keyword", Map.of("type", "STRING", "description", "Từ khóa tìm kiếm: tên kho, địa chỉ hoặc mô tả ngữ nghĩa (VD: 'kho chứa đồ gỗ thoáng mát')"),
                         "minPrice", Map.of("type", "NUMBER", "description", "Giá thuê tối thiểu (VNĐ/tháng)"),
                         "maxPrice", Map.of("type", "NUMBER", "description", "Giá thuê tối đa (VNĐ/tháng)"),
                         "minArea",  Map.of("type", "NUMBER", "description", "Diện tích tối thiểu (m²)")
@@ -91,6 +92,7 @@ public class SearchWarehousesTool implements ChatTool {
         map.put("id", w.getId().toString());
         map.put("name", w.getName());
         map.put("address", w.getAddress());
+        map.put("description", w.getDescription());
         map.put("pricePerMonth", w.getPricePerMonth());
         map.put("capacity", w.getCapacity());
         map.put("type", w.getType() != null ? w.getType().getName() : null);

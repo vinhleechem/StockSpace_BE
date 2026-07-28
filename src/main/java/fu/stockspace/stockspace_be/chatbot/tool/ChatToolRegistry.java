@@ -37,7 +37,7 @@ public class ChatToolRegistry {
 
     // Tool names theo từng role
     private static final List<String> GUEST_TOOL_NAMES = List.of(
-            "searchWarehouses", "getWarehouseDetail", "askLoginPrompt"
+            "searchWarehouses", "getWarehouseDetail", "askLoginPrompt", "searchSystemPolicy"
     );
     private static final List<String> TENANT_EXTRA_TOOL_NAMES = List.of(
             "getMyContracts", "getContractDetail", "getMyStock", "getMyWallet"
