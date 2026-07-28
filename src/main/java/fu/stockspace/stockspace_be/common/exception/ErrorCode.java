@@ -135,6 +135,13 @@ public enum ErrorCode {
     GEMINI_API_ERROR("Chatbot tạm thời không khả dụng, vui lòng thử lại sau", HttpStatus.SERVICE_UNAVAILABLE),
     GEMINI_API_QUOTA_EXCEEDED("Chatbot đang bận, vui lòng thử lại sau ít phút", HttpStatus.TOO_MANY_REQUESTS),
     CHAT_TOOL_EXECUTION_ERROR("Không thể lấy dữ liệu yêu cầu, vui lòng thử lại", HttpStatus.BAD_GATEWAY),
+    CHAT_PROVIDER_NOT_CONFIGURED("Chatbot chưa được cấu hình trên máy chủ", HttpStatus.SERVICE_UNAVAILABLE),
+    CHAT_PROVIDER_UNAVAILABLE("Nhà cung cấp AI tạm thời không khả dụng", HttpStatus.SERVICE_UNAVAILABLE),
+    CHAT_PROVIDER_INVALID_RESPONSE("Nhà cung cấp AI trả về dữ liệu không hợp lệ", HttpStatus.BAD_GATEWAY),
+    CHAT_PROVIDER_TIMEOUT("Nhà cung cấp AI phản hồi quá thời gian cho phép", HttpStatus.GATEWAY_TIMEOUT),
+    CHAT_PROVIDER_RATE_LIMITED("Chatbot đang bận, vui lòng thử lại sau ít phút", HttpStatus.TOO_MANY_REQUESTS),
+    CHAT_PROVIDER_BUSY("Chatbot đang xử lý quá nhiều yêu cầu", HttpStatus.TOO_MANY_REQUESTS),
+    CHAT_RATE_LIMIT_EXCEEDED("Bạn gửi yêu cầu quá nhanh, vui lòng thử lại sau", HttpStatus.TOO_MANY_REQUESTS),
 
     // Review Errors
     REVIEW_NOT_FOUND("Đánh giá không tồn tại", HttpStatus.NOT_FOUND),
