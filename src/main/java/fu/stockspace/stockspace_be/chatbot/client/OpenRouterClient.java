@@ -213,8 +213,16 @@ public class OpenRouterClient {
                 return new AiResponse(null, new FunctionCall(callId, name, args));
             }
 
-            // Text response
+            // Text response — Kiểm tra xem có chứa XML tool_call tag từ Nemotron/DeepSeek không
             String text = (String) message.getOrDefault("content", "");
+            if (text != null && text.contains("<tool_call>")) {
+                FunctionCall xmlCall = parseXmlToolCall(text);
+                if (xmlCall != null) {
+                    log.info("[OpenRouterClient] Parsed XML tool call: {} with args: {}", xmlCall.name(), xmlCall.args());
+                    return new AiResponse(null, xmlCall);
+                }
+            }
+
             return new AiResponse(text, null);
 
         } catch (Exception e) {
@@ -243,6 +251,35 @@ public class OpenRouterClient {
             return objectMapper.writeValueAsString(args != null ? args : Map.of());
         } catch (JsonProcessingException e) {
             return "{}";
+        }
+    }
+
+    private FunctionCall parseXmlToolCall(String text) {
+        try {
+            java.util.regex.Pattern fnPattern = java.util.regex.Pattern.compile("<function[ =][\"']?([^>\"']+)[\"']?>");
+            java.util.regex.Matcher fnMatcher = fnPattern.matcher(text);
+
+            if (!fnMatcher.find()) {
+                return null;
+            }
+            String functionName = fnMatcher.group(1).trim();
+
+            Map<String, Object> args = new HashMap<>();
+            java.util.regex.Pattern paramPattern = java.util.regex.Pattern.compile("<parameter[ =][\"']?([^>\"']+)[\"']?>\\s*(.*?)\\s*</parameter>", java.util.regex.Pattern.DOTALL);
+            java.util.regex.Matcher paramMatcher = paramPattern.matcher(text);
+
+            while (paramMatcher.find()) {
+                String paramName = paramMatcher.group(1).trim();
+                String paramValue = paramMatcher.group(2).trim();
+                args.put(paramName, paramValue);
+            }
+
+            String callId = "xml_" + UUID.randomUUID().toString().substring(0, 8);
+            return new FunctionCall(callId, functionName, args);
+
+        } catch (Exception e) {
+            log.warn("[OpenRouterClient] Failed to parse XML tool call: {}", e.getMessage());
+            return null;
         }
     }
 
