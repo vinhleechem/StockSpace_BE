@@ -13,6 +13,9 @@ RUN mvn clean package -DskipTests
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 
+# Cài wget để deploy.sh có thể healthcheck bên trong container
+RUN apk add --no-cache wget
+
 # Copy jar file từ build stage
 COPY --from=build /app/target/StockSpace_BE-0.0.1-SNAPSHOT.jar app.jar
 
