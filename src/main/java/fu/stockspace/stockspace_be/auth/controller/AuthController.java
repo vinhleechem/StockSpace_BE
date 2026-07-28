@@ -44,6 +44,14 @@ public class AuthController {
     private final RefreshTokenService refreshTokenService;
     private final fu.stockspace.stockspace_be.staff.service.TenantStaffService tenantStaffService;
 
+    // ==================== Health Check ====================
+
+    @GetMapping("/health")
+    @Operation(summary = "Kiểm tra trạng thái ứng dụng (Health check)")
+    public ResponseEntity<ApiResponse<String>> healthCheck() {
+        return ResponseEntity.ok(ApiResponse.success("StockSpace BE is healthy", "UP"));
+    }
+
     // ==================== Register ====================
 
     @PostMapping("/register")
