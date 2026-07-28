@@ -64,8 +64,8 @@ public class SecurityConfig {
                         // Cụ thể permit Google Callback
                         .requestMatchers(HttpMethod.GET, "/api/auth/google/callback").permitAll()
 
-                        // Swagger UI & OpenApi docs — public để test
-                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
+                        // Swagger UI & OpenApi docs & Actuator health — public để test và healthcheck
+                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html", "/actuator/**").permitAll()
 
                         // Warehouse search/view — public (Guest có thể xem)
                         .requestMatchers(HttpMethod.GET, "/api/warehouses/**").permitAll()
