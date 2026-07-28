@@ -11,22 +11,22 @@ import reactor.netty.http.client.HttpClient;
 import java.time.Duration;
 
 /**
- * Config WebClient để gọi Gemini API.
+ * Config WebClient để gọi OpenRouter AI API.
  */
 @Configuration
 public class WebClientConfig {
 
-    @Value("${app.gemini.base-url}")
-    private String geminiBaseUrl;
+    @Value("${app.openrouter.base-url:https://openrouter.ai/api/v1}")
+    private String openRouterBaseUrl;
 
     @Bean
     public WebClient webClient() {
         return WebClient.builder()
-                .baseUrl(geminiBaseUrl)
+                .baseUrl(openRouterBaseUrl)
                 .clientConnector(new ReactorClientHttpConnector(
                         HttpClient.create()
-                                .responseTimeout(Duration.ofSeconds(30))
-                                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5000)
+                                .responseTimeout(Duration.ofSeconds(45))
+                                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10000)
                 ))
                 .build();
     }

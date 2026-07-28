@@ -2,8 +2,8 @@ package fu.stockspace.stockspace_be.chatbot.service;
 
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
-import fu.stockspace.stockspace_be.chatbot.client.GeminiClient;
-import fu.stockspace.stockspace_be.chatbot.client.GeminiClient.GeminiResponse;
+import fu.stockspace.stockspace_be.chatbot.client.OpenRouterClient;
+import fu.stockspace.stockspace_be.chatbot.client.OpenRouterClient.AiResponse;
 import fu.stockspace.stockspace_be.chatbot.dto.*;
 import fu.stockspace.stockspace_be.chatbot.entity.ChatMessage;
 import fu.stockspace.stockspace_be.chatbot.entity.ChatSession;
@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
  * ChatbotService — xử lý toàn bộ logic chatbot bao gồm Agentic Loop.
  *
  * Agentic Loop (tối đa 5 vòng):
- *   Gemini → FUNCTION_CALL → execute tool → gửi kết quả về Gemini → lặp cho đến khi TEXT
+ *   OpenRouter AI → FUNCTION_CALL → execute tool → gửi kết quả về OpenRouter → lặp cho đến khi TEXT
  */
 @Slf4j
 @Service
@@ -41,7 +41,7 @@ public class ChatbotService {
 
     private final ChatSessionRepository sessionRepository;
     private final ChatMessageRepository messageRepository;
-    private final GeminiClient geminiClient;
+    private final OpenRouterClient openRouterClient;
     private final ChatToolRegistry toolRegistry;
     private final PromptBuilder promptBuilder;
     private final UserRepository userRepository;
@@ -73,7 +73,7 @@ public class ChatbotService {
 
         // 5. Lưu tin nhắn vào DB
         saveMessage(session, "user", request.message());
-        saveMessage(session, "model", botReply);
+        saveMessage(session, "assistant", botReply);
 
         // 6. Set title nếu session mới
         if (isNewSession) {
@@ -120,7 +120,7 @@ public class ChatbotService {
 
         // Lưu tin nhắn
         saveMessage(session, "user", request.message());
-        saveMessage(session, "model", botReply);
+        saveMessage(session, "assistant", botReply);
 
         if (isNewSession) {
             session.setTitle(truncate(request.message(), 50));
@@ -170,7 +170,7 @@ public class ChatbotService {
     // ── Agentic Loop ──────────────────────────────────────────────────────────
 
     /**
-     * Vòng lặp agentic: gọi Gemini → nếu FUNCTION_CALL → execute → gửi kết quả lại → lặp.
+     * Vòng lặp agentic: gọi OpenRouter AI → nếu FUNCTION_CALL → execute → gửi kết quả lại → lặp.
      * Tối đa MAX_AGENTIC_ITERATIONS vòng.
      */
     private String runAgenticLoop(List<Map<String, Object>> history,
@@ -178,27 +178,23 @@ public class ChatbotService {
                                    String userMessage,
                                    List<ChatTool> tools,
                                    UUID userId) {
-        GeminiResponse response = geminiClient.chatWithTools(history, systemPrompt, userMessage, tools);
+        AiResponse response = openRouterClient.chatWithTools(history, systemPrompt, userMessage, tools);
 
         // Track full conversation để gửi tool result
-        List<Object> conversation = new ArrayList<>(history);
-        conversation.add(GeminiClient.buildContent("user", userMessage));
+        List<Map<String, Object>> conversation = new ArrayList<>();
+        if (systemPrompt != null && !systemPrompt.isBlank()) {
+            conversation.add(Map.of("role", "system", "content", systemPrompt));
+        }
+        conversation.addAll(history);
+        conversation.add(OpenRouterClient.buildContent("user", userMessage));
 
         int iteration = 0;
         while (response.isFunctionCall() && iteration < MAX_AGENTIC_ITERATIONS) {
-            String toolName = response.functionCall().name();
-            Map<String, Object> args = response.functionCall().args();
+            OpenRouterClient.FunctionCall fnCall = response.functionCall();
+            String toolName = fnCall.name();
+            Map<String, Object> args = fnCall.args();
 
             log.info("[AgenticLoop] Iteration {}: calling tool '{}' with args {}", iteration + 1, toolName, args);
-
-            // Thêm model's function call vào conversation
-            conversation.add(Map.of(
-                    "role", "model",
-                    "parts", List.of(Map.of("functionCall", Map.of(
-                            "name", toolName,
-                            "args", args
-                    )))
-            ));
 
             // Execute tool
             String toolResult = toolRegistry.findByName(toolName)
@@ -214,8 +210,8 @@ public class ChatbotService {
 
             log.info("[AgenticLoop] Tool '{}' result: {}", toolName, toolResult);
 
-            // Gửi kết quả tool về Gemini
-            response = geminiClient.sendToolResult(conversation, toolName, toolResult);
+            // Gửi kết quả tool về OpenRouter
+            response = openRouterClient.sendToolResult(conversation, fnCall, toolResult);
             iteration++;
         }
 
@@ -235,7 +231,7 @@ public class ChatbotService {
             try {
                 sessionId = UUID.fromString(sessionIdStr);
             } catch (IllegalArgumentException e) {
-                throw new AppException(ErrorCode.CHAT_SESSION_NOT_FOUND);
+                throw new ResourceNotFoundException(ErrorCode.CHAT_SESSION_NOT_FOUND);
             }
 
             return sessionRepository.findByIdAndUserId(sessionId, userId)
@@ -257,7 +253,7 @@ public class ChatbotService {
         Collections.reverse(messages);
 
         return messages.stream()
-                .map(m -> GeminiClient.buildContent(m.getRole(), m.getContent()))
+                .map(m -> OpenRouterClient.buildContent(m.getRole(), m.getContent()))
                 .collect(Collectors.toList());
     }
 
@@ -265,7 +261,7 @@ public class ChatbotService {
         ChatMessage msg = ChatMessage.builder()
                 .session(session)
                 .role(role)
-                .content(content)
+                .content(content != null ? content : "")
                 .build();
         messageRepository.save(msg);
     }
