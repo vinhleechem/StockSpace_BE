@@ -7,6 +7,7 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestExcepti
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
+import fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository;
 import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
@@ -49,6 +50,7 @@ class InventoryAuditServiceTest {
     @Mock private InventoryReceiptService inventoryReceiptService;
     @Mock private NotificationService notificationService;
     @Mock private SubscriptionService subscriptionService;
+    @Mock private TenantMemberRepository tenantMemberRepository;
 
     @InjectMocks
     private InventoryAuditService inventoryAuditService;
@@ -185,6 +187,7 @@ class InventoryAuditServiceTest {
 
     @Test
     void testCreateAudit_SubscriptionRequired() {
+        when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
         when(subscriptionService.hasActiveSubscription(userId)).thenReturn(false);
 
         CreateInventoryAuditRequest request = CreateInventoryAuditRequest.builder()
