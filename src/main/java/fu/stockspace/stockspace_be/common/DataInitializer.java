@@ -6,6 +6,8 @@ import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.PermissionRepository;
 import fu.stockspace.stockspace_be.auth.repository.RoleRepository;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
+import fu.stockspace.stockspace_be.chatbot.entity.KnowledgeCategory;
+import fu.stockspace.stockspace_be.chatbot.entity.SystemKnowledge;
 import fu.stockspace.stockspace_be.common.entity.SystemPolicy;
 import fu.stockspace.stockspace_be.common.repository.SystemPolicyRepository;
 import fu.stockspace.stockspace_be.wallet.service.WalletService;
@@ -18,11 +20,14 @@ import fu.stockspace.stockspace_be.wms.product.repository.UnitOfMeasureRepositor
 import java.math.BigDecimal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 /**
  * Khởi tạo dữ liệu mẫu (Roles, Permissions, default Users) khi chạy ứng dụng lần đầu.
@@ -31,6 +36,9 @@ import java.util.Set;
 @RequiredArgsConstructor
 @Slf4j
 public class DataInitializer implements CommandLineRunner {
+    @Value("${app.data.seed-demo-users:false}")
+    private boolean seedDemoUsers;
+
     private final RoleRepository roleRepository;
     private final PermissionRepository permissionRepository;
     private final UserRepository userRepository;
@@ -42,7 +50,6 @@ public class DataInitializer implements CommandLineRunner {
     private final fu.stockspace.stockspace_be.wallet.repository.WalletRepository walletRepository;
     private final UnitOfMeasureRepository uomRepository;
     private final fu.stockspace.stockspace_be.chatbot.repository.SystemKnowledgeRepository systemKnowledgeRepository;
-    private final fu.stockspace.stockspace_be.chatbot.client.EmbeddingClient embeddingClient;
     @Override
     @Transactional
     public void run(String... args) throws Exception {
@@ -83,12 +90,16 @@ public class DataInitializer implements CommandLineRunner {
         // ROLE_INSPECTOR — Thanh tra chất lượng kho
         Set<Permission> inspectorPermissions = Set.of(whRead, inspectRead, inspectCreate, inspectApprove);
         getOrCreateRole(RoleType.ROLE_INSPECTOR.name(), "Thanh tra kho bãi (Inspector)", inspectorPermissions);
-        // 3. Khởi tạo default users để tiện test
-        createDefaultUser("admin@stockspace.com", "Password123", "System Admin", "0987654321", RoleType.ROLE_ADMIN.name(), BigDecimal.ZERO);
-        createDefaultUser("owner@stockspace.com", "Password123", "Nguyen Owner", "0987654322", RoleType.ROLE_OWNER.name(), new BigDecimal("200000000.00"));
-        createDefaultUser("tenant@stockspace.com", "Password123", "Tran Tenant", "0987654323", RoleType.ROLE_TENANT.name(), new BigDecimal("100000000.00"));
-        createDefaultUser("staff@stockspace.com", "Password123", "Le Staff", "0987654324", RoleType.ROLE_STAFF.name(), BigDecimal.ZERO);
-        createDefaultUser("inspector@stockspace.com", "Password123", "Pham Inspector", "0987654325", RoleType.ROLE_INSPECTOR.name(), BigDecimal.ZERO);
+        // 3. Tài khoản demo phải được bật chủ động; production luôn tắt.
+        if (seedDemoUsers) {
+            createDefaultUser("admin@stockspace.com", "Password123", "System Admin", "0987654321", RoleType.ROLE_ADMIN.name(), BigDecimal.ZERO);
+            createDefaultUser("owner@stockspace.com", "Password123", "Nguyen Owner", "0987654322", RoleType.ROLE_OWNER.name(), new BigDecimal("200000000.00"));
+            createDefaultUser("tenant@stockspace.com", "Password123", "Tran Tenant", "0987654323", RoleType.ROLE_TENANT.name(), new BigDecimal("100000000.00"));
+            createDefaultUser("staff@stockspace.com", "Password123", "Le Staff", "0987654324", RoleType.ROLE_STAFF.name(), BigDecimal.ZERO);
+            createDefaultUser("inspector@stockspace.com", "Password123", "Pham Inspector", "0987654325", RoleType.ROLE_INSPECTOR.name(), BigDecimal.ZERO);
+        } else {
+            log.info("Demo account seeding is disabled");
+        }
         // 4. Khởi tạo chính sách/cam kết ràng buộc mặc định
         seedDefaultSystemPolicy();
         // 5. Khởi tạo các gói dịch vụ mặc định
@@ -242,39 +253,107 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     private void seedSystemKnowledge() {
-        if (systemKnowledgeRepository.count() == 0) {
-            log.info("Seeding system knowledge base (Policy & FAQ RAG)...");
+        List<KnowledgeSeed> seeds = List.of(
+                new KnowledgeSeed(
+                        "kb.deposit.current",
+                        KnowledgeCategory.POLICY,
+                        "Quy định đặt cọc thuê kho",
+                        "Khoản đặt cọc mặc định bằng 10% giá thuê theo tháng tại thời điểm tạo yêu cầu đặt kho. " +
+                                "Tỷ lệ thực tế có thể được StockSpace điều chỉnh; số tiền hiển thị trên yêu cầu " +
+                                "là căn cứ áp dụng cho giao dịch cụ thể. " +
+                                "Hệ thống trừ khoản cọc khỏi ví người thuê khi gửi yêu cầu. Nếu yêu cầu còn đang chờ xử lý " +
+                                "và người thuê hủy, hoặc chủ kho từ chối, hệ thống hoàn lại toàn bộ khoản cọc."
+                ),
+                new KnowledgeSeed(
+                        "kb.cancellation.current",
+                        KnowledgeCategory.CANCELLATION,
+                        "Chính sách Hủy hợp đồng thuê kho",
+                        "Người thuê chỉ có thể tự hủy yêu cầu đặt kho khi yêu cầu còn đang chờ xử lý và khi đó được hoàn lại khoản cọc. " +
+                                "Trong giai đoạn thương lượng hợp đồng, chủ kho có thể gửi đề nghị hủy để người thuê phản hồi. " +
+                                "Nếu người thuê đồng ý, hợp đồng bị hủy và cọc được hoàn; nếu không đồng ý, vụ việc chuyển " +
+                                "sang tranh chấp. Khoản cọc trong tranh chấp chỉ được xử lý theo kết quả phân xử dựa trên bằng chứng."
+                ),
+                new KnowledgeSeed(
+                        "kb.damage-dispute.current",
+                        KnowledgeCategory.INSURANCE,
+                        "Bảo hiểm & Đền bù hàng hóa hư hỏng",
+                        "StockSpace không tự động cấp hợp đồng bảo hiểm hoặc cam kết một mức bồi thường cố định. " +
+                                "Khi có hư hỏng hoặc thất thoát, các bên cần lưu bằng chứng và dùng quy trình tranh chấp; " +
+                                "Bộ phận kiểm định hoặc quản trị viên xử lý khoản cọc theo hồ sơ được cung cấp. Điều kiện bảo hiểm riêng, " +
+                                "nếu có, phải được kiểm tra trong hợp đồng và chứng từ của kho."
+                ),
+                new KnowledgeSeed(
+                        "kb.rental-process.current",
+                        KnowledgeCategory.RENTAL_PROCESS,
+                        "Quy trình Thuê kho bãi trên StockSpace",
+                        "Bước 1: Người thuê chọn kho đang cho thuê và gửi yêu cầu đặt kho; khoản cọc được trừ theo số tiền hiển thị. " +
+                                "Bước 2: Chủ kho chấp nhận hoặc từ chối yêu cầu; nếu chấp nhận, hệ thống tạo hợp đồng để hai bên " +
+                                "thương lượng. Bước 3: Chủ kho cập nhật thông tin hợp đồng và chứng từ, sau đó người thuê xác nhận " +
+                                "trong thời hạn StockSpace thông báo. Bước 4: Hợp đồng có hiệu lực và hai bên thực hiện bàn giao."
+                ),
+                new KnowledgeSeed(
+                        "kb.wallet-vnpay.current",
+                        KnowledgeCategory.FAQ,
+                        "Làm thế nào để nạp tiền vào ví StockSpace?",
+                        "Luồng nạp tiền hiện tại chuyển người dùng đến cổng VNPAY. Các kênh thanh toán khả dụng do VNPAY " +
+                                "hiển thị tại thời điểm giao dịch. Số dư chỉ được ghi nhận sau khi hệ thống nhận và xác minh " +
+                                "kết quả thanh toán thành công; hãy kiểm tra lịch sử giao dịch nếu số dư chưa cập nhật."
+                )
+        );
 
-            createKnowledgeIfNotExist("POLICY", "Quy định Đặt cọc thuê kho",
-                    "Người thuê kho (Tenant) cần thanh toán khoản tiền cọc cố định là 10% tổng giá trị hợp đồng thuê kho. Khoản tiền cọc này sẽ được giữ an toàn trong hệ thống và hoàn trả lại cho Tenant khi hợp đồng kết thúc mà không phát sinh đền bù hư hỏng.");
-
-            createKnowledgeIfNotExist("CANCELLATION", "Chính sách Hủy hợp đồng thuê kho",
-                    "Nếu Tenant hủy hợp đồng trước thời hạn giao kho, số tiền cọc 10% sẽ không được hoàn lại. Nếu Chủ kho (Owner) tự ý hủy hợp đồng đã được ký kết, Owner sẽ bị phạt đền bù 100% tiền cọc cho Tenant và bị trừ điểm uy tín trên nền tảng.");
-
-            createKnowledgeIfNotExist("INSURANCE", "Bảo hiểm & Đền bù hàng hóa hư hỏng",
-                    "Tất cả các kho bãi đã qua xác minh (IsVerified = true) đều bắt buộc tuân thủ quy định bảo hiểm PCCC và bảo vệ tài sản. Trong trường hợp xảy ra hỏa hoạn, ngập lụt hoặc thất thoát do lỗi vận hành kho, bên quản lý kho chịu trách nhiệm bồi thường theo biên bản kiểm định WMS.");
-
-            createKnowledgeIfNotExist("RENTAL_PROCESS", "Quy trình Thuê kho bãi trên StockSpace",
-                    "Bước 1: Tìm kiếm kho phù hợp và gửi yêu cầu giữ chỗ (Booking). Bước 2: Chủ kho phê duyệt yêu cầu trong vòng 24h. Bước 3: Tenant thanh toán tiền cọc 10% qua ví StockSpace. Bước 4: Ký hợp đồng điện tử và nhận bàn giao kho.");
-
-            createKnowledgeIfNotExist("FAQ", "Làm thế nào để nạp tiền vào ví StockSpace?",
-                    "Bạn có thể nạp tiền vào ví StockSpace nhanh chóng qua cổng thanh toán VNPAY (thẻ ATM nội địa, QR Code, thẻ Visa/Mastercard). Tiền sẽ được cộng vào tài khoản ngay lập tức.");
-
-            log.info("Seeded system knowledge base successfully.");
+        int changed = 0;
+        for (KnowledgeSeed seed : seeds) {
+            if (upsertKnowledgeSeed(seed)) {
+                changed++;
+            }
+        }
+        if (changed > 0) {
+            log.info("Seeded or updated {} system knowledge documents without remote embedding calls", changed);
         }
     }
 
-    private void createKnowledgeIfNotExist(String category, String title, String content) {
-        if (!systemKnowledgeRepository.existsByTitle(title)) {
-            var vector = embeddingClient.getEmbedding(title + " " + content);
-            String vectorStr = embeddingClient.toVectorString(vector);
+    private boolean upsertKnowledgeSeed(KnowledgeSeed seed) {
+        SystemKnowledge document = systemKnowledgeRepository.findBySourceId(seed.sourceId())
+                .or(() -> systemKnowledgeRepository.findFirstByTitleIgnoreCaseAndIsDeletedFalse(seed.title()))
+                .orElseGet(() -> SystemKnowledge.builder()
+                        .sourceId(seed.sourceId())
+                        .category(seed.category())
+                        .title(seed.title())
+                        .content(seed.content())
+                        .build());
 
-            systemKnowledgeRepository.save(fu.stockspace.stockspace_be.chatbot.entity.SystemKnowledge.builder()
-                    .category(category)
-                    .title(title)
-                    .content(content)
-                    .embeddingStr(vectorStr)
-                    .build());
+        boolean isNew = document.getId() == null;
+        boolean contentChanged = !Objects.equals(document.getTitle(), seed.title())
+                || !Objects.equals(document.getContent(), seed.content())
+                || document.getCategory() != seed.category();
+        boolean metadataChanged = !Objects.equals(document.getSourceId(), seed.sourceId())
+                || !document.isActive()
+                || document.isDeleted()
+                || "[]".equals(document.getEmbeddingStr());
+
+        document.setSourceId(seed.sourceId());
+        document.setCategory(seed.category());
+        document.setTitle(seed.title());
+        document.setContent(seed.content());
+        document.setActive(true);
+        document.setDeleted(false);
+
+        if (contentChanged || "[]".equals(document.getEmbeddingStr())) {
+            document.clearEmbedding();
         }
+
+        if (isNew || contentChanged || metadataChanged) {
+            systemKnowledgeRepository.save(document);
+            return true;
+        }
+        return false;
+    }
+
+    private record KnowledgeSeed(
+            String sourceId,
+            KnowledgeCategory category,
+            String title,
+            String content
+    ) {
     }
 }
