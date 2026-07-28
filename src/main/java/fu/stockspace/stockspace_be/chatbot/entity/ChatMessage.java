@@ -10,11 +10,11 @@ import java.util.UUID;
 /**
  * Entity đại diện cho một tin nhắn trong phiên hội thoại.
  *
- * role: "user" = tin nhắn người dùng, "model" = tin nhắn AI
+ * role: "user" = tin nhắn người dùng, "assistant" = tin nhắn AI
  */
 @Entity
 @Table(name = "chat_messages", indexes = {
-        @Index(name = "idx_chat_messages_session_id", columnList = "session_id")
+        @Index(name = "idx_chat_messages_session_created", columnList = "session_id, created_at")
 })
 @Getter
 @Setter
@@ -33,7 +33,7 @@ public class ChatMessage extends BaseEntity {
     private ChatSession session;
 
     /**
-     * "user" hoặc "model"
+     * "user" hoặc "assistant"
      */
     @Column(name = "role", nullable = false, length = 10)
     private String role;
