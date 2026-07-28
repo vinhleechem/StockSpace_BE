@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Size;
  */
 public record SendMessageRequest(
         /** ID session (null nếu tạo session mới) */
+        @Size(max = 36, message = "sessionId không hợp lệ")
         String sessionId,
 
         /** Nội dung tin nhắn */
