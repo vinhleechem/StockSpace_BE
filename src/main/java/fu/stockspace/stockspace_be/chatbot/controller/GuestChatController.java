@@ -37,18 +37,16 @@ public class GuestChatController {
 
     @Operation(
             summary = "Gửi tin nhắn (Guest)",
-            description = "Không cần đăng nhập. Server cấp sessionToken trong response; các lần sau gửi token bằng header X-Chat-Session-Token. Query parameter chỉ giữ để tương thích client cũ."
+            description = "Không cần đăng nhập. Server cấp sessionToken trong response; các lần sau gửi token bằng header X-Chat-Session-Token."
     )
     @PostMapping("/send")
     public ResponseEntity<ApiResponse<ChatResponse>> sendMessage(
             @Parameter(description = "Guest session bearer token do server cấp")
-            @RequestHeader(name = SESSION_TOKEN_HEADER, required = false) String headerToken,
-            @Parameter(description = "Deprecated: dùng header X-Chat-Session-Token", deprecated = true)
-            @RequestParam(name = "sessionToken", required = false) String legacyQueryToken,
+            @RequestHeader(name = SESSION_TOKEN_HEADER, required = false) String sessionToken,
             @Valid @RequestBody SendMessageRequest request) {
 
         ChatResponse response = chatbotService.processGuestMessage(
-                resolveSessionToken(headerToken, legacyQueryToken),
+                normalize(sessionToken),
                 request
         );
         return ResponseEntity.ok(ApiResponse.success(response));
@@ -65,13 +63,11 @@ public class GuestChatController {
     )
     public ResponseEntity<SseEmitter> streamMessage(
             @Parameter(description = "Guest session bearer token do server cấp")
-            @RequestHeader(name = SESSION_TOKEN_HEADER, required = false) String headerToken,
-            @Parameter(description = "Deprecated: dùng header X-Chat-Session-Token", deprecated = true)
-            @RequestParam(name = "sessionToken", required = false) String legacyQueryToken,
+            @RequestHeader(name = SESSION_TOKEN_HEADER, required = false) String sessionToken,
             @Valid @RequestBody SendMessageRequest request) {
 
         SseEmitter emitter = chatbotService.streamGuestMessage(
-                resolveSessionToken(headerToken, legacyQueryToken),
+                normalize(sessionToken),
                 request
         );
         return streamResponse(emitter);
@@ -79,31 +75,20 @@ public class GuestChatController {
 
     @Operation(
             summary = "Lịch sử chat (Guest)",
-            description = "Trả về tối đa 200 tin nhắn gần nhất. Ưu tiên header X-Chat-Session-Token."
+            description = "Trả về tối đa 200 tin nhắn gần nhất. Sử dụng header X-Chat-Session-Token."
     )
     @GetMapping("/history")
     public ResponseEntity<ApiResponse<List<ChatMessageResponse>>> getHistory(
             @Parameter(description = "Guest session bearer token do server cấp")
-            @RequestHeader(name = SESSION_TOKEN_HEADER, required = false) String headerToken,
-            @Parameter(description = "Deprecated: dùng header X-Chat-Session-Token", deprecated = true)
-            @RequestParam(name = "sessionToken", required = false) String legacyQueryToken) {
+            @RequestHeader(name = SESSION_TOKEN_HEADER, required = false) String sessionToken) {
 
-        String sessionToken = resolveSessionToken(headerToken, legacyQueryToken);
-        if (sessionToken == null) {
+        String token = normalize(sessionToken);
+        if (token == null) {
             throw new BadRequestException("Thiếu guest session token");
         }
         List<ChatMessageResponse> messages =
-                chatbotService.getGuestHistory(sessionToken);
+                chatbotService.getGuestHistory(token);
         return ResponseEntity.ok(ApiResponse.success(messages));
-    }
-
-    private String resolveSessionToken(String headerToken, String legacyQueryToken) {
-        String header = normalize(headerToken);
-        String query = normalize(legacyQueryToken);
-        if (header != null && query != null && !header.equals(query)) {
-            throw new BadRequestException("Guest session token không nhất quán");
-        }
-        return header != null ? header : query;
     }
 
     private String normalize(String value) {

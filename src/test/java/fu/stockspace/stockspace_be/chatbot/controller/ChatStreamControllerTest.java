@@ -33,7 +33,7 @@ class ChatStreamControllerTest {
         when(chatbotService.streamGuestMessage(token, request)).thenReturn(emitter);
 
         ResponseEntity<SseEmitter> response =
-                controller.streamMessage(token, null, request);
+                controller.streamMessage(token, request);
 
         assertSame(emitter, response.getBody());
         assertEquals(MediaType.TEXT_EVENT_STREAM, response.getHeaders().getContentType());
@@ -43,21 +43,6 @@ class ChatStreamControllerTest {
                 response.getHeaders().getCacheControl()
         );
         verify(chatbotService).streamGuestMessage(token, request);
-    }
-
-    @Test
-    void guestStreamRejectsConflictingHeaderAndLegacyQueryTokens() {
-        GuestChatController controller =
-                new GuestChatController(mock(ChatbotService.class));
-
-        assertThrows(
-                BadRequestException.class,
-                () -> controller.streamMessage(
-                        UUID.randomUUID().toString(),
-                        UUID.randomUUID().toString(),
-                        new SendMessageRequest(null, "Xin chào")
-                )
-        );
     }
 
     @Test
