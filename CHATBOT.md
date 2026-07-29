@@ -50,8 +50,7 @@ Content-Type: application/json
 {"sessionId": null, "message": "Tìm kho ở Quận 7"}
 ```
 
-Server trả `sessionToken`. Từ lượt sau và khi đọc history, gửi token đó bằng
-header; query parameter chỉ còn để tương thích client cũ:
+Server trả `sessionToken`. Từ lượt sau và khi đọc history, gửi token đó qua header:
 
 ```http
 X-Chat-Session-Token: <server-issued-token>
