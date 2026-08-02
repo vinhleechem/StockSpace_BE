@@ -46,6 +46,10 @@ public class WarehouseLayout extends BaseEntity {
     @Builder.Default
     private Integer width = 100;
 
+    @Column(name = "length", nullable = false)
+    @Builder.Default
+    private Integer length = 100;
+
     @Column(name = "height", nullable = false)
     @Builder.Default
     private Integer height = 100;
