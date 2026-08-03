@@ -14,6 +14,8 @@ import java.util.UUID;
 public class BinSaveRequest {
     private UUID id; // null nếu tạo mới
 
+    private Integer shelfLevel;
+
     @NotBlank(message = "Tên Bin không được để trống")
     private String name;
 
@@ -29,8 +31,12 @@ public class BinSaveRequest {
     @NotNull(message = "Tọa độ Y của Bin không được để trống")
     private Integer coordinateY;
 
+    private Integer positionZ;
+
     @NotNull(message = "Chiều rộng của Bin không được để trống")
     private Integer width;
+
+    private Integer length;
 
     @NotNull(message = "Chiều cao của Bin không được để trống")
     private Integer height;

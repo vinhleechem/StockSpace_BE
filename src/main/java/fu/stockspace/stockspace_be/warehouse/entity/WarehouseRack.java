@@ -27,8 +27,14 @@ public class WarehouseRack extends BaseEntity {
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "zone_id", nullable = false)
-    private WarehouseZone zone;
+    @JoinColumn(name = "layout_id", nullable = false)
+    private WarehouseLayout layout;
+
+    @Column(name = "zone_name", length = 100)
+    private String zoneName;
+
+    @Column(name = "zone_code", length = 50)
+    private String zoneCode;
 
     @Column(name = "name", nullable = false, length = 100)
     private String name;
@@ -48,8 +54,19 @@ public class WarehouseRack extends BaseEntity {
     @Column(name = "coordinate_y")
     private Integer coordinateY;
 
+    @Column(name = "position_z")
+    @Builder.Default
+    private Integer positionZ = 0;
+
+    @Column(name = "rotation")
+    @Builder.Default
+    private Integer rotation = 0;
+
     @Column(name = "width")
     private Integer width;
+
+    @Column(name = "length")
+    private Integer length;
 
     @Column(name = "height")
     private Integer height;

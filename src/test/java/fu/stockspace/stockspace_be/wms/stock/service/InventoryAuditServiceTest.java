@@ -49,6 +49,7 @@ class InventoryAuditServiceTest {
     @Mock private InventoryReceiptService inventoryReceiptService;
     @Mock private NotificationService notificationService;
     @Mock private SubscriptionService subscriptionService;
+    @Mock private fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository tenantMemberRepository;
 
     @InjectMocks
     private InventoryAuditService inventoryAuditService;
@@ -190,6 +191,8 @@ class InventoryAuditServiceTest {
         CreateInventoryAuditRequest request = CreateInventoryAuditRequest.builder()
                 .warehouseId(warehouseId)
                 .build();
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
 
         ForbiddenException ex = assertThrows(ForbiddenException.class,
                 () -> inventoryAuditService.createAudit(userId, request));

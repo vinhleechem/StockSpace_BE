@@ -8,11 +8,9 @@ import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseBin;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseRack;
-import fu.stockspace.stockspace_be.warehouse.entity.WarehouseZone;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseBinRepository;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRackRepository;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
-import fu.stockspace.stockspace_be.warehouse.repository.WarehouseZoneRepository;
 import fu.stockspace.stockspace_be.wms.product.entity.ProductSku;
 import fu.stockspace.stockspace_be.wms.product.entity.UnitOfMeasure;
 import fu.stockspace.stockspace_be.wms.product.repository.ProductSkuRepository;
@@ -42,7 +40,6 @@ public class StockBatchService {
     private final StockBatchRepository stockBatchRepository;
     private final WarehouseRepository warehouseRepository;
     private final ProductSkuRepository productSkuRepository;
-    private final WarehouseZoneRepository zoneRepository;
     private final WarehouseRackRepository rackRepository;
     private final WarehouseBinRepository binRepository;
     private final SubscriptionService subscriptionService;
@@ -95,7 +92,7 @@ public class StockBatchService {
         List<StockLocationDto> locations = batches.stream()
                 .map(b -> StockLocationDto.builder()
                         .batchId(b.getId())
-                        .zoneName(b.getZone() != null ? b.getZone().getName() : null)
+                        .zoneName(b.getRack() != null ? b.getRack().getZoneName() : null)
                         .rackName(b.getRack() != null ? b.getRack().getName() : null)
                         .binName(b.getBin() != null ? b.getBin().getName() : null)
                         .quantity(b.getQuantity())
@@ -133,16 +130,13 @@ public class StockBatchService {
      * Tìm lô hàng theo vị trí hoặc tạo mới nếu chưa tồn tại (internal).
      */
     @Transactional
-    public StockBatch findOrCreateBatch(UUID skuId, UUID warehouseId, UUID zoneId, UUID rackId, UUID binId) {
+    public StockBatch findOrCreateBatch(UUID skuId, UUID warehouseId, UUID rackId, UUID binId) {
         return stockBatchRepository
-                .findBySkuIdAndWarehouseIdAndZoneIdAndRackIdAndBinIdAndIsDeletedFalse(
-                        skuId, warehouseId, zoneId, rackId, binId)
+                .findBySkuIdAndWarehouseIdAndRackIdAndBinIdAndIsDeletedFalse(
+                        skuId, warehouseId, rackId, binId)
                 .orElseGet(() -> {
                     Warehouse warehouse = warehouseRepository.findById(warehouseId)
                             .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
-                    WarehouseZone zone = zoneId != null
-                            ? zoneRepository.findById(zoneId).orElse(null)
-                            : null;
                     WarehouseRack rack = rackId != null
                             ? rackRepository.findById(rackId).orElse(null)
                             : null;
@@ -153,7 +147,6 @@ public class StockBatchService {
                     StockBatch newBatch = StockBatch.builder()
                             .skuId(skuId)
                             .warehouse(warehouse)
-                            .zone(zone)
                             .rack(rack)
                             .bin(bin)
                             .quantity(0)
@@ -178,8 +171,7 @@ public class StockBatchService {
                 .uomName(uom != null ? uom.getName() : null)
                 .warehouseId(b.getWarehouse() != null ? b.getWarehouse().getId() : null)
                 .warehouseName(b.getWarehouse() != null ? b.getWarehouse().getName() : null)
-                .zoneId(b.getZone() != null ? b.getZone().getId() : null)
-                .zoneName(b.getZone() != null ? b.getZone().getName() : null)
+                .zoneName(b.getRack() != null ? b.getRack().getZoneName() : null)
                 .rackId(b.getRack() != null ? b.getRack().getId() : null)
                 .rackName(b.getRack() != null ? b.getRack().getName() : null)
                 .binId(b.getBin() != null ? b.getBin().getId() : null)
