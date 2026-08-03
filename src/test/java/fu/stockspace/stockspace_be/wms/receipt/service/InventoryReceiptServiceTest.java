@@ -3,16 +3,16 @@ package fu.stockspace.stockspace_be.wms.receipt.service;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.booking.entity.ApprovalStatus;
-import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
-import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
-import fu.stockspace.stockspace_be.warehouse.entity.*;
+import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
+import fu.stockspace.stockspace_be.warehouse.entity.WarehouseBin;
+import fu.stockspace.stockspace_be.warehouse.entity.WarehouseLayout;
+import fu.stockspace.stockspace_be.warehouse.entity.WarehouseRack;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseBinRepository;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRackRepository;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
-import fu.stockspace.stockspace_be.warehouse.repository.WarehouseZoneRepository;
 import fu.stockspace.stockspace_be.wms.product.entity.ProductSku;
 import fu.stockspace.stockspace_be.wms.product.repository.ProductSkuRepository;
 import fu.stockspace.stockspace_be.wms.receipt.dto.*;
@@ -32,8 +32,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.time.LocalDateTime;
-import java.util.*;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -49,7 +50,6 @@ class InventoryReceiptServiceTest {
     @Mock private WarehouseRepository warehouseRepository;
     @Mock private UserRepository userRepository;
     @Mock private ProductSkuRepository productSkuRepository;
-    @Mock private WarehouseZoneRepository zoneRepository;
     @Mock private WarehouseRackRepository rackRepository;
     @Mock private WarehouseBinRepository binRepository;
     @Mock private SubscriptionService subscriptionService;
@@ -65,8 +65,7 @@ class InventoryReceiptServiceTest {
     private WarehouseLayout layout;
     private UUID skuId;
     private ProductSku productSku;
-    private UUID zoneId, rackId, binId;
-    private WarehouseZone zone;
+    private UUID rackId, binId;
     private WarehouseRack rack;
     private WarehouseBin bin;
 
@@ -81,11 +80,8 @@ class InventoryReceiptServiceTest {
         skuId = UUID.randomUUID();
         productSku = ProductSku.builder().id(skuId).skuCode("SKU123").name("Product 1").build();
 
-        zoneId = UUID.randomUUID();
-        zone = WarehouseZone.builder().id(zoneId).layout(layout).name("Zone A").build();
-
         rackId = UUID.randomUUID();
-        rack = WarehouseRack.builder().id(rackId).zone(zone).name("Rack 1").build();
+        rack = WarehouseRack.builder().id(rackId).layout(layout).zoneName("Zone A").name("Rack 1").build();
 
         binId = UUID.randomUUID();
         bin = WarehouseBin.builder().id(binId).rack(rack).name("Bin 1").build();
@@ -97,7 +93,6 @@ class InventoryReceiptServiceTest {
         when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
         when(productSkuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(productSku));
-        when(zoneRepository.findById(zoneId)).thenReturn(Optional.of(zone));
         when(rackRepository.findById(rackId)).thenReturn(Optional.of(rack));
         when(binRepository.findById(binId)).thenReturn(Optional.of(bin));
 
@@ -115,7 +110,6 @@ class InventoryReceiptServiceTest {
                 .receipt(receipt)
                 .sku(productSku)
                 .quantity(10)
-                .zone(zone)
                 .rack(rack)
                 .bin(bin)
                 .build();
@@ -124,7 +118,6 @@ class InventoryReceiptServiceTest {
         ReceiptItemRequest itemRequest = ReceiptItemRequest.builder()
                 .skuId(skuId)
                 .quantity(10)
-                .zoneId(zoneId)
                 .rackId(rackId)
                 .binId(binId)
                 .build();
@@ -159,7 +152,7 @@ class InventoryReceiptServiceTest {
     }
 
     @Test
-    void testCreateReceipt_InvalidCoordinates_ZoneNotInWarehouse() {
+    void testCreateReceipt_InvalidCoordinates_RackNotInWarehouse() {
         when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
         when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
@@ -167,13 +160,12 @@ class InventoryReceiptServiceTest {
 
         Warehouse alternateWarehouse = Warehouse.builder().id(UUID.randomUUID()).build();
         WarehouseLayout alternateLayout = WarehouseLayout.builder().id(UUID.randomUUID()).warehouse(alternateWarehouse).build();
-        WarehouseZone invalidZone = WarehouseZone.builder().id(zoneId).layout(alternateLayout).build();
-        when(zoneRepository.findById(zoneId)).thenReturn(Optional.of(invalidZone));
+        WarehouseRack invalidRack = WarehouseRack.builder().id(rackId).layout(alternateLayout).build();
+        when(rackRepository.findById(rackId)).thenReturn(Optional.of(invalidRack));
 
         ReceiptItemRequest itemRequest = ReceiptItemRequest.builder()
                 .skuId(skuId)
                 .quantity(10)
-                .zoneId(zoneId)
                 .rackId(rackId)
                 .binId(binId)
                 .build();
@@ -208,14 +200,13 @@ class InventoryReceiptServiceTest {
                 .receipt(receipt)
                 .sku(productSku)
                 .quantity(50)
-                .zone(zone)
                 .rack(rack)
                 .bin(bin)
                 .build();
         when(receiptItemRepository.findByReceiptId(receipt.getId())).thenReturn(List.of(item));
 
-        when(stockBatchRepository.findBySkuIdAndWarehouseIdAndZoneIdAndRackIdAndBinIdAndIsDeletedFalse(
-                skuId, warehouseId, zoneId, rackId, binId)).thenReturn(Optional.empty());
+        when(stockBatchRepository.findBySkuIdAndWarehouseIdAndRackIdAndBinIdAndIsDeletedFalse(
+                skuId, warehouseId, rackId, binId)).thenReturn(Optional.empty());
 
         when(receiptRepository.save(any(InventoryReceipt.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -248,7 +239,6 @@ class InventoryReceiptServiceTest {
                 .receipt(receipt)
                 .sku(productSku)
                 .quantity(50)
-                .zone(zone)
                 .rack(rack)
                 .bin(bin)
                 .build();
@@ -258,13 +248,12 @@ class InventoryReceiptServiceTest {
                 .id(UUID.randomUUID())
                 .skuId(skuId)
                 .warehouse(warehouse)
-                .zone(zone)
                 .rack(rack)
                 .bin(bin)
                 .quantity(100)
                 .build();
-        when(stockBatchRepository.findBySkuIdAndWarehouseIdAndZoneIdAndRackIdAndBinIdAndIsDeletedFalse(
-                skuId, warehouseId, zoneId, rackId, binId)).thenReturn(Optional.of(existingBatch));
+        when(stockBatchRepository.findBySkuIdAndWarehouseIdAndRackIdAndBinIdAndIsDeletedFalse(
+                skuId, warehouseId, rackId, binId)).thenReturn(Optional.of(existingBatch));
 
         when(receiptRepository.save(any(InventoryReceipt.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -298,7 +287,6 @@ class InventoryReceiptServiceTest {
                 .receipt(receipt)
                 .sku(productSku)
                 .quantity(30)
-                .zone(zone)
                 .rack(rack)
                 .bin(bin)
                 .build();
@@ -308,13 +296,12 @@ class InventoryReceiptServiceTest {
                 .id(UUID.randomUUID())
                 .skuId(skuId)
                 .warehouse(warehouse)
-                .zone(zone)
                 .rack(rack)
                 .bin(bin)
                 .quantity(100)
                 .build();
-        when(stockBatchRepository.findBySkuIdAndWarehouseIdAndZoneIdAndRackIdAndBinIdAndIsDeletedFalse(
-                skuId, warehouseId, zoneId, rackId, binId)).thenReturn(Optional.of(existingBatch));
+        when(stockBatchRepository.findBySkuIdAndWarehouseIdAndRackIdAndBinIdAndIsDeletedFalse(
+                skuId, warehouseId, rackId, binId)).thenReturn(Optional.of(existingBatch));
 
         when(receiptRepository.save(any(InventoryReceipt.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -348,7 +335,6 @@ class InventoryReceiptServiceTest {
                 .receipt(receipt)
                 .sku(productSku)
                 .quantity(150)
-                .zone(zone)
                 .rack(rack)
                 .bin(bin)
                 .build();
@@ -358,13 +344,12 @@ class InventoryReceiptServiceTest {
                 .id(UUID.randomUUID())
                 .skuId(skuId)
                 .warehouse(warehouse)
-                .zone(zone)
                 .rack(rack)
                 .bin(bin)
                 .quantity(100)
                 .build();
-        when(stockBatchRepository.findBySkuIdAndWarehouseIdAndZoneIdAndRackIdAndBinIdAndIsDeletedFalse(
-                skuId, warehouseId, zoneId, rackId, binId)).thenReturn(Optional.of(existingBatch));
+        when(stockBatchRepository.findBySkuIdAndWarehouseIdAndRackIdAndBinIdAndIsDeletedFalse(
+                skuId, warehouseId, rackId, binId)).thenReturn(Optional.of(existingBatch));
 
         assertThrows(BadRequestException.class, () -> receiptService.approveReceipt(approverId, receipt.getId()));
     }

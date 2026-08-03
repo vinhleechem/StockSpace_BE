@@ -41,14 +41,25 @@ public class WarehouseBin extends BaseEntity {
     @Column(name = "max_volume", precision = 10, scale = 2)
     private BigDecimal maxVolume;
 
+    @Column(name = "shelf_level")
+    @Builder.Default
+    private Integer shelfLevel = 1;
+
     @Column(name = "coordinate_x")
     private Integer coordinateX;
 
     @Column(name = "coordinate_y")
     private Integer coordinateY;
 
+    @Column(name = "position_z")
+    @Builder.Default
+    private Integer positionZ = 0;
+
     @Column(name = "width")
     private Integer width;
+
+    @Column(name = "length")
+    private Integer length;
 
     @Column(name = "height")
     private Integer height;
