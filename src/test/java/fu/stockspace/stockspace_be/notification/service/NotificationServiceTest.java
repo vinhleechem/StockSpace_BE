@@ -7,12 +7,14 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundE
 import fu.stockspace.stockspace_be.notification.dto.PagedNotificationResponse;
 import fu.stockspace.stockspace_be.notification.entity.Notification;
 import fu.stockspace.stockspace_be.notification.repository.NotificationRepository;
+import fu.stockspace.stockspace_be.notification.websocket.NotificationCreatedEvent;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -36,6 +38,9 @@ class NotificationServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private ApplicationEventPublisher applicationEventPublisher;
+
     @InjectMocks
     private NotificationService notificationService;
 
@@ -45,6 +50,8 @@ class NotificationServiceTest {
         User user = User.builder().id(userId).email("user@test.com").build();
         
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         notificationService.push(userId, "Test Title", "Test Message", "SYSTEM");
 
@@ -57,6 +64,10 @@ class NotificationServiceTest {
         assertEquals("Test Message", saved.getMessage());
         assertEquals("SYSTEM", saved.getType());
         assertFalse(saved.isRead());
+        verify(applicationEventPublisher).publishEvent((Object) argThat(
+                (NotificationCreatedEvent event) -> "user@test.com".equals(event.recipientEmail())
+                        && "Test Title".equals(event.notification().getTitle())
+        ));
     }
 
     @Test

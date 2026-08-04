@@ -47,6 +47,12 @@
             <artifactId>spring-boot-starter-webmvc</artifactId>
         </dependency>
 
+        <!-- STOMP WebSocket transport for real-time in-app notifications -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
+
         <!-- Spring Boot Actuator (Health Check) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
