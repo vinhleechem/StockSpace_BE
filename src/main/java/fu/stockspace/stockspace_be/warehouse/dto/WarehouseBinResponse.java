@@ -16,8 +16,12 @@ public class WarehouseBinResponse {
     private String code;
     private BigDecimal maxWeight;
     private BigDecimal maxVolume;
+    private Integer shelfLevel;
     private Integer coordinateX;
     private Integer coordinateY;
+    private Integer positionZ;
     private Integer width;
+    private Integer length;
     private Integer height;
+    private boolean isOccupied;
 }

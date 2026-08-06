@@ -19,18 +19,14 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
 
     List<StockBatch> findByRackId(UUID rackId);
 
-    List<StockBatch> findByZoneId(UUID zoneId);
-
     boolean existsByBinIdAndQuantityGreaterThanAndIsDeletedFalse(UUID binId, int quantity);
 
     boolean existsByRackIdAndQuantityGreaterThanAndIsDeletedFalse(UUID rackId, int quantity);
 
-    boolean existsByZoneIdAndQuantityGreaterThanAndIsDeletedFalse(UUID zoneId, int quantity);
-
     boolean existsBySkuIdAndIsDeletedFalse(UUID skuId);
 
-    Optional<StockBatch> findBySkuIdAndWarehouseIdAndZoneIdAndRackIdAndBinIdAndIsDeletedFalse(
-            UUID skuId, UUID warehouseId, UUID zoneId, UUID rackId, UUID binId);
+    Optional<StockBatch> findBySkuIdAndWarehouseIdAndRackIdAndBinIdAndIsDeletedFalse(
+            UUID skuId, UUID warehouseId, UUID rackId, UUID binId);
 
     // Dev B — Module 5
     Page<StockBatch> findByWarehouseIdAndIsDeletedFalse(UUID warehouseId, Pageable pageable);

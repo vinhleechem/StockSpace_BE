@@ -10,7 +10,5 @@ import java.util.UUID;
 @Repository
 public interface WarehouseRackRepository extends JpaRepository<WarehouseRack, UUID> {
 
-    List<WarehouseRack> findAllByZoneId(UUID zoneId);
-
-    List<WarehouseRack> findAllByZoneLayoutId(UUID layoutId);
+    List<WarehouseRack> findAllByLayoutId(UUID layoutId);
 }

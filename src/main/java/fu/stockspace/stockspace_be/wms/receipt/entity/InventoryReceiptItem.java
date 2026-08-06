@@ -1,7 +1,6 @@
 package fu.stockspace.stockspace_be.wms.receipt.entity;
 
 import fu.stockspace.stockspace_be.wms.product.entity.ProductSku;
-import fu.stockspace.stockspace_be.warehouse.entity.WarehouseZone;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseRack;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseBin;
 import jakarta.persistence.*;
@@ -33,10 +32,6 @@ public class InventoryReceiptItem {
 
     @Column(name = "quantity", nullable = false)
     private int quantity;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "zone_id")
-    private WarehouseZone zone;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "rack_id")
