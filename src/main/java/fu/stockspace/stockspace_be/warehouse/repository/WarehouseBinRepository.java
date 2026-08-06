@@ -13,7 +13,7 @@ public interface WarehouseBinRepository extends JpaRepository<WarehouseBin, UUID
 
     List<WarehouseBin> findAllByRackId(UUID rackId);
 
-    List<WarehouseBin> findAllByRackZoneLayoutId(UUID layoutId);
+    List<WarehouseBin> findAllByRackLayoutId(UUID layoutId);
 
     Optional<WarehouseBin> findByCode(String code);
 }

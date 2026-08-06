@@ -1,0 +1,61 @@
+name: Deploy production
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+# Do not cancel a deployment that may already be rebuilding containers on the VPS.
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy VPS
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+
+    steps:
+      - name: Validate deployment secrets
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          test -n "$VPS_HOST" || (echo 'Missing VPS_HOST secret' && exit 1)
+          test -n "$VPS_USERNAME" || (echo 'Missing VPS_USERNAME secret' && exit 1)
+          test -n "$VPS_SSH_KEY" || (echo 'Missing VPS_SSH_KEY secret' && exit 1)
+          test -n "$VPS_KNOWN_HOSTS" || (echo 'Missing VPS_KNOWN_HOSTS secret' && exit 1)
+
+      - name: Configure SSH
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Run deployment on VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
+        run: |
+          PORT="${VPS_PORT:-22}"
+          ssh \
+            -i ~/.ssh/id_ed25519 \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 \
+            -p "$PORT" \
+            "$VPS_USERNAME@$VPS_HOST" \
+            'bash /opt/stockspace/deploy.sh deploy'
