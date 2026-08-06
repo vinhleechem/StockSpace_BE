@@ -13,11 +13,11 @@ In **Settings → Environments**, create an environment named `production` and a
 | --- | --- |
 | `VPS_HOST` | VPS IP address or hostname |
 | `VPS_USERNAME` | SSH user, e.g. `root` or a dedicated deploy user |
-| `VPS_SSH_KEY` | Private SSH key for that user (including `BEGIN` and `END` lines) |
+| `VPS_SSH_KEY_B64` | Base64-encoded private SSH key for that user |
 | `VPS_KNOWN_HOSTS` | Output of `ssh-keyscan -H <VPS_HOST>` run from a trusted machine |
 | `VPS_PORT` | SSH port; optional, defaults to `22` |
 
-The public key that matches `VPS_SSH_KEY` must be present in the VPS user's `~/.ssh/authorized_keys` file. The project must already be set up at `/opt/stockspace`; `deploy.sh` pulls `origin/main`, rebuilds the Docker services, and checks the health endpoint.
+The public key that matches `VPS_SSH_KEY_B64` must be present in the VPS user's `~/.ssh/authorized_keys` file. The project must already be set up at `/opt/stockspace`; `deploy.sh` pulls `origin/main`, rebuilds the Docker services, and checks the health endpoint.
 
 ## Enforce the PR flow
 
