@@ -92,8 +92,13 @@ public class TenantStaffService {
             throw new ResourceConflictException(ErrorCode.STAFF_INVITATION_DUPLICATE);
         }
 
-        // 3. Kiểm tra email đã là Staff active của Tenant chưa
+        // 3. Kiểm tra email đã là Tenant/Owner hoặc đã là Staff active của Tenant chưa
         userRepository.findByEmail(email).ifPresent(existingUser -> {
+            boolean isTenantOrOwner = existingUser.getRoles().stream()
+                    .anyMatch(r -> RoleType.ROLE_TENANT.name().equals(r.getName()) || RoleType.ROLE_OWNER.name().equals(r.getName()));
+            if (isTenantOrOwner) {
+                throw new BadRequestException(ErrorCode.STAFF_CANNOT_INVITE_TENANT_OR_OWNER);
+            }
             if (memberRepository.existsByUserIdAndTenantIdAndIsDeletedFalse(existingUser.getId(), tenantId)) {
                 throw new ResourceConflictException(ErrorCode.STAFF_ALREADY_MEMBER);
             }
