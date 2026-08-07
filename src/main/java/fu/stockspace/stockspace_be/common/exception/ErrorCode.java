@@ -122,6 +122,7 @@ public enum ErrorCode {
     STAFF_INVITATION_ALREADY_ACCEPTED("Lời mời này đã được sử dụng trước đó", HttpStatus.BAD_REQUEST),
     STAFF_INVITATION_DUPLICATE("Đã có lời mời đang chờ xác nhận gửi đến email này. Vui lòng kiểm tra hộp thư", HttpStatus.CONFLICT),
     STAFF_ALREADY_MEMBER("Email này đã là nhân viên kho đang hoạt động trong tổ chức của bạn", HttpStatus.CONFLICT),
+    STAFF_CANNOT_INVITE_TENANT_OR_OWNER("Email này đã đăng ký tài khoản Tenant hoặc Chủ kho độc lập. Không thể mời làm Nhân viên kho", HttpStatus.BAD_REQUEST),
     STAFF_NOT_FOUND("Nhân viên không tồn tại hoặc đã bị xóa khỏi tổ chức", HttpStatus.NOT_FOUND),
 
     // Inventory Audit Errors (Dev B)
