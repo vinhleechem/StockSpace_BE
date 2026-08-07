@@ -15,6 +15,14 @@ public class WarehouseLayoutResponse {
     private UUID tenantId;
     private boolean isDefault;
     private Integer width;
+    private Integer length;
     private Integer height;
-    private List<ZoneResponse> zones;
+
+    // Layout Statistics
+    private int totalRacks;
+    private int totalBins;
+    private int occupiedBins;
+    private int emptyBins;
+
+    private List<RackResponse> racks;
 }

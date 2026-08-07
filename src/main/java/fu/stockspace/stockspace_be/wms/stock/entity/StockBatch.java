@@ -2,7 +2,6 @@ package fu.stockspace.stockspace_be.wms.stock.entity;
 
 import fu.stockspace.stockspace_be.common.entity.BaseEntity;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
-import fu.stockspace.stockspace_be.warehouse.entity.WarehouseZone;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseRack;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseBin;
 import jakarta.persistence.*;
@@ -32,10 +31,6 @@ public class StockBatch extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "warehouse_id", nullable = false)
     private Warehouse warehouse;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "zone_id")
-    private WarehouseZone zone;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "rack_id")
