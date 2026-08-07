@@ -59,9 +59,10 @@ public class GetInspectionDetailTool implements ChatTool {
 
         try {
             UUID inspectionId = UUID.fromString(params.get("inspectionId").toString());
-            InspectionReportResponse response = inspectionService.getInspectionDetail(userId, inspectionId);
+            InspectionReportResponse response = inspectionService.getInspectionById(inspectionId);
             return objectMapper.writeValueAsString(response);
         } catch (Exception e) {
+
             log.warn("[GetInspectionDetailTool] Read failed (cause={})", e.getClass().getSimpleName());
             return "{\"error\":\"Không thể lấy thông tin chi tiết kiểm định lúc này.\"}";
         }

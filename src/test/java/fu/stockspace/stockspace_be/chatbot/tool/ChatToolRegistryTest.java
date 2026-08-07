@@ -22,7 +22,18 @@ class ChatToolRegistryTest {
             "getMyContracts",
             "getContractDetail",
             "getMyStock",
-            "getMyWallet"
+            "getMyWallet",
+            "getMyWarehouses",
+            "getWarehouseBookings",
+            "getRevenueSummary",
+            "getOccupancyRate",
+            "getAssignedWarehouseStock",
+            "getPendingInboundOrders",
+            "getPendingOutboundOrders",
+            "getPlatformSummary",
+            "getMonthlyRevenue",
+            "getMyAssignedInspections",
+            "getInspectionDetail"
     );
 
     @Test
@@ -32,6 +43,7 @@ class ChatToolRegistryTest {
         List<String> guest = names(registry.getToolsForRole("GUEST"));
         List<String> tenant = names(registry.getToolsForRole("ROLE_TENANT"));
         List<String> owner = names(registry.getToolsForRole("ROLE_OWNER"));
+        List<String> staff = names(registry.getToolsForRole("ROLE_STAFF"));
 
         assertTrue(guest.contains("askLoginPrompt"));
         assertFalse(guest.contains("getMyWallet"));
@@ -42,12 +54,19 @@ class ChatToolRegistryTest {
                 "getMyWallet"
         )));
         assertFalse(tenant.contains("askLoginPrompt"));
-        assertEquals(List.of(
-                "searchWarehouses",
-                "getWarehouseDetail",
-                "searchSystemPolicy"
-        ), owner);
+        assertTrue(owner.containsAll(List.of(
+                "getMyWarehouses",
+                "getWarehouseBookings",
+                "getRevenueSummary",
+                "getOccupancyRate"
+        )));
+        assertTrue(staff.containsAll(List.of(
+                "getAssignedWarehouseStock",
+                "getPendingInboundOrders",
+                "getPendingOutboundOrders"
+        )));
     }
+
 
     @Test
     void failsFastWhenRequiredToolIsMissingOrDuplicated() {

@@ -261,10 +261,11 @@ INSPECTOR   → [getMyAssignedInspections, getInspectionDetail]
 | 9 | Guest Session Token (`X-Chat-Session-Token`, SHA-256 hash, rolling TTL) | **Dev A** | 🟢 | ✅ |
 | 10 | User/Guest Chat Controllers (Sync JSON & SSE Stream) | **Dev A** | 🟢 | ✅ |
 | 11 | RAG Hybrid Search with pgvector (`ops/migrations/20260728_chatbot_production.sql`) | **Dev A** | 🔴 | ✅ |
-| 12 | Expose internal methods (Contract/Wallet/Stock/Booking/Inspection) | **Dev B** | 🔴 | ⬜ |
-| 13 | Tools: OWNER (`getMyWarehouses`, `getWarehouseBookings`, `getRevenueSummary`, `getOccupancyRate`) | **Dev B** | 🟡 | ⬜ |
-| 14 | Tools: STAFF (`getAssignedWarehouseStock`, `getPendingInboundOrders`, `getPendingOutboundOrders`) | **Dev B** | 🟡 | ⬜ |
-| 15 | Tools: ADMIN (`getPlatformSummary`, `getMonthlyRevenue`) | **Dev B** | 🟡 | ⬜ |
-| 16 | Tools: INSPECTOR (`getMyAssignedInspections`, `getInspectionDetail`) | **Dev B** | 🟡 | ⬜ |
-| 17 | Owner Stats Service + Controller + DTOs | **Dev B** | 🟢 | ⬜ |
-| 18 | Admin Stats Service + Controller + DTOs | **Dev B** | 🟢 | ⬜ |
+| 12 | Expose internal methods (Contract/Wallet/Stock/Booking/Inspection) | **Dev B** | 🔴 | ✅ |
+| 13 | Tools: OWNER (`getMyWarehouses`, `getWarehouseBookings`, `getRevenueSummary`, `getOccupancyRate`) | **Dev B** | 🟡 | ✅ |
+| 14 | Tools: STAFF (`getAssignedWarehouseStock`, `getPendingInboundOrders`, `getPendingOutboundOrders`) | **Dev B** | 🟡 | ✅ |
+| 15 | Tools: ADMIN (`getPlatformSummary`, `getMonthlyRevenue`) | **Dev B** | 🟡 | ✅ |
+| 16 | Tools: INSPECTOR (`getMyAssignedInspections`, `getInspectionDetail`) | **Dev B** | 🟡 | ✅ |
+| 17 | Owner Stats Service + Controller + DTOs | **Dev B** | 🟢 | ✅ |
+| 18 | Admin Stats Service + Controller + DTOs | **Dev B** | 🟢 | ✅ |
+
