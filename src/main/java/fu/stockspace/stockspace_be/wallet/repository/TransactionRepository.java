@@ -19,7 +19,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
             SELECT EXTRACT(MONTH FROM t.createdAt) as month, SUM(t.amount) as total
             FROM Transaction t
             WHERE t.wallet.id = :walletId
-              AND t.type = :type
+              AND t.transactionType = :type
               AND EXTRACT(YEAR FROM t.createdAt) = :year
             GROUP BY EXTRACT(MONTH FROM t.createdAt)
             """)
@@ -32,7 +32,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
     @Query("""
             SELECT EXTRACT(MONTH FROM t.createdAt) as month, SUM(t.amount) as total
             FROM Transaction t
-            WHERE t.type = :type
+            WHERE t.transactionType = :type
               AND EXTRACT(YEAR FROM t.createdAt) = :year
             GROUP BY EXTRACT(MONTH FROM t.createdAt)
             """)
