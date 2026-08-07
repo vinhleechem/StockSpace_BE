@@ -12,11 +12,9 @@ import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseBin;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseRack;
-import fu.stockspace.stockspace_be.warehouse.entity.WarehouseZone;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseBinRepository;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRackRepository;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
-import fu.stockspace.stockspace_be.warehouse.repository.WarehouseZoneRepository;
 import fu.stockspace.stockspace_be.wms.product.entity.ProductSku;
 import fu.stockspace.stockspace_be.wms.product.repository.ProductSkuRepository;
 import fu.stockspace.stockspace_be.wms.receipt.dto.*;
@@ -55,7 +53,6 @@ public class InventoryReceiptService {
     private final WarehouseRepository warehouseRepository;
     private final UserRepository userRepository;
     private final ProductSkuRepository productSkuRepository;
-    private final WarehouseZoneRepository zoneRepository;
     private final WarehouseRackRepository rackRepository;
     private final WarehouseBinRepository binRepository;
     private final SubscriptionService subscriptionService;
@@ -93,15 +90,9 @@ public class InventoryReceiptService {
             ProductSku sku = productSkuRepository.findByIdAndIsDeletedFalse(itemRequest.getSkuId())
                     .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.SKU_NOT_FOUND));
 
-            WarehouseZone zone = zoneRepository.findById(itemRequest.getZoneId())
-                    .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.ZONE_NOT_FOUND));
-            if (!zone.getLayout().getWarehouse().getId().equals(warehouse.getId())) {
-                throw new BadRequestException(ErrorCode.LAYOUT_INVALID_COORDINATES);
-            }
-
             WarehouseRack rack = rackRepository.findById(itemRequest.getRackId())
                     .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RACK_NOT_FOUND));
-            if (!rack.getZone().getId().equals(zone.getId())) {
+            if (!rack.getLayout().getWarehouse().getId().equals(warehouse.getId())) {
                 throw new BadRequestException(ErrorCode.LAYOUT_INVALID_COORDINATES);
             }
 
@@ -115,7 +106,6 @@ public class InventoryReceiptService {
                     .receipt(receipt)
                     .sku(sku)
                     .quantity(itemRequest.getQuantity())
-                    .zone(zone)
                     .rack(rack)
                     .bin(bin)
                     .note(itemRequest.getNote())
@@ -155,13 +145,12 @@ public class InventoryReceiptService {
         for (InventoryReceiptItem item : items) {
             UUID skuId = item.getSku().getId();
             UUID warehouseId = receipt.getWarehouse().getId();
-            UUID zoneId = item.getZone().getId();
             UUID rackId = item.getRack().getId();
             UUID binId = item.getBin().getId();
 
             if (receipt.getType() == DocumentType.INBOUND) {
                 StockBatch batch = stockBatchRepository
-                        .findBySkuIdAndWarehouseIdAndZoneIdAndRackIdAndBinIdAndIsDeletedFalse(skuId, warehouseId, zoneId, rackId, binId)
+                        .findBySkuIdAndWarehouseIdAndRackIdAndBinIdAndIsDeletedFalse(skuId, warehouseId, rackId, binId)
                         .orElse(null);
 
                 if (batch != null) {
@@ -171,7 +160,6 @@ public class InventoryReceiptService {
                     batch = StockBatch.builder()
                             .skuId(skuId)
                             .warehouse(receipt.getWarehouse())
-                            .zone(item.getZone())
                             .rack(item.getRack())
                             .bin(item.getBin())
                             .quantity(item.getQuantity())
@@ -189,7 +177,7 @@ public class InventoryReceiptService {
 
             } else if (receipt.getType() == DocumentType.OUTBOUND) {
                 StockBatch batch = stockBatchRepository
-                        .findBySkuIdAndWarehouseIdAndZoneIdAndRackIdAndBinIdAndIsDeletedFalse(skuId, warehouseId, zoneId, rackId, binId)
+                        .findBySkuIdAndWarehouseIdAndRackIdAndBinIdAndIsDeletedFalse(skuId, warehouseId, rackId, binId)
                         .orElseThrow(() -> new BadRequestException(ErrorCode.STOCK_INSUFFICIENT_QUANTITY));
 
                 if (batch.getQuantity() < item.getQuantity()) {
@@ -256,8 +244,7 @@ public class InventoryReceiptService {
                 .skuCode(item.getSku().getSkuCode())
                 .skuName(item.getSku().getName())
                 .quantity(item.getQuantity())
-                .zoneId(item.getZone().getId())
-                .zoneName(item.getZone().getName())
+                .zoneName(item.getRack().getZoneName())
                 .rackId(item.getRack().getId())
                 .rackName(item.getRack().getName())
                 .binId(item.getBin().getId())
@@ -317,7 +304,6 @@ public class InventoryReceiptService {
                 .receipt(receipt)
                 .sku(sku)
                 .quantity(quantity)
-                .zone(batch.getZone())
                 .rack(batch.getRack())
                 .bin(batch.getBin())
                 .note("Điều chỉnh tự động từ kiểm kê #" + auditId)
