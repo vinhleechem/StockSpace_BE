@@ -146,6 +146,32 @@ class TenantStaffServiceTest {
         verify(invitationRepository, never()).save(any(StaffInvitation.class));
     }
 
+    @Test
+    void testSendInvitation_CannotInviteTenantOrOwner() {
+        InviteStaffRequest request = new InviteStaffRequest();
+        request.setEmail("existingtenant@example.com");
+        request.setFullName("Existing Tenant");
+
+        Role tenantRole = Role.builder().name(RoleType.ROLE_TENANT.name()).build();
+        User existingTenantUser = User.builder()
+                .id(UUID.randomUUID())
+                .email("existingtenant@example.com")
+                .roles(Set.of(tenantRole))
+                .build();
+
+        when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenantUser));
+        when(subscriptionRepository.findFirstByTenantIdAndStatusAndEndDateGreaterThanEqualOrderByEndDateDesc(
+                eq(tenantId), eq(SubscriptionStatus.ACTIVE), any(LocalDate.class)))
+                .thenReturn(Optional.of(activeSubscription));
+        when(memberRepository.countByTenantIdAndIsActiveTrueAndIsDeletedFalse(tenantId)).thenReturn(2L);
+        when(invitationRepository.existsByEmailAndTenantIdAndStatus("existingtenant@example.com", tenantId, InvitationStatus.PENDING))
+                .thenReturn(false);
+        when(userRepository.findByEmail("existingtenant@example.com")).thenReturn(Optional.of(existingTenantUser));
+
+        assertThrows(BadRequestException.class, () -> staffService.sendInvitation(tenantId, request));
+        verify(invitationRepository, never()).save(any(StaffInvitation.class));
+    }
+
     // ==================== previewInvitation Tests ====================
 
     @Test
