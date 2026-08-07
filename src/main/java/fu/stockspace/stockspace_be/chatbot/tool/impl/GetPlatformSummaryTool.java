@@ -2,7 +2,7 @@ package fu.stockspace.stockspace_be.chatbot.tool.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
-import fu.stockspace.stockspace_be.booking.repository.BookingRepository;
+import fu.stockspace.stockspace_be.booking.repository.BookingRequestRepository;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatTool;
 import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
@@ -26,8 +26,9 @@ public class GetPlatformSummaryTool implements ChatTool {
     private final ObjectMapper objectMapper;
     private final UserRepository userRepository;
     private final WarehouseRepository warehouseRepository;
-    private final BookingRepository bookingRepository;
+    private final BookingRequestRepository bookingRepository;
     private final RentalContractRepository contractRepository;
+
 
     @Override
     public String getName() {
