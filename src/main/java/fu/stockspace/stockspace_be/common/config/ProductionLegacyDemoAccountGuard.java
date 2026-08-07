@@ -15,8 +15,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.security.SecureRandom;
-import java.util.Base64;
 import java.util.List;
 
 /**
@@ -47,7 +45,6 @@ public class ProductionLegacyDemoAccountGuard implements ApplicationRunner {
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
-    private final SecureRandom secureRandom = new SecureRandom();
 
     @Override
     @Transactional
@@ -60,7 +57,6 @@ public class ProductionLegacyDemoAccountGuard implements ApplicationRunner {
             }
 
             user.setActive(false);
-            user.setPassword(passwordEncoder.encode(randomReplacementPassword()));
             userRepository.save(user);
             refreshTokenRepository.deleteAllByUser(user);
             disabled++;
@@ -83,9 +79,4 @@ public class ProductionLegacyDemoAccountGuard implements ApplicationRunner {
         }
     }
 
-    private String randomReplacementPassword() {
-        byte[] bytes = new byte[48];
-        secureRandom.nextBytes(bytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-    }
 }
