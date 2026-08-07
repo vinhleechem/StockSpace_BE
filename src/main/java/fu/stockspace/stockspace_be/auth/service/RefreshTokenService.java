@@ -32,6 +32,9 @@ public class RefreshTokenService {
     @Value("${app.jwt.refresh-expiration-ms}")
     private long refreshExpirationMs;
 
+    @Value("${app.security.cookie-secure:false}")
+    private boolean secureCookie;
+
     // Tên cookie — FE không cần biết tên này vì browser tự gửi
     public static final String REFRESH_TOKEN_COOKIE_NAME = "refreshToken";
 
@@ -60,7 +63,7 @@ public class RefreshTokenService {
      *
      * @return RefreshToken entity nếu hợp lệ
      */
-    @Transactional
+    @Transactional(noRollbackFor = UnauthorizedException.class)
     public RefreshToken validateRefreshToken(String token) {
         RefreshToken refreshToken = refreshTokenRepository.findByToken(token)
                 .orElseThrow(() -> new UnauthorizedException(ErrorCode.INVALID_REFRESH_TOKEN));
@@ -70,6 +73,17 @@ public class RefreshTokenService {
             refreshToken.setDeleted(true);
             refreshTokenRepository.save(refreshToken);
             throw new UnauthorizedException(ErrorCode.INVALID_REFRESH_TOKEN, "Refresh token has expired. Please login again.");
+        }
+
+        if (refreshToken.getUser() == null
+                || !refreshToken.getUser().isEnabled()
+                || refreshToken.getUser().isDeleted()) {
+            refreshToken.setDeleted(true);
+            refreshTokenRepository.save(refreshToken);
+            throw new UnauthorizedException(
+                    ErrorCode.INVALID_REFRESH_TOKEN,
+                    "Tài khoản không còn hoạt động. Vui lòng đăng nhập lại."
+            );
         }
 
         return refreshToken;
@@ -101,14 +115,14 @@ public class RefreshTokenService {
      *
      * Cấu hình:
      * - HttpOnly: true → JS không đọc được
-     * - Secure: false (dev) → true khi deploy HTTPS
+     * - Secure: cấu hình theo profile; production luôn bật
      * - SameSite: Strict → chống CSRF
      * - Path: /api/auth → chỉ gửi khi gọi auth endpoints
      */
     public ResponseCookie buildRefreshTokenCookie(String tokenValue) {
         return ResponseCookie.from(REFRESH_TOKEN_COOKIE_NAME, tokenValue)
                 .httpOnly(true)
-                .secure(false)        // ⚠️ Đổi thành true khi deploy production (HTTPS)
+                .secure(secureCookie)
                 .path("/api/auth")    // Cookie chỉ gửi kèm request đến /api/auth/*
                 .maxAge(Duration.ofMillis(refreshExpirationMs))
                 .sameSite("Strict")
@@ -121,7 +135,7 @@ public class RefreshTokenService {
     public ResponseCookie buildClearRefreshTokenCookie() {
         return ResponseCookie.from(REFRESH_TOKEN_COOKIE_NAME, "")
                 .httpOnly(true)
-                .secure(false)
+                .secure(secureCookie)
                 .path("/api/auth")
                 .maxAge(0)           // maxAge = 0 → browser xóa cookie ngay
                 .sameSite("Strict")

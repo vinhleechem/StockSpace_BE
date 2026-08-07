@@ -40,6 +40,10 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
             WHERE c.booking.tenant.id = :tenantId
               AND c.booking.warehouse.id = :warehouseId
               AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
+              AND c.isActive = true
+              AND c.isDeleted = false
+              AND c.booking.isActive = true
+              AND c.booking.isDeleted = false
             """)
     boolean existsByTenantIdAndWarehouseIdAndStatusActive(@Param("tenantId") UUID tenantId, @Param("warehouseId") UUID warehouseId);
 }

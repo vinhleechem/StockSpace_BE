@@ -31,10 +31,73 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
     // Dev B — Module 5
     Page<StockBatch> findByWarehouseIdAndIsDeletedFalse(UUID warehouseId, Pageable pageable);
 
+    @Query("""
+            SELECT b FROM StockBatch b
+            JOIN ProductSku s ON s.id = b.skuId
+            WHERE b.warehouse.id = :warehouseId
+              AND s.tenant.id = :tenantId
+              AND b.isActive = true
+              AND s.isActive = true
+              AND b.isDeleted = false
+              AND s.isDeleted = false
+            """)
+    Page<StockBatch> findByWarehouseIdAndTenantId(
+            @Param("warehouseId") UUID warehouseId,
+            @Param("tenantId") UUID tenantId,
+            Pageable pageable
+    );
+
+    @Query("""
+            SELECT COUNT(DISTINCT b.skuId) AS productCount,
+                   COUNT(b.id) AS batchCount,
+                   COALESCE(SUM(b.quantity), 0) AS totalQuantity
+            FROM StockBatch b
+            JOIN ProductSku s ON s.id = b.skuId
+            WHERE b.warehouse.id = :warehouseId
+              AND s.tenant.id = :tenantId
+              AND b.isActive = true
+              AND s.isActive = true
+              AND b.isDeleted = false
+              AND s.isDeleted = false
+            """)
+    WarehouseStockSummaryProjection summarizeByWarehouseIdAndTenantId(
+            @Param("warehouseId") UUID warehouseId,
+            @Param("tenantId") UUID tenantId
+    );
+
     List<StockBatch> findBySkuIdAndIsDeletedFalse(UUID skuId);
+
+    @Query("""
+            SELECT b FROM StockBatch b
+            WHERE b.skuId = :skuId
+              AND b.isActive = true
+              AND b.isDeleted = false
+              AND EXISTS (
+                  SELECT c.id FROM RentalContract c
+                  WHERE c.booking.tenant.id = :tenantId
+                    AND c.booking.warehouse.id = b.warehouse.id
+                    AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
+                    AND c.isActive = true
+                    AND c.isDeleted = false
+                    AND c.booking.isActive = true
+                    AND c.booking.isDeleted = false
+              )
+            """)
+    List<StockBatch> findBySkuIdInActiveTenantWarehouses(
+            @Param("skuId") UUID skuId,
+            @Param("tenantId") UUID tenantId
+    );
 
     @Query("SELECT COALESCE(SUM(b.quantity), 0) FROM StockBatch b WHERE b.skuId = :skuId AND b.isDeleted = false")
     int sumQuantityBySkuId(@Param("skuId") UUID skuId);
 
     Optional<StockBatch> findByIdAndIsDeletedFalse(UUID id);
+
+    interface WarehouseStockSummaryProjection {
+        Long getProductCount();
+
+        Long getBatchCount();
+
+        Long getTotalQuantity();
+    }
 }

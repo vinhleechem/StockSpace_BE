@@ -36,13 +36,23 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
 
     // ==================== Public Search ====================
 
+    @Query("""
+            SELECT w FROM Warehouse w
+            WHERE w.id = :id
+              AND w.isActive = true
+              AND w.isDeleted = false
+              AND w.status = fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus.AVAILABLE
+            """)
+    Optional<Warehouse> findPublicAvailableById(@Param("id") UUID id);
+
     /**
      * Tìm kiếm kho công khai: trả về kho đã được duyệt đăng bài (không cần đã kiểm định)
      * Filter: keyword (name/address), pricePerMonth, capacity
      */
     @Query("""
             SELECT w FROM Warehouse w
-            WHERE w.isDeleted = false
+            WHERE w.isActive = true
+              AND w.isDeleted = false
               AND ((:status IS NULL AND w.status = fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus.AVAILABLE) OR (:status IS NOT NULL AND w.status = :status))
               AND (:keyword IS NULL OR LOWER(w.name) LIKE :keyword
                    OR LOWER(w.address) LIKE :keyword)
