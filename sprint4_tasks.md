@@ -70,7 +70,7 @@ INSPECTOR   → [getMyAssignedInspections, getInspectionDetail]
 - [x] **Dev A hoàn thành `ChatToolRegistry`** → Dev B đăng ký tools vào registry
 - [x] **Dev A hoàn thành `OpenRouterClient` & SSE Streaming** → Dev B dùng để test tools & stream
 - [x] **Dev A hoàn thành RAG Policy Search (`SearchSystemPolicyTool`)**
-- [ ] **Dev B expose internal methods** cần thiết cho tools tiếp theo (OWNER/STAFF/ADMIN/INSPECTOR):
+- [x] **Dev B expose internal methods** cần thiết cho tools tiếp theo (OWNER/STAFF/ADMIN/INSPECTOR):
   - `ContractService.getMyContracts(UUID tenantId)` → `List<ContractSummaryDto>`
   - `WalletService.getBalance(UUID userId)` → `BigDecimal`
   - `StockBatchService.getSummaryByWarehouse(UUID warehouseId)` → `StockSummaryDto`
@@ -161,42 +161,42 @@ INSPECTOR   → [getMyAssignedInspections, getInspectionDetail]
 
 > Dev A cần các method này để implement tools. Dev B làm trước khi bắt đầu tool.
 
-- [ ] **`ContractService`** thêm/expose: `getMyContracts(UUID tenantId)` → `List<ContractSummaryDto>`, `getContractDetail(UUID contractId, UUID userId)` → `ContractDetailDto`
-- [ ] **`WalletService`** thêm/expose: `getBalance(UUID userId)` → `BigDecimal`
-- [ ] **`StockBatchService`** thêm/expose: `getSummaryByWarehouse(UUID warehouseId)` → `StockSummaryDto`
-- [ ] **`BookingService`** thêm/expose: `getPendingByWarehouse(UUID warehouseId)` → `List<BookingSummaryDto>`
-- [ ] **DTOs nội bộ nếu chưa có:** `ContractSummaryDto`, `ContractDetailDto`, `StockSummaryDto`, `BookingSummaryDto`
+- [x] **`ContractService`** thêm/expose: `getMyContracts(UUID tenantId)` → `List<ContractSummaryDto>`, `getContractDetail(UUID contractId, UUID userId)` → `ContractDetailDto`
+- [x] **`WalletService`** thêm/expose: `getBalance(UUID userId)` → `BigDecimal`
+- [x] **`StockBatchService`** thêm/expose: `getSummaryByWarehouse(UUID warehouseId)` → `StockSummaryDto`
+- [x] **`BookingService`** thêm/expose: `getPendingByWarehouse(UUID warehouseId)` → `List<BookingSummaryDto>`
+- [x] **DTOs nội bộ nếu chưa có:** `ContractSummaryDto`, `ContractDetailDto`, `StockSummaryDto`, `BookingSummaryDto`
 
 ---
 
 ### ═══ MODULE 3: Tools — OWNER (Dev B implement) ═══
 
-- [ ] **`GetMyWarehousesTool`** — query `WarehouseRepository.findByOwnerId(userId)`, return list JSON
-- [ ] **`GetWarehouseBookingsTool`** — params: `warehouseId` (optional), gọi `BookingService.getPendingByWarehouse(warehouseId)`
-- [ ] **`GetRevenueSummaryTool`** — params: `year`, query `WalletTransaction` type `RENTAL_PAYMENT`, group by month, return JSON
-- [ ] **`GetOccupancyTool`** — đếm kho RENTED / tổng kho của owner, return tỉ lệ + danh sách JSON
+- [x] **`GetMyWarehousesTool`** — query `WarehouseRepository.findByOwnerId(userId)`, return list JSON
+- [x] **`GetWarehouseBookingsTool`** — params: `warehouseId` (optional), gọi `BookingService.getPendingByWarehouse(warehouseId)`
+- [x] **`GetRevenueSummaryTool`** — params: `year`, query `WalletTransaction` type `RENTAL_PAYMENT`, group by month, return JSON
+- [x] **`GetOccupancyTool`** — đếm kho RENTED / tổng kho của owner, return tỉ lệ + danh sách JSON
 
 ---
 
 ### ═══ MODULE 4: Tools — STAFF (Dev B implement) ═══
 
-- [ ] **`GetAssignedStockTool`** — query `StockBatchRepository` kho Staff được phân công, return tồn kho JSON
-- [ ] **`GetPendingInboundTool`** — query `InventoryReceiptRepository` status PENDING của kho phân công
-- [ ] **`GetPendingOutboundTool`** — query outbound orders PENDING của kho phân công
+- [x] **`GetAssignedStockTool`** — query `StockBatchRepository` kho Staff được phân công, return tồn kho JSON
+- [x] **`GetPendingInboundTool`** — query `InventoryReceiptRepository` status PENDING của kho phân công
+- [x] **`GetPendingOutboundTool`** — query outbound orders PENDING của kho phân công
 
 ---
 
 ### ═══ MODULE 5: Tools — ADMIN (Dev B implement) ═══
 
-- [ ] **`GetPlatformSummaryTool`** — đếm tổng User/Owner/Tenant/Kho/Contract/Booking/Revenue tháng hiện tại
-- [ ] **`GetMonthlyRevenueTool`** — params: `year`, revenue commission từng tháng
+- [x] **`GetPlatformSummaryTool`** — đếm tổng User/Owner/Tenant/Kho/Contract/Booking/Revenue tháng hiện tại
+- [x] **`GetMonthlyRevenueTool`** — params: `year`, revenue commission từng tháng
 
 ---
 
 ### ═══ MODULE 6: Tools — INSPECTOR (Dev B implement) ═══
 
-- [ ] **`GetMyInspectionsTool`** — query `InspectionRepository.findByInspectorId(userId)` status PENDING/IN_PROGRESS, return JSON
-- [ ] **`GetInspectionDetailTool`** — params: `inspectionId`, return chi tiết yêu cầu kiểm định
+- [x] **`GetMyInspectionsTool`** — query `InspectionRepository.findByInspectorId(userId)` status PENDING/IN_PROGRESS, return JSON
+- [x] **`GetInspectionDetailTool`** — params: `inspectionId`, return chi tiết yêu cầu kiểm định
 
 ---
 
@@ -205,25 +205,22 @@ INSPECTOR   → [getMyAssignedInspections, getInspectionDetail]
 > Chatbot trả lời stats qua tool, nhưng frontend cũng cần API endpoint riêng cho Dashboard.
 
 #### 7.1. Owner Stats
-- [ ] **`OwnerStatsService.java`**:
+- [x] **`OwnerStatsService.java`**:
   - `getRevenueSummary(UUID ownerId, int year)` → `RevenueStatsResponse`
   - `getOccupancyRate(UUID ownerId)` → `OccupancyStatsResponse`
-  - `getRecentActivity(UUID ownerId)` → `List<ActivitySummary>` (10 sự kiện gần nhất)
-
-- [ ] **`OwnerStatsController.java`** — `/api/owner/stats`, `hasRole('OWNER')`
+- [x] **`OwnerStatsController.java`** — `/api/owner/stats`, `hasRole('OWNER')`
 
 | Method | Path | Mô tả |
 |--------|------|--------|
 | `GET` | `/api/owner/stats/revenue` | Doanh thu theo năm (`?year=`) |
 | `GET` | `/api/owner/stats/occupancy` | Tỉ lệ lấp đầy |
-| `GET` | `/api/owner/stats/activity` | Hoạt động gần đây |
 
 #### 7.2. Admin Stats
-- [ ] **`AdminStatsService.java`**:
+- [x] **`AdminStatsService.java`**:
   - `getPlatformSummary()` → `PlatformSummaryResponse`
   - `getMonthlyRevenue(int year)` → `List<MonthlyRevenueDto>`
 
-- [ ] **`AdminStatsController.java`** — `/api/admin/stats`, `hasRole('ADMIN')`
+- [x] **`AdminStatsController.java`** — `/api/admin/stats`, `hasRole('ADMIN')`
 
 | Method | Path | Mô tả |
 |--------|------|--------|
@@ -231,10 +228,11 @@ INSPECTOR   → [getMyAssignedInspections, getInspectionDetail]
 | `GET` | `/api/admin/stats/revenue` | Doanh thu commission theo năm |
 
 #### 7.3. DTOs Stats
-- [ ] `RevenueStatsResponse.java` — `int year`, `List<MonthlyRevenueDto>`, `BigDecimal totalRevenue`
-- [ ] `MonthlyRevenueDto.java` — `int month`, `BigDecimal revenue`
-- [ ] `OccupancyStatsResponse.java` — `int total`, `int rented`, `double occupancyRate`, `List<WarehouseStatusDto>`
-- [ ] `PlatformSummaryResponse.java` — users, warehouses, bookings, contracts, monthlyCommission
+- [x] `RevenueStatsResponse.java` — `int year`, `List<MonthlyRevenueDto>`, `BigDecimal totalRevenue`
+- [x] `MonthlyRevenueDto.java` — `int month`, `BigDecimal revenue`
+- [x] `OccupancyStatsResponse.java` — `int total`, `int rented`, `double occupancyRate`, `List<WarehouseStatusDto>`
+- [x] `PlatformSummaryResponse.java` — users, warehouses, bookings, contracts, monthlyCommission
+
 
 ---
 
@@ -261,10 +259,11 @@ INSPECTOR   → [getMyAssignedInspections, getInspectionDetail]
 | 9 | Guest Session Token (`X-Chat-Session-Token`, SHA-256 hash, rolling TTL) | **Dev A** | 🟢 | ✅ |
 | 10 | User/Guest Chat Controllers (Sync JSON & SSE Stream) | **Dev A** | 🟢 | ✅ |
 | 11 | RAG Hybrid Search with pgvector (`ops/migrations/20260728_chatbot_production.sql`) | **Dev A** | 🔴 | ✅ |
-| 12 | Expose internal methods (Contract/Wallet/Stock/Booking/Inspection) | **Dev B** | 🔴 | ⬜ |
-| 13 | Tools: OWNER (`getMyWarehouses`, `getWarehouseBookings`, `getRevenueSummary`, `getOccupancyRate`) | **Dev B** | 🟡 | ⬜ |
-| 14 | Tools: STAFF (`getAssignedWarehouseStock`, `getPendingInboundOrders`, `getPendingOutboundOrders`) | **Dev B** | 🟡 | ⬜ |
-| 15 | Tools: ADMIN (`getPlatformSummary`, `getMonthlyRevenue`) | **Dev B** | 🟡 | ⬜ |
-| 16 | Tools: INSPECTOR (`getMyAssignedInspections`, `getInspectionDetail`) | **Dev B** | 🟡 | ⬜ |
-| 17 | Owner Stats Service + Controller + DTOs | **Dev B** | 🟢 | ⬜ |
-| 18 | Admin Stats Service + Controller + DTOs | **Dev B** | 🟢 | ⬜ |
+| 12 | Expose internal methods (Contract/Wallet/Stock/Booking/Inspection) | **Dev B** | 🔴 | ✅ |
+| 13 | Tools: OWNER (`getMyWarehouses`, `getWarehouseBookings`, `getRevenueSummary`, `getOccupancyRate`) | **Dev B** | 🟡 | ✅ |
+| 14 | Tools: STAFF (`getAssignedWarehouseStock`, `getPendingInboundOrders`, `getPendingOutboundOrders`) | **Dev B** | 🟡 | ✅ |
+| 15 | Tools: ADMIN (`getPlatformSummary`, `getMonthlyRevenue`) | **Dev B** | 🟡 | ✅ |
+| 16 | Tools: INSPECTOR (`getMyAssignedInspections`, `getInspectionDetail`) | **Dev B** | 🟡 | ✅ |
+| 17 | Owner Stats Service + Controller + DTOs | **Dev B** | 🟢 | ✅ |
+| 18 | Admin Stats Service + Controller + DTOs | **Dev B** | 🟢 | ✅ |
+

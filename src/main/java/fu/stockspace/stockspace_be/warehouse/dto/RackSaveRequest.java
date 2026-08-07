@@ -16,6 +16,9 @@ import java.util.UUID;
 public class RackSaveRequest {
     private UUID id; // null nếu tạo mới
 
+    private String zoneName;
+    private String zoneCode;
+
     @NotBlank(message = "Tên Rack không được để trống")
     private String name;
 
@@ -31,8 +34,13 @@ public class RackSaveRequest {
     @NotNull(message = "Tọa độ Y của Rack không được để trống")
     private Integer coordinateY;
 
+    private Integer positionZ;
+    private Integer rotation;
+
     @NotNull(message = "Chiều rộng của Rack không được để trống")
     private Integer width;
+
+    private Integer length;
 
     @NotNull(message = "Chiều cao của Rack không được để trống")
     private Integer height;

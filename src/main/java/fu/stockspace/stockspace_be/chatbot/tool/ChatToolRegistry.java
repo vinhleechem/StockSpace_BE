@@ -38,6 +38,22 @@ public class ChatToolRegistry {
             PUBLIC_TOOL_NAMES,
             List.of("getMyContracts", "getContractDetail", "getMyStock", "getMyWallet")
     );
+    private static final List<String> OWNER_TOOL_NAMES = merge(
+            PUBLIC_TOOL_NAMES,
+            List.of("getMyWarehouses", "getWarehouseBookings", "getRevenueSummary", "getOccupancyRate")
+    );
+    private static final List<String> STAFF_TOOL_NAMES = merge(
+            PUBLIC_TOOL_NAMES,
+            List.of("getAssignedWarehouseStock", "getPendingInboundOrders", "getPendingOutboundOrders")
+    );
+    private static final List<String> ADMIN_TOOL_NAMES = merge(
+            PUBLIC_TOOL_NAMES,
+            List.of("getPlatformSummary", "getMonthlyRevenue")
+    );
+    private static final List<String> INSPECTOR_TOOL_NAMES = merge(
+            PUBLIC_TOOL_NAMES,
+            List.of("getMyAssignedInspections", "getInspectionDetail")
+    );
 
     private final Map<String, List<ChatTool>> toolsByRole;
     private final Map<String, ChatTool> toolsByName;
@@ -56,16 +72,12 @@ public class ChatToolRegistry {
         Map<String, List<ChatTool>> roleMap = new HashMap<>();
         roleMap.put(GUEST_KEY, requiredTools(GUEST_TOOL_NAMES));
         roleMap.put(RoleType.ROLE_TENANT.name(), requiredTools(TENANT_TOOL_NAMES));
-
-        // Private tools for these roles belong to Dev B and are not present in
-        // this branch. Give them safe public/RAG capabilities instead of
-        // advertising nonexistent tools and encouraging hallucinated data.
-        List<ChatTool> publicTools = requiredTools(PUBLIC_TOOL_NAMES);
-        roleMap.put(RoleType.ROLE_OWNER.name(), publicTools);
-        roleMap.put(RoleType.ROLE_STAFF.name(), publicTools);
-        roleMap.put(RoleType.ROLE_ADMIN.name(), publicTools);
-        roleMap.put(RoleType.ROLE_INSPECTOR.name(), publicTools);
+        roleMap.put(RoleType.ROLE_OWNER.name(), requiredTools(OWNER_TOOL_NAMES));
+        roleMap.put(RoleType.ROLE_STAFF.name(), requiredTools(STAFF_TOOL_NAMES));
+        roleMap.put(RoleType.ROLE_ADMIN.name(), requiredTools(ADMIN_TOOL_NAMES));
+        roleMap.put(RoleType.ROLE_INSPECTOR.name(), requiredTools(INSPECTOR_TOOL_NAMES));
         this.toolsByRole = Map.copyOf(roleMap);
+
 
         log.info("[ChatToolRegistry] Registered {} implemented tools", toolsByName.size());
     }
