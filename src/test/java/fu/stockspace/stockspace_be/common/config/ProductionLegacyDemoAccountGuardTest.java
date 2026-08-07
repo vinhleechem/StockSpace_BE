@@ -13,8 +13,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -32,7 +31,7 @@ class ProductionLegacyDemoAccountGuardTest {
     private PasswordEncoder passwordEncoder;
 
     @Test
-    void disablesAndRevokesOnlyAccountStillUsingKnownDemoPassword() {
+    void disablesAndRevokesOnlyAccountStillUsingKnownDemoPasswordWithoutChangingIt() {
         User legacyAdmin = User.builder()
                 .email("admin@stockspace.com")
                 .password("legacy-hash")
@@ -46,8 +45,6 @@ class ProductionLegacyDemoAccountGuardTest {
                 .thenReturn(Optional.empty());
         when(passwordEncoder.matches("Password123", "legacy-hash"))
                 .thenReturn(true);
-        when(passwordEncoder.encode(anyString())).thenReturn("rotated-hash");
-
         new ProductionLegacyDemoAccountGuard(
                 userRepository,
                 refreshTokenRepository,
@@ -55,7 +52,7 @@ class ProductionLegacyDemoAccountGuardTest {
         ).run(new DefaultApplicationArguments(new String[0]));
 
         assertFalse(legacyAdmin.isActive());
-        assertNotEquals("legacy-hash", legacyAdmin.getPassword());
+        assertEquals("legacy-hash", legacyAdmin.getPassword());
         verify(userRepository).save(legacyAdmin);
         verify(refreshTokenRepository).deleteAllByUser(legacyAdmin);
     }
