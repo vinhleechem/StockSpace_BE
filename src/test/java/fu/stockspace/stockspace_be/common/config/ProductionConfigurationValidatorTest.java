@@ -22,6 +22,7 @@ class ProductionConfigurationValidatorTest {
                         "provider/tool-model",
                         "deny",
                         true,
+                        false,
                         1536
                 );
 
@@ -38,6 +39,7 @@ class ProductionConfigurationValidatorTest {
                         "model",
                         "deny",
                         true,
+                        false,
                         1536
                 ).validate()
         );
@@ -49,6 +51,7 @@ class ProductionConfigurationValidatorTest {
                         "model",
                         "deny",
                         true,
+                        false,
                         1536
                 ).validate()
         );
@@ -59,6 +62,7 @@ class ProductionConfigurationValidatorTest {
                         "key",
                         "model",
                         "allow",
+                        false,
                         false,
                         1536
                 ).validate()
@@ -71,8 +75,25 @@ class ProductionConfigurationValidatorTest {
                         "model",
                         "deny",
                         true,
+                        false,
                         768
                 ).validate()
         );
+    }
+
+    @Test
+    void allowsInsecureProviderRoutingOnlyWhenExplicitlyEnabled() {
+        ProductionConfigurationValidator validator =
+                new ProductionConfigurationValidator(
+                        STRONG_SECRET,
+                        "sk-or-v1-test",
+                        "provider/free-model",
+                        "allow",
+                        false,
+                        true,
+                        1536
+                );
+
+        assertDoesNotThrow(validator::validate);
     }
 }
