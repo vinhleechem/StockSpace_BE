@@ -111,6 +111,16 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Preserve the provider-specific HTTP status (429/502/503/504) without
+     * leaking the upstream response body.
+     */
+    @ExceptionHandler(ChatProviderException.class)
+    public ResponseEntity<ApiResponse<Void>> handleChatProvider(ChatProviderException ex) {
+        return ResponseEntity.status(ex.getErrorCode().getStatus())
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    /**
      * Business logic lỗi — các trường hợp IllegalArgumentException chung.
      */
     @ExceptionHandler(IllegalArgumentException.class)
