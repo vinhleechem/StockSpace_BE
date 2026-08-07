@@ -254,7 +254,7 @@ public class WarehouseService {
 
         Page<Warehouse> result = warehouseRepository.searchPublic(
                 kw,
-                request.getStatus(),
+                WarehouseStatus.AVAILABLE,
                 request.getMinPrice(),
                 request.getMaxPrice(),
                 request.getMinCapacity(),
