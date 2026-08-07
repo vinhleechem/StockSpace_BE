@@ -243,7 +243,7 @@ check_env() {
     log_info "Kiểm tra biến môi trường..."
     source .env
 
-    REQUIRED_VARS=("DB_PASSWORD" "JWT_SECRET" "CLOUDINARY_CLOUD_NAME" "CLOUDINARY_API_KEY" "CLOUDINARY_API_SECRET" "OPENROUTER_API_KEY" "OPENROUTER_MODEL" "PUBLIC_HTTPS_READY")
+    REQUIRED_VARS=("DB_PASSWORD" "JWT_SECRET" "CLOUDINARY_CLOUD_NAME" "CLOUDINARY_API_KEY" "CLOUDINARY_API_SECRET" "OPENROUTER_API_KEY" "OPENROUTER_MODEL")
     MISSING=()
 
     for VAR in "${REQUIRED_VARS[@]}"; do
@@ -256,8 +256,11 @@ check_env() {
     if [ ${#MISSING[@]} -gt 0 ]; then
         log_error "Các biến sau chưa được điền trong .env: ${MISSING[*]}"
     fi
-    if [ "$PUBLIC_HTTPS_READY" != "true" ]; then
-        log_error "Production phải có HTTPS trước khi deploy (PUBLIC_HTTPS_READY=true)."
+    if [ "${PUBLIC_HTTPS_READY:-false}" != "true" ]; then
+        if [ "${ALLOW_INSECURE_HTTP:-false}" != "true" ]; then
+            log_error "Production phải có HTTPS trước khi deploy (PUBLIC_HTTPS_READY=true). Chỉ dùng ALLOW_INSECURE_HTTP=true cho môi trường test tạm thời."
+        fi
+        log_warn "Đang deploy HTTP không mã hóa vì ALLOW_INSECURE_HTTP=true. Không dùng cấu hình này cho production public."
     fi
 
     log_success "Tất cả biến bắt buộc đã có."
