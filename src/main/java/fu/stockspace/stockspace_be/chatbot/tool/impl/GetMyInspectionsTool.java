@@ -46,9 +46,10 @@ public class GetMyInspectionsTool implements ChatTool {
         }
 
         try {
-            PagedResponse<InspectionReportResponse> paged = inspectionService.getInspectorTasks(userId, 0, 50);
-            return objectMapper.writeValueAsString(paged.getContent());
+            org.springframework.data.domain.Page<InspectionReportResponse> page = inspectionService.getAssignedInspections(userId, 0, 50);
+            return objectMapper.writeValueAsString(page.getContent());
         } catch (Exception e) {
+
             log.warn("[GetMyInspectionsTool] Read failed (cause={})", e.getClass().getSimpleName());
             return "{\"error\":\"Không thể lấy danh sách nhiệm vụ kiểm định lúc này.\"}";
         }
