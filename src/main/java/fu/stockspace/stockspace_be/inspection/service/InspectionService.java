@@ -247,7 +247,15 @@ public class InspectionService {
                 .map(this::mapToResponse);
     }
 
+    @Transactional(readOnly = true)
+    public InspectionReportResponse getInspectionById(UUID inspectionId) {
+        InspectionReport report = inspectionRepository.findById(inspectionId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.INSPECTION_NOT_FOUND));
+        return mapToResponse(report);
+    }
+
     // ==================== Private helpers ====================
+
 
     private InspectionReportResponse mapToResponse(InspectionReport r) {
         var warehouse = r.getWarehouse();

@@ -11,6 +11,7 @@ import fu.stockspace.stockspace_be.auth.security.JwtUtil;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.UnauthorizedException;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -292,10 +293,14 @@ public class AuthService {
     /**
      * Dùng refresh token (từ cookie) để lấy access token mới.
      */
-    @Transactional
+    @Transactional(noRollbackFor = UnauthorizedException.class)
     public AuthResult refresh(String refreshTokenValue) {
         RefreshToken oldRefreshToken = refreshTokenService.validateRefreshToken(refreshTokenValue);
         User user = oldRefreshToken.getUser();
+        if (!user.isEnabled() || user.isDeleted()) {
+            refreshTokenService.deleteAllTokensForUser(user);
+            throw new UnauthorizedException(ErrorCode.USER_LOCKED);
+        }
 
         refreshTokenService.deleteToken(refreshTokenValue);
 

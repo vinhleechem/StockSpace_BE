@@ -114,12 +114,39 @@ deploy() {
     git reset --hard "origin/$BRANCH"
     log_success "Code đã cập nhật."
 
-    # 2. Build và restart với Docker Compose
+    # 2. Apply additive chatbot/RAG rollout migration before the new app starts.
+    MIGRATION_FILE="ops/migrations/20260728_chatbot_production.sql"
+    if [ -f "$MIGRATION_FILE" ]; then
+        log_info "Khởi động PostgreSQL và chạy migration chatbot/RAG..."
+        docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d postgres
+        DB_READY=false
+        for ATTEMPT in $(seq 1 30); do
+            if docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+                exec -T postgres pg_isready \
+                -U "${DB_USERNAME:-postgres}" \
+                -d "${DB_NAME:-stockspace}" > /dev/null 2>&1; then
+                DB_READY=true
+                break
+            fi
+            sleep 2
+        done
+        if [ "$DB_READY" != "true" ]; then
+            log_error "PostgreSQL chưa sẵn sàng để chạy migration."
+        fi
+        docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+            exec -T postgres psql \
+            -v ON_ERROR_STOP=1 \
+            -U "${DB_USERNAME:-postgres}" \
+            -d "${DB_NAME:-stockspace}" < "$MIGRATION_FILE"
+        log_success "Migration chatbot/RAG đã hoàn tất."
+    fi
+
+    # 3. Build và restart với Docker Compose
     log_info "Build image và khởi động containers..."
     docker compose pull postgres nginx 2>/dev/null || true  # Pull image mới nhất từ registry
     docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build --remove-orphans
 
-    # 3. Đợi app healthy
+    # 4. Đợi app healthy
     log_info "Đợi ứng dụng khởi động (tối đa 120s)..."
     TIMEOUT=120
     ELAPSED=0
@@ -133,7 +160,7 @@ deploy() {
     done
     echo ""
 
-    # 4. Dọn dẹp image cũ
+    # 5. Dọn dẹp image cũ
     log_info "Dọn dẹp Docker images không dùng..."
     docker image prune -f
 
@@ -212,7 +239,7 @@ check_env() {
     log_info "Kiểm tra biến môi trường..."
     source .env
 
-    REQUIRED_VARS=("DB_PASSWORD" "JWT_SECRET" "CLOUDINARY_CLOUD_NAME" "CLOUDINARY_API_KEY" "CLOUDINARY_API_SECRET")
+    REQUIRED_VARS=("DB_PASSWORD" "JWT_SECRET" "CLOUDINARY_CLOUD_NAME" "CLOUDINARY_API_KEY" "CLOUDINARY_API_SECRET" "OPENROUTER_API_KEY" "OPENROUTER_MODEL" "PUBLIC_HTTPS_READY")
     MISSING=()
 
     for VAR in "${REQUIRED_VARS[@]}"; do
@@ -224,6 +251,9 @@ check_env() {
 
     if [ ${#MISSING[@]} -gt 0 ]; then
         log_error "Các biến sau chưa được điền trong .env: ${MISSING[*]}"
+    fi
+    if [ "$PUBLIC_HTTPS_READY" != "true" ]; then
+        log_error "Production phải có HTTPS trước khi deploy (PUBLIC_HTTPS_READY=true)."
     fi
 
     log_success "Tất cả biến bắt buộc đã có."
