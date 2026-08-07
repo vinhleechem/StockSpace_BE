@@ -1,7 +1,7 @@
 package fu.stockspace.stockspace_be.stats.service;
 
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
-import fu.stockspace.stockspace_be.booking.repository.BookingRepository;
+import fu.stockspace.stockspace_be.booking.repository.BookingRequestRepository;
 import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.stats.dto.MonthlyRevenueDto;
 import fu.stockspace.stockspace_be.stats.dto.PlatformSummaryResponse;
@@ -25,9 +25,10 @@ public class AdminStatsService {
 
     private final UserRepository userRepository;
     private final WarehouseRepository warehouseRepository;
-    private final BookingRepository bookingRepository;
+    private final BookingRequestRepository bookingRepository;
     private final RentalContractRepository contractRepository;
     private final TransactionRepository transactionRepository;
+
 
     @Transactional(readOnly = true)
     public PlatformSummaryResponse getPlatformSummary() {
