@@ -9,8 +9,10 @@ import fu.stockspace.stockspace_be.notification.dto.NotificationResponse;
 import fu.stockspace.stockspace_be.notification.dto.PagedNotificationResponse;
 import fu.stockspace.stockspace_be.notification.entity.Notification;
 import fu.stockspace.stockspace_be.notification.repository.NotificationRepository;
+import fu.stockspace.stockspace_be.notification.websocket.NotificationCreatedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -26,6 +28,7 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     @Transactional
     public void push(UUID userId, String title, String message, String type) {
@@ -41,7 +44,11 @@ public class NotificationService {
                 .isRead(false)
                 .build();
 
-        notificationRepository.save(notification);
+        Notification savedNotification = notificationRepository.save(notification);
+        applicationEventPublisher.publishEvent(new NotificationCreatedEvent(
+                user.getEmail(),
+                mapToResponse(savedNotification)
+        ));
     }
 
     @Transactional(readOnly = true)

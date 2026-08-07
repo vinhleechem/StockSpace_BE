@@ -27,7 +27,6 @@ public class StockBatchResponse {
     private String warehouseName;
 
     // Location
-    private UUID zoneId;
     private String zoneName;
     private UUID rackId;
     private String rackName;

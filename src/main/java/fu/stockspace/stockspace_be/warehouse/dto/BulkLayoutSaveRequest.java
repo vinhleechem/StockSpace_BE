@@ -14,9 +14,12 @@ public class BulkLayoutSaveRequest {
     @NotNull(message = "Chiều rộng lưới layout không được để trống")
     private Integer width;
 
+    @NotNull(message = "Chiều dài lưới layout không được để trống")
+    private Integer length;
+
     @NotNull(message = "Chiều cao lưới layout không được để trống")
     private Integer height;
 
     @Valid
-    private List<ZoneSaveRequest> zones;
+    private List<RackSaveRequest> racks;
 }

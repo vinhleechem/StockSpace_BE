@@ -79,6 +79,9 @@ public class SecurityConfig {
                         // Guest Chatbot
                         .requestMatchers("/api/chat/guest/**").permitAll()
 
+                        // Browser handshake is public; the STOMP CONNECT frame is JWT-authenticated.
+                        .requestMatchers("/ws", "/ws/**").permitAll()
+
                         // Tất cả còn lại cần authenticate
                         .anyRequest().authenticated()
                 )
