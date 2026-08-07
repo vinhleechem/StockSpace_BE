@@ -114,9 +114,10 @@ deploy() {
     git reset --hard "origin/$BRANCH"
     log_success "Code đã cập nhật."
 
-    # 2. Apply additive chatbot/RAG rollout migration before the new app starts.
-    MIGRATION_FILE="ops/migrations/20260728_chatbot_production.sql"
-    if [ -f "$MIGRATION_FILE" ]; then
+    # 2. Apply idempotent production migrations before the new app starts.
+    # Every production migration must be idempotent. Files run in lexical order.
+    MIGRATION_FILES=(ops/migrations/*.sql)
+    if [ -f "${MIGRATION_FILES[0]}" ]; then
         log_info "Khởi động PostgreSQL và chạy migration chatbot/RAG..."
         docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d postgres
         DB_READY=false
@@ -133,12 +134,15 @@ deploy() {
         if [ "$DB_READY" != "true" ]; then
             log_error "PostgreSQL chưa sẵn sàng để chạy migration."
         fi
-        docker compose -f docker-compose.yml -f docker-compose.prod.yml \
-            exec -T postgres psql \
-            -v ON_ERROR_STOP=1 \
-            -U "${DB_USERNAME:-postgres}" \
-            -d "${DB_NAME:-stockspace}" < "$MIGRATION_FILE"
-        log_success "Migration chatbot/RAG đã hoàn tất."
+        for MIGRATION_FILE in "${MIGRATION_FILES[@]}"; do
+            log_info "Running migration: $MIGRATION_FILE"
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+                exec -T postgres psql \
+                -v ON_ERROR_STOP=1 \
+                -U "${DB_USERNAME:-postgres}" \
+                -d "${DB_NAME:-stockspace}" < "$MIGRATION_FILE"
+        done
+        log_success "Production migrations completed."
     fi
 
     # 3. Build và restart với Docker Compose
