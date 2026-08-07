@@ -27,6 +27,18 @@ services:
       - SEED_DEMO_USERS=false
       - CHATBOT_RAG_INDEXER_ENABLED=${CHATBOT_RAG_INDEXER_ENABLED:-true}
       - JAVA_TOOL_OPTIONS=-Xmx768m -Xms256m -XX:+UseContainerSupport
+
+  adminer:
+    image: adminer:4.8.1-standalone
+    container_name: stockspace-adminer
+    environment:
+      - ADMINER_DEFAULT_SERVER=postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - stockspace-net
+    restart: unless-stopped
     # ⛔ Không expose port 8080 — Nginx sẽ proxy vào
 
   # ─── Nginx Reverse Proxy ───────────────────────────────────────────────────
@@ -40,6 +52,7 @@ services:
       - nginx_logs:/var/log/nginx
     depends_on:
       - app
+      - adminer
     networks:
       - stockspace-net
     restart: unless-stopped
