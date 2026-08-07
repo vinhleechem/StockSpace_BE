@@ -20,6 +20,7 @@ public class ProductionConfigurationValidator {
     private final String openRouterModel;
     private final String dataCollection;
     private final boolean zeroDataRetention;
+    private final boolean allowInsecureProvider;
     private final int embeddingDimensions;
 
     public ProductionConfigurationValidator(
@@ -28,6 +29,7 @@ public class ProductionConfigurationValidator {
             @Value("${app.openrouter.model:}") String openRouterModel,
             @Value("${app.openrouter.data-collection:deny}") String dataCollection,
             @Value("${app.openrouter.zdr:true}") boolean zeroDataRetention,
+            @Value("${app.openrouter.allow-insecure-provider:false}") boolean allowInsecureProvider,
             @Value("${app.openrouter.embedding-dimensions:1536}") int embeddingDimensions
     ) {
         this.jwtSecret = jwtSecret;
@@ -35,6 +37,7 @@ public class ProductionConfigurationValidator {
         this.openRouterModel = openRouterModel;
         this.dataCollection = dataCollection;
         this.zeroDataRetention = zeroDataRetention;
+        this.allowInsecureProvider = allowInsecureProvider;
         this.embeddingDimensions = embeddingDimensions;
     }
 
@@ -49,9 +52,11 @@ public class ProductionConfigurationValidator {
 
         requireConfigured("OpenRouter API key", openRouterApiKey);
         requireConfigured("OpenRouter model", openRouterModel);
-        if (!"deny".equalsIgnoreCase(dataCollection) || !zeroDataRetention) {
+        if ((!"deny".equalsIgnoreCase(dataCollection) || !zeroDataRetention)
+                && !allowInsecureProvider) {
             throw new IllegalStateException(
-                    "Production chatbot requires OpenRouter data_collection=deny and ZDR=true"
+                    "Production chatbot requires OpenRouter data_collection=deny and ZDR=true "
+                            + "unless OPENROUTER_ALLOW_INSECURE_PROVIDER=true"
             );
         }
         if (embeddingDimensions != SystemKnowledge.EMBEDDING_DIMENSIONS) {
