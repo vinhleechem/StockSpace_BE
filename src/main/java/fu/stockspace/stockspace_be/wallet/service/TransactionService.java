@@ -37,6 +37,8 @@ public class TransactionService {
                 .content(responses)
                 .page(page.getNumber())
                 .size(page.getSize())
+                .pageNo(page.getNumber())
+                .pageSize(page.getSize())
                 .totalElements(page.getTotalElements())
                 .totalPages(page.getTotalPages())
                 .last(page.isLast())
@@ -56,11 +58,14 @@ public class TransactionService {
                 .content(responses)
                 .page(page.getNumber())
                 .size(page.getSize())
+                .pageNo(page.getNumber())
+                .pageSize(page.getSize())
                 .totalElements(page.getTotalElements())
                 .totalPages(page.getTotalPages())
                 .last(page.isLast())
                 .build();
     }
+
 
     /**
      * Lấy thông tin trạng thái giao dịch theo mã paymentCode.

@@ -82,4 +82,21 @@ public class InventoryReceiptController {
         InventoryReceiptResponse response = receiptService.getReceiptDetail(id);
         return ResponseEntity.ok(ApiResponse.success("Lấy chi tiết phiếu thành công", response));
     }
+
+    @GetMapping("/export")
+    @Operation(summary = "Xuất danh sách phiếu nhập/xuất kho ra file Excel/CSV")
+    public ResponseEntity<byte[]> exportReceipts(
+            @RequestParam UUID warehouseId,
+            @RequestParam(required = false) DocumentType type
+    ) {
+        checkSubscription();
+        byte[] csvData = receiptService.exportReceiptsToCsv(warehouseId, type);
+        String filename = "inventory_receipts_" + (type != null ? type.name().toLowerCase() : "all") + ".csv";
+
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(org.springframework.http.MediaType.parseMediaType("text/csv; charset=UTF-8"))
+                .body(csvData);
+    }
 }
+
