@@ -10,15 +10,17 @@ import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
+import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.staff.dto.*;
-import fu.stockspace.stockspace_be.staff.entity.InvitationStatus;
-import fu.stockspace.stockspace_be.staff.entity.StaffInvitation;
-import fu.stockspace.stockspace_be.staff.entity.TenantMember;
+import fu.stockspace.stockspace_be.staff.entity.*;
 import fu.stockspace.stockspace_be.staff.repository.StaffInvitationRepository;
+import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
 import fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository;
 import fu.stockspace.stockspace_be.subscription.entity.Subscription;
 import fu.stockspace.stockspace_be.subscription.entity.SubscriptionStatus;
 import fu.stockspace.stockspace_be.subscription.repository.SubscriptionRepository;
+import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
+import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -36,13 +38,6 @@ import java.util.UUID;
 
 /**
  * Service quản lý toàn bộ vòng đời nhân viên kho (Staff) trong tổ chức Tenant.
- *
- * Luồng chính:
- *  1. Tenant gửi lời mời → sendInvitation()
- *  2. Staff click link, preview token → previewInvitation()
- *  3. Staff thiết lập mật khẩu → acceptInvitation()
- *  4. Tenant quản lý danh sách → listStaffs(), removeStaff()
- *  5. Downgrade gói → deactivateExcessStaffs()
  */
 @Slf4j
 @Service
@@ -51,11 +46,15 @@ public class TenantStaffService {
 
     private final TenantMemberRepository memberRepository;
     private final StaffInvitationRepository invitationRepository;
+    private final StaffWarehouseAssignmentRepository assignmentRepository;
+    private final WarehouseRepository warehouseRepository;
+    private final RentalContractRepository contractRepository;
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final SubscriptionRepository subscriptionRepository;
     private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
+
 
     // ==================== Gửi Lời Mời ====================
 
@@ -273,7 +272,7 @@ public class TenantStaffService {
 
     /**
      * Tenant xóa mềm nhân viên khỏi tổ chức (is_deleted = true).
-     * Lịch sử phiếu nhập/xuất kho vẫn được giữ nguyên.
+     * Cập nhật mốc thời gian nghỉ việc (resignedAt) và tự động thu hồi (REVOKE) toàn bộ phân công kho active.
      */
     @Transactional
     public void removeStaff(UUID tenantId, UUID memberId) {
@@ -289,11 +288,132 @@ public class TenantStaffService {
             throw new ResourceNotFoundException(ErrorCode.STAFF_NOT_FOUND);
         }
 
+        LocalDateTime now = LocalDateTime.now();
         member.setDeleted(true);
         member.setActive(false);
+        member.setResignedAt(now);
         memberRepository.save(member);
 
-        log.info("Staff removed: memberId={} from tenantId={}", memberId, tenantId);
+        // Tự động thu hồi toàn bộ phân công kho ACTIVE của Staff này dưới Tenant
+        List<StaffWarehouseAssignment> activeAssignments = assignmentRepository
+                .findByStaffIdAndTenantIdAndStatus(member.getUser().getId(), tenantId, AssignmentStatus.ACTIVE);
+        for (StaffWarehouseAssignment a : activeAssignments) {
+            a.setStatus(AssignmentStatus.REVOKED);
+            a.setEndDate(now);
+        }
+        assignmentRepository.saveAll(activeAssignments);
+
+        log.info("Staff removed: memberId={} from tenantId={}, revoked {} active warehouse assignments",
+                memberId, tenantId, activeAssignments.size());
+    }
+
+    // ==================== Phân Công Kho Cho Nhân Viên ====================
+
+    @Transactional
+    public StaffAssignmentResponse assignWarehouseToStaff(UUID tenantId, UUID staffUserId, AssignWarehouseRequest request) {
+        User tenant = userRepository.findById(tenantId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+        User staff = userRepository.findById(staffUserId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STAFF_NOT_FOUND));
+
+        // 1. Kiểm tra Staff có đang là nhân viên active của Tenant này không
+        boolean isMember = memberRepository.existsByUserIdAndTenantIdAndIsDeletedFalse(staffUserId, tenantId);
+        if (!isMember) {
+            throw new BadRequestException(ErrorCode.STAFF_NOT_FOUND);
+        }
+
+        // 2. Kiểm tra Kho có đang được Tenant này thuê với hợp đồng ACTIVE không
+        boolean isRented = contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(tenantId, request.getWarehouseId());
+        if (!isRented) {
+            throw new BadRequestException(ErrorCode.WAREHOUSE_NOT_FOUND);
+        }
+
+        Warehouse warehouse = warehouseRepository.findById(request.getWarehouseId())
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
+
+        // 3. Nếu Staff đã có phân công ACTIVE tại kho này -> cập nhật role / customTitle / notes
+        List<StaffWarehouseAssignment> existing = assignmentRepository
+                .findByStaffIdAndTenantIdAndStatus(staffUserId, tenantId, AssignmentStatus.ACTIVE);
+        for (StaffWarehouseAssignment a : existing) {
+            if (a.getWarehouse().getId().equals(request.getWarehouseId())) {
+                a.setRole(request.getRole());
+                a.setCustomTitle(request.getCustomTitle());
+                a.setNotes(request.getNotes());
+                return mapToAssignmentResponse(assignmentRepository.save(a));
+            }
+        }
+
+        // 4. Tạo mới bản ghi phân công kho
+        StaffWarehouseAssignment assignment = StaffWarehouseAssignment.builder()
+                .staff(staff)
+                .tenant(tenant)
+                .warehouse(warehouse)
+                .role(request.getRole())
+                .customTitle(request.getCustomTitle())
+                .assignedBy(tenant)
+                .startDate(LocalDateTime.now())
+                .status(AssignmentStatus.ACTIVE)
+                .notes(request.getNotes())
+                .build();
+
+        return mapToAssignmentResponse(assignmentRepository.save(assignment));
+    }
+
+    @Transactional
+    public void revokeWarehouseAssignment(UUID tenantId, UUID assignmentId) {
+        StaffWarehouseAssignment assignment = assignmentRepository.findById(assignmentId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STAFF_NOT_FOUND));
+
+        if (!assignment.getTenant().getId().equals(tenantId)) {
+            throw new fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException(ErrorCode.FORBIDDEN);
+        }
+
+        assignment.setStatus(AssignmentStatus.REVOKED);
+        assignment.setEndDate(LocalDateTime.now());
+        assignmentRepository.save(assignment);
+    }
+
+    @Transactional(readOnly = true)
+    public List<StaffAssignmentResponse> getStaffAssignments(UUID tenantId, UUID staffUserId) {
+        List<StaffWarehouseAssignment> list = assignmentRepository
+                .findByTenantIdAndStaffIdOrderByStartDateDesc(tenantId, staffUserId);
+        return list.stream().map(this::mapToAssignmentResponse).toList();
+    }
+
+    // ==================== Lịch Sử Công Tác Sự Nghiệp Staff ====================
+
+    @Transactional(readOnly = true)
+    public StaffWorkHistoryResponse getStaffWorkHistory(UUID staffUserId) {
+        User staff = userRepository.findById(staffUserId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+
+        List<TenantMember> memberships = memberRepository.findByUserIdOrderByJoinedAtDesc(staffUserId);
+
+        List<StaffWorkHistoryResponse.TenantTenureResponse> tenures = memberships.stream()
+                .map(m -> StaffWorkHistoryResponse.TenantTenureResponse.builder()
+                        .membershipId(m.getId())
+                        .tenantId(m.getTenant().getId())
+                        .tenantName(m.getTenant().getFullName())
+                        .tenantEmail(m.getTenant().getEmail())
+                        .joinedAt(m.getJoinedAt())
+                        .resignedAt(m.getResignedAt())
+                        .isActive(m.isActive() && !m.isDeleted())
+                        .build())
+                .toList();
+
+        List<StaffWarehouseAssignment> assignments = assignmentRepository.findAllCareerAssignmentsByStaffId(staffUserId);
+        List<StaffAssignmentResponse> assignmentResponses = assignments.stream()
+                .map(this::mapToAssignmentResponse)
+                .toList();
+
+        return StaffWorkHistoryResponse.builder()
+                .staffId(staff.getId())
+                .fullName(staff.getFullName())
+                .email(staff.getEmail())
+                .phone(staff.getPhone())
+                .tenantTenures(tenures)
+                .warehouseAssignments(assignmentResponses)
+                .build();
     }
 
     // ==================== Xử Lý Downgrade Gói ====================
@@ -340,4 +460,27 @@ public class TenantStaffService {
                 .joinedAt(member.getJoinedAt())
                 .build();
     }
+
+    private StaffAssignmentResponse mapToAssignmentResponse(StaffWarehouseAssignment a) {
+        return StaffAssignmentResponse.builder()
+                .id(a.getId())
+                .staffId(a.getStaff().getId())
+                .staffName(a.getStaff().getFullName())
+                .staffEmail(a.getStaff().getEmail())
+                .tenantId(a.getTenant().getId())
+                .tenantName(a.getTenant().getFullName())
+                .warehouseId(a.getWarehouse().getId())
+                .warehouseName(a.getWarehouse().getName())
+                .warehouseAddress(a.getWarehouse().getAddress())
+                .role(a.getRole())
+                .customTitle(a.getCustomTitle())
+                .assignedById(a.getAssignedBy().getId())
+                .assignedByName(a.getAssignedBy().getFullName())
+                .startDate(a.getStartDate())
+                .endDate(a.getEndDate())
+                .status(a.getStatus())
+                .notes(a.getNotes())
+                .build();
+    }
 }
+

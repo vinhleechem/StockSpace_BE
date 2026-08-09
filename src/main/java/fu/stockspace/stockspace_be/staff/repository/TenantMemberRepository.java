@@ -43,6 +43,12 @@ public interface TenantMemberRepository extends JpaRepository<TenantMember, UUID
     Optional<TenantMember> findByUserIdAndIsActiveTrueAndIsDeletedFalse(UUID userId);
 
     /**
+     * Lấy toàn bộ lịch sử các membership (Tenant công tác) của User qua các thời kỳ.
+     */
+    List<TenantMember> findByUserIdOrderByJoinedAtDesc(UUID userId);
+
+
+    /**
      * Danh sách nhân viên active của Tenant, sắp xếp theo thời gian gia nhập tăng dần.
      * Dùng khi downgrade gói để xác định ai bị khóa (khóa người mới nhất).
      */
