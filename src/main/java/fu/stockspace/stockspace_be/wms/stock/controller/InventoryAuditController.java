@@ -1,7 +1,9 @@
 package fu.stockspace.stockspace_be.wms.stock.controller;
 
 import fu.stockspace.stockspace_be.auth.util.SecurityUtil;
+
 import fu.stockspace.stockspace_be.common.dto.ApiResponse;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.wms.stock.dto.*;
@@ -47,15 +49,16 @@ public class InventoryAuditController {
 
     @GetMapping
     @Operation(summary = "Danh sách phiếu kiểm kê của tôi (phân trang)")
-    public ResponseEntity<ApiResponse<PagedAuditResponse>> getMyAudits(
+    public ResponseEntity<ApiResponse<PagedResponse<InventoryAuditResponse>>> getMyAudits(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
         UUID userId = getCurrentUserId();
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        PagedAuditResponse response = auditService.getMyAudits(userId, pageable);
+        PagedResponse<InventoryAuditResponse> response = auditService.getMyAudits(userId, pageable);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách phiếu kiểm kê thành công", response));
     }
+
 
     @GetMapping("/{id}")
     @Operation(summary = "Chi tiết phiếu kiểm kê")
