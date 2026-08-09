@@ -4,7 +4,9 @@ import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.auth.util.TenantContextUtil;
 import fu.stockspace.stockspace_be.booking.entity.ApprovalStatus;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
+
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
@@ -204,7 +206,7 @@ public class InventoryReceiptService {
     }
 
     @Transactional(readOnly = true)
-    public PagedReceiptResponse getReceiptsByWarehouse(UUID warehouseId, DocumentType type, Pageable pageable) {
+    public PagedResponse<InventoryReceiptResponse> getReceiptsByWarehouse(UUID warehouseId, DocumentType type, Pageable pageable) {
         Page<InventoryReceipt> page;
         if (type != null) {
             page = receiptRepository.findByWarehouseIdAndTypeAndIsDeletedFalse(warehouseId, type, pageable);
@@ -212,22 +214,12 @@ public class InventoryReceiptService {
             page = receiptRepository.findByWarehouseIdAndIsDeletedFalse(warehouseId, pageable);
         }
 
-        List<InventoryReceiptResponse> content = page.getContent().stream()
-                .map(receipt -> {
-                    List<InventoryReceiptItem> items = receiptItemRepository.findByReceiptId(receipt.getId());
-                    return mapToResponse(receipt, items);
-                })
-                .collect(Collectors.toList());
-
-        return PagedReceiptResponse.builder()
-                .content(content)
-                .pageNo(page.getNumber())
-                .pageSize(page.getSize())
-                .totalElements(page.getTotalElements())
-                .totalPages(page.getTotalPages())
-                .last(page.isLast())
-                .build();
+        return PagedResponse.fromPage(page, receipt -> {
+            List<InventoryReceiptItem> items = receiptItemRepository.findByReceiptId(receipt.getId());
+            return mapToResponse(receipt, items);
+        });
     }
+
 
     @Transactional(readOnly = true)
     public InventoryReceiptResponse getReceiptDetail(UUID receiptId) {

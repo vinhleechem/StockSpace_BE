@@ -7,7 +7,8 @@ import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.wms.receipt.dto.InventoryTransactionResponse;
 import fu.stockspace.stockspace_be.wms.receipt.service.InventoryReceiptService;
-import fu.stockspace.stockspace_be.wms.stock.dto.PagedStockBatchResponse;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
+import fu.stockspace.stockspace_be.wms.stock.dto.StockBatchResponse;
 import fu.stockspace.stockspace_be.wms.stock.dto.StockSummaryResponse;
 import fu.stockspace.stockspace_be.wms.stock.service.StockBatchService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -35,16 +36,17 @@ public class StockBatchController {
 
     @GetMapping
     @Operation(summary = "Xem toàn bộ tồn kho trong kho đang thuê (phân trang theo warehouseId)")
-    public ResponseEntity<ApiResponse<PagedStockBatchResponse>> getStockByWarehouse(
+    public ResponseEntity<ApiResponse<PagedResponse<StockBatchResponse>>> getStockByWarehouse(
             @RequestParam UUID warehouseId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
         UUID tenantId = TenantContextUtil.getCurrentTenantId();
         Pageable pageable = PageRequest.of(page, size);
-        PagedStockBatchResponse response = stockBatchService.getStockByWarehouse(tenantId, warehouseId, pageable);
+        PagedResponse<StockBatchResponse> response = stockBatchService.getStockByWarehouse(tenantId, warehouseId, pageable);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách tồn kho thành công", response));
     }
+
 
     @GetMapping("/sku/{skuId}")
     @Operation(summary = "Xem tồn kho chi tiết theo SKU — tổng hợp tất cả vị trí lưu trữ")

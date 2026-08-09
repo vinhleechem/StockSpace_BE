@@ -1,8 +1,10 @@
 package fu.stockspace.stockspace_be.notification.controller;
 
 import fu.stockspace.stockspace_be.auth.util.SecurityUtil;
+
 import fu.stockspace.stockspace_be.common.dto.ApiResponse;
-import fu.stockspace.stockspace_be.notification.dto.PagedNotificationResponse;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
+import fu.stockspace.stockspace_be.notification.dto.NotificationResponse;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -26,15 +28,16 @@ public class NotificationController {
 
     @GetMapping
     @Operation(summary = "Lấy danh sách thông báo của tôi (phân trang)")
-    public ResponseEntity<ApiResponse<PagedNotificationResponse>> getMyNotifications(
+    public ResponseEntity<ApiResponse<PagedResponse<NotificationResponse>>> getMyNotifications(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
         UUID userId = SecurityUtil.getCurrentUserId();
         Pageable pageable = PageRequest.of(page, size);
-        PagedNotificationResponse response = notificationService.getMyNotifications(userId, pageable);
+        PagedResponse<NotificationResponse> response = notificationService.getMyNotifications(userId, pageable);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách thông báo thành công", response));
     }
+
 
     @GetMapping("/unread-count")
     @Operation(summary = "Lấy số lượng thông báo chưa đọc")
