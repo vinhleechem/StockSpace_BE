@@ -2,7 +2,9 @@ package fu.stockspace.stockspace_be.contract.service;
 import java.util.UUID;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
+import fu.stockspace.stockspace_be.auth.util.TenantContextUtil;
 import fu.stockspace.stockspace_be.booking.entity.BookingRequest;
+
 import fu.stockspace.stockspace_be.booking.repository.BookingRequestRepository;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
@@ -103,6 +105,8 @@ public class ContractService {
         }
         return mapToResponse(contract);
     }
+
+
     // ==================== Confirm handover ====================
     /**
      * Một bên xác nhận bàn giao kho.

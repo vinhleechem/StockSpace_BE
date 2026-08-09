@@ -68,4 +68,9 @@ public class TenantMember {
     @CreationTimestamp
     @Column(name = "joined_at", nullable = false, updatable = false)
     private LocalDateTime joinedAt;
+
+    /** Thời điểm Staff chính thức rời khỏi Tenant (sa thải / thôi việc) */
+    @Column(name = "resigned_at")
+    private LocalDateTime resignedAt;
 }
+
