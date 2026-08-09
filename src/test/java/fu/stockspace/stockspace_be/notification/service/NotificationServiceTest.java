@@ -2,10 +2,12 @@ package fu.stockspace.stockspace_be.notification.service;
 
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
-import fu.stockspace.stockspace_be.notification.dto.PagedNotificationResponse;
+import fu.stockspace.stockspace_be.notification.dto.NotificationResponse;
 import fu.stockspace.stockspace_be.notification.entity.Notification;
+
 import fu.stockspace.stockspace_be.notification.repository.NotificationRepository;
 import fu.stockspace.stockspace_be.notification.websocket.NotificationCreatedEvent;
 import org.junit.jupiter.api.Test;
@@ -100,7 +102,7 @@ class NotificationServiceTest {
         Page<Notification> page = new PageImpl<>(List.of(n1), pageable, 1);
         when(notificationRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable)).thenReturn(page);
 
-        PagedNotificationResponse response = notificationService.getMyNotifications(userId, pageable);
+        PagedResponse<NotificationResponse> response = notificationService.getMyNotifications(userId, pageable);
 
         assertNotNull(response);
         assertEquals(1, response.getContent().size());
@@ -109,6 +111,7 @@ class NotificationServiceTest {
         assertEquals(0, response.getPage());
         assertEquals(1, response.getTotalElements());
     }
+
 
     @Test
     void testMarkAsRead_Success() {

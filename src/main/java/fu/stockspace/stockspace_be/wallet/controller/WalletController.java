@@ -70,14 +70,15 @@ public class WalletController {
     }
     @GetMapping("/transactions")
     @Operation(summary = "Xem lịch sử giao dịch ví (phân trang)")
-    public ResponseEntity<ApiResponse<PagedTransactionResponse>> getMyTransactions(
+    public ResponseEntity<ApiResponse<PagedResponse<TransactionResponse>>> getMyTransactions(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         User user = getCurrentUser();
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        PagedTransactionResponse response = transactionService.getMyTransactions(user.getId(), pageable);
+        PagedResponse<TransactionResponse> response = transactionService.getMyTransactions(user.getId(), pageable);
         return ResponseEntity.ok(ApiResponse.success("Lấy lịch sử giao dịch thành công", response));
     }
+
 
     @GetMapping("/transactions/{paymentCode}/status")
     @Operation(summary = "Xem trạng thái giao dịch theo mã paymentCode")

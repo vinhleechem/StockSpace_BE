@@ -8,8 +8,9 @@ import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
 import fu.stockspace.stockspace_be.wms.receipt.dto.CreateInventoryReceiptRequest;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
+import fu.stockspace.stockspace_be.wms.receipt.dto.CreateInventoryReceiptRequest;
 import fu.stockspace.stockspace_be.wms.receipt.dto.InventoryReceiptResponse;
-import fu.stockspace.stockspace_be.wms.receipt.dto.PagedReceiptResponse;
 import fu.stockspace.stockspace_be.wms.receipt.entity.DocumentType;
 import fu.stockspace.stockspace_be.wms.receipt.service.InventoryReceiptService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -63,7 +64,7 @@ public class InventoryReceiptController {
 
     @GetMapping
     @Operation(summary = "Lấy danh sách phiếu nhập/xuất kho phân trang theo kho")
-    public ResponseEntity<ApiResponse<PagedReceiptResponse>> getReceipts(
+    public ResponseEntity<ApiResponse<PagedResponse<InventoryReceiptResponse>>> getReceipts(
             @RequestParam UUID warehouseId,
             @RequestParam(required = false) DocumentType type,
             @RequestParam(defaultValue = "0") int page,
@@ -71,9 +72,10 @@ public class InventoryReceiptController {
     ) {
         checkSubscription();
         Pageable pageable = PageRequest.of(page, size);
-        PagedReceiptResponse response = receiptService.getReceiptsByWarehouse(warehouseId, type, pageable);
+        PagedResponse<InventoryReceiptResponse> response = receiptService.getReceiptsByWarehouse(warehouseId, type, pageable);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách phiếu thành công", response));
     }
+
 
     @GetMapping("/{id}")
     @Operation(summary = "Xem chi tiết phiếu nhập/xuất kho")
@@ -82,4 +84,21 @@ public class InventoryReceiptController {
         InventoryReceiptResponse response = receiptService.getReceiptDetail(id);
         return ResponseEntity.ok(ApiResponse.success("Lấy chi tiết phiếu thành công", response));
     }
+
+    @GetMapping("/export")
+    @Operation(summary = "Xuất danh sách phiếu nhập/xuất kho ra file Excel/CSV")
+    public ResponseEntity<byte[]> exportReceipts(
+            @RequestParam UUID warehouseId,
+            @RequestParam(required = false) DocumentType type
+    ) {
+        checkSubscription();
+        byte[] csvData = receiptService.exportReceiptsToCsv(warehouseId, type);
+        String filename = "inventory_receipts_" + (type != null ? type.name().toLowerCase() : "all") + ".csv";
+
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(org.springframework.http.MediaType.parseMediaType("text/csv; charset=UTF-8"))
+                .body(csvData);
+    }
 }
+

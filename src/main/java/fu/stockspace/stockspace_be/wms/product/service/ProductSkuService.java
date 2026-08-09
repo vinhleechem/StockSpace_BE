@@ -2,11 +2,11 @@ package fu.stockspace.stockspace_be.wms.product.service;
 
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.wms.product.dto.CreateSkuRequest;
-import fu.stockspace.stockspace_be.wms.product.dto.PagedSkuResponse;
 import fu.stockspace.stockspace_be.wms.product.dto.ProductSkuResponse;
 import fu.stockspace.stockspace_be.wms.product.dto.UpdateSkuRequest;
 import fu.stockspace.stockspace_be.wms.product.entity.ProductCategory;
@@ -17,15 +17,15 @@ import fu.stockspace.stockspace_be.wms.product.entity.UnitOfMeasure;
 import fu.stockspace.stockspace_be.wms.product.repository.UnitOfMeasureRepository;
 import fu.stockspace.stockspace_be.wms.stock.repository.StockBatchRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -37,20 +37,9 @@ public class ProductSkuService {
     private final UserRepository userRepository;
     private final UnitOfMeasureRepository uomRepository;
 
-    public PagedSkuResponse getMySKUs(UUID tenantId, Pageable pageable) {
+    public PagedResponse<ProductSkuResponse> getMySKUs(UUID tenantId, Pageable pageable) {
         Page<ProductSku> page = skuRepository.findAllActiveByTenantOrSystem(tenantId, pageable);
-        List<ProductSkuResponse> content = page.getContent().stream()
-                .map(this::mapToResponse)
-                .collect(Collectors.toList());
-
-        return PagedSkuResponse.builder()
-                .content(content)
-                .page(page.getNumber())
-                .size(page.getSize())
-                .totalElements(page.getTotalElements())
-                .totalPages(page.getTotalPages())
-                .last(page.isLast())
-                .build();
+        return PagedResponse.fromPage(page, this::mapToResponse);
     }
 
     public ProductSkuResponse getSkuDetail(UUID tenantId, UUID skuId) {

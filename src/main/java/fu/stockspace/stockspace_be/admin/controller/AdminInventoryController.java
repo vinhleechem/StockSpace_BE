@@ -1,11 +1,12 @@
 package fu.stockspace.stockspace_be.admin.controller;
 
 import fu.stockspace.stockspace_be.common.dto.ApiResponse;
-import fu.stockspace.stockspace_be.wms.receipt.dto.PagedReceiptResponse;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
+import fu.stockspace.stockspace_be.wms.receipt.dto.InventoryReceiptResponse;
 import fu.stockspace.stockspace_be.wms.receipt.entity.DocumentType;
 import fu.stockspace.stockspace_be.wms.receipt.service.InventoryReceiptService;
-import fu.stockspace.stockspace_be.wms.stock.dto.PagedAuditResponse;
-import fu.stockspace.stockspace_be.wms.stock.dto.PagedStockBatchResponse;
+import fu.stockspace.stockspace_be.wms.stock.dto.InventoryAuditResponse;
+import fu.stockspace.stockspace_be.wms.stock.dto.StockBatchResponse;
 import fu.stockspace.stockspace_be.wms.stock.service.InventoryAuditService;
 import fu.stockspace.stockspace_be.wms.stock.service.StockBatchService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -40,14 +41,14 @@ public class AdminInventoryController {
      */
     @GetMapping("/receipts")
     @Operation(summary = "Xem tất cả phiếu nhập/xuất kho toàn hệ thống")
-    public ResponseEntity<ApiResponse<PagedReceiptResponse>> getAllReceipts(
+    public ResponseEntity<ApiResponse<PagedResponse<InventoryReceiptResponse>>> getAllReceipts(
             @RequestParam UUID warehouseId,
             @RequestParam(required = false) DocumentType type,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        PagedReceiptResponse response = inventoryReceiptService.getReceiptsByWarehouse(warehouseId, type, pageable);
+        PagedResponse<InventoryReceiptResponse> response = inventoryReceiptService.getReceiptsByWarehouse(warehouseId, type, pageable);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách phiếu nhập/xuất thành công", response));
     }
 
@@ -57,12 +58,12 @@ public class AdminInventoryController {
      */
     @GetMapping("/audits")
     @Operation(summary = "Xem tất cả phiếu kiểm kê toàn hệ thống")
-    public ResponseEntity<ApiResponse<PagedAuditResponse>> getAllAudits(
+    public ResponseEntity<ApiResponse<PagedResponse<InventoryAuditResponse>>> getAllAudits(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        PagedAuditResponse response = inventoryAuditService.getAllAudits(pageable);
+        PagedResponse<InventoryAuditResponse> response = inventoryAuditService.getAllAudits(pageable);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách phiếu kiểm kê thành công", response));
     }
 
@@ -72,7 +73,7 @@ public class AdminInventoryController {
      */
     @GetMapping("/stock")
     @Operation(summary = "Tổng hợp tồn kho toàn hệ thống theo kho")
-    public ResponseEntity<ApiResponse<PagedStockBatchResponse>> getAllStock(
+    public ResponseEntity<ApiResponse<PagedResponse<StockBatchResponse>>> getAllStock(
             @RequestParam UUID warehouseId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size
@@ -83,6 +84,6 @@ public class AdminInventoryController {
         // In practice, Admin views all warehouses directly.
         // We delegate to the service method but skip tenant restriction.
         var batchPage = stockBatchService.getAdminStockByWarehouse(warehouseId, pageable);
-        return ResponseEntity.ok(ApiResponse.success("Lấy tổng hợp tồn kho thành công", batchPage));
+        return ResponseEntity.ok(ApiResponse.success("Lấy thông tin tồn kho kho thành công", batchPage));
     }
 }

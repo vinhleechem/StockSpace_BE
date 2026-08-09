@@ -1,8 +1,8 @@
 package fu.stockspace.stockspace_be.admin.controller;
 
 import fu.stockspace.stockspace_be.common.dto.ApiResponse;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.warehouse.dto.CreateWarehouseTypeRequest;
-import fu.stockspace.stockspace_be.warehouse.dto.PagedWarehouseTypeResponse;
 import fu.stockspace.stockspace_be.warehouse.dto.WarehouseTypeResponse;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseTypeService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -36,7 +36,7 @@ public class AdminWarehouseTypeController {
      */
     @GetMapping
     @Operation(summary = "Lấy danh sách loại kho (phân trang, tìm kiếm)")
-    public ResponseEntity<ApiResponse<PagedWarehouseTypeResponse>> getTypes(
+    public ResponseEntity<ApiResponse<PagedResponse<WarehouseTypeResponse>>> getTypes(
             @Parameter(description = "Từ khóa tìm kiếm (tên / mô tả loại kho)")
             @RequestParam(required = false) String keyword,
 
@@ -45,10 +45,11 @@ public class AdminWarehouseTypeController {
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir
     ) {
-        PagedWarehouseTypeResponse result = warehouseTypeService.getTypesPaged(
+        PagedResponse<WarehouseTypeResponse> result = warehouseTypeService.getTypesPaged(
                 keyword, page, size, sortBy, sortDir);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách loại kho thành công", result));
     }
+
 
     /**
      * GET /api/admin/warehouse-types/{id}

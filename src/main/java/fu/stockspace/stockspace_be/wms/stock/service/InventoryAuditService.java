@@ -2,7 +2,9 @@ package fu.stockspace.stockspace_be.wms.stock.service;
 
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
+
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
@@ -223,23 +225,12 @@ public class InventoryAuditService {
      * Lấy danh sách phiếu kiểm kê của người dùng hiện tại (phân trang).
      */
     @Transactional(readOnly = true)
-    public PagedAuditResponse getMyAudits(UUID userId, Pageable pageable) {
+    public PagedResponse<InventoryAuditResponse> getMyAudits(UUID userId, Pageable pageable) {
         Page<InventoryAudit> page = auditRepository.findByRequestedByIdAndIsDeletedFalse(userId, pageable);
-        List<InventoryAuditResponse> content = page.getContent().stream()
-                .map(audit -> {
-                    List<InventoryAuditItem> items = auditItemRepository.findByAuditId(audit.getId());
-                    return mapToResponse(audit, items);
-                })
-                .collect(Collectors.toList());
-
-        return PagedAuditResponse.builder()
-                .content(content)
-                .pageNo(page.getNumber())
-                .pageSize(page.getSize())
-                .totalElements(page.getTotalElements())
-                .totalPages(page.getTotalPages())
-                .last(page.isLast())
-                .build();
+        return PagedResponse.fromPage(page, audit -> {
+            List<InventoryAuditItem> items = auditItemRepository.findByAuditId(audit.getId());
+            return mapToResponse(audit, items);
+        });
     }
 
     /**
@@ -258,22 +249,12 @@ public class InventoryAuditService {
      * Admin xem toàn bộ phiếu kiểm kê hệ thống (phân trang).
      */
     @Transactional(readOnly = true)
-    public PagedAuditResponse getAllAudits(Pageable pageable) {
+    public PagedResponse<InventoryAuditResponse> getAllAudits(Pageable pageable) {
         Page<InventoryAudit> page = auditRepository.findByIsDeletedFalse(pageable);
-        List<InventoryAuditResponse> content = page.getContent().stream()
-                .map(audit -> {
-                    List<InventoryAuditItem> items = auditItemRepository.findByAuditId(audit.getId());
-                    return mapToResponse(audit, items);
-                })
-                .collect(Collectors.toList());
-        return PagedAuditResponse.builder()
-                .content(content)
-                .pageNo(page.getNumber())
-                .pageSize(page.getSize())
-                .totalElements(page.getTotalElements())
-                .totalPages(page.getTotalPages())
-                .last(page.isLast())
-                .build();
+        return PagedResponse.fromPage(page, audit -> {
+            List<InventoryAuditItem> items = auditItemRepository.findByAuditId(audit.getId());
+            return mapToResponse(audit, items);
+        });
     }
 
     // ==================== Private Helpers ====================
