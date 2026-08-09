@@ -2,7 +2,9 @@ package fu.stockspace.stockspace_be.contract.service;
 import java.util.UUID;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
+import fu.stockspace.stockspace_be.auth.util.TenantContextUtil;
 import fu.stockspace.stockspace_be.booking.entity.BookingRequest;
+
 import fu.stockspace.stockspace_be.booking.repository.BookingRequestRepository;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
@@ -96,13 +98,24 @@ public class ContractService {
     public RentalContractResponse getContractById(UUID contractId, UUID userId) {
         RentalContract contract = contractRepository.findById(contractId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
-        UUID tenantId = contract.getBooking().getTenant().getId();
+        UUID contractTenantId = contract.getBooking().getTenant().getId();
         UUID ownerId = contract.getBooking().getWarehouse().getOwner().getId();
-        if (!userId.equals(tenantId) && !userId.equals(ownerId)) {
+
+        UUID currentTenantId = null;
+        try {
+            currentTenantId = TenantContextUtil.getCurrentTenantId();
+        } catch (Exception ignored) {}
+
+        boolean isAuthorized = userId.equals(contractTenantId) 
+                || userId.equals(ownerId) 
+                || (currentTenantId != null && currentTenantId.equals(contractTenantId));
+
+        if (!isAuthorized) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
         return mapToResponse(contract);
     }
+
     // ==================== Confirm handover ====================
     /**
      * Một bên xác nhận bàn giao kho.
