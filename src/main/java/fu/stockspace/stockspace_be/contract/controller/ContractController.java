@@ -2,6 +2,7 @@ package fu.stockspace.stockspace_be.contract.controller;
 
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.util.SecurityUtil;
+import fu.stockspace.stockspace_be.auth.util.TenantContextUtil;
 import fu.stockspace.stockspace_be.common.dto.ApiResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.UnauthorizedException;
@@ -34,7 +35,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/contracts")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('OWNER', 'TENANT', 'ADMIN')")
+@PreAuthorize("hasAnyRole('OWNER', 'TENANT', 'STAFF', 'ADMIN')")
 public class ContractController {
 
     private final ContractService contractService;
@@ -42,7 +43,7 @@ public class ContractController {
     /**
      * GET /api/contracts
      * Danh sách hợp đồng của user hiện tại (phân trang).
-     * Owner xem hợp đồng liên quan kho mình; Tenant xem hợp đồng mình tham gia.
+     * Owner xem hợp đồng liên quan kho mình; Tenant/Staff xem hợp đồng của Tenant mình tham gia.
      */
     @GetMapping
     @Operation(summary = "Danh sách hợp đồng của mình")
@@ -54,12 +55,17 @@ public class ContractController {
         boolean isOwner = user.getRoles().stream()
                 .anyMatch(r -> r.getName().equals("ROLE_OWNER"));
 
-        Page<RentalContractResponse> result = isOwner
-                ? contractService.getMyContractsAsOwner(user.getId(), page, size)
-                : contractService.getMyContractsAsTenant(user.getId(), page, size);
+        Page<RentalContractResponse> result;
+        if (isOwner) {
+            result = contractService.getMyContractsAsOwner(user.getId(), page, size);
+        } else {
+            java.util.UUID tenantId = TenantContextUtil.getCurrentTenantId();
+            result = contractService.getMyContractsAsTenant(tenantId, page, size);
+        }
 
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách hợp đồng thành công", PagedResponse.fromPage(result)));
     }
+
 
     /**
      * GET /api/contracts/{id}
