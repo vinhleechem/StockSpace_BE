@@ -27,7 +27,11 @@ import fu.stockspace.stockspace_be.subscription.entity.ServicePackage;
 import fu.stockspace.stockspace_be.subscription.repository.ServicePackageRepository;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
 
+import fu.stockspace.stockspace_be.auth.util.SecurityUtil;
 import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
+import fu.stockspace.stockspace_be.staff.entity.AssignmentStatus;
+import fu.stockspace.stockspace_be.staff.entity.StaffWarehouseAssignment;
+import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -57,14 +61,32 @@ public class WarehouseService {
     private final ServicePackageRepository servicePackageRepository;
     private final NotificationService notificationService;
     private final RentalContractRepository rentalContractRepository;
+    private final StaffWarehouseAssignmentRepository staffWarehouseAssignmentRepository;
 
     @Transactional(readOnly = true)
     public List<WarehouseResponse> getActiveRentedWarehouses(UUID tenantId) {
         List<Warehouse> warehouses = rentalContractRepository.findActiveRentedWarehousesByTenantId(tenantId);
+
+        // Nếu người dùng hiện tại là STAFF -> lọc đúng các kho được phân công ACTIVE
+        UUID currentUserId = SecurityUtil.getCurrentUserId();
+        if (currentUserId != null) {
+            List<StaffWarehouseAssignment> activeAssignments = staffWarehouseAssignmentRepository
+                    .findByStaffIdAndTenantIdAndStatus(currentUserId, tenantId, AssignmentStatus.ACTIVE);
+            if (!activeAssignments.isEmpty()) {
+                Set<UUID> assignedWarehouseIds = activeAssignments.stream()
+                        .map(a -> a.getWarehouse().getId())
+                        .collect(Collectors.toSet());
+                warehouses = warehouses.stream()
+                        .filter(w -> assignedWarehouseIds.contains(w.getId()))
+                        .collect(Collectors.toList());
+            }
+        }
+
         return warehouses.stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
+
 
 
     // ==================== Owner: CRUD ====================
