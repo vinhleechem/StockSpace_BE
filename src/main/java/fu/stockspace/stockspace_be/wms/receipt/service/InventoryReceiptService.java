@@ -345,9 +345,41 @@ public class InventoryReceiptService {
         transactionRepository.save(tx);
     }
 
+    @Transactional(readOnly = true)
+    public byte[] exportReceiptsToCsv(UUID warehouseId, DocumentType type) {
+        Page<InventoryReceipt> page;
+        if (type != null) {
+            page = receiptRepository.findByWarehouseIdAndTypeAndIsDeletedFalse(warehouseId, type, Pageable.unpaged());
+        } else {
+            page = receiptRepository.findByWarehouseIdAndIsDeletedFalse(warehouseId, Pageable.unpaged());
+        }
+
+        StringBuilder csv = new StringBuilder();
+        csv.append("\uFEFF"); // UTF-8 BOM for Excel compatibility
+        csv.append("Ma phieu,Loai phieu,Kho bai,Trang thai,Ma SKU,So luong,Ngay tao\n");
+
+        for (InventoryReceipt receipt : page.getContent()) {
+            List<InventoryReceiptItem> items = receiptItemRepository.findByReceiptId(receipt.getId());
+            String warehouseName = receipt.getWarehouse() != null ? receipt.getWarehouse().getName().replace("\"", "\"\"") : "";
+            if (items.isEmpty()) {
+                csv.append(String.format("%s,%s,\"%s\",%s,-,0,%s\n",
+                        receipt.getId(), receipt.getType(), warehouseName, receipt.getStatus(), receipt.getCreatedAt()));
+            } else {
+                for (InventoryReceiptItem item : items) {
+                    String skuCode = item.getSku() != null ? item.getSku().getSkuCode() : "";
+                    csv.append(String.format("%s,%s,\"%s\",%s,%s,%d,%s\n",
+                            receipt.getId(), receipt.getType(), warehouseName, receipt.getStatus(), skuCode, item.getQuantity(), receipt.getCreatedAt()));
+                }
+            }
+        }
+
+        return csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
     /**
      * Xem lịch sử biến động số lượng của một lô hàng (Module 7 endpoint).
      */
+
     @Transactional(readOnly = true)
     public org.springframework.data.domain.Page<InventoryTransactionResponse> getTransactionsByBatch(
             UUID batchId, org.springframework.data.domain.Pageable pageable) {

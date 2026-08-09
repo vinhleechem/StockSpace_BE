@@ -11,7 +11,17 @@ public class PagedTransactionResponse {
     private List<TransactionResponse> content;
     private int page;
     private int size;
+    private int pageNo;
+    private int pageSize;
     private long totalElements;
     private int totalPages;
     private boolean last;
-}
+
+    public int getPageNo() {
+        return pageNo != 0 ? pageNo : page;
+    }
+
+    public int getPageSize() {
+        return pageSize != 0 ? pageSize : size;
+    }
+}
