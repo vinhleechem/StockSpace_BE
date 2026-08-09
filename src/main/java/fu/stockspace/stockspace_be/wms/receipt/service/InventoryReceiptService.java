@@ -355,26 +355,54 @@ public class InventoryReceiptService {
         }
 
         StringBuilder csv = new StringBuilder();
-        csv.append("\uFEFF"); // UTF-8 BOM for Excel compatibility
-        csv.append("Ma phieu,Loai phieu,Kho bai,Trang thai,Ma SKU,So luong,Ngay tao\n");
+        csv.append("sep=,\n"); // Force Excel to parse columns using comma
+        csv.append("\uFEFF"); // UTF-8 BOM for Excel Unicode display
+        csv.append("STT,Mã Phiếu,Loại Phiếu,Kho Bãi,Trạng Thái,Mã SKU,Tên Sản Phẩm,Đơn Vị Tính,Số Lượng,Người Tạo,Thời Gian Tạo\n");
+
+        java.time.format.DateTimeFormatter dateFormatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        int stt = 1;
 
         for (InventoryReceipt receipt : page.getContent()) {
             List<InventoryReceiptItem> items = receiptItemRepository.findByReceiptId(receipt.getId());
-            String warehouseName = receipt.getWarehouse() != null ? receipt.getWarehouse().getName().replace("\"", "\"\"") : "";
+            String warehouseName = escapeCsvField(receipt.getWarehouse() != null ? receipt.getWarehouse().getName() : "");
+            String typeStr = receipt.getType() == DocumentType.INBOUND ? "Nhập kho" : "Xuất kho";
+            String statusStr = mapStatusToVietnamese(receipt.getStatus());
+            String createdByStr = escapeCsvField(receipt.getCreatedBy() != null ? receipt.getCreatedBy().getFullName() : "");
+            String formattedDate = receipt.getCreatedAt() != null ? receipt.getCreatedAt().format(dateFormatter) : "";
+
             if (items.isEmpty()) {
-                csv.append(String.format("%s,%s,\"%s\",%s,-,0,%s\n",
-                        receipt.getId(), receipt.getType(), warehouseName, receipt.getStatus(), receipt.getCreatedAt()));
+                csv.append(String.format("%d,%s,\"%s\",%s,%s,-,-,-,0,\"%s\",%s\n",
+                        stt++, receipt.getId(), typeStr, warehouseName, statusStr, createdByStr, formattedDate));
             } else {
                 for (InventoryReceiptItem item : items) {
-                    String skuCode = item.getSku() != null ? item.getSku().getSkuCode() : "";
-                    csv.append(String.format("%s,%s,\"%s\",%s,%s,%d,%s\n",
-                            receipt.getId(), receipt.getType(), warehouseName, receipt.getStatus(), skuCode, item.getQuantity(), receipt.getCreatedAt()));
+                    ProductSku sku = item.getSku();
+                    String skuCode = sku != null ? sku.getSkuCode() : "-";
+                    String skuName = escapeCsvField(sku != null ? sku.getName() : "-");
+                    String uomName = sku != null && sku.getUom() != null ? sku.getUom().getName() : "-";
+
+                    csv.append(String.format("%d,%s,%s,\"%s\",%s,%s,\"%s\",%s,%d,\"%s\",%s\n",
+                            stt++, receipt.getId(), typeStr, warehouseName, statusStr, skuCode, skuName, uomName, item.getQuantity(), createdByStr, formattedDate));
                 }
             }
         }
 
         return csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
+
+    private String mapStatusToVietnamese(ApprovalStatus status) {
+        if (status == null) return "Chờ duyệt";
+        return switch (status) {
+            case APPROVED -> "Đã duyệt";
+            case REJECTED -> "Từ chối";
+            default -> "Chờ duyệt";
+        };
+    }
+
+    private String escapeCsvField(String input) {
+        if (input == null) return "";
+        return input.replace("\"", "\"\"");
+    }
+
 
     /**
      * Xem lịch sử biến động số lượng của một lô hàng (Module 7 endpoint).
