@@ -56,6 +56,19 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Dữ liệu JSON hoặc tham số không đọc/parse được (ví dụ FE truyền chuỗi id giả "rack_01" không đúng định dạng UUID).
+     */
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleHttpMessageNotReadable(
+            org.springframework.http.converter.HttpMessageNotReadableException ex
+    ) {
+        log.warn("JSON parse failure: {}", ex.getMessage());
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.error("Dữ liệu JSON không hợp lệ. Nếu là thêm mới Rack/Bin, trường 'id' phải để null (hoặc không truyền). Nếu là cập nhật, trường 'id' phải là UUID hợp lệ (36 ký tự)."));
+    }
+
+
+    /**
     /**
      * Xử lý lỗi BadRequestException (400).
      */
