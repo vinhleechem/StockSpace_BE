@@ -140,9 +140,9 @@ _(Nếu muốn chạy cả ứng dụng lẫn database hoàn toàn trong môi tr
 ## 🎯 Danh Sách Tài Khoản Thử Nghiệm (Opt-in Demo Users)
 
 Các tài khoản dưới đây **không còn được seed mặc định**. Chỉ môi trường dev
-được phép bật chủ động bằng `SEED_DEMO_USERS=true`; profile production luôn
-tắt và tự vô hiệu account cũ vẫn còn dùng mật khẩu công khai. Khi dev bật seed,
-mật khẩu demo là **`Password123`** và tuyệt đối không được dùng cho dữ liệu thật.
+được phép bật chủ động bằng `SEED_DEMO_USERS=true`. Production không tự thay
+đổi trạng thái tài khoản khi deploy. Khi dev bật seed, mật khẩu demo là
+**`Password123`** và tuyệt đối không được dùng cho dữ liệu thật.
 
 | Email                      | Vai Trò (Role)     | Chức Năng Chính                                                         |
 | -------------------------- | ------------------ | ----------------------------------------------------------------------- |
