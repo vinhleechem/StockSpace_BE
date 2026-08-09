@@ -5,8 +5,10 @@ import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.booking.dto.BookingResponse;
 import fu.stockspace.stockspace_be.booking.repository.BookingRequestRepository;
 import fu.stockspace.stockspace_be.booking.service.BookingService;
+import fu.stockspace.stockspace_be.chatbot.tool.ChatTool;
 import fu.stockspace.stockspace_be.chatbot.tool.impl.*;
 import fu.stockspace.stockspace_be.common.dto.PagedResponse;
+
 import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.inspection.dto.InspectionReportResponse;
 import fu.stockspace.stockspace_be.inspection.service.InspectionService;
@@ -18,9 +20,9 @@ import fu.stockspace.stockspace_be.wallet.repository.WalletRepository;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
-import fu.stockspace.stockspace_be.wms.receipt.dto.PagedReceiptResponse;
 import fu.stockspace.stockspace_be.wms.receipt.service.InventoryReceiptService;
 import fu.stockspace.stockspace_be.wms.stock.dto.StockBatchResponse;
+
 import fu.stockspace.stockspace_be.wms.stock.service.StockBatchService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -114,8 +116,8 @@ class DevBToolsTest {
         when(tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(userId)).thenReturn(Optional.of(member));
 
         UUID warehouseId = UUID.randomUUID();
-        fu.stockspace.stockspace_be.wms.stock.dto.PagedStockBatchResponse paged =
-                fu.stockspace.stockspace_be.wms.stock.dto.PagedStockBatchResponse.builder().content(Collections.emptyList()).build();
+        PagedResponse<fu.stockspace.stockspace_be.wms.stock.dto.StockBatchResponse> paged =
+                PagedResponse.<fu.stockspace.stockspace_be.wms.stock.dto.StockBatchResponse>builder().content(Collections.emptyList()).build();
         when(stockBatchService.getStockByWarehouse(eq(tenantUser.getId()), eq(warehouseId), any()))
                 .thenReturn(paged);
 
@@ -126,12 +128,14 @@ class DevBToolsTest {
     @Test
     void testGetPendingInboundTool_Success() {
         GetPendingInboundTool tool = new GetPendingInboundTool(objectMapper, receiptService);
-        PagedReceiptResponse paged = PagedReceiptResponse.builder().content(Collections.emptyList()).build();
+        PagedResponse<fu.stockspace.stockspace_be.wms.receipt.dto.InventoryReceiptResponse> paged =
+                PagedResponse.<fu.stockspace.stockspace_be.wms.receipt.dto.InventoryReceiptResponse>builder().content(Collections.emptyList()).build();
         when(receiptService.getReceiptsByWarehouse(any(), any(), any())).thenReturn(paged);
 
         String json = tool.execute(Collections.emptyMap(), userId);
         assertNotNull(json);
     }
+
 
     @Test
     void testGetPlatformSummaryTool_Success() {

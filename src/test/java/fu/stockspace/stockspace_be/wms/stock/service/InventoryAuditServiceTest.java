@@ -2,7 +2,9 @@ package fu.stockspace.stockspace_be.wms.stock.service;
 
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
+
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
@@ -602,7 +604,7 @@ class InventoryAuditServiceTest {
         when(productSkuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(productSku));
 
         Pageable pageable = PageRequest.of(0, 10);
-        PagedAuditResponse response = inventoryAuditService.getMyAudits(userId, pageable);
+        PagedResponse<InventoryAuditResponse> response = inventoryAuditService.getMyAudits(userId, pageable);
 
         assertNotNull(response);
         assertEquals(2, response.getContent().size());
@@ -616,7 +618,7 @@ class InventoryAuditServiceTest {
                 .thenReturn(emptyPage);
 
         Pageable pageable = PageRequest.of(0, 10);
-        PagedAuditResponse response = inventoryAuditService.getMyAudits(userId, pageable);
+        PagedResponse<InventoryAuditResponse> response = inventoryAuditService.getMyAudits(userId, pageable);
 
         assertNotNull(response);
         assertTrue(response.getContent().isEmpty());
@@ -682,7 +684,7 @@ class InventoryAuditServiceTest {
         when(productSkuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(productSku));
 
         Pageable pageable = PageRequest.of(0, 20);
-        PagedAuditResponse response = inventoryAuditService.getAllAudits(pageable);
+        PagedResponse<InventoryAuditResponse> response = inventoryAuditService.getAllAudits(pageable);
 
         assertNotNull(response);
         assertEquals(2, response.getContent().size());
@@ -695,9 +697,10 @@ class InventoryAuditServiceTest {
         when(auditRepository.findByIsDeletedFalse(any(Pageable.class))).thenReturn(emptyPage);
 
         Pageable pageable = PageRequest.of(0, 20);
-        PagedAuditResponse response = inventoryAuditService.getAllAudits(pageable);
+        PagedResponse<InventoryAuditResponse> response = inventoryAuditService.getAllAudits(pageable);
 
         assertNotNull(response);
         assertTrue(response.getContent().isEmpty());
     }
 }
+
