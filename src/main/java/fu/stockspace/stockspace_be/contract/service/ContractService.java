@@ -98,23 +98,14 @@ public class ContractService {
     public RentalContractResponse getContractById(UUID contractId, UUID userId) {
         RentalContract contract = contractRepository.findById(contractId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
-        UUID contractTenantId = contract.getBooking().getTenant().getId();
+        UUID tenantId = contract.getBooking().getTenant().getId();
         UUID ownerId = contract.getBooking().getWarehouse().getOwner().getId();
-
-        UUID currentTenantId = null;
-        try {
-            currentTenantId = TenantContextUtil.getCurrentTenantId();
-        } catch (Exception ignored) {}
-
-        boolean isAuthorized = userId.equals(contractTenantId) 
-                || userId.equals(ownerId) 
-                || (currentTenantId != null && currentTenantId.equals(contractTenantId));
-
-        if (!isAuthorized) {
+        if (!userId.equals(tenantId) && !userId.equals(ownerId)) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
         return mapToResponse(contract);
     }
+
 
     // ==================== Confirm handover ====================
     /**
