@@ -2,11 +2,12 @@ package fu.stockspace.stockspace_be.wms.product.service;
 
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.wms.product.dto.CreateSkuRequest;
-import fu.stockspace.stockspace_be.wms.product.dto.PagedSkuResponse;
 import fu.stockspace.stockspace_be.wms.product.dto.ProductSkuResponse;
+
 import fu.stockspace.stockspace_be.wms.product.dto.UpdateSkuRequest;
 import fu.stockspace.stockspace_be.wms.product.entity.ProductCategory;
 import fu.stockspace.stockspace_be.wms.product.entity.ProductSku;
@@ -79,13 +80,14 @@ class ProductSkuServiceTest {
         when(skuRepository.findAllActiveByTenantOrSystem(tenantId, pageRequest))
                 .thenReturn(new PageImpl<>(Collections.singletonList(sku), pageRequest, 1));
 
-        PagedSkuResponse response = skuService.getMySKUs(tenantId, pageRequest);
+        PagedResponse<ProductSkuResponse> response = skuService.getMySKUs(tenantId, pageRequest);
 
         assertNotNull(response);
         assertEquals(1, response.getContent().size());
         assertEquals("SKU123", response.getContent().get(0).getSkuCode());
         assertEquals(1, response.getTotalElements());
     }
+
 
     @Test
     void testGetSkuDetail_Success() {

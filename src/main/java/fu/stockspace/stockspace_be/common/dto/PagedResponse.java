@@ -52,4 +52,14 @@ public class PagedResponse<T> {
                 .last(page.isLast())
                 .build();
     }
+
+    public int getPageNo() {
+        return page;
+    }
+
+    public int getPageSize() {
+        return size;
+    }
 }
+
+

@@ -3,7 +3,9 @@ package fu.stockspace.stockspace_be.chatbot.tool.impl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fu.stockspace.stockspace_be.booking.entity.ApprovalStatus;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatTool;
-import fu.stockspace.stockspace_be.wms.receipt.dto.PagedReceiptResponse;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
+
+import fu.stockspace.stockspace_be.wms.receipt.dto.InventoryReceiptResponse;
 import fu.stockspace.stockspace_be.wms.receipt.entity.DocumentType;
 import fu.stockspace.stockspace_be.wms.receipt.service.InventoryReceiptService;
 import lombok.RequiredArgsConstructor;
@@ -62,9 +64,10 @@ public class GetPendingInboundTool implements ChatTool {
                 } catch (IllegalArgumentException ignored) {}
             }
 
-            PagedReceiptResponse paged = receiptService.getReceiptsByWarehouse(warehouseId, DocumentType.INBOUND, PageRequest.of(0, 50));
+            PagedResponse<InventoryReceiptResponse> paged = receiptService.getReceiptsByWarehouse(warehouseId, DocumentType.INBOUND, PageRequest.of(0, 50));
             List<Map<String, Object>> pendingItems = new ArrayList<>();
-            for (var item : paged.getContent()) {
+            for (InventoryReceiptResponse item : paged.getContent()) {
+
                 if (item.getStatus() == ApprovalStatus.PENDING) {
                     Map<String, Object> m = new LinkedHashMap<>();
                     m.put("receiptId", item.getId());

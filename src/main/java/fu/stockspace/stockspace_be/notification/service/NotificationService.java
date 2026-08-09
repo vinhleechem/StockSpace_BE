@@ -2,11 +2,11 @@ package fu.stockspace.stockspace_be.notification.service;
 
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.notification.dto.NotificationResponse;
-import fu.stockspace.stockspace_be.notification.dto.PagedNotificationResponse;
 import fu.stockspace.stockspace_be.notification.entity.Notification;
 import fu.stockspace.stockspace_be.notification.repository.NotificationRepository;
 import fu.stockspace.stockspace_be.notification.websocket.NotificationCreatedEvent;
@@ -18,7 +18,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -52,20 +51,9 @@ public class NotificationService {
     }
 
     @Transactional(readOnly = true)
-    public PagedNotificationResponse getMyNotifications(UUID userId, Pageable pageable) {
+    public PagedResponse<NotificationResponse> getMyNotifications(UUID userId, Pageable pageable) {
         Page<Notification> page = notificationRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable);
-        List<NotificationResponse> content = page.getContent().stream()
-                .map(this::mapToResponse)
-                .toList();
-
-        return PagedNotificationResponse.builder()
-                .content(content)
-                .page(page.getNumber())
-                .size(page.getSize())
-                .totalElements(page.getTotalElements())
-                .totalPages(page.getTotalPages())
-                .last(page.isLast())
-                .build();
+        return PagedResponse.fromPage(page, this::mapToResponse);
     }
 
     @Transactional
