@@ -81,15 +81,16 @@ public class TenantProductController {
 
     @GetMapping("/skus")
     @Operation(summary = "Lấy danh sách SKU sản phẩm phân trang (bao gồm SKU đề xuất)")
-    public ResponseEntity<ApiResponse<PagedSkuResponse>> getMySKUs(
+    public ResponseEntity<ApiResponse<PagedResponse<ProductSkuResponse>>> getMySKUs(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         UUID tenantId = getCurrentTenantId();
         checkSubscription(tenantId);
         Pageable pageable = PageRequest.of(page, size);
-        PagedSkuResponse response = skuService.getMySKUs(tenantId, pageable);
+        PagedResponse<ProductSkuResponse> response = skuService.getMySKUs(tenantId, pageable);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách SKU thành công", response));
     }
+
 
     @GetMapping("/skus/{id}")
     @Operation(summary = "Xem chi tiết SKU sản phẩm")
