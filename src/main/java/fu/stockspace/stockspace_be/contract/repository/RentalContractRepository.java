@@ -46,4 +46,16 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
               AND c.booking.isDeleted = false
             """)
     boolean existsByTenantIdAndWarehouseIdAndStatusActive(@Param("tenantId") UUID tenantId, @Param("warehouseId") UUID warehouseId);
+
+    @Query("""
+            SELECT DISTINCT c.booking.warehouse FROM RentalContract c
+            WHERE c.booking.tenant.id = :tenantId
+              AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
+              AND c.isActive = true
+              AND c.isDeleted = false
+              AND c.booking.isActive = true
+              AND c.booking.isDeleted = false
+            """)
+    java.util.List<fu.stockspace.stockspace_be.warehouse.entity.Warehouse> findActiveRentedWarehousesByTenantId(@Param("tenantId") UUID tenantId);
 }
+

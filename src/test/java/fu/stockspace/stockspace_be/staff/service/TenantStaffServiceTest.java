@@ -12,9 +12,15 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundE
 import fu.stockspace.stockspace_be.staff.dto.*;
 import fu.stockspace.stockspace_be.staff.entity.InvitationStatus;
 import fu.stockspace.stockspace_be.staff.entity.StaffInvitation;
+import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.staff.entity.TenantMember;
 import fu.stockspace.stockspace_be.staff.repository.StaffInvitationRepository;
+import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
 import fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository;
+import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
+
+
+
 import fu.stockspace.stockspace_be.subscription.entity.ServicePackage;
 import fu.stockspace.stockspace_be.subscription.entity.Subscription;
 import fu.stockspace.stockspace_be.subscription.entity.SubscriptionStatus;
@@ -44,6 +50,9 @@ class TenantStaffServiceTest {
 
     @Mock private TenantMemberRepository memberRepository;
     @Mock private StaffInvitationRepository invitationRepository;
+    @Mock private StaffWarehouseAssignmentRepository assignmentRepository;
+    @Mock private WarehouseRepository warehouseRepository;
+    @Mock private RentalContractRepository contractRepository;
     @Mock private UserRepository userRepository;
     @Mock private RoleRepository roleRepository;
     @Mock private SubscriptionRepository subscriptionRepository;
@@ -52,6 +61,7 @@ class TenantStaffServiceTest {
 
     @InjectMocks
     private TenantStaffService staffService;
+
 
     private UUID tenantId;
     private User tenantUser;
@@ -268,9 +278,11 @@ class TenantStaffServiceTest {
     @Test
     void testRemoveStaff_Success() {
         UUID memberId = UUID.randomUUID();
+        User staffUser = User.builder().id(UUID.randomUUID()).email("staff@test.com").build();
         TenantMember member = TenantMember.builder()
                 .id(memberId)
                 .tenant(tenantUser)
+                .user(staffUser)
                 .isActive(true)
                 .isDeleted(false)
                 .build();
@@ -281,8 +293,10 @@ class TenantStaffServiceTest {
 
         assertTrue(member.isDeleted());
         assertFalse(member.isActive());
+        assertNotNull(member.getResignedAt());
         verify(memberRepository, times(1)).save(member);
     }
+
 
     // ==================== deactivateExcessStaffs Tests ====================
 

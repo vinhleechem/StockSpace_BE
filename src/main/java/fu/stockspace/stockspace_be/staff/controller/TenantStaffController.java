@@ -5,9 +5,7 @@ import fu.stockspace.stockspace_be.auth.util.SecurityUtil;
 import fu.stockspace.stockspace_be.common.dto.ApiResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.UnauthorizedException;
-import fu.stockspace.stockspace_be.staff.dto.InvitationSentResponse;
-import fu.stockspace.stockspace_be.staff.dto.InviteStaffRequest;
-import fu.stockspace.stockspace_be.staff.dto.StaffMemberResponse;
+import fu.stockspace.stockspace_be.staff.dto.*;
 import fu.stockspace.stockspace_be.staff.service.TenantStaffService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,6 +20,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -59,11 +58,41 @@ public class TenantStaffController {
     }
 
     @DeleteMapping("/{memberId}")
-    @Operation(summary = "Xóa/Sa thải nhân viên kho (soft delete)")
+    @Operation(summary = "Xóa/Sa thải nhân viên kho (soft delete + thu hồi phân công kho)")
     public ResponseEntity<ApiResponse<Void>> removeStaff(@PathVariable UUID memberId) {
         User tenant = getCurrentUser();
         staffService.removeStaff(tenant.getId(), memberId);
         return ResponseEntity.ok(ApiResponse.success("Xóa nhân viên kho khỏi tổ chức thành công", null));
+    }
+
+    @PostMapping("/{staffUserId}/warehouses")
+    @Operation(summary = "Phân công nhân viên làm việc tại Kho (gán role WMS & chức danh)")
+    public ResponseEntity<ApiResponse<StaffAssignmentResponse>> assignWarehouse(
+            @PathVariable UUID staffUserId,
+            @Valid @RequestBody AssignWarehouseRequest request
+    ) {
+        User tenant = getCurrentUser();
+        StaffAssignmentResponse response = staffService.assignWarehouseToStaff(tenant.getId(), staffUserId, request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Phân công nhân viên làm việc tại kho thành công", response));
+    }
+
+    @GetMapping("/{staffUserId}/warehouses")
+    @Operation(summary = "Xem lịch sử phân công kho của nhân viên trong tổ chức")
+    public ResponseEntity<ApiResponse<List<StaffAssignmentResponse>>> getStaffAssignments(
+            @PathVariable UUID staffUserId
+    ) {
+        User tenant = getCurrentUser();
+        List<StaffAssignmentResponse> response = staffService.getStaffAssignments(tenant.getId(), staffUserId);
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách phân công kho thành công", response));
+    }
+
+    @DeleteMapping("/assignments/{assignmentId}")
+    @Operation(summary = "Thu hồi phân công nhân viên làm việc tại kho")
+    public ResponseEntity<ApiResponse<Void>> revokeAssignment(@PathVariable UUID assignmentId) {
+        User tenant = getCurrentUser();
+        staffService.revokeWarehouseAssignment(tenant.getId(), assignmentId);
+        return ResponseEntity.ok(ApiResponse.success("Thu hồi phân công kho thành công", null));
     }
 
     private User getCurrentUser() {
