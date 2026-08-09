@@ -1,11 +1,11 @@
 package fu.stockspace.stockspace_be.warehouse.service;
 
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.warehouse.dto.CreateWarehouseTypeRequest;
-import fu.stockspace.stockspace_be.warehouse.dto.PagedWarehouseTypeResponse;
 import fu.stockspace.stockspace_be.warehouse.dto.WarehouseTypeResponse;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseType;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
@@ -96,7 +96,7 @@ public class WarehouseTypeService {
     }
 
     @Transactional(readOnly = true)
-    public PagedWarehouseTypeResponse getTypesPaged(String keyword, int page, int size, String sortBy, String sortDir) {
+    public PagedResponse<WarehouseTypeResponse> getTypesPaged(String keyword, int page, int size, String sortBy, String sortDir) {
         Sort sort = "asc".equalsIgnoreCase(sortDir) ? Sort.by(sortBy).ascending() : Sort.by(sortBy).descending();
         Pageable pageable = PageRequest.of(page, size, sort);
 
@@ -108,19 +108,9 @@ public class WarehouseTypeService {
             typePage = warehouseTypeRepository.findAll(pageable);
         }
 
-        List<WarehouseTypeResponse> content = typePage.getContent().stream()
-                .map(this::mapToResponse)
-                .collect(Collectors.toList());
-
-        return PagedWarehouseTypeResponse.builder()
-                .content(content)
-                .page(typePage.getNumber())
-                .size(typePage.getSize())
-                .totalElements(typePage.getTotalElements())
-                .totalPages(typePage.getTotalPages())
-                .last(typePage.isLast())
-                .build();
+        return PagedResponse.fromPage(typePage, this::mapToResponse);
     }
+
 
     private WarehouseTypeResponse mapToResponse(WarehouseType wt) {
         return WarehouseTypeResponse.builder()

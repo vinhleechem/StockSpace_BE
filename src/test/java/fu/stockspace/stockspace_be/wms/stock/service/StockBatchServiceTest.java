@@ -1,5 +1,6 @@
 package fu.stockspace.stockspace_be.wms.stock.service;
 
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
@@ -15,7 +16,7 @@ import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
 import fu.stockspace.stockspace_be.wms.product.entity.ProductSku;
 import fu.stockspace.stockspace_be.wms.product.entity.UnitOfMeasure;
 import fu.stockspace.stockspace_be.wms.product.repository.ProductSkuRepository;
-import fu.stockspace.stockspace_be.wms.stock.dto.PagedStockBatchResponse;
+import fu.stockspace.stockspace_be.wms.stock.dto.StockBatchResponse;
 import fu.stockspace.stockspace_be.wms.stock.dto.StockSummaryResponse;
 import fu.stockspace.stockspace_be.wms.stock.entity.StockBatch;
 import fu.stockspace.stockspace_be.wms.stock.repository.StockBatchRepository;
@@ -103,7 +104,7 @@ class StockBatchServiceTest {
         when(productSkuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(productSku));
 
         Pageable pageable = PageRequest.of(0, 10);
-        PagedStockBatchResponse response = stockBatchService.getStockByWarehouse(tenantId, warehouseId, pageable);
+        PagedResponse<StockBatchResponse> response = stockBatchService.getStockByWarehouse(tenantId, warehouseId, pageable);
 
         assertNotNull(response);
         assertEquals(1, response.getContent().size());
@@ -146,7 +147,7 @@ class StockBatchServiceTest {
                 .thenReturn(emptyPage);
 
         Pageable pageable = PageRequest.of(0, 10);
-        PagedStockBatchResponse response = stockBatchService.getStockByWarehouse(tenantId, warehouseId, pageable);
+        PagedResponse<StockBatchResponse> response = stockBatchService.getStockByWarehouse(tenantId, warehouseId, pageable);
 
         assertNotNull(response);
         assertTrue(response.getContent().isEmpty());
@@ -402,7 +403,7 @@ class StockBatchServiceTest {
         when(productSkuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(productSku));
 
         Pageable pageable = PageRequest.of(0, 50);
-        PagedStockBatchResponse response = stockBatchService.getAdminStockByWarehouse(warehouseId, pageable);
+        PagedResponse<StockBatchResponse> response = stockBatchService.getAdminStockByWarehouse(warehouseId, pageable);
 
         assertNotNull(response);
         assertEquals(1, response.getContent().size());
@@ -416,7 +417,8 @@ class StockBatchServiceTest {
                 .thenReturn(emptyPage);
 
         Pageable pageable = PageRequest.of(0, 50);
-        PagedStockBatchResponse response = stockBatchService.getAdminStockByWarehouse(warehouseId, pageable);
+        PagedResponse<StockBatchResponse> response = stockBatchService.getAdminStockByWarehouse(warehouseId, pageable);
+
 
         assertNotNull(response);
         assertTrue(response.getContent().isEmpty());

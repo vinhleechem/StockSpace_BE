@@ -1,5 +1,6 @@
 package fu.stockspace.stockspace_be.wms.stock.service;
 
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
@@ -15,7 +16,6 @@ import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
 import fu.stockspace.stockspace_be.wms.product.entity.ProductSku;
 import fu.stockspace.stockspace_be.wms.product.entity.UnitOfMeasure;
 import fu.stockspace.stockspace_be.wms.product.repository.ProductSkuRepository;
-import fu.stockspace.stockspace_be.wms.stock.dto.PagedStockBatchResponse;
 import fu.stockspace.stockspace_be.wms.stock.dto.StockBatchResponse;
 import fu.stockspace.stockspace_be.wms.stock.dto.StockLocationDto;
 import fu.stockspace.stockspace_be.wms.stock.dto.StockSummaryResponse;
@@ -51,7 +51,7 @@ public class StockBatchService {
      * Tenant phải có subscription active.
      */
     @Transactional(readOnly = true)
-    public PagedStockBatchResponse getStockByWarehouse(UUID tenantId, UUID warehouseId, Pageable pageable) {
+    public PagedResponse<StockBatchResponse> getStockByWarehouse(UUID tenantId, UUID warehouseId, Pageable pageable) {
         if (!subscriptionService.hasActiveSubscription(tenantId)) {
             throw new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED);
         }
@@ -63,18 +63,7 @@ public class StockBatchService {
         Page<StockBatch> page = stockBatchRepository.findByWarehouseIdAndTenantId(
                 warehouseId, tenantId, pageable);
 
-        List<StockBatchResponse> content = page.getContent().stream()
-                .map(this::mapToResponse)
-                .collect(Collectors.toList());
-
-        return PagedStockBatchResponse.builder()
-                .content(content)
-                .pageNo(page.getNumber())
-                .pageSize(page.getSize())
-                .totalElements(page.getTotalElements())
-                .totalPages(page.getTotalPages())
-                .last(page.isLast())
-                .build();
+        return PagedResponse.fromPage(page, this::mapToResponse);
     }
 
     /**
@@ -237,18 +226,9 @@ public class StockBatchService {
      * Admin xem tồn kho theo warehouse — không cần kiểm tra subscription.
      */
     @Transactional(readOnly = true)
-    public PagedStockBatchResponse getAdminStockByWarehouse(UUID warehouseId, Pageable pageable) {
+    public PagedResponse<StockBatchResponse> getAdminStockByWarehouse(UUID warehouseId, Pageable pageable) {
         Page<StockBatch> page = stockBatchRepository.findByWarehouseIdAndIsDeletedFalse(warehouseId, pageable);
-        List<StockBatchResponse> content = page.getContent().stream()
-                .map(this::mapToResponse)
-                .collect(Collectors.toList());
-        return PagedStockBatchResponse.builder()
-                .content(content)
-                .pageNo(page.getNumber())
-                .pageSize(page.getSize())
-                .totalElements(page.getTotalElements())
-                .totalPages(page.getTotalPages())
-                .last(page.isLast())
-                .build();
+        return PagedResponse.fromPage(page, this::mapToResponse);
     }
 }
+

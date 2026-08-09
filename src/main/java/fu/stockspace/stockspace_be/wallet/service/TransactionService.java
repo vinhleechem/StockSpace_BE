@@ -1,7 +1,7 @@
 package fu.stockspace.stockspace_be.wallet.service;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
-import fu.stockspace.stockspace_be.wallet.dto.PagedTransactionResponse;
 import fu.stockspace.stockspace_be.wallet.dto.TransactionResponse;
 import fu.stockspace.stockspace_be.wallet.entity.Transaction;
 import fu.stockspace.stockspace_be.wallet.entity.Wallet;
@@ -13,7 +13,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import java.util.List;
 import java.util.UUID;
 @Slf4j
 @Service
@@ -22,45 +21,24 @@ public class TransactionService {
     private final TransactionRepository transactionRepository;
     private final WalletRepository walletRepository;
     /**
-     * Xem lịch sử giao dịch của ví người dùng hiện tại (phân trang).
+     * Lấy danh sách giao dịch của user hiện tại (phân trang).
      */
     @Transactional(readOnly = true)
-    public PagedTransactionResponse getMyTransactions(UUID userId, Pageable pageable) {
+    public PagedResponse<TransactionResponse> getMyTransactions(UUID userId, Pageable pageable) {
         Wallet wallet = walletRepository.findByUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WALLET_NOT_FOUND));
         Page<Transaction> page = transactionRepository.findByWalletId(wallet.getId(), pageable);
-        
-        List<TransactionResponse> responses = page.getContent().stream()
-                .map(this::mapToResponse)
-                .toList();
-        return PagedTransactionResponse.builder()
-                .content(responses)
-                .page(page.getNumber())
-                .size(page.getSize())
-                .totalElements(page.getTotalElements())
-                .totalPages(page.getTotalPages())
-                .last(page.isLast())
-                .build();
+        return PagedResponse.fromPage(page, this::mapToResponse);
     }
     /**
      * API dành cho Admin xem toàn bộ giao dịch hệ thống.
      */
     @Transactional(readOnly = true)
-    public PagedTransactionResponse getAllTransactions(Pageable pageable) {
+    public PagedResponse<TransactionResponse> getAllTransactions(Pageable pageable) {
         Page<Transaction> page = transactionRepository.findAll(pageable);
-        
-        List<TransactionResponse> responses = page.getContent().stream()
-                .map(this::mapToResponse)
-                .toList();
-        return PagedTransactionResponse.builder()
-                .content(responses)
-                .page(page.getNumber())
-                .size(page.getSize())
-                .totalElements(page.getTotalElements())
-                .totalPages(page.getTotalPages())
-                .last(page.isLast())
-                .build();
+        return PagedResponse.fromPage(page, this::mapToResponse);
     }
+
 
     /**
      * Lấy thông tin trạng thái giao dịch theo mã paymentCode.
