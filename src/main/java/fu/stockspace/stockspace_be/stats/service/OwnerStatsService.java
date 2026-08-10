@@ -7,6 +7,7 @@ import fu.stockspace.stockspace_be.wallet.entity.TransactionType;
 import fu.stockspace.stockspace_be.wallet.entity.Wallet;
 import fu.stockspace.stockspace_be.wallet.repository.TransactionRepository;
 import fu.stockspace.stockspace_be.wallet.repository.WalletRepository;
+import fu.stockspace.stockspace_be.wallet.service.WalletService;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
@@ -28,27 +29,21 @@ public class OwnerStatsService {
     private final WalletRepository walletRepository;
     private final TransactionRepository transactionRepository;
     private final WarehouseRepository warehouseRepository;
+    private final WalletService walletService;
 
     @Transactional(readOnly = true)
     public RevenueStatsResponse getRevenueSummary(UUID ownerId, Integer year) {
         int targetYear = (year != null && year > 2000) ? year : LocalDate.now().getYear();
 
-        Optional<Wallet> walletOpt = walletRepository.findByUserId(ownerId);
-        if (walletOpt.isEmpty()) {
-            List<MonthlyRevenueDto> emptyList = new ArrayList<>();
-            for (int m = 1; m <= 12; m++) {
-                emptyList.add(new MonthlyRevenueDto(m, BigDecimal.ZERO));
-            }
-            return RevenueStatsResponse.builder()
-                    .year(targetYear)
-                    .totalRevenue(BigDecimal.ZERO)
-                    .monthlyRevenue(emptyList)
-                    .build();
-        }
+        Wallet wallet = walletService.getOrCreateWallet(ownerId);
 
-        Wallet wallet = walletOpt.get();
-        List<Object[]> monthlyData = transactionRepository.findMonthlyRevenueByWalletIdAndTypeAndYear(
-                wallet.getId(), TransactionType.DEPOSIT_PAYMENT, targetYear);
+        // Owner revenue = DEPOSIT_RECEIVED (nhận tiền cọc từ Tenant)
+        List<TransactionType> revenueTypes = List.of(
+                TransactionType.DEPOSIT_RECEIVED,
+                TransactionType.DEPOSIT_PAYMENT   // backward compat: dữ liệu cũ dùng type này
+        );
+        List<Object[]> monthlyData = transactionRepository.findMonthlyRevenueByWalletIdAndTypesAndYear(
+                wallet.getId(), revenueTypes, targetYear);
 
         Map<Integer, BigDecimal> monthMap = new HashMap<>();
         BigDecimal total = BigDecimal.ZERO;
@@ -57,7 +52,7 @@ public class OwnerStatsService {
             if (row != null && row.length >= 2 && row[0] != null && row[1] != null) {
                 int month = ((Number) row[0]).intValue();
                 BigDecimal amount = new BigDecimal(row[1].toString());
-                monthMap.put(month, amount);
+                monthMap.merge(month, amount, BigDecimal::add);
                 total = total.add(amount);
             }
         }
