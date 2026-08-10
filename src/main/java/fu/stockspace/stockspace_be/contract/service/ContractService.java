@@ -265,18 +265,11 @@ public class ContractService {
             log.error("Failed to auto-clone layout for tenant {} after contract activation: {}", actualTenantId, e.getMessage());
         }
 
-        // =========================================================
-        // [INTEGRATION POINT — Dev B]
-        // Chuyển tiền cọc sang ví Owner khi Tenant confirm:
-        // walletService.addBalance(
-        //     contract.getBooking().getWarehouse().getOwner().getId(),
-        //     contract.getBooking().getDepositAmount(),
-        //     "Nhận cọc thuê kho: " + contract.getBooking().getWarehouse().getName()
-        // );
+        // Chuyển tiền cọc sang ví Owner khi Tenant confirm hợp đồng
         walletService.refundBalance(
             contract.getBooking().getWarehouse().getOwner().getId(),
             contract.getBooking().getDepositAmount(),
-            TransactionType.DEPOSIT_REFUND,
+            TransactionType.DEPOSIT_RECEIVED,
             "Nhận cọc thuê kho: " + contract.getBooking().getWarehouse().getName(),
             contract.getBooking().getId(),
             null
