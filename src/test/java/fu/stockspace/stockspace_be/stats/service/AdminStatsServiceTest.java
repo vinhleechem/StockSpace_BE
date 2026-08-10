@@ -56,7 +56,7 @@ class AdminStatsServiceTest {
         Object[] row1 = new Object[]{3, 1500000L};
         List<Object[]> monthlyData = java.util.Collections.singletonList(row1);
 
-        when(transactionRepository.findMonthlyRevenueByTypeAndYear(any(), eq(2026)))
+        when(transactionRepository.findMonthlyRevenueByTypesAndYear(any(), eq(2026)))
                 .thenReturn(monthlyData);
 
 
