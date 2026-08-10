@@ -40,7 +40,21 @@ public class TenantSubscriptionController {
         SubscriptionResponse response = subscriptionService.getMyActiveSubscription(user.getId());
         return ResponseEntity.ok(ApiResponse.success("Lấy thông tin gói đang hoạt động thành công", response));
     }
+
+    @GetMapping("/preview-change")
+    @Operation(summary = "Xem trước thông tin chuyển đổi/mua gói dịch vụ (Gia hạn, Nâng cấp, Hạ cấp)")
+    public ResponseEntity<ApiResponse<fu.stockspace.stockspace_be.subscription.dto.SubscriptionPreviewResponse>> previewSubscriptionChange(
+            @RequestParam java.util.UUID packageId
+    ) {
+        User user = getCurrentUser();
+        fu.stockspace.stockspace_be.subscription.dto.SubscriptionPreviewResponse response =
+                subscriptionService.previewSubscriptionChange(user.getId(), packageId);
+        return ResponseEntity.ok(ApiResponse.success("Xem trước chuyển đổi gói dịch vụ thành công", response));
+    }
+
     private User getCurrentUser() {
+
+
         return SecurityUtil.getCurrentUser()
                 .orElseThrow(() -> new UnauthorizedException(ErrorCode.UNAUTHENTICATED));
     }

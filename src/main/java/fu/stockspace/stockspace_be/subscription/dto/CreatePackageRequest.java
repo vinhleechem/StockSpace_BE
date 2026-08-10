@@ -21,5 +21,7 @@ public class CreatePackageRequest {
     private Integer durationDays;
     /** Số nhân viên tối đa. 0 = không giới hạn */
     @Min(value = 0, message = "maxStaff không được âm")
+    @Builder.Default
     private int maxStaff = 0;
 }
+

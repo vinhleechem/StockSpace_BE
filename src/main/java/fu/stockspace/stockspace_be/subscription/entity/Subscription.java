@@ -38,4 +38,22 @@ public class Subscription extends BaseEntity {
     @Column(name = "status", nullable = false, length = 20)
     @Builder.Default
     private SubscriptionStatus status = SubscriptionStatus.ACTIVE;
-}
+
+    // ==================== Snapshot Fields ====================
+    /** Quota Staff tại thời điểm mua (Snapshot) */
+    @Column(name = "snapshot_max_staff", nullable = false)
+    @Builder.Default
+    private int snapshotMaxStaff = 0;
+
+    /** Giá mua tại thời điểm mua (Snapshot) */
+    @Column(name = "snapshot_price", precision = 15, scale = 2)
+    private java.math.BigDecimal snapshotPrice;
+
+    /** Mô tả tính năng dạng JSON/Text tại thời điểm mua (Snapshot) */
+    @Column(name = "snapshot_features", columnDefinition = "TEXT")
+    private String snapshotFeatures;
+
+    /** Tên gói dịch vụ tại thời điểm mua (Snapshot) */
+    @Column(name = "snapshot_package_name", length = 150)
+    private String snapshotPackageName;
+}
