@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/owner/stats")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('OWNER')")
+@PreAuthorize("@rbac.hasPermission('OWNER_STATS_READ')")
 public class OwnerStatsController {
 
     private final OwnerStatsService ownerStatsService;

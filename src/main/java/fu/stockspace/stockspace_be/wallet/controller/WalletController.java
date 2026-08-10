@@ -27,12 +27,12 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/wallet")
 @RequiredArgsConstructor
 @Tag(name = "Wallet", description = "Các API liên quan đến Ví, Giao dịch và Yêu cầu Rút tiền")
-@PreAuthorize("isAuthenticated()")
 public class WalletController {
     private final WalletService walletService;
     private final TransactionService transactionService;
     private final WithdrawService withdrawService;
     @GetMapping
+    @PreAuthorize("@rbac.hasPermission('WALLET_READ')")
     @Operation(summary = "Xem thông tin ví và số dư hiện tại")
     public ResponseEntity<ApiResponse<WalletResponse>> getWalletInfo() {
         User user = getCurrentUser();
@@ -40,6 +40,7 @@ public class WalletController {
         return ResponseEntity.ok(ApiResponse.success("Lấy thông tin ví thành công", response));
     }
     @PostMapping("/top-up")
+    @PreAuthorize("@rbac.hasPermission('WALLET_TOP_UP')")
     @Operation(summary = "Tạo yêu cầu nạp tiền (Sinh mã thanh toán & link redirect VNPAY)")
     public ResponseEntity<ApiResponse<TopUpResponse>> topUp(
             @Valid @RequestBody TopUpRequest request,
@@ -69,6 +70,7 @@ public class WalletController {
         return ipAddress != null ? ipAddress : "127.0.0.1";
     }
     @GetMapping("/transactions")
+    @PreAuthorize("@rbac.hasPermission('WALLET_READ')")
     @Operation(summary = "Xem lịch sử giao dịch ví (phân trang)")
     public ResponseEntity<ApiResponse<PagedResponse<TransactionResponse>>> getMyTransactions(
             @RequestParam(defaultValue = "0") int page,
@@ -81,6 +83,7 @@ public class WalletController {
 
 
     @GetMapping("/transactions/{paymentCode}/status")
+    @PreAuthorize("@rbac.hasPermission('WALLET_READ')")
     @Operation(summary = "Xem trạng thái giao dịch theo mã paymentCode")
     public ResponseEntity<ApiResponse<TransactionResponse>> getTransactionStatus(@PathVariable String paymentCode) {
         User user = getCurrentUser();
@@ -89,6 +92,7 @@ public class WalletController {
     }
 
     @PostMapping("/withdraw")
+    @PreAuthorize("@rbac.hasPermission('WALLET_WITHDRAW')")
     @Operation(summary = "Gửi yêu cầu rút tiền về ngân hàng")
     public ResponseEntity<ApiResponse<WithdrawResponse>> withdraw(@Valid @RequestBody WithdrawRequestDto requestDto) {
         User user = getCurrentUser();
@@ -97,6 +101,7 @@ public class WalletController {
                 .body(ApiResponse.success("Gửi yêu cầu rút tiền thành công. Số tiền đã được tạm giữ.", response));
     }
     @GetMapping("/withdrawals")
+    @PreAuthorize("@rbac.hasPermission('WALLET_WITHDRAW')")
     @Operation(summary = "Xem lịch sử các yêu cầu rút tiền của mình (phân trang)")
     public ResponseEntity<ApiResponse<PagedResponse<WithdrawResponse>>> getMyWithdrawals(
             @RequestParam(defaultValue = "0") int page,

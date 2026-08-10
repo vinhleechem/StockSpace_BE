@@ -155,7 +155,7 @@ public class AuthController {
         // ==================== Logout ====================
 
         @PostMapping("/logout")
-        @PreAuthorize("isAuthenticated()")
+        @PreAuthorize("@rbac.hasPermission('AUTH_SESSION_MANAGE')")
         @Operation(summary = "Logout khỏi thiết bị hiện tại")
         public ResponseEntity<ApiResponse<Void>> logout(
                         @Parameter(hidden = true) @CookieValue(name = RefreshTokenService.REFRESH_TOKEN_COOKIE_NAME, required = false) String refreshTokenValue) {
@@ -168,7 +168,7 @@ public class AuthController {
         }
 
         @PostMapping("/logout-all")
-        @PreAuthorize("isAuthenticated()")
+        @PreAuthorize("@rbac.hasPermission('AUTH_SESSION_MANAGE')")
         @Operation(summary = "Logout khỏi tất cả thiết bị")
         public ResponseEntity<ApiResponse<Void>> logoutAll(
                         @CookieValue(name = RefreshTokenService.REFRESH_TOKEN_COOKIE_NAME, required = false) String refreshTokenValue) {
@@ -186,7 +186,7 @@ public class AuthController {
         // ==================== Me ====================
 
         @GetMapping("/me")
-        @PreAuthorize("isAuthenticated()")
+        @PreAuthorize("@rbac.hasPermission('PROFILE_READ')")
         @Operation(summary = "Lấy thông tin user đang đăng nhập")
         public ResponseEntity<ApiResponse<UserInfoResponse>> getCurrentUser() {
                 User user = SecurityUtil.getCurrentUser()

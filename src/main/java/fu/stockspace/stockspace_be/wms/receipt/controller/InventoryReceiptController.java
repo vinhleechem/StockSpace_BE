@@ -29,7 +29,6 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/tenant/inventory/receipts")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('TENANT', 'STAFF')")
 public class InventoryReceiptController {
 
     private final InventoryReceiptService receiptService;
@@ -43,6 +42,7 @@ public class InventoryReceiptController {
     }
 
     @PostMapping
+    @PreAuthorize("@rbac.hasAnyPermission('INBOUND_CREATE', 'OUTBOUND_CREATE')")
     @Operation(summary = "Tạo phiếu nhập/xuất kho mới ở trạng thái PENDING")
     public ResponseEntity<ApiResponse<InventoryReceiptResponse>> createReceipt(
             @Valid @RequestBody CreateInventoryReceiptRequest request
@@ -54,6 +54,7 @@ public class InventoryReceiptController {
     }
 
     @PatchMapping("/{id}/approve")
+    @PreAuthorize("@rbac.hasPermission('INVENTORY_UPDATE')")
     @Operation(summary = "Duyệt phiếu nhập/xuất kho (cộng/trừ kho và ghi nhật ký giao dịch)")
     public ResponseEntity<ApiResponse<InventoryReceiptResponse>> approveReceipt(@PathVariable UUID id) {
         checkSubscription();
@@ -63,6 +64,7 @@ public class InventoryReceiptController {
     }
 
     @GetMapping
+    @PreAuthorize("@rbac.hasPermission('INVENTORY_READ')")
     @Operation(summary = "Lấy danh sách phiếu nhập/xuất kho phân trang theo kho")
     public ResponseEntity<ApiResponse<PagedResponse<InventoryReceiptResponse>>> getReceipts(
             @RequestParam UUID warehouseId,
@@ -78,6 +80,7 @@ public class InventoryReceiptController {
 
 
     @GetMapping("/{id}")
+    @PreAuthorize("@rbac.hasPermission('INVENTORY_READ')")
     @Operation(summary = "Xem chi tiết phiếu nhập/xuất kho")
     public ResponseEntity<ApiResponse<InventoryReceiptResponse>> getReceiptDetail(@PathVariable UUID id) {
         checkSubscription();
@@ -86,6 +89,7 @@ public class InventoryReceiptController {
     }
 
     @GetMapping("/export")
+    @PreAuthorize("@rbac.hasPermission('INVENTORY_READ')")
     @Operation(summary = "Xuất danh sách phiếu nhập/xuất kho ra file Excel/CSV")
     public ResponseEntity<byte[]> exportReceipts(
             @RequestParam UUID warehouseId,

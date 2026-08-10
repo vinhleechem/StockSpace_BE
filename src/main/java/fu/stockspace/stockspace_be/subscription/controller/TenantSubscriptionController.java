@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/tenant/subscriptions")
 @RequiredArgsConstructor
 @Tag(name = "Tenant — Subscriptions", description = "Các API đăng ký gói dịch vụ dành cho Tenant")
-@PreAuthorize("hasRole('TENANT')")
+@PreAuthorize("@rbac.hasPermission('PACKAGE_PURCHASE')")
 public class TenantSubscriptionController {
     private final SubscriptionService subscriptionService;
     @PostMapping

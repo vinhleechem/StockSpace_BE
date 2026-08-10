@@ -31,7 +31,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/inspector/inspections")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('INSPECTOR', 'ADMIN')")
+@PreAuthorize("@rbac.hasPermission('INSPECTION_EXECUTE')")
 public class InspectorController {
 
     private final InspectionService inspectionService;

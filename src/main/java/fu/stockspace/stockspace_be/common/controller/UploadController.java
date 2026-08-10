@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -29,6 +30,7 @@ public class UploadController {
      * Upload single image.
      */
     @PostMapping(value = "/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@rbac.hasPermission('MEDIA_UPLOAD')")
     @Operation(summary = "Upload một hình ảnh (Yêu cầu đăng nhập)")
     public ResponseEntity<ApiResponse<String>> uploadSingleImage(
             @RequestParam("file") MultipartFile file
@@ -50,6 +52,7 @@ public class UploadController {
      * Upload multiple images.
      */
     @PostMapping(value = "/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@rbac.hasPermission('MEDIA_UPLOAD')")
     @Operation(summary = "Upload nhiều hình ảnh cùng lúc (Yêu cầu đăng nhập)")
     public ResponseEntity<ApiResponse<List<String>>> uploadMultipleImages(
             @RequestParam("files") List<MultipartFile> files

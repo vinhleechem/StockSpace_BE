@@ -22,7 +22,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/tenant/warehouses")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('TENANT')")
+@PreAuthorize("@rbac.hasPermission('WAREHOUSE_LAYOUT_TENANT_MANAGE')")
 public class TenantLayoutController {
 
     private final WarehouseLayoutService layoutService;

@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/admin/transactions")
 @RequiredArgsConstructor
 @Tag(name = "Admin — Transactions", description = "Các API thống kê và quản lý giao dịch hệ thống")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("@rbac.hasPermission('ADMIN_TRANSACTION_READ')")
 public class AdminTransactionController {
     private final TransactionService transactionService;
 

@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/admin/disputes")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ADMIN', 'INSPECTOR')")
+@PreAuthorize("@rbac.hasPermission('DISPUTE_RESOLVE')")
 public class AdminDisputeController {
 
     private final AdminDisputeService adminDisputeService;

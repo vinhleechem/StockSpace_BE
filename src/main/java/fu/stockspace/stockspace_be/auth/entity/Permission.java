@@ -12,7 +12,7 @@ import fu.stockspace.stockspace_be.common.entity.BaseEntity;
  * Ví dụ: WAREHOUSE_CREATE, INVENTORY_READ, STAFF_MANAGE
  *
  * Dùng trong @PreAuthorize:
- *   @PreAuthorize("hasAuthority('WAREHOUSE_CREATE')")
+ *   @PreAuthorize("@rbac.hasPermission('WAREHOUSE_CREATE')")
  */
 @Entity
 @Table(name = "permissions")

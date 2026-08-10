@@ -35,7 +35,6 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/contracts")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('OWNER', 'TENANT', 'ADMIN')")
 public class ContractController {
 
     private final ContractService contractService;
@@ -46,6 +45,7 @@ public class ContractController {
      * Owner xem hợp đồng liên quan kho mình; Tenant xem hợp đồng mình tham gia.
      */
     @GetMapping
+    @PreAuthorize("@rbac.hasPermission('CONTRACT_READ')")
     @Operation(summary = "Danh sách hợp đồng của mình")
     public ResponseEntity<ApiResponse<PagedResponse<RentalContractResponse>>> getMyContracts(
             @RequestParam(defaultValue = "0") int page,
@@ -69,6 +69,7 @@ public class ContractController {
      * Chi tiết một hợp đồng — chỉ Owner hoặc Tenant liên quan mới xem được.
      */
     @GetMapping("/{id}")
+    @PreAuthorize("@rbac.hasPermission('CONTRACT_READ')")
     @Operation(summary = "Chi tiết hợp đồng thuê kho")
     public ResponseEntity<ApiResponse<RentalContractResponse>> getById(@PathVariable java.util.UUID id) {
         java.util.UUID userId = getCurrentUser().getId();
@@ -82,6 +83,7 @@ public class ContractController {
      * Khi cả Owner và Tenant đều confirm → hợp đồng COMPLETED + kho AVAILABLE.
      */
     @PatchMapping("/{id}/confirm-handover")
+    @PreAuthorize("@rbac.hasPermission('CONTRACT_HANDOVER_CONFIRM')")
     @Operation(summary = "Xác nhận bàn giao kho (Owner / Tenant)")
     public ResponseEntity<ApiResponse<RentalContractResponse>> confirmHandover(@PathVariable java.util.UUID id) {
         java.util.UUID userId = getCurrentUser().getId();
@@ -95,7 +97,7 @@ public class ContractController {
      */
     @PostMapping("/{id}/submit-online")
     @Operation(summary = "Owner nộp thông tin & ảnh chụp hợp đồng giấy (Owner)")
-    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    @PreAuthorize("@rbac.hasPermission('CONTRACT_OWNER_MANAGE')")
     public ResponseEntity<ApiResponse<RentalContractResponse>> submitOnline(
             @PathVariable java.util.UUID id,
             @Valid @RequestBody SubmitContractRequest request
@@ -111,7 +113,7 @@ public class ContractController {
      */
     @PostMapping("/{id}/tenant-confirm")
     @Operation(summary = "Tenant xác nhận kích hoạt hợp đồng (Tenant)")
-    @PreAuthorize("hasAnyRole('TENANT', 'ADMIN')")
+    @PreAuthorize("@rbac.hasPermission('CONTRACT_TENANT_MANAGE')")
     public ResponseEntity<ApiResponse<RentalContractResponse>> tenantConfirm(@PathVariable java.util.UUID id) {
         java.util.UUID tenantId = getCurrentUser().getId();
         RentalContractResponse response = contractService.tenantConfirmContract(tenantId, id);
@@ -124,7 +126,7 @@ public class ContractController {
      */
     @PostMapping("/{id}/tenant-report-failed")
     @Operation(summary = "Tenant báo cáo deal thất bại / báo lỗi hợp đồng (Tenant)")
-    @PreAuthorize("hasAnyRole('TENANT', 'ADMIN')")
+    @PreAuthorize("@rbac.hasPermission('CONTRACT_TENANT_MANAGE')")
     public ResponseEntity<ApiResponse<RentalContractResponse>> tenantReportFailed(
             @PathVariable java.util.UUID id,
             @Valid @RequestBody TenantReportFailedRequest request
@@ -140,7 +142,7 @@ public class ContractController {
      */
     @PostMapping("/{id}/owner-cancel")
     @Operation(summary = "Owner đề xuất hủy deal thương lượng (Owner)")
-    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    @PreAuthorize("@rbac.hasPermission('CONTRACT_OWNER_MANAGE')")
     public ResponseEntity<ApiResponse<RentalContractResponse>> ownerCancel(
             @PathVariable java.util.UUID id,
             @Valid @RequestBody OwnerCancelRequest request
@@ -156,7 +158,7 @@ public class ContractController {
      */
     @PostMapping("/{id}/tenant-respond-cancel")
     @Operation(summary = "Tenant phản hồi yêu cầu hủy deal (Tenant)")
-    @PreAuthorize("hasAnyRole('TENANT', 'ADMIN')")
+    @PreAuthorize("@rbac.hasPermission('CONTRACT_TENANT_MANAGE')")
     public ResponseEntity<ApiResponse<RentalContractResponse>> tenantRespondCancel(
             @PathVariable java.util.UUID id,
             @Valid @RequestBody TenantRespondCancelRequest request

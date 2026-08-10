@@ -50,7 +50,6 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/owner/warehouses")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
 public class OwnerWarehouseController {
 
     private final WarehouseService warehouseService;
@@ -66,6 +65,7 @@ public class OwnerWarehouseController {
      * Status ban đầu sẽ là PENDING_APPROVAL.
      */
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@rbac.hasPermission('WAREHOUSE_CREATE')")
     @Operation(summary = "Tạo warehouse mới (Owner)")
     public ResponseEntity<ApiResponse<WarehouseResponse>> create(
             @Parameter(
@@ -111,6 +111,7 @@ public class OwnerWarehouseController {
      * Danh sách kho của Owner hiện tại, có phân trang và sắp xếp.
      */
     @GetMapping
+    @PreAuthorize("@rbac.hasPermission('WAREHOUSE_READ')")
     @Operation(summary = "Danh sách kho của Owner (phân trang)")
     public ResponseEntity<ApiResponse<PagedResponse<WarehouseResponse>>> getMyWarehouses(
             @RequestParam(defaultValue = "0") int page,
@@ -130,6 +131,7 @@ public class OwnerWarehouseController {
      * Cập nhật thông tin kho (name, address, description, price, capacity, type).
      */
     @PutMapping("/{id}")
+    @PreAuthorize("@rbac.hasPermission('WAREHOUSE_UPDATE')")
     @Operation(summary = "Cập nhật thông tin warehouse (Owner)")
     public ResponseEntity<ApiResponse<WarehouseResponse>> update(
             @PathVariable UUID id,
@@ -148,6 +150,7 @@ public class OwnerWarehouseController {
      * Không thể tự set RENTED.
      */
     @PatchMapping("/{id}/status")
+    @PreAuthorize("@rbac.hasPermission('WAREHOUSE_UPDATE')")
     @Operation(summary = "Cập nhật trạng thái warehouse (AVAILABLE / INACTIVE)")
     public ResponseEntity<ApiResponse<WarehouseResponse>> updateStatus(
             @PathVariable UUID id,
@@ -165,6 +168,7 @@ public class OwnerWarehouseController {
      * Xoá warehouse. Không xoá được khi đang có Tenant thuê.
      */
     @DeleteMapping("/{id}")
+    @PreAuthorize("@rbac.hasPermission('WAREHOUSE_DELETE')")
     @Operation(summary = "Xoá warehouse (Owner)")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable UUID id) {
         UUID ownerId = getCurrentUserId();
@@ -180,6 +184,7 @@ public class OwnerWarehouseController {
      * Body: { "imageUrls": ["url1", "url2"] }
      */
     @PostMapping(value = "/{id}/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@rbac.hasPermission('WAREHOUSE_UPDATE')")
     @Operation(summary = "Thêm ảnh vào warehouse")
     public ResponseEntity<ApiResponse<List<String>>> addImages(
             @PathVariable UUID id,
@@ -197,6 +202,7 @@ public class OwnerWarehouseController {
      * Thay thế toàn bộ ảnh bằng danh sách mới.
      */
     @PutMapping(value = "/{id}/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@rbac.hasPermission('WAREHOUSE_UPDATE')")
     @Operation(summary = "Thay thế toàn bộ ảnh warehouse")
     public ResponseEntity<ApiResponse<List<String>>> replaceImages(
             @PathVariable UUID id,

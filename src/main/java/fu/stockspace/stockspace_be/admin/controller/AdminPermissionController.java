@@ -22,7 +22,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/admin/permissions")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("@rbac.hasPermission('ADMIN_PERMISSION_MANAGE')")
 public class AdminPermissionController {
 
     private final PermissionManagementService permissionManagementService;
