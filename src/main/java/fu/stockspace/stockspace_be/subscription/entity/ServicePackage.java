@@ -33,7 +33,7 @@ public class ServicePackage extends BaseEntity {
      * 0 = không giới hạn (dùng cho gói Enterprise/custom).
      * Mặc định = 0 (cho gói cũ chưa set).
      */
-    @Column(name = "max_staff", nullable = false)
+    @Column(name = "max_staff")
     @Builder.Default
-    private int maxStaff = 0;
+    private Integer maxStaff = 0;
 }

@@ -77,12 +77,12 @@ public class SubscriptionService {
                 java.math.BigDecimal currentPrice = activeSub.getSnapshotPrice() != null
                         ? activeSub.getSnapshotPrice()
                         : (activePkg != null ? activePkg.getPrice() : java.math.BigDecimal.ZERO);
-                int currentMaxStaff = activeSub.getSnapshotMaxStaff() > 0
+                int currentMaxStaff = (activeSub.getSnapshotMaxStaff() != null && activeSub.getSnapshotMaxStaff() > 0)
                         ? activeSub.getSnapshotMaxStaff()
-                        : (activePkg != null ? activePkg.getMaxStaff() : 0);
+                        : (activePkg != null && activePkg.getMaxStaff() != null ? activePkg.getMaxStaff() : 0);
 
-                boolean isLowerPrice = servicePackage.getPrice().compareTo(currentPrice) < 0;
-                boolean isLowerStaff = servicePackage.getMaxStaff() < currentMaxStaff;
+                boolean isLowerPrice = servicePackage.getPrice() != null && currentPrice != null ? servicePackage.getPrice().compareTo(currentPrice) < 0 : false;
+                boolean isLowerStaff = (servicePackage.getMaxStaff() != null ? servicePackage.getMaxStaff() : 0) < currentMaxStaff;
 
                 if (isLowerPrice && isLowerStaff) {
                     throw new BadRequestException("Không thể hạ xuống gói dịch vụ thấp hơn khi gói hiện tại vẫn đang còn hạn. Vui lòng hạ gói sau khi gói hiện tại kết thúc.");
@@ -175,11 +175,17 @@ public class SubscriptionService {
                         tenantId, SubscriptionStatus.ACTIVE, LocalDate.now())
                 .isPresent();
     }
+
     /**
      * Preview chuyển đổi gói dịch vụ cho Tenant xem trước khi xác nhận bấm mua.
      */
     @Transactional(readOnly = true)
     public fu.stockspace.stockspace_be.subscription.dto.SubscriptionPreviewResponse previewSubscriptionChange(UUID tenantId, UUID newPackageId) {
+
+        if (newPackageId == null) {
+            throw new BadRequestException("ID gói dịch vụ không được để trống");
+        }
+
         ServicePackage newPackage = packageRepository.findById(newPackageId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.PACKAGE_NOT_FOUND));
 
@@ -187,15 +193,18 @@ public class SubscriptionService {
                 .findFirstByTenantIdAndStatusAndEndDateGreaterThanEqualOrderByEndDateDesc(
                         tenantId, SubscriptionStatus.ACTIVE, LocalDate.now());
 
+        java.math.BigDecimal newPrice = newPackage.getPrice() != null ? newPackage.getPrice() : java.math.BigDecimal.ZERO;
+        int newMaxStaff = newPackage.getMaxStaff() != null ? newPackage.getMaxStaff() : 0;
+
         if (activeOpt.isEmpty()) {
             return fu.stockspace.stockspace_be.subscription.dto.SubscriptionPreviewResponse.builder()
                     .newPackageId(newPackage.getId())
                     .newPackageName(newPackage.getName())
-                    .newMaxStaff(newPackage.getMaxStaff())
-                    .newPrice(newPackage.getPrice())
+                    .newMaxStaff(newMaxStaff)
+                    .newPrice(newPrice)
                     .transactionType("NEW_PURCHASE")
                     .canProceed(true)
-                    .message("Đăng ký mới gói dịch vụ " + newPackage.getName())
+                    .message("Đăng ký mới gói dịch vụ " + (newPackage.getName() != null ? newPackage.getName() : ""))
                     .build();
         }
 
@@ -208,8 +217,8 @@ public class SubscriptionService {
                 : (currentPackage != null ? currentPackage.getName() : "Gói hiện tại");
         java.math.BigDecimal currentPrice = activeSub.getSnapshotPrice() != null
                 ? activeSub.getSnapshotPrice()
-                : (currentPackage != null ? currentPackage.getPrice() : java.math.BigDecimal.ZERO);
-        int currentMaxStaff = activeSub.getSnapshotMaxStaff() > 0
+                : (currentPackage != null && currentPackage.getPrice() != null ? currentPackage.getPrice() : java.math.BigDecimal.ZERO);
+        int currentMaxStaff = (activeSub.getSnapshotMaxStaff() != null && activeSub.getSnapshotMaxStaff() > 0)
                 ? activeSub.getSnapshotMaxStaff()
                 : (currentPackage != null ? currentPackage.getMaxStaff() : 0);
 
@@ -221,16 +230,16 @@ public class SubscriptionService {
                     .currentPrice(currentPrice)
                     .newPackageId(newPackage.getId())
                     .newPackageName(newPackage.getName())
-                    .newMaxStaff(newPackage.getMaxStaff())
-                    .newPrice(newPackage.getPrice())
+                    .newMaxStaff(newMaxStaff)
+                    .newPrice(newPrice)
                     .transactionType("RENEWAL")
                     .canProceed(true)
-                    .message("Gia hạn thêm " + newPackage.getDurationDays() + " ngày cho gói " + newPackage.getName())
+                    .message("Gia hạn thêm " + (newPackage.getDurationDays() != null ? newPackage.getDurationDays() : 0) + " ngày cho gói " + (newPackage.getName() != null ? newPackage.getName() : ""))
                     .build();
         }
 
-        boolean isLowerPrice = newPackage.getPrice().compareTo(currentPrice) < 0;
-        boolean isLowerStaff = newPackage.getMaxStaff() < currentMaxStaff;
+        boolean isLowerPrice = newPrice.compareTo(currentPrice) < 0;
+        boolean isLowerStaff = newMaxStaff < currentMaxStaff;
 
         if (isLowerPrice && isLowerStaff) {
             return fu.stockspace.stockspace_be.subscription.dto.SubscriptionPreviewResponse.builder()
@@ -240,8 +249,8 @@ public class SubscriptionService {
                     .currentPrice(currentPrice)
                     .newPackageId(newPackage.getId())
                     .newPackageName(newPackage.getName())
-                    .newMaxStaff(newPackage.getMaxStaff())
-                    .newPrice(newPackage.getPrice())
+                    .newMaxStaff(newMaxStaff)
+                    .newPrice(newPrice)
                     .transactionType("DOWNGRADE_BLOCKED")
                     .canProceed(false)
                     .message("Không thể hạ xuống gói thấp hơn khi gói hiện tại vẫn đang còn hạn. Bạn chỉ có thể đăng ký gói mới sau khi gói hiện tại hết hạn.")
@@ -255,14 +264,14 @@ public class SubscriptionService {
                 .currentPrice(currentPrice)
                 .newPackageId(newPackage.getId())
                 .newPackageName(newPackage.getName())
-                .newMaxStaff(newPackage.getMaxStaff())
-                .newPrice(newPackage.getPrice())
+                .newMaxStaff(newMaxStaff)
+                .newPrice(newPrice)
                 .transactionType("UPGRADE")
                 .canProceed(true)
-                .message("Nâng cấp từ gói " + currentPackageName + " lên gói " + newPackage.getName() + ". Gói mới có hiệu lực ngay lập tức.")
+                .message("Nâng cấp từ gói " + currentPackageName + " lên gói " + (newPackage.getName() != null ? newPackage.getName() : "") + ". Gói mới có hiệu lực ngay lập tức.")
                 .build();
-
     }
+
 
     /**
      * Admin xem tất cả các lượt đăng ký gói.

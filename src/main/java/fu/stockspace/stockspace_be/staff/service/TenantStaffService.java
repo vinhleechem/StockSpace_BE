@@ -16,6 +16,7 @@ import fu.stockspace.stockspace_be.staff.entity.*;
 import fu.stockspace.stockspace_be.staff.repository.StaffInvitationRepository;
 import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
 import fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository;
+import fu.stockspace.stockspace_be.subscription.entity.ServicePackage;
 import fu.stockspace.stockspace_be.subscription.entity.Subscription;
 import fu.stockspace.stockspace_be.subscription.entity.SubscriptionStatus;
 import fu.stockspace.stockspace_be.subscription.repository.SubscriptionRepository;
@@ -77,7 +78,10 @@ public class TenantStaffService {
                         tenantId, SubscriptionStatus.ACTIVE, LocalDate.now())
                 .orElseThrow(() -> new BadRequestException(ErrorCode.SUBSCRIPTION_REQUIRED));
 
-        int maxStaff = activeSubscription.getServicePackage().getMaxStaff();
+        ServicePackage activePkg = activeSubscription.getServicePackage();
+        int maxStaff = (activeSubscription.getSnapshotMaxStaff() != null && activeSubscription.getSnapshotMaxStaff() > 0)
+                ? activeSubscription.getSnapshotMaxStaff()
+                : (activePkg != null && activePkg.getMaxStaff() != null ? activePkg.getMaxStaff() : 0);
         if (maxStaff > 0) { // 0 = không giới hạn
             long currentStaffCount = memberRepository.countByTenantIdAndIsActiveTrueAndIsDeletedFalse(tenantId);
             if (currentStaffCount >= maxStaff) {
