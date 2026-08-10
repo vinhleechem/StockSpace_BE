@@ -24,5 +24,6 @@ public class RackResponse {
     private Integer width;
     private Integer length;
     private Integer height;
+    private List<String> occupiedPositions;
     private List<WarehouseBinResponse> bins;
 }
