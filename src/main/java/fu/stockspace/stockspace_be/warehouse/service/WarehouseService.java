@@ -121,27 +121,41 @@ public class WarehouseService {
                 .policy(policy)
                 .build();
 
-        // Deduct posting fee from Owner's wallet
-        String pkgIdStr = systemConfigService.getValue("warehouse_publish_package_id", null);
-        if (pkgIdStr != null) {
+        // Deduct posting fee from Owner's wallet using SystemConfig warehouse_publish_fee
+        java.math.BigDecimal publishFee = null;
+        String feeStr = systemConfigService.getValue("warehouse_publish_fee", null);
+        if (feeStr != null && !feeStr.trim().isEmpty()) {
             try {
-                UUID pkgId = UUID.fromString(pkgIdStr.trim());
-                ServicePackage publishPkg = servicePackageRepository.findById(pkgId)
-                        .orElseThrow(() -> new ResourceNotFoundException("Gói dịch vụ phí đăng bài không tồn tại"));
-                
-                walletService.deductBalance(
-                        ownerId,
-                        publishPkg.getPrice(),
-                        TransactionType.COMMISSION,
-                        "Trừ phí đăng bài kho bãi: " + request.getName(),
-                        null,
-                        null
-                );
-                log.info("Deducted posting fee of {} from owner {} for warehouse {}", publishPkg.getPrice(), ownerId, request.getName());
-            } catch (IllegalArgumentException e) {
-                log.error("Invalid warehouse_publish_package_id system config (expected UUID): {}", pkgIdStr, e);
+                publishFee = new java.math.BigDecimal(feeStr.trim());
+            } catch (NumberFormatException ignored) {}
+        }
+
+        // Fallback: Check warehouse_publish_package_id if direct fee not configured
+        if (publishFee == null) {
+            String pkgIdStr = systemConfigService.getValue("warehouse_publish_package_id", null);
+            if (pkgIdStr != null) {
+                try {
+                    UUID pkgId = UUID.fromString(pkgIdStr.trim());
+                    ServicePackage publishPkg = servicePackageRepository.findById(pkgId).orElse(null);
+                    if (publishPkg != null) {
+                        publishFee = publishPkg.getPrice();
+                    }
+                } catch (IllegalArgumentException ignored) {}
             }
         }
+
+        if (publishFee != null && publishFee.compareTo(java.math.BigDecimal.ZERO) > 0) {
+            walletService.deductBalance(
+                    ownerId,
+                    publishFee,
+                    TransactionType.COMMISSION,
+                    "Trừ phí đăng bài kho bãi: " + request.getName(),
+                    null,
+                    null
+            );
+            log.info("Deducted posting fee of {} from owner {} for warehouse {}", publishFee, ownerId, request.getName());
+        }
+
 
         warehouse = warehouseRepository.save(warehouse);
 
