@@ -99,10 +99,13 @@ class SystemConfigServiceTest {
                 .thenReturn(Optional.empty());
         when(configRepository.findByConfigKey(SystemConfigKey.CONTRACT_EXPIRY_DAYS.getKey()))
                 .thenReturn(Optional.empty());
+        when(configRepository.findByConfigKey(SystemConfigKey.WAREHOUSE_PUBLISH_FEE.getKey()))
+                .thenReturn(Optional.empty());
         when(configRepository.findByConfigKey(SystemConfigKey.WAREHOUSE_PUBLISH_PACKAGE_ID.getKey()))
                 .thenReturn(Optional.empty());
 
         List<SystemConfigResponse> responses = configService.getAllConfigs();
+
 
         assertNotNull(responses);
         assertEquals(SystemConfigKey.values().length, responses.size());
@@ -248,16 +251,19 @@ class SystemConfigServiceTest {
                 .thenReturn(Optional.of(feeConfig));
         when(configRepository.findByConfigKey(SystemConfigKey.CONTRACT_EXPIRY_DAYS.getKey()))
                 .thenReturn(Optional.empty());
+        when(configRepository.findByConfigKey(SystemConfigKey.WAREHOUSE_PUBLISH_FEE.getKey()))
+                .thenReturn(Optional.empty());
 
         List<SystemConfigResponse> responses = configService.getPublicConfigs();
 
         assertNotNull(responses);
-        assertEquals(3, responses.size());
+        assertEquals(4, responses.size());
 
         boolean hasPackageId = responses.stream()
                 .anyMatch(r -> r.getConfigKey().equals(SystemConfigKey.WAREHOUSE_PUBLISH_PACKAGE_ID.getKey()));
         assertFalse(hasPackageId);
     }
+
 
     @Test
     void testGetPublicConfigByKey_Success_PublicConfig() {

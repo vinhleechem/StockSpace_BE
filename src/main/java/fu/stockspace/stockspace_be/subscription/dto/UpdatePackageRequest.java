@@ -14,4 +14,7 @@ public class UpdatePackageRequest {
     private BigDecimal price;
     @Min(value = 1, message = "Thời hạn gói tối thiểu là 1 ngày")
     private Integer durationDays;
+    @Min(value = 0, message = "maxStaff không được âm")
+    private Integer maxStaff;
 }
+
