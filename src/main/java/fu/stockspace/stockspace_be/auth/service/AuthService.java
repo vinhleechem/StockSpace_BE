@@ -50,6 +50,7 @@ public class AuthService {
     private final OutboundAuthClient outboundAuthClient;
     private final OutboundUserClient outboundUserClient;
     private final fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository tenantMemberRepository;
+    private final fu.stockspace.stockspace_be.wallet.service.WalletService walletService;
 
     @Value("${app.google.client-id}")
     private String googleClientId;
@@ -100,6 +101,9 @@ public class AuthService {
 
         user = userRepository.save(user);
         log.info("New user registered: {} with role {}", user.getEmail(), dbRole.getName());
+
+        // Tự động khởi tạo Ví cho user mới (balance = 0)
+        walletService.getOrCreateWallet(user.getId());
 
         // Gửi email chào mừng (bất đồng bộ — không block response)
         emailService.sendWelcomeEmail(user.getEmail(), user.getFullName());
@@ -205,6 +209,8 @@ public class AuthService {
 
                         User saved = userRepository.save(newUser);
                         log.info("New Google user registered: {}", saved.getEmail());
+                        // Tự động khởi tạo Ví cho user mới (balance = 0)
+                        walletService.getOrCreateWallet(saved.getId());
                         // Gửi email chào mừng
                         emailService.sendWelcomeEmail(saved.getEmail(), saved.getFullName());
                         return saved;
