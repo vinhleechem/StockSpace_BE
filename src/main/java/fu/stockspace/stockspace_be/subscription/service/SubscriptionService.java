@@ -59,9 +59,10 @@ public class SubscriptionService {
 
         if (activeOpt.isPresent()) {
             Subscription activeSub = activeOpt.get();
+            ServicePackage activePkg = activeSub.getServicePackage();
 
             // 1. Gia hạn (Same package)
-            if (activeSub.getServicePackage().getId().equals(servicePackage.getId())) {
+            if (activePkg != null && activePkg.getId().equals(servicePackage.getId())) {
                 log.info("Renewal package: Tenant {} renewing package '{}'", tenantId, servicePackage.getName());
                 LocalDate newEndDate = activeSub.getEndDate().plusDays(servicePackage.getDurationDays());
                 activeSub.setEndDate(newEndDate);
@@ -75,10 +76,10 @@ public class SubscriptionService {
                 // Kiểm tra Hạ cấp (Downgrade Check)
                 java.math.BigDecimal currentPrice = activeSub.getSnapshotPrice() != null
                         ? activeSub.getSnapshotPrice()
-                        : activeSub.getServicePackage().getPrice();
+                        : (activePkg != null ? activePkg.getPrice() : java.math.BigDecimal.ZERO);
                 int currentMaxStaff = activeSub.getSnapshotMaxStaff() > 0
                         ? activeSub.getSnapshotMaxStaff()
-                        : activeSub.getServicePackage().getMaxStaff();
+                        : (activePkg != null ? activePkg.getMaxStaff() : 0);
 
                 boolean isLowerPrice = servicePackage.getPrice().compareTo(currentPrice) < 0;
                 boolean isLowerStaff = servicePackage.getMaxStaff() < currentMaxStaff;
@@ -88,12 +89,16 @@ public class SubscriptionService {
                 }
 
                 // 2. Nâng cấp (Upgrade): Ngắt gói cũ thành SUPERSEDED và tạo gói mới
+                String oldPkgName = activeSub.getSnapshotPackageName() != null
+                        ? activeSub.getSnapshotPackageName()
+                        : (activePkg != null ? activePkg.getName() : "Gói hiện tại");
                 log.info("Upgrade package: Tenant {} upgrading from '{}' to '{}'",
-                        tenantId, activeSub.getServicePackage().getName(), servicePackage.getName());
+                        tenantId, oldPkgName, servicePackage.getName());
 
                 activeSub.setStatus(SubscriptionStatus.SUPERSEDED);
                 activeSub.setEndDate(LocalDate.now());
                 subscriptionRepository.save(activeSub);
+
 
                 LocalDate startDate = LocalDate.now();
                 LocalDate endDate = startDate.plusDays(servicePackage.getDurationDays());
@@ -197,17 +202,21 @@ public class SubscriptionService {
         Subscription activeSub = activeOpt.get();
         ServicePackage currentPackage = activeSub.getServicePackage();
 
+        UUID currentPackageId = currentPackage != null ? currentPackage.getId() : null;
+        String currentPackageName = activeSub.getSnapshotPackageName() != null
+                ? activeSub.getSnapshotPackageName()
+                : (currentPackage != null ? currentPackage.getName() : "Gói hiện tại");
         java.math.BigDecimal currentPrice = activeSub.getSnapshotPrice() != null
                 ? activeSub.getSnapshotPrice()
-                : currentPackage.getPrice();
+                : (currentPackage != null ? currentPackage.getPrice() : java.math.BigDecimal.ZERO);
         int currentMaxStaff = activeSub.getSnapshotMaxStaff() > 0
                 ? activeSub.getSnapshotMaxStaff()
-                : currentPackage.getMaxStaff();
+                : (currentPackage != null ? currentPackage.getMaxStaff() : 0);
 
-        if (currentPackage.getId().equals(newPackageId)) {
+        if (currentPackageId != null && currentPackageId.equals(newPackageId)) {
             return fu.stockspace.stockspace_be.subscription.dto.SubscriptionPreviewResponse.builder()
-                    .currentPackageId(currentPackage.getId())
-                    .currentPackageName(currentPackage.getName())
+                    .currentPackageId(currentPackageId)
+                    .currentPackageName(currentPackageName)
                     .currentMaxStaff(currentMaxStaff)
                     .currentPrice(currentPrice)
                     .newPackageId(newPackage.getId())
@@ -225,8 +234,8 @@ public class SubscriptionService {
 
         if (isLowerPrice && isLowerStaff) {
             return fu.stockspace.stockspace_be.subscription.dto.SubscriptionPreviewResponse.builder()
-                    .currentPackageId(currentPackage.getId())
-                    .currentPackageName(currentPackage.getName())
+                    .currentPackageId(currentPackageId)
+                    .currentPackageName(currentPackageName)
                     .currentMaxStaff(currentMaxStaff)
                     .currentPrice(currentPrice)
                     .newPackageId(newPackage.getId())
@@ -240,8 +249,8 @@ public class SubscriptionService {
         }
 
         return fu.stockspace.stockspace_be.subscription.dto.SubscriptionPreviewResponse.builder()
-                .currentPackageId(currentPackage.getId())
-                .currentPackageName(currentPackage.getName())
+                .currentPackageId(currentPackageId)
+                .currentPackageName(currentPackageName)
                 .currentMaxStaff(currentMaxStaff)
                 .currentPrice(currentPrice)
                 .newPackageId(newPackage.getId())
@@ -250,8 +259,9 @@ public class SubscriptionService {
                 .newPrice(newPackage.getPrice())
                 .transactionType("UPGRADE")
                 .canProceed(true)
-                .message("Nâng cấp từ gói " + currentPackage.getName() + " lên gói " + newPackage.getName() + ". Gói mới có hiệu lực ngay lập tức.")
+                .message("Nâng cấp từ gói " + currentPackageName + " lên gói " + newPackage.getName() + ". Gói mới có hiệu lực ngay lập tức.")
                 .build();
+
     }
 
     /**
@@ -264,13 +274,15 @@ public class SubscriptionService {
                 .map(this::mapToResponse);
     }
     private SubscriptionResponse mapToResponse(Subscription s) {
+        if (s == null) return null;
         return SubscriptionResponse.builder()
                 .id(s.getId())
-                .tenantId(s.getTenant().getId())
+                .tenantId(s.getTenant() != null ? s.getTenant().getId() : null)
                 .servicePackage(packageService.mapToResponse(s.getServicePackage()))
                 .startDate(s.getStartDate())
                 .endDate(s.getEndDate())
                 .status(s.getStatus())
                 .build();
     }
+
 }

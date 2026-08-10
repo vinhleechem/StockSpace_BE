@@ -170,6 +170,10 @@ public class WarehouseLayoutService {
             if (!warehouse.getOwner().getId().equals(userId)) {
                 throw new ForbiddenException(ErrorCode.WAREHOUSE_NOT_OWNED);
             }
+            if (warehouse.getStatus() == fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus.RENTED) {
+                throw new BadRequestException("Không thể chỉnh sửa sơ đồ layout kho trong thời gian kho đang được cho thuê.");
+            }
+
             layout = layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId).orElse(null);
             if (layout == null) {
                 layout = WarehouseLayout.builder()
