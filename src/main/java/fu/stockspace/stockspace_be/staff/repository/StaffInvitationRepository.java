@@ -21,4 +21,9 @@ public interface StaffInvitationRepository extends JpaRepository<StaffInvitation
      * Tránh gửi nhiều lời mời trùng.
      */
     boolean existsByEmailAndTenantIdAndStatus(String email, UUID tenantId, InvitationStatus status);
+
+    /**
+     * Đếm số lượng lời mời theo Tenant và Status (VD: PENDING).
+     */
+    long countByTenantIdAndStatus(UUID tenantId, InvitationStatus status);
 }

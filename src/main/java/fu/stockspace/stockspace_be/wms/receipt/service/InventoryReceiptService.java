@@ -1,5 +1,6 @@
 package fu.stockspace.stockspace_be.wms.receipt.service;
 
+import fu.stockspace.stockspace_be.auth.entity.RoleType;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.auth.util.TenantContextUtil;
@@ -104,6 +105,10 @@ public class InventoryReceiptService {
                 throw new BadRequestException(ErrorCode.LAYOUT_INVALID_COORDINATES);
             }
 
+            if (request.getType() == DocumentType.INBOUND) {
+                validateBinCapacity(bin, itemRequest.getQuantity());
+            }
+
             InventoryReceiptItem item = InventoryReceiptItem.builder()
                     .receipt(receipt)
                     .sku(sku)
@@ -124,6 +129,12 @@ public class InventoryReceiptService {
     public InventoryReceiptResponse approveReceipt(UUID approverId, UUID receiptId) {
         User approver = userRepository.findById(approverId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+
+        boolean isStaff = approver.getRoles() != null && approver.getRoles().stream()
+                .anyMatch(r -> RoleType.ROLE_STAFF.name().equals(r.getName()));
+        if (isStaff) {
+            throw new ForbiddenException("Nhân viên không có quyền phê duyệt phiếu nhập/xuất kho. Phiếu phải được Doanh nghiệp (Tenant) phê duyệt.");
+        }
 
         InventoryReceipt receipt = receiptRepository.findById(receiptId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RECEIPT_NOT_FOUND));
@@ -151,6 +162,7 @@ public class InventoryReceiptService {
             UUID binId = item.getBin().getId();
 
             if (receipt.getType() == DocumentType.INBOUND) {
+                validateBinCapacity(item.getBin(), item.getQuantity());
                 StockBatch batch = stockBatchRepository
                         .findBySkuIdAndWarehouseIdAndRackIdAndBinIdAndIsDeletedFalse(skuId, warehouseId, rackId, binId)
                         .orElse(null);
@@ -236,7 +248,6 @@ public class InventoryReceiptService {
                 .skuCode(item.getSku().getSkuCode())
                 .skuName(item.getSku().getName())
                 .quantity(item.getQuantity())
-                .zoneName(item.getRack().getZoneName())
                 .rackId(item.getRack().getId())
                 .rackName(item.getRack().getName())
                 .binId(item.getBin().getId())
@@ -417,5 +428,25 @@ public class InventoryReceiptService {
                             .createdAt(t.getCreatedAt())
                             .build();
                 });
+    }
+
+    private void validateBinCapacity(WarehouseBin bin, int incomingQuantity) {
+        if (bin == null) return;
+        int currentQtyInBin = stockBatchRepository.sumQuantityByBinId(bin.getId());
+        java.math.BigDecimal totalQtyAfterInbound = java.math.BigDecimal.valueOf((long) currentQtyInBin + incomingQuantity);
+
+        if (bin.getMaxWeight() != null && bin.getMaxWeight().compareTo(java.math.BigDecimal.ZERO) > 0) {
+            if (totalQtyAfterInbound.compareTo(bin.getMaxWeight()) > 0) {
+                throw new BadRequestException("Vượt quá sức chứa trọng lượng tối đa của ô " + bin.getName() +
+                        " (Tối đa: " + bin.getMaxWeight() + ", Hiện tại + Nhập mới: " + totalQtyAfterInbound + ")");
+            }
+        }
+
+        if (bin.getMaxVolume() != null && bin.getMaxVolume().compareTo(java.math.BigDecimal.ZERO) > 0) {
+            if (totalQtyAfterInbound.compareTo(bin.getMaxVolume()) > 0) {
+                throw new BadRequestException("Vượt quá sức chứa thể tích tối đa của ô " + bin.getName() +
+                        " (Tối đa: " + bin.getMaxVolume() + ", Hiện tại + Nhập mới: " + totalQtyAfterInbound + ")");
+            }
+        }
     }
 }

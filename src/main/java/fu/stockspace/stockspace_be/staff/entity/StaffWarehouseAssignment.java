@@ -51,11 +51,6 @@ public class StaffWarehouseAssignment extends BaseEntity {
     @JoinColumn(name = "warehouse_id", nullable = false)
     private Warehouse warehouse;
 
-    /** Vai trò chuẩn hóa trong WMS tại kho này */
-    @Enumerated(EnumType.STRING)
-    @Column(name = "role", nullable = false, length = 50)
-    private WarehouseRole role;
-
     /** Chức danh hiển thị tùy chỉnh (do Tenant tự điền, vd: "Thủ kho Ca 1") */
     @Column(name = "custom_title", length = 150)
     private String customTitle;

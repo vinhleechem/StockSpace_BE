@@ -73,7 +73,6 @@ class WarehouseLayoutServiceTest {
         WarehouseRack rack = WarehouseRack.builder()
                 .id(UUID.randomUUID())
                 .layout(defaultLayout)
-                .zoneName("Khu A")
                 .name("Rack A1")
                 .coordinateX(0)
                 .coordinateY(0)
@@ -106,7 +105,16 @@ class WarehouseLayoutServiceTest {
         assertEquals(0, response.getOccupiedBins());
         assertEquals(1, response.getEmptyBins());
         assertEquals("Rack A1", response.getRacks().get(0).getName());
+        assertNotNull(response.getRacks().get(0).getOccupiedPositions());
+        assertEquals(100, response.getRacks().get(0).getOccupiedPositions().size());
+        assertTrue(response.getRacks().get(0).getOccupiedPositions().contains("0:0"));
+        assertTrue(response.getRacks().get(0).getOccupiedPositions().contains("9:9"));
+
         assertEquals("Bin A1-1", response.getRacks().get(0).getBins().get(0).getName());
+        assertNotNull(response.getRacks().get(0).getBins().get(0).getOccupiedPositions());
+        assertEquals(4, response.getRacks().get(0).getBins().get(0).getOccupiedPositions().size());
+        assertTrue(response.getRacks().get(0).getBins().get(0).getOccupiedPositions().contains("0:0"));
+        assertTrue(response.getRacks().get(0).getBins().get(0).getOccupiedPositions().contains("1:1"));
     }
 
     @Test
@@ -132,7 +140,6 @@ class WarehouseLayoutServiceTest {
         WarehouseRack rack = WarehouseRack.builder()
                 .id(UUID.randomUUID())
                 .layout(defaultLayout)
-                .zoneName("Khu A")
                 .name("Rack A1")
                 .coordinateX(0)
                 .coordinateY(0)
