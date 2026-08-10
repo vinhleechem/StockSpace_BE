@@ -104,6 +104,10 @@ public class InventoryReceiptService {
                 throw new BadRequestException(ErrorCode.LAYOUT_INVALID_COORDINATES);
             }
 
+            if (request.getType() == DocumentType.INBOUND) {
+                validateBinCapacity(bin, itemRequest.getQuantity());
+            }
+
             InventoryReceiptItem item = InventoryReceiptItem.builder()
                     .receipt(receipt)
                     .sku(sku)
@@ -151,6 +155,7 @@ public class InventoryReceiptService {
             UUID binId = item.getBin().getId();
 
             if (receipt.getType() == DocumentType.INBOUND) {
+                validateBinCapacity(item.getBin(), item.getQuantity());
                 StockBatch batch = stockBatchRepository
                         .findBySkuIdAndWarehouseIdAndRackIdAndBinIdAndIsDeletedFalse(skuId, warehouseId, rackId, binId)
                         .orElse(null);
@@ -416,5 +421,25 @@ public class InventoryReceiptService {
                             .createdAt(t.getCreatedAt())
                             .build();
                 });
+    }
+
+    private void validateBinCapacity(WarehouseBin bin, int incomingQuantity) {
+        if (bin == null) return;
+        int currentQtyInBin = stockBatchRepository.sumQuantityByBinId(bin.getId());
+        java.math.BigDecimal totalQtyAfterInbound = java.math.BigDecimal.valueOf((long) currentQtyInBin + incomingQuantity);
+
+        if (bin.getMaxWeight() != null && bin.getMaxWeight().compareTo(java.math.BigDecimal.ZERO) > 0) {
+            if (totalQtyAfterInbound.compareTo(bin.getMaxWeight()) > 0) {
+                throw new BadRequestException("Vượt quá sức chứa trọng lượng tối đa của ô " + bin.getName() +
+                        " (Tối đa: " + bin.getMaxWeight() + ", Hiện tại + Nhập mới: " + totalQtyAfterInbound + ")");
+            }
+        }
+
+        if (bin.getMaxVolume() != null && bin.getMaxVolume().compareTo(java.math.BigDecimal.ZERO) > 0) {
+            if (totalQtyAfterInbound.compareTo(bin.getMaxVolume()) > 0) {
+                throw new BadRequestException("Vượt quá sức chứa thể tích tối đa của ô " + bin.getName() +
+                        " (Tối đa: " + bin.getMaxVolume() + ", Hiện tại + Nhập mới: " + totalQtyAfterInbound + ")");
+            }
+        }
     }
 }
