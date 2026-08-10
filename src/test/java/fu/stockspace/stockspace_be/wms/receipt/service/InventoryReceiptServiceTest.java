@@ -214,6 +214,18 @@ class InventoryReceiptServiceTest {
     }
 
     @Test
+    void testApproveReceipt_ByStaff_ThrowsForbiddenException() {
+        UUID staffId = UUID.randomUUID();
+        fu.stockspace.stockspace_be.auth.entity.Role staffRole = fu.stockspace.stockspace_be.auth.entity.Role.builder()
+                .name(fu.stockspace.stockspace_be.auth.entity.RoleType.ROLE_STAFF.name()).build();
+        User staffUser = User.builder().id(staffId).roles(java.util.Set.of(staffRole)).build();
+        when(userRepository.findById(staffId)).thenReturn(Optional.of(staffUser));
+
+        UUID receiptId = UUID.randomUUID();
+        assertThrows(ForbiddenException.class, () -> receiptService.approveReceipt(staffId, receiptId));
+    }
+
+    @Test
     void testApproveReceipt_Success_Inbound_NewBatch() {
         UUID approverId = UUID.randomUUID();
         User approver = User.builder().id(approverId).email("approver@test.com").build();
