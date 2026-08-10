@@ -77,7 +77,7 @@ public class SubscriptionService {
                 java.math.BigDecimal currentPrice = activeSub.getSnapshotPrice() != null
                         ? activeSub.getSnapshotPrice()
                         : (activePkg != null ? activePkg.getPrice() : java.math.BigDecimal.ZERO);
-                int currentMaxStaff = activeSub.getSnapshotMaxStaff() > 0
+                int currentMaxStaff = (activeSub.getSnapshotMaxStaff() != null && activeSub.getSnapshotMaxStaff() > 0)
                         ? activeSub.getSnapshotMaxStaff()
                         : (activePkg != null ? activePkg.getMaxStaff() : 0);
 
@@ -218,7 +218,7 @@ public class SubscriptionService {
         java.math.BigDecimal currentPrice = activeSub.getSnapshotPrice() != null
                 ? activeSub.getSnapshotPrice()
                 : (currentPackage != null && currentPackage.getPrice() != null ? currentPackage.getPrice() : java.math.BigDecimal.ZERO);
-        int currentMaxStaff = activeSub.getSnapshotMaxStaff() > 0
+        int currentMaxStaff = (activeSub.getSnapshotMaxStaff() != null && activeSub.getSnapshotMaxStaff() > 0)
                 ? activeSub.getSnapshotMaxStaff()
                 : (currentPackage != null ? currentPackage.getMaxStaff() : 0);
 
