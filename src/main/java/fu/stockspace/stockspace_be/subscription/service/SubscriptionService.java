@@ -79,10 +79,10 @@ public class SubscriptionService {
                         : (activePkg != null ? activePkg.getPrice() : java.math.BigDecimal.ZERO);
                 int currentMaxStaff = (activeSub.getSnapshotMaxStaff() != null && activeSub.getSnapshotMaxStaff() > 0)
                         ? activeSub.getSnapshotMaxStaff()
-                        : (activePkg != null ? activePkg.getMaxStaff() : 0);
+                        : (activePkg != null && activePkg.getMaxStaff() != null ? activePkg.getMaxStaff() : 0);
 
-                boolean isLowerPrice = servicePackage.getPrice().compareTo(currentPrice) < 0;
-                boolean isLowerStaff = servicePackage.getMaxStaff() < currentMaxStaff;
+                boolean isLowerPrice = servicePackage.getPrice() != null && currentPrice != null ? servicePackage.getPrice().compareTo(currentPrice) < 0 : false;
+                boolean isLowerStaff = (servicePackage.getMaxStaff() != null ? servicePackage.getMaxStaff() : 0) < currentMaxStaff;
 
                 if (isLowerPrice && isLowerStaff) {
                     throw new BadRequestException("Không thể hạ xuống gói dịch vụ thấp hơn khi gói hiện tại vẫn đang còn hạn. Vui lòng hạ gói sau khi gói hiện tại kết thúc.");
@@ -194,7 +194,7 @@ public class SubscriptionService {
                         tenantId, SubscriptionStatus.ACTIVE, LocalDate.now());
 
         java.math.BigDecimal newPrice = newPackage.getPrice() != null ? newPackage.getPrice() : java.math.BigDecimal.ZERO;
-        int newMaxStaff = newPackage.getMaxStaff();
+        int newMaxStaff = newPackage.getMaxStaff() != null ? newPackage.getMaxStaff() : 0;
 
         if (activeOpt.isEmpty()) {
             return fu.stockspace.stockspace_be.subscription.dto.SubscriptionPreviewResponse.builder()
