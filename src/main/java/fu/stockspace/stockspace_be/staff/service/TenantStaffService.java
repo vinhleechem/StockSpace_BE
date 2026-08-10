@@ -83,8 +83,9 @@ public class TenantStaffService {
                 ? activeSubscription.getSnapshotMaxStaff()
                 : (activePkg != null && activePkg.getMaxStaff() != null ? activePkg.getMaxStaff() : 0);
         if (maxStaff > 0) { // 0 = không giới hạn
-            long currentStaffCount = memberRepository.countByTenantIdAndIsActiveTrueAndIsDeletedFalse(tenantId);
-            if (currentStaffCount >= maxStaff) {
+            long activeStaffCount = memberRepository.countByTenantIdAndIsActiveTrueAndIsDeletedFalse(tenantId);
+            long pendingInviteCount = invitationRepository.countByTenantIdAndStatus(tenantId, InvitationStatus.PENDING);
+            if ((activeStaffCount + pendingInviteCount) >= maxStaff) {
                 throw new BadRequestException(ErrorCode.STAFF_LIMIT_EXCEEDED);
             }
         }
@@ -222,10 +223,28 @@ public class TenantStaffService {
         }
 
         // 4. Kiểm tra chưa là thành viên của Tenant này
+        UUID tenantId = invitation.getTenant().getId();
         if (memberRepository.existsByUserIdAndTenantIdAndIsDeletedFalse(
-                staffUser.getId(), invitation.getTenant().getId())) {
+                staffUser.getId(), tenantId)) {
             throw new ResourceConflictException(ErrorCode.STAFF_ALREADY_MEMBER);
         }
+
+        // 4.1 Kiểm tra lại Quota Staff trước khi cho phép gia nhập
+        subscriptionRepository
+                .findFirstByTenantIdAndStatusAndEndDateGreaterThanEqualOrderByEndDateDesc(
+                        tenantId, SubscriptionStatus.ACTIVE, LocalDate.now())
+                .ifPresent(sub -> {
+                    ServicePackage pkg = sub.getServicePackage();
+                    int maxStaff = (sub.getSnapshotMaxStaff() != null && sub.getSnapshotMaxStaff() > 0)
+                            ? sub.getSnapshotMaxStaff()
+                            : (pkg != null && pkg.getMaxStaff() != null ? pkg.getMaxStaff() : 0);
+                    if (maxStaff > 0) {
+                        long activeStaffCount = memberRepository.countByTenantIdAndIsActiveTrueAndIsDeletedFalse(tenantId);
+                        if (activeStaffCount >= maxStaff) {
+                            throw new BadRequestException(ErrorCode.STAFF_LIMIT_EXCEEDED);
+                        }
+                    }
+                });
 
         // 5. Tạo TenantMember mới
         TenantMember member = TenantMember.builder()

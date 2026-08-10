@@ -115,8 +115,6 @@ public class WarehouseLayoutService {
         for (WarehouseRack rack : defaultRacks) {
             WarehouseRack cloneRack = WarehouseRack.builder()
                     .layout(tenantLayout)
-                    .zoneName(rack.getZoneName())
-                    .zoneCode(rack.getZoneCode())
                     .name(rack.getName())
                     .code(rack.getCode())
                     .maxWeight(rack.getMaxWeight())
@@ -315,8 +313,6 @@ public class WarehouseLayoutService {
                         if (rReq.getRotation() != null) rack.setRotation(rReq.getRotation());
                     } else {
                         // Owner cập nhật đầy đủ
-                        rack.setZoneName(rReq.getZoneName());
-                        rack.setZoneCode(rReq.getZoneCode());
                         rack.setName(rReq.getName());
                         rack.setCode(rReq.getCode());
                         rack.setMaxWeight(rReq.getMaxWeight());
@@ -332,8 +328,6 @@ public class WarehouseLayoutService {
                 } else {
                     rack = WarehouseRack.builder()
                             .layout(layout)
-                            .zoneName(rReq.getZoneName())
-                            .zoneCode(rReq.getZoneCode())
                             .name(rReq.getName())
                             .code(rReq.getCode())
                             .maxWeight(rReq.getMaxWeight())
@@ -423,6 +417,9 @@ public class WarehouseLayoutService {
                     occupiedBins++;
                 }
 
+                List<String> binOccupiedPositions = calculateOccupiedPositions(
+                        bin.getCoordinateX(), bin.getCoordinateY(), bin.getWidth(), bin.getLength());
+
                 binResponses.add(WarehouseBinResponse.builder()
                         .id(bin.getId())
                         .rackId(rack.getId())
@@ -438,14 +435,16 @@ public class WarehouseLayoutService {
                         .length(bin.getLength())
                         .height(bin.getHeight())
                         .isOccupied(isOccupied)
+                        .occupiedPositions(binOccupiedPositions)
                         .build());
             }
+
+            List<String> rackOccupiedPositions = calculateOccupiedPositions(
+                    rack.getCoordinateX(), rack.getCoordinateY(), rack.getWidth(), rack.getLength());
 
             rackResponses.add(RackResponse.builder()
                     .id(rack.getId())
                     .layoutId(layout.getId())
-                    .zoneName(rack.getZoneName())
-                    .zoneCode(rack.getZoneCode())
                     .name(rack.getName())
                     .code(rack.getCode())
                     .maxWeight(rack.getMaxWeight())
@@ -457,6 +456,7 @@ public class WarehouseLayoutService {
                     .width(rack.getWidth())
                     .length(rack.getLength())
                     .height(rack.getHeight())
+                    .occupiedPositions(rackOccupiedPositions)
                     .bins(binResponses)
                     .build());
         }
@@ -477,5 +477,19 @@ public class WarehouseLayoutService {
                 .emptyBins(emptyBins)
                 .racks(rackResponses)
                 .build();
+    }
+
+    private List<String> calculateOccupiedPositions(Integer startX, Integer startY, Integer width, Integer length) {
+        List<String> positions = new java.util.ArrayList<>();
+        if (startX == null || startY == null) return positions;
+        int w = width != null && width > 0 ? width : 1;
+        int l = length != null && length > 0 ? length : 1;
+
+        for (int x = startX; x < startX + w; x++) {
+            for (int y = startY; y < startY + l; y++) {
+                positions.add(x + ":" + y);
+            }
+        }
+        return positions;
     }
 }

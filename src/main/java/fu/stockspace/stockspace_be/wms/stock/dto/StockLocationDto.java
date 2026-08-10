@@ -16,7 +16,6 @@ import java.util.UUID;
 @AllArgsConstructor
 public class StockLocationDto {
     private UUID batchId;
-    private String zoneName;
     private String rackName;
     private String binName;
     private int quantity;

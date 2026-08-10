@@ -91,6 +91,9 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
     @Query("SELECT COALESCE(SUM(b.quantity), 0) FROM StockBatch b WHERE b.skuId = :skuId AND b.isDeleted = false")
     int sumQuantityBySkuId(@Param("skuId") UUID skuId);
 
+    @Query("SELECT COALESCE(SUM(b.quantity), 0) FROM StockBatch b WHERE b.bin.id = :binId AND b.isDeleted = false")
+    int sumQuantityByBinId(@Param("binId") UUID binId);
+
     Optional<StockBatch> findByIdAndIsDeletedFalse(UUID id);
 
     interface WarehouseStockSummaryProjection {

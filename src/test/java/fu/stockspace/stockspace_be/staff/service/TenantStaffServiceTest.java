@@ -139,6 +139,23 @@ class TenantStaffServiceTest {
     }
 
     @Test
+    void testSendInvitation_QuotaExceededIncludingPendingInvitations() {
+        InviteStaffRequest request = new InviteStaffRequest();
+        request.setEmail("staff3@example.com");
+        request.setFullName("Le Staff 3");
+
+        when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenantUser));
+        when(subscriptionRepository.findFirstByTenantIdAndStatusAndEndDateGreaterThanEqualOrderByEndDateDesc(
+                eq(tenantId), eq(SubscriptionStatus.ACTIVE), any(LocalDate.class)))
+                .thenReturn(Optional.of(activeSubscription));
+        when(memberRepository.countByTenantIdAndIsActiveTrueAndIsDeletedFalse(tenantId)).thenReturn(3L);
+        when(invitationRepository.countByTenantIdAndStatus(tenantId, InvitationStatus.PENDING)).thenReturn(2L); // Total 3 + 2 = 5 >= 5
+
+        assertThrows(BadRequestException.class, () -> staffService.sendInvitation(tenantId, request));
+        verify(invitationRepository, never()).save(any(StaffInvitation.class));
+    }
+
+    @Test
     void testSendInvitation_DuplicateInvitation() {
         InviteStaffRequest request = new InviteStaffRequest();
         request.setEmail("staff@example.com");

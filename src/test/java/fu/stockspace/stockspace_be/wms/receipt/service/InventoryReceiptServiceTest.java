@@ -81,7 +81,7 @@ class InventoryReceiptServiceTest {
         productSku = ProductSku.builder().id(skuId).skuCode("SKU123").name("Product 1").build();
 
         rackId = UUID.randomUUID();
-        rack = WarehouseRack.builder().id(rackId).layout(layout).zoneName("Zone A").name("Rack 1").build();
+        rack = WarehouseRack.builder().id(rackId).layout(layout).name("Rack 1").build();
 
         binId = UUID.randomUUID();
         bin = WarehouseBin.builder().id(binId).rack(rack).name("Bin 1").build();
@@ -136,6 +136,40 @@ class InventoryReceiptServiceTest {
         assertEquals(1, response.getItems().size());
         assertEquals("SKU123", response.getItems().get(0).getSkuCode());
         verify(receiptRepository, times(1)).save(any(InventoryReceipt.class));
+    }
+
+    @Test
+    void testCreateReceipt_Inbound_BinCapacityExceeded_ThrowsException() {
+        WarehouseBin binWithLimit = WarehouseBin.builder()
+                .id(binId)
+                .rack(rack)
+                .name("Bin Limited")
+                .maxWeight(java.math.BigDecimal.valueOf(50))
+                .build();
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
+        when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(receiptRepository.save(any(InventoryReceipt.class))).thenAnswer(i -> i.getArgument(0));
+        when(productSkuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(productSku));
+        when(rackRepository.findById(rackId)).thenReturn(Optional.of(rack));
+        when(binRepository.findById(binId)).thenReturn(Optional.of(binWithLimit));
+        when(stockBatchRepository.sumQuantityByBinId(binId)).thenReturn(40); // 40 existing + 20 incoming = 60 > 50
+
+        ReceiptItemRequest itemRequest = ReceiptItemRequest.builder()
+                .skuId(skuId)
+                .quantity(20)
+                .rackId(rackId)
+                .binId(binId)
+                .build();
+
+        CreateInventoryReceiptRequest request = CreateInventoryReceiptRequest.builder()
+                .warehouseId(warehouseId)
+                .type(DocumentType.INBOUND)
+                .items(List.of(itemRequest))
+                .build();
+
+        assertThrows(BadRequestException.class, () -> receiptService.createReceipt(userId, request));
     }
 
     @Test
