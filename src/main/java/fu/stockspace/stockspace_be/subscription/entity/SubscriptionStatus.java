@@ -5,5 +5,7 @@ package fu.stockspace.stockspace_be.subscription.entity;
 public enum SubscriptionStatus {
     ACTIVE,
     EXPIRED,
-    CANCELLED
-}
+    CANCELLED,
+    /** Đã bị thay thế / hủy sớm do nâng cấp gói mới */
+    SUPERSEDED
+}
