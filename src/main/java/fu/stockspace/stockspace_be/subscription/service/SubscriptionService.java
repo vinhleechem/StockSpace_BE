@@ -20,7 +20,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
+import java.util.Optional;
 import java.util.UUID;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -33,6 +35,10 @@ public class SubscriptionService {
     private final fu.stockspace.stockspace_be.staff.service.TenantStaffService tenantStaffService;
     /**
      * Mua gói dịch vụ. Khấu trừ tiền ví Tenant và kích hoạt gói.
+     * Hỗ trợ 3 trường hợp:
+     *  1. Gia hạn (Renewal - Mua cùng gói cũ): Nối tiếp thời hạn endDate += durationDays.
+     *  2. Nâng cấp (Upgrade - Mua gói mới bằng hoặc cao hơn): Kích hoạt ngay gói mới, ngắt gói cũ (SUPERSEDED).
+     *  3. Hạ cấp (Downgrade - Mua gói thấp hơn khi gói cũ còn hạn): Chặn và báo lỗi.
      */
     @Transactional
     public SubscriptionResponse purchasePackage(UUID tenantId, PurchasePackageRequest request) {
@@ -41,45 +47,108 @@ public class SubscriptionService {
         if (!servicePackage.isActive()) {
             throw new BadRequestException("Gói dịch vụ này hiện đã ngừng cung cấp");
         }
-        // 1. Kiểm tra gói active hiện tại. Nếu đang có gói active -> Chặn mua (theo error code SUBSCRIPTION_ALREADY_ACTIVE)
-        boolean hasActive = hasActiveSubscription(tenantId);
-        if (hasActive) {
-            throw new BadRequestException(ErrorCode.SUBSCRIPTION_ALREADY_ACTIVE);
-        }
-        // 2. Kích hoạt Subscription mới (Lưu trước để Hibernate tự generate ID)
+
         User tenant = userRepository.findById(tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
 
-        LocalDate startDate = LocalDate.now();
-        LocalDate endDate = startDate.plusDays(servicePackage.getDurationDays());
+        Optional<Subscription> activeOpt = subscriptionRepository
+                .findFirstByTenantIdAndStatusAndEndDateGreaterThanEqualOrderByEndDateDesc(
+                        tenantId, SubscriptionStatus.ACTIVE, LocalDate.now());
 
-        Subscription subscription = Subscription.builder()
-                .tenant(tenant)
-                .servicePackage(servicePackage)
-                .startDate(startDate)
-                .endDate(endDate)
-                .status(SubscriptionStatus.ACTIVE)
-                .build();
-        subscription = subscriptionRepository.save(subscription);
+        Subscription subscription;
 
-        // Tự động kiểm tra và khóa bớt Staff nếu vượt quota gói mới mua (downgrade)
+        if (activeOpt.isPresent()) {
+            Subscription activeSub = activeOpt.get();
+
+            // 1. Gia hạn (Same package)
+            if (activeSub.getServicePackage().getId().equals(servicePackage.getId())) {
+                log.info("Renewal package: Tenant {} renewing package '{}'", tenantId, servicePackage.getName());
+                LocalDate newEndDate = activeSub.getEndDate().plusDays(servicePackage.getDurationDays());
+                activeSub.setEndDate(newEndDate);
+                // Cập nhật snapshot nếu gói đã được Admin điều chỉnh
+                activeSub.setSnapshotMaxStaff(servicePackage.getMaxStaff());
+                activeSub.setSnapshotPrice(servicePackage.getPrice());
+                activeSub.setSnapshotFeatures(servicePackage.getFeatures());
+                activeSub.setSnapshotPackageName(servicePackage.getName());
+                subscription = subscriptionRepository.save(activeSub);
+            } else {
+                // Kiểm tra Hạ cấp (Downgrade Check)
+                java.math.BigDecimal currentPrice = activeSub.getSnapshotPrice() != null
+                        ? activeSub.getSnapshotPrice()
+                        : activeSub.getServicePackage().getPrice();
+                int currentMaxStaff = activeSub.getSnapshotMaxStaff() > 0
+                        ? activeSub.getSnapshotMaxStaff()
+                        : activeSub.getServicePackage().getMaxStaff();
+
+                boolean isLowerPrice = servicePackage.getPrice().compareTo(currentPrice) < 0;
+                boolean isLowerStaff = servicePackage.getMaxStaff() < currentMaxStaff;
+
+                if (isLowerPrice && isLowerStaff) {
+                    throw new BadRequestException("Không thể hạ xuống gói dịch vụ thấp hơn khi gói hiện tại vẫn đang còn hạn. Vui lòng hạ gói sau khi gói hiện tại kết thúc.");
+                }
+
+                // 2. Nâng cấp (Upgrade): Ngắt gói cũ thành SUPERSEDED và tạo gói mới
+                log.info("Upgrade package: Tenant {} upgrading from '{}' to '{}'",
+                        tenantId, activeSub.getServicePackage().getName(), servicePackage.getName());
+
+                activeSub.setStatus(SubscriptionStatus.SUPERSEDED);
+                activeSub.setEndDate(LocalDate.now());
+                subscriptionRepository.save(activeSub);
+
+                LocalDate startDate = LocalDate.now();
+                LocalDate endDate = startDate.plusDays(servicePackage.getDurationDays());
+
+                subscription = Subscription.builder()
+                        .tenant(tenant)
+                        .servicePackage(servicePackage)
+                        .startDate(startDate)
+                        .endDate(endDate)
+                        .status(SubscriptionStatus.ACTIVE)
+                        .snapshotMaxStaff(servicePackage.getMaxStaff())
+                        .snapshotPrice(servicePackage.getPrice())
+                        .snapshotFeatures(servicePackage.getFeatures())
+                        .snapshotPackageName(servicePackage.getName())
+                        .build();
+                subscription = subscriptionRepository.save(subscription);
+            }
+        } else {
+            // 3. Mua mới hoàn toàn
+            LocalDate startDate = LocalDate.now();
+            LocalDate endDate = startDate.plusDays(servicePackage.getDurationDays());
+
+            subscription = Subscription.builder()
+                    .tenant(tenant)
+                    .servicePackage(servicePackage)
+                    .startDate(startDate)
+                    .endDate(endDate)
+                    .status(SubscriptionStatus.ACTIVE)
+                    .snapshotMaxStaff(servicePackage.getMaxStaff())
+                    .snapshotPrice(servicePackage.getPrice())
+                    .snapshotFeatures(servicePackage.getFeatures())
+                    .snapshotPackageName(servicePackage.getName())
+                    .build();
+            subscription = subscriptionRepository.save(subscription);
+        }
+
+        // Tự động kiểm tra và khóa bớt Staff nếu vượt quota gói mới mua
         tenantStaffService.deactivateExcessStaffs(tenantId, servicePackage.getMaxStaff());
 
-        // 3. Trừ tiền ví (Truyền ID của gói vừa tạo vào reference)
+        // Trừ tiền ví Tenant
         walletService.deductBalance(
                 tenantId,
                 servicePackage.getPrice(),
                 TransactionType.PACKAGE_PAYMENT,
-                "Mua gói dịch vụ: " + servicePackage.getName(),
+                "Thanh toán gói dịch vụ: " + servicePackage.getName(),
                 null,
                 subscription.getId()
         );
 
-        log.info("Subscription Service: Tenant {} purchased package '{}' successfully. Subscription ID: {}", 
+        log.info("Subscription Service: Tenant {} processed package '{}' successfully. Subscription ID: {}",
                 tenantId, servicePackage.getName(), subscription.getId());
 
         return mapToResponse(subscription);
     }
+
     /**
      * Lấy thông tin gói dịch vụ đang active của Tenant.
      */
@@ -102,10 +171,95 @@ public class SubscriptionService {
                 .isPresent();
     }
     /**
+     * Preview chuyển đổi gói dịch vụ cho Tenant xem trước khi xác nhận bấm mua.
+     */
+    @Transactional(readOnly = true)
+    public fu.stockspace.stockspace_be.subscription.dto.SubscriptionPreviewResponse previewSubscriptionChange(UUID tenantId, UUID newPackageId) {
+        ServicePackage newPackage = packageRepository.findById(newPackageId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.PACKAGE_NOT_FOUND));
+
+        Optional<Subscription> activeOpt = subscriptionRepository
+                .findFirstByTenantIdAndStatusAndEndDateGreaterThanEqualOrderByEndDateDesc(
+                        tenantId, SubscriptionStatus.ACTIVE, LocalDate.now());
+
+        if (activeOpt.isEmpty()) {
+            return fu.stockspace.stockspace_be.subscription.dto.SubscriptionPreviewResponse.builder()
+                    .newPackageId(newPackage.getId())
+                    .newPackageName(newPackage.getName())
+                    .newMaxStaff(newPackage.getMaxStaff())
+                    .newPrice(newPackage.getPrice())
+                    .transactionType("NEW_PURCHASE")
+                    .canProceed(true)
+                    .message("Đăng ký mới gói dịch vụ " + newPackage.getName())
+                    .build();
+        }
+
+        Subscription activeSub = activeOpt.get();
+        ServicePackage currentPackage = activeSub.getServicePackage();
+
+        java.math.BigDecimal currentPrice = activeSub.getSnapshotPrice() != null
+                ? activeSub.getSnapshotPrice()
+                : currentPackage.getPrice();
+        int currentMaxStaff = activeSub.getSnapshotMaxStaff() > 0
+                ? activeSub.getSnapshotMaxStaff()
+                : currentPackage.getMaxStaff();
+
+        if (currentPackage.getId().equals(newPackageId)) {
+            return fu.stockspace.stockspace_be.subscription.dto.SubscriptionPreviewResponse.builder()
+                    .currentPackageId(currentPackage.getId())
+                    .currentPackageName(currentPackage.getName())
+                    .currentMaxStaff(currentMaxStaff)
+                    .currentPrice(currentPrice)
+                    .newPackageId(newPackage.getId())
+                    .newPackageName(newPackage.getName())
+                    .newMaxStaff(newPackage.getMaxStaff())
+                    .newPrice(newPackage.getPrice())
+                    .transactionType("RENEWAL")
+                    .canProceed(true)
+                    .message("Gia hạn thêm " + newPackage.getDurationDays() + " ngày cho gói " + newPackage.getName())
+                    .build();
+        }
+
+        boolean isLowerPrice = newPackage.getPrice().compareTo(currentPrice) < 0;
+        boolean isLowerStaff = newPackage.getMaxStaff() < currentMaxStaff;
+
+        if (isLowerPrice && isLowerStaff) {
+            return fu.stockspace.stockspace_be.subscription.dto.SubscriptionPreviewResponse.builder()
+                    .currentPackageId(currentPackage.getId())
+                    .currentPackageName(currentPackage.getName())
+                    .currentMaxStaff(currentMaxStaff)
+                    .currentPrice(currentPrice)
+                    .newPackageId(newPackage.getId())
+                    .newPackageName(newPackage.getName())
+                    .newMaxStaff(newPackage.getMaxStaff())
+                    .newPrice(newPackage.getPrice())
+                    .transactionType("DOWNGRADE_BLOCKED")
+                    .canProceed(false)
+                    .message("Không thể hạ xuống gói thấp hơn khi gói hiện tại vẫn đang còn hạn. Bạn chỉ có thể đăng ký gói mới sau khi gói hiện tại hết hạn.")
+                    .build();
+        }
+
+        return fu.stockspace.stockspace_be.subscription.dto.SubscriptionPreviewResponse.builder()
+                .currentPackageId(currentPackage.getId())
+                .currentPackageName(currentPackage.getName())
+                .currentMaxStaff(currentMaxStaff)
+                .currentPrice(currentPrice)
+                .newPackageId(newPackage.getId())
+                .newPackageName(newPackage.getName())
+                .newMaxStaff(newPackage.getMaxStaff())
+                .newPrice(newPackage.getPrice())
+                .transactionType("UPGRADE")
+                .canProceed(true)
+                .message("Nâng cấp từ gói " + currentPackage.getName() + " lên gói " + newPackage.getName() + ". Gói mới có hiệu lực ngay lập tức.")
+                .build();
+    }
+
+    /**
      * Admin xem tất cả các lượt đăng ký gói.
      */
     @Transactional(readOnly = true)
     public Page<SubscriptionResponse> getAllSubscriptions(Pageable pageable) {
+
         return subscriptionRepository.findAll(pageable)
                 .map(this::mapToResponse);
     }
