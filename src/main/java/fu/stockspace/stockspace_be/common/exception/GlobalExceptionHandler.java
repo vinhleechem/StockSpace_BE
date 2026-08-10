@@ -68,11 +68,29 @@ public class GlobalExceptionHandler {
     }
 
 
-    /**
+    @ExceptionHandler(org.springframework.web.bind.MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMissingParams(
+            org.springframework.web.bind.MissingServletRequestParameterException ex
+    ) {
+        log.warn("Missing request parameter: {}", ex.getParameterName());
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.error("Thiếu tham số yêu cầu: " + ex.getParameterName()));
+    }
+
+    @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTypeMismatch(
+            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException ex
+    ) {
+        log.warn("Type mismatch for parameter {}: {}", ex.getName(), ex.getMessage());
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.error("Tham số '" + ex.getName() + "' không đúng định dạng dữ liệu (ví dụ: UUID không hợp lệ)"));
+    }
+
     /**
      * Xử lý lỗi BadRequestException (400).
      */
     @ExceptionHandler(BadRequestException.class)
+
     public ResponseEntity<ApiResponse<Void>> handleBadRequest(BadRequestException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.error(ex.getMessage()));
