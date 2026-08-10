@@ -81,7 +81,7 @@ class InventoryReceiptServiceTest {
         productSku = ProductSku.builder().id(skuId).skuCode("SKU123").name("Product 1").build();
 
         rackId = UUID.randomUUID();
-        rack = WarehouseRack.builder().id(rackId).layout(layout).zoneName("Zone A").name("Rack 1").build();
+        rack = WarehouseRack.builder().id(rackId).layout(layout).name("Rack 1").build();
 
         binId = UUID.randomUUID();
         bin = WarehouseBin.builder().id(binId).rack(rack).name("Bin 1").build();

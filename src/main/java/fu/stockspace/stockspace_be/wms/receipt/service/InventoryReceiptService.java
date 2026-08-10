@@ -236,7 +236,6 @@ public class InventoryReceiptService {
                 .skuCode(item.getSku().getSkuCode())
                 .skuName(item.getSku().getName())
                 .quantity(item.getQuantity())
-                .zoneName(item.getRack().getZoneName())
                 .rackId(item.getRack().getId())
                 .rackName(item.getRack().getName())
                 .binId(item.getBin().getId())

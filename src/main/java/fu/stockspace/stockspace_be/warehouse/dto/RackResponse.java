@@ -13,8 +13,6 @@ import java.util.UUID;
 public class RackResponse {
     private UUID id;
     private UUID layoutId;
-    private String zoneName;
-    private String zoneCode;
     private String name;
     private String code;
     private BigDecimal maxWeight;
