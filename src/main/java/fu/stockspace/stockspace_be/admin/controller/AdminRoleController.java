@@ -21,7 +21,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("@rbac.hasPermission('ADMIN_ROLE_MANAGE')")
 public class AdminRoleController {
 
     private final RoleManagementService roleManagementService;

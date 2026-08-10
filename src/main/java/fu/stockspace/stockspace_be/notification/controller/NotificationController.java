@@ -21,12 +21,12 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/notifications")
 @RequiredArgsConstructor
-@PreAuthorize("isAuthenticated()")
 public class NotificationController {
 
     private final NotificationService notificationService;
 
     @GetMapping
+    @PreAuthorize("@rbac.hasPermission('NOTIFICATION_READ')")
     @Operation(summary = "Lấy danh sách thông báo của tôi (phân trang)")
     public ResponseEntity<ApiResponse<PagedResponse<NotificationResponse>>> getMyNotifications(
             @RequestParam(defaultValue = "0") int page,
@@ -40,6 +40,7 @@ public class NotificationController {
 
 
     @GetMapping("/unread-count")
+    @PreAuthorize("@rbac.hasPermission('NOTIFICATION_READ')")
     @Operation(summary = "Lấy số lượng thông báo chưa đọc")
     public ResponseEntity<ApiResponse<Long>> getUnreadCount() {
         UUID userId = SecurityUtil.getCurrentUserId();
@@ -48,6 +49,7 @@ public class NotificationController {
     }
 
     @PatchMapping("/{id}/read")
+    @PreAuthorize("@rbac.hasPermission('NOTIFICATION_UPDATE')")
     @Operation(summary = "Đánh dấu 1 thông báo đã đọc")
     public ResponseEntity<ApiResponse<Void>> markAsRead(@PathVariable UUID id) {
         UUID userId = SecurityUtil.getCurrentUserId();
@@ -56,6 +58,7 @@ public class NotificationController {
     }
 
     @PatchMapping("/read-all")
+    @PreAuthorize("@rbac.hasPermission('NOTIFICATION_UPDATE')")
     @Operation(summary = "Đánh dấu tất cả thông báo đã đọc")
     public ResponseEntity<ApiResponse<Void>> markAllAsRead() {
         UUID userId = SecurityUtil.getCurrentUserId();

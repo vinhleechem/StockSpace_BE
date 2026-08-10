@@ -23,7 +23,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/admin/warehouses")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ADMIN', 'INSPECTOR')")
+@PreAuthorize("@rbac.hasPermission('WAREHOUSE_REVIEW')")
 public class AdminWarehouseController {
 
     private final WarehouseService warehouseService;

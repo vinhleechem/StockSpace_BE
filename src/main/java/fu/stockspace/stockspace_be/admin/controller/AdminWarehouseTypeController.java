@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/admin/warehouse-types")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("@rbac.hasPermission('ADMIN_WAREHOUSE_TYPE_MANAGE')")
 public class AdminWarehouseTypeController {
 
     private final WarehouseTypeService warehouseTypeService;

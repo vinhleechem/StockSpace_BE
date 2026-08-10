@@ -21,7 +21,7 @@ import java.util.UUID;
 @RequestMapping("/api/admin/withdrawals")
 @RequiredArgsConstructor
 @Tag(name = "Admin — Withdrawals", description = "Các API phê duyệt yêu cầu rút tiền dành cho Admin")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("@rbac.hasPermission('ADMIN_WITHDRAWAL_MANAGE')")
 public class AdminWithdrawController {
     private final WithdrawService withdrawService;
     @GetMapping

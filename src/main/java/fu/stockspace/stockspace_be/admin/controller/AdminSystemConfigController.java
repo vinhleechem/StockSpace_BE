@@ -18,7 +18,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/admin/configs")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("@rbac.hasPermission('ADMIN_SYSTEM_CONFIG_MANAGE')")
 public class AdminSystemConfigController {
 
     private final SystemConfigService configService;
