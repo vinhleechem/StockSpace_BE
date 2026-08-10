@@ -245,4 +245,23 @@ class WarehouseLayoutServiceTest {
 
         assertEquals("Tenant không được phép thêm kệ hàng mới vào sơ đồ.", ex.getMessage());
     }
+
+    @Test
+    void testSaveLayoutBulk_OwnerModifyLayoutWhenRented_ThrowsException() {
+        warehouse.setStatus(WarehouseStatus.RENTED);
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+
+        BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
+                .width(100)
+                .length(100)
+                .height(10)
+                .racks(Collections.emptyList())
+                .build();
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () ->
+                layoutService.saveLayoutBulk(warehouseId, userId, "OWNER", request));
+
+        assertTrue(ex.getMessage().contains("Không thể chỉnh sửa sơ đồ layout kho trong thời gian kho đang được cho thuê"));
+    }
 }
+
