@@ -16,8 +16,6 @@ import java.util.UUID;
 public class RackSaveRequest {
     private UUID id; // null nếu tạo mới
 
-    private String zoneName;
-    private String zoneCode;
 
     @NotBlank(message = "Tên Rack không được để trống")
     private String name;

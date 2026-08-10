@@ -115,8 +115,6 @@ public class WarehouseLayoutService {
         for (WarehouseRack rack : defaultRacks) {
             WarehouseRack cloneRack = WarehouseRack.builder()
                     .layout(tenantLayout)
-                    .zoneName(rack.getZoneName())
-                    .zoneCode(rack.getZoneCode())
                     .name(rack.getName())
                     .code(rack.getCode())
                     .maxWeight(rack.getMaxWeight())
@@ -315,8 +313,6 @@ public class WarehouseLayoutService {
                         if (rReq.getRotation() != null) rack.setRotation(rReq.getRotation());
                     } else {
                         // Owner cập nhật đầy đủ
-                        rack.setZoneName(rReq.getZoneName());
-                        rack.setZoneCode(rReq.getZoneCode());
                         rack.setName(rReq.getName());
                         rack.setCode(rReq.getCode());
                         rack.setMaxWeight(rReq.getMaxWeight());
@@ -332,8 +328,6 @@ public class WarehouseLayoutService {
                 } else {
                     rack = WarehouseRack.builder()
                             .layout(layout)
-                            .zoneName(rReq.getZoneName())
-                            .zoneCode(rReq.getZoneCode())
                             .name(rReq.getName())
                             .code(rReq.getCode())
                             .maxWeight(rReq.getMaxWeight())
@@ -444,8 +438,6 @@ public class WarehouseLayoutService {
             rackResponses.add(RackResponse.builder()
                     .id(rack.getId())
                     .layoutId(layout.getId())
-                    .zoneName(rack.getZoneName())
-                    .zoneCode(rack.getZoneCode())
                     .name(rack.getName())
                     .code(rack.getCode())
                     .maxWeight(rack.getMaxWeight())
