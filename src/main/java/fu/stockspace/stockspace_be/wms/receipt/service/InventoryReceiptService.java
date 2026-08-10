@@ -1,5 +1,6 @@
 package fu.stockspace.stockspace_be.wms.receipt.service;
 
+import fu.stockspace.stockspace_be.auth.entity.RoleType;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.auth.util.TenantContextUtil;
@@ -128,6 +129,12 @@ public class InventoryReceiptService {
     public InventoryReceiptResponse approveReceipt(UUID approverId, UUID receiptId) {
         User approver = userRepository.findById(approverId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+
+        boolean isStaff = approver.getRoles() != null && approver.getRoles().stream()
+                .anyMatch(r -> RoleType.ROLE_STAFF.name().equals(r.getName()));
+        if (isStaff) {
+            throw new ForbiddenException("Nhân viên không có quyền phê duyệt phiếu nhập/xuất kho. Phiếu phải được Doanh nghiệp (Tenant) phê duyệt.");
+        }
 
         InventoryReceipt receipt = receiptRepository.findById(receiptId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RECEIPT_NOT_FOUND));
