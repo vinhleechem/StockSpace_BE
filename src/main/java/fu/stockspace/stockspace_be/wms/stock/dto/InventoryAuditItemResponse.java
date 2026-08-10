@@ -17,7 +17,6 @@ public class InventoryAuditItemResponse {
     private String skuCode;
     private String skuName;
     private String uomSymbol;
-    private String zoneName;
     private String rackName;
     private String binName;
     private int expectedQuantity;

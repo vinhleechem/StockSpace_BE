@@ -76,7 +76,7 @@ class StockBatchServiceTest {
         uom = UnitOfMeasure.builder().id(UUID.randomUUID()).code("BOX").name("Hộp").build();
         productSku = ProductSku.builder().id(skuId).skuCode("SKU-01").name("Sản phẩm 1").uom(uom).build();
 
-        WarehouseRack rack = WarehouseRack.builder().id(UUID.randomUUID()).zoneName("Zone A").name("Rack 1").build();
+        WarehouseRack rack = WarehouseRack.builder().id(UUID.randomUUID()).name("Rack 1").build();
         WarehouseBin bin = WarehouseBin.builder().id(UUID.randomUUID()).rack(rack).name("Bin 1").build();
 
         stockBatch = StockBatch.builder()
@@ -217,7 +217,7 @@ class StockBatchServiceTest {
         UUID warehouseId2 = UUID.randomUUID();
         Warehouse warehouse2 = Warehouse.builder().id(warehouseId2).name("Kho 2").build();
 
-        WarehouseRack rack = WarehouseRack.builder().id(UUID.randomUUID()).zoneName("Zone A").name("Rack 1").build();
+        WarehouseRack rack = WarehouseRack.builder().id(UUID.randomUUID()).name("Rack 1").build();
 
         StockBatch batch1 = StockBatch.builder()
                 .id(UUID.randomUUID())
@@ -248,7 +248,6 @@ class StockBatchServiceTest {
         assertEquals("SKU-01", summary.getSkuCode());
         assertEquals(100, summary.getTotalQuantity());
         assertEquals(2, summary.getLocations().size());
-        assertEquals("Zone A", summary.getLocations().get(0).getZoneName());
     }
 
 

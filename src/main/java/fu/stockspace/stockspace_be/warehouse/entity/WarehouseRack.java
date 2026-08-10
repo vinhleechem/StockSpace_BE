@@ -30,12 +30,6 @@ public class WarehouseRack extends BaseEntity {
     @JoinColumn(name = "layout_id", nullable = false)
     private WarehouseLayout layout;
 
-    @Column(name = "zone_name", length = 100)
-    private String zoneName;
-
-    @Column(name = "zone_code", length = 50)
-    private String zoneCode;
-
     @Column(name = "name", nullable = false, length = 100)
     private String name;
 

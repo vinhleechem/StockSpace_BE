@@ -293,7 +293,6 @@ public class InventoryAuditService {
                 .skuCode(sku != null ? sku.getSkuCode() : null)
                 .skuName(sku != null ? sku.getName() : null)
                 .uomSymbol(uom != null ? uom.getCode() : null)
-                .zoneName(batch.getRack() != null ? batch.getRack().getZoneName() : null)
                 .rackName(batch.getRack() != null ? batch.getRack().getName() : null)
                 .binName(batch.getBin() != null ? batch.getBin().getName() : null)
                 .expectedQuantity(item.getExpectedQuantity())
