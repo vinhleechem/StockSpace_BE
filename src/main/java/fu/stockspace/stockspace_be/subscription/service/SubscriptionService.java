@@ -148,6 +148,24 @@ public class SubscriptionService {
                 subscription.getId()
         );
 
+        // Ghi nhận doanh thu cho hệ thống: Cộng tiền tương ứng vào Ví System Admin
+        final UUID subId = subscription.getId();
+        userRepository.findFirstByRoles_Name(fu.stockspace.stockspace_be.auth.entity.RoleType.ROLE_ADMIN.name())
+                .ifPresent(adminUser -> {
+                    try {
+                        walletService.refundBalance(
+                                adminUser.getId(),
+                                servicePackage.getPrice(),
+                                TransactionType.PACKAGE_PAYMENT,
+                                "Doanh thu gói dịch vụ từ Tenant: " + servicePackage.getName(),
+                                null,
+                                subId
+                        );
+                    } catch (Exception e) {
+                        log.error("Failed to credit system revenue to admin wallet: {}", e.getMessage(), e);
+                    }
+                });
+
         log.info("Subscription Service: Tenant {} processed package '{}' successfully. Subscription ID: {}",
                 tenantId, servicePackage.getName(), subscription.getId());
 

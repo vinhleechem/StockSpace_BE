@@ -20,13 +20,13 @@ import java.util.UUID;
 public class TransactionService {
     private final TransactionRepository transactionRepository;
     private final WalletRepository walletRepository;
+    private final WalletService walletService;
     /**
      * Lấy danh sách giao dịch của user hiện tại (phân trang).
      */
     @Transactional(readOnly = true)
     public PagedResponse<TransactionResponse> getMyTransactions(UUID userId, Pageable pageable) {
-        Wallet wallet = walletRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WALLET_NOT_FOUND));
+        Wallet wallet = walletService.getOrCreateWallet(userId);
         Page<Transaction> page = transactionRepository.findByWalletId(wallet.getId(), pageable);
         return PagedResponse.fromPage(page, this::mapToResponse);
     }
