@@ -32,6 +32,7 @@ class OwnerStatsServiceTest {
     @Mock private WalletRepository walletRepository;
     @Mock private TransactionRepository transactionRepository;
     @Mock private WarehouseRepository warehouseRepository;
+    @Mock private fu.stockspace.stockspace_be.wallet.service.WalletService walletService;
 
     @InjectMocks
     private OwnerStatsService ownerStatsService;
@@ -46,12 +47,12 @@ class OwnerStatsServiceTest {
     @Test
     void testGetRevenueSummary_Success() {
         Wallet wallet = Wallet.builder().id(UUID.randomUUID()).build();
-        when(walletRepository.findByUserId(ownerId)).thenReturn(Optional.of(wallet));
+        when(walletService.getOrCreateWallet(ownerId)).thenReturn(wallet);
 
         Object[] row1 = new Object[]{1, 5000000L};
         List<Object[]> monthlyData = java.util.Collections.singletonList(row1);
 
-        when(transactionRepository.findMonthlyRevenueByWalletIdAndTypeAndYear(eq(wallet.getId()), any(), eq(2026)))
+        when(transactionRepository.findMonthlyRevenueByWalletIdAndTypesAndYear(eq(wallet.getId()), any(), eq(2026)))
                 .thenReturn(monthlyData);
 
 

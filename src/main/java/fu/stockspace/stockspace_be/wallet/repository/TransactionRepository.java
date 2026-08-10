@@ -32,6 +32,20 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
     @Query("""
             SELECT EXTRACT(MONTH FROM t.createdAt) as month, SUM(t.amount) as total
             FROM Transaction t
+            WHERE t.wallet.id = :walletId
+              AND t.transactionType IN :types
+              AND EXTRACT(YEAR FROM t.createdAt) = :year
+            GROUP BY EXTRACT(MONTH FROM t.createdAt)
+            """)
+    List<Object[]> findMonthlyRevenueByWalletIdAndTypesAndYear(
+            @Param("walletId") UUID walletId,
+            @Param("types") List<fu.stockspace.stockspace_be.wallet.entity.TransactionType> types,
+            @Param("year") int year
+    );
+
+    @Query("""
+            SELECT EXTRACT(MONTH FROM t.createdAt) as month, SUM(t.amount) as total
+            FROM Transaction t
             WHERE t.transactionType = :type
               AND EXTRACT(YEAR FROM t.createdAt) = :year
             GROUP BY EXTRACT(MONTH FROM t.createdAt)
@@ -40,4 +54,16 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
             @Param("type") fu.stockspace.stockspace_be.wallet.entity.TransactionType type,
             @Param("year") int year
     );
-}
+
+    @Query("""
+            SELECT EXTRACT(MONTH FROM t.createdAt) as month, SUM(t.amount) as total
+            FROM Transaction t
+            WHERE t.transactionType IN :types
+              AND EXTRACT(YEAR FROM t.createdAt) = :year
+            GROUP BY EXTRACT(MONTH FROM t.createdAt)
+            """)
+    List<Object[]> findMonthlyRevenueByTypesAndYear(
+            @Param("types") List<fu.stockspace.stockspace_be.wallet.entity.TransactionType> types,
+            @Param("year") int year
+    );
+}
