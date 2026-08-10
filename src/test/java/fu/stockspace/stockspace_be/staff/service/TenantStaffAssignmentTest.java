@@ -80,7 +80,6 @@ class TenantStaffAssignmentTest {
     void assignWarehouseToStaff_success() {
         AssignWarehouseRequest req = AssignWarehouseRequest.builder()
                 .warehouseId(warehouseId)
-                .role(WarehouseRole.MANAGER)
                 .customTitle("Trưởng Kho Hà Nội")
                 .notes("Phân công quản lý ca 1")
                 .build();
@@ -98,7 +97,6 @@ class TenantStaffAssignmentTest {
                 .staff(staffUser)
                 .tenant(tenantUser)
                 .warehouse(warehouse)
-                .role(WarehouseRole.MANAGER)
                 .customTitle("Trưởng Kho Hà Nội")
                 .assignedBy(tenantUser)
                 .startDate(LocalDateTime.now())
@@ -111,7 +109,6 @@ class TenantStaffAssignmentTest {
         StaffAssignmentResponse response = staffService.assignWarehouseToStaff(tenantId, staffUserId, req);
 
         assertNotNull(response);
-        assertEquals(WarehouseRole.MANAGER, response.getRole());
         assertEquals("Trưởng Kho Hà Nội", response.getCustomTitle());
         assertEquals(warehouseId, response.getWarehouseId());
         assertEquals(AssignmentStatus.ACTIVE, response.getStatus());
@@ -127,7 +124,6 @@ class TenantStaffAssignmentTest {
                 .staff(staffUser)
                 .tenant(tenantUser)
                 .warehouse(warehouse)
-                .role(WarehouseRole.OPERATOR)
                 .status(AssignmentStatus.ACTIVE)
                 .startDate(LocalDateTime.now().minusDays(10))
                 .build();
@@ -157,7 +153,6 @@ class TenantStaffAssignmentTest {
                 .staff(staffUser)
                 .tenant(tenantUser)
                 .warehouse(warehouse)
-                .role(WarehouseRole.INSPECTOR)
                 .startDate(LocalDateTime.now().minusMonths(2))
                 .endDate(LocalDateTime.now().minusMonths(1))
                 .status(AssignmentStatus.EXPIRED)
@@ -172,6 +167,5 @@ class TenantStaffAssignmentTest {
         assertEquals(staffUserId, history.getStaffId());
         assertEquals(1, history.getTenantTenures().size());
         assertEquals(1, history.getWarehouseAssignments().size());
-        assertEquals(WarehouseRole.INSPECTOR, history.getWarehouseAssignments().get(0).getRole());
     }
 }
