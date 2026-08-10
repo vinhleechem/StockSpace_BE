@@ -84,6 +84,7 @@ public class ServicePackageService {
         log.info("Subscription Service: Soft-deleted service package ID: {}", id);
     }
     public ServicePackageResponse mapToResponse(ServicePackage p) {
+        if (p == null) return null;
         return ServicePackageResponse.builder()
                 .id(p.getId())
                 .name(p.getName())
@@ -93,4 +94,5 @@ public class ServicePackageService {
                 .maxStaff(p.getMaxStaff())
                 .build();
     }
+
 }
