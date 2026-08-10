@@ -36,7 +36,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/chat")
 @RequiredArgsConstructor
-@PreAuthorize("isAuthenticated()")
+@PreAuthorize("@rbac.hasPermission('CHAT_USE')")
 public class UserChatController {
 
     private final ChatbotService chatbotService;

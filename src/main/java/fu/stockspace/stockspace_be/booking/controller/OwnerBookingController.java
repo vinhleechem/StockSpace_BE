@@ -30,7 +30,6 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/owner/bookings")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
 public class OwnerBookingController {
 
     private final BookingService bookingService;
@@ -40,6 +39,7 @@ public class OwnerBookingController {
      * Danh sách yêu cầu thuê đến kho của Owner, phân trang.
      */
     @GetMapping
+    @PreAuthorize("@rbac.hasPermission('RENTAL_REQUEST_READ')")
     @Operation(summary = "Xem danh sách yêu cầu thuê kho đến (Owner)")
     public ResponseEntity<ApiResponse<PagedResponse<BookingResponse>>> getIncomingRequests(
             @RequestParam(defaultValue = "0") int page,
@@ -56,6 +56,7 @@ public class OwnerBookingController {
      * Tự động: deduct deposit + tạo hợp đồng + warehouse RENTED.
      */
     @PatchMapping("/{id}/approve")
+    @PreAuthorize("@rbac.hasPermission('RENTAL_REQUEST_PROCESS')")
     @Operation(summary = "Chấp nhận yêu cầu thuê kho")
     public ResponseEntity<ApiResponse<BookingResponse>> approve(@PathVariable java.util.UUID id) {
         java.util.UUID ownerId = getCurrentUserId();
@@ -69,6 +70,7 @@ public class OwnerBookingController {
      * Body: { "reason": "..." }
      */
     @PatchMapping("/{id}/reject")
+    @PreAuthorize("@rbac.hasPermission('RENTAL_REQUEST_PROCESS')")
     @Operation(summary = "Từ chối yêu cầu thuê kho")
     public ResponseEntity<ApiResponse<BookingResponse>> reject(
             @PathVariable java.util.UUID id,

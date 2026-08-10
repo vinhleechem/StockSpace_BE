@@ -22,7 +22,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/owner/warehouses")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+@PreAuthorize("@rbac.hasPermission('WAREHOUSE_LAYOUT_OWNER_MANAGE')")
 public class OwnerLayoutController {
 
     private final WarehouseLayoutService layoutService;

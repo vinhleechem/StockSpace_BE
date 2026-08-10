@@ -44,7 +44,6 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/disputes")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('OWNER', 'TENANT', 'ADMIN')")
 public class DisputeController {
 
     private final DisputeService disputeService;
@@ -57,6 +56,7 @@ public class DisputeController {
      * Mở tranh chấp cho hợp đồng (hỗ trợ upload ảnh bằng chứng).
      */
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@rbac.hasPermission('DISPUTE_CREATE')")
     @Operation(summary = "Mở tranh chấp hợp đồng")
     public ResponseEntity<ApiResponse<DisputeResponse>> raise(
             @Parameter(
@@ -102,6 +102,7 @@ public class DisputeController {
      * Danh sách dispute do mình mở.
      */
     @GetMapping("/mine")
+    @PreAuthorize("@rbac.hasPermission('DISPUTE_READ')")
     @Operation(summary = "Xem danh sách tranh chấp của mình")
     public ResponseEntity<ApiResponse<PagedResponse<DisputeResponse>>> getMyDisputes(
             @RequestParam(defaultValue = "0") int page,

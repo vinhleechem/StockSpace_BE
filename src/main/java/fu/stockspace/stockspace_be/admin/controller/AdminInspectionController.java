@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/admin/inspections")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ADMIN')")
+@PreAuthorize("@rbac.hasPermission('INSPECTION_ASSIGN')")
 public class AdminInspectionController {
 
     private final InspectionService inspectionService;

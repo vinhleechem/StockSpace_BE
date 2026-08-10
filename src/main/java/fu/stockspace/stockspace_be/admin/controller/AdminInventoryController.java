@@ -28,7 +28,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/admin/inventory")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("@rbac.hasPermission('ADMIN_INVENTORY_READ')")
 public class AdminInventoryController {
 
     private final InventoryReceiptService inventoryReceiptService;

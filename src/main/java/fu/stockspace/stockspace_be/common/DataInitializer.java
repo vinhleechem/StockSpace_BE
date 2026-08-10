@@ -22,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +34,7 @@ import java.util.Set;
  * Khởi tạo dữ liệu mẫu (Roles, Permissions, default Users) khi chạy ứng dụng lần đầu.
  */
 @Component
+@Order(1)
 @RequiredArgsConstructor
 @Slf4j
 public class DataInitializer implements CommandLineRunner {
@@ -124,19 +126,17 @@ public class DataInitializer implements CommandLineRunner {
                 });
     }
     private void getOrCreateRole(String name, String description, Set<Permission> permissions) {
-        Role role = roleRepository.findByName(name)
-                .orElseGet(() -> Role.builder()
-                        .name(name)
-                        .description(description)
-                        .build());
-        if (role.getPermissions() == null) {
-            role.setPermissions(new HashSet<>(permissions));
-        } else {
-            role.getPermissions().clear();
-            role.getPermissions().addAll(permissions);
+        if (roleRepository.findByName(name).isPresent()) {
+            return;
         }
+
+        Role role = Role.builder()
+                .name(name)
+                .description(description)
+                .permissions(new HashSet<>(permissions))
+                .build();
         roleRepository.save(role);
-        log.info("Seeding role: {} with {} permissions", name, permissions.size());
+        log.info("Seeded new role: {} with {} permissions", name, permissions.size());
     }
     private void createDefaultUser(String email, String rawPassword, String fullName, String phone, String roleName, BigDecimal initialBalance) {
         if (!userRepository.existsByEmail(email)) {

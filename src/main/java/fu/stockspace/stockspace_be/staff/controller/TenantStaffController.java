@@ -28,7 +28,7 @@ import java.util.UUID;
 @RequestMapping("/api/tenant/staffs")
 @RequiredArgsConstructor
 @Tag(name = "Tenant — Staff Management", description = "Các API quản lý và mời nhân viên kho (Staff) dành cho Tenant")
-@PreAuthorize("hasRole('TENANT')")
+@PreAuthorize("@rbac.hasPermission('STAFF_MANAGE')")
 public class TenantStaffController {
 
     private final TenantStaffService staffService;

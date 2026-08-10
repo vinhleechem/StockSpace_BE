@@ -29,7 +29,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/tenant/products")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('TENANT', 'STAFF')")
+@PreAuthorize("@rbac.hasPermission('PRODUCT_MANAGE')")
 public class TenantProductController {
 
     private final ProductCategoryService categoryService;

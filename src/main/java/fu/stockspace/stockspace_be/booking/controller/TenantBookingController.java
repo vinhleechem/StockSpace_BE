@@ -31,7 +31,6 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/tenant/bookings")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('TENANT', 'ADMIN')")
 public class TenantBookingController {
 
     private final BookingService bookingService;
@@ -41,6 +40,7 @@ public class TenantBookingController {
      * Gửi yêu cầu thuê kho.
      */
     @PostMapping
+    @PreAuthorize("@rbac.hasPermission('RENTAL_REQUEST_CREATE')")
     @Operation(summary = "Gửi yêu cầu thuê kho")
     public ResponseEntity<ApiResponse<BookingResponse>> sendRequest(
             @Valid @RequestBody CreateBookingRequest request
@@ -56,6 +56,7 @@ public class TenantBookingController {
      * Danh sách booking của Tenant, phân trang.
      */
     @GetMapping
+    @PreAuthorize("@rbac.hasPermission('RENTAL_REQUEST_READ')")
     @Operation(summary = "Xem lịch sử yêu cầu thuê kho")
     public ResponseEntity<ApiResponse<PagedResponse<BookingResponse>>> getMyBookings(
             @RequestParam(defaultValue = "0") int page,
@@ -71,6 +72,7 @@ public class TenantBookingController {
      * Tenant tự huỷ yêu cầu (chỉ được khi status PENDING).
      */
     @DeleteMapping("/{id}")
+    @PreAuthorize("@rbac.hasPermission('RENTAL_REQUEST_CREATE')")
     @Operation(summary = "Huỷ yêu cầu thuê kho")
     public ResponseEntity<ApiResponse<Void>> cancel(@PathVariable java.util.UUID id) {
         java.util.UUID tenantId = getCurrentUserId();

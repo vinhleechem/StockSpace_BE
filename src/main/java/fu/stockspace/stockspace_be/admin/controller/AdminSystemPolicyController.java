@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/admin/system-policies")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ADMIN')")
+@PreAuthorize("@rbac.hasPermission('ADMIN_SYSTEM_POLICY_MANAGE')")
 public class AdminSystemPolicyController {
 
     private final SystemPolicyService systemPolicyService;

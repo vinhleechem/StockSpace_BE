@@ -24,7 +24,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/tenant/warehouses")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('TENANT', 'STAFF')")
+@PreAuthorize("@rbac.hasPermission('WAREHOUSE_READ')")
 public class TenantWarehouseController {
 
     private final WarehouseService warehouseService;

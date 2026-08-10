@@ -26,7 +26,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/tenant/inventory/audits")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('TENANT', 'STAFF')")
+@PreAuthorize("@rbac.hasPermission('INVENTORY_AUDIT_MANAGE')")
 public class InventoryAuditController {
 
     private final InventoryAuditService auditService;

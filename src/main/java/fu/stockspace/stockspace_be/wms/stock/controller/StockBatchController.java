@@ -27,7 +27,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/tenant/inventory/stock")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('TENANT', 'STAFF')")
+@PreAuthorize("@rbac.hasPermission('INVENTORY_READ')")
 public class StockBatchController {
 
     private final StockBatchService stockBatchService;

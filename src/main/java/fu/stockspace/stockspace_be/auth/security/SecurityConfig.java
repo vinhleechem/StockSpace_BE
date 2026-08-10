@@ -73,6 +73,9 @@ public class SecurityConfig {
                         // Public configurations — public (Guest can view system configs like deposit percentage, etc.)
                         .requestMatchers(HttpMethod.GET, "/api/configs/**").permitAll()
 
+                        // Active system policy is displayed before registration / booking.
+                        .requestMatchers(HttpMethod.GET, "/api/system-policies/**").permitAll()
+
                         // Public packages — public
                         .requestMatchers(HttpMethod.GET, "/api/packages/**").permitAll()
 

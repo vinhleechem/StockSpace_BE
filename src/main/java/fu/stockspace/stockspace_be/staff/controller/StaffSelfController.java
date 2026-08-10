@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/staff")
 @RequiredArgsConstructor
 @Tag(name = "Staff — Self Portal", description = "Các API cá nhân dành cho tài khoản Staff")
-@PreAuthorize("hasRole('STAFF')")
+@PreAuthorize("@rbac.hasPermission('STAFF_WORK_HISTORY_READ')")
 public class StaffSelfController {
 
     private final TenantStaffService staffService;

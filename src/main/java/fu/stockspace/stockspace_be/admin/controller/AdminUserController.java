@@ -25,7 +25,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/admin/users")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("@rbac.hasPermission('ADMIN_USER_MANAGE')")
 public class AdminUserController {
 
     private final AdminUserManagementService userManagementService;
