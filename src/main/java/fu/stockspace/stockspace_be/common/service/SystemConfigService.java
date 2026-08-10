@@ -168,16 +168,17 @@ public class SystemConfigService {
             } catch (NumberFormatException e) {
                 throw new BadRequestException(ErrorCode.CONFIG_INVALID_VALUE, "Số ngày tối đa xác nhận hợp đồng phải là số nguyên");
             }
-        } else if (key.equals("inspection_fee")) {
+        } else if (key.equals("inspection_fee") || key.equals("warehouse_publish_fee")) {
             try {
                 BigDecimal val = new BigDecimal(value.trim());
                 if (val.compareTo(BigDecimal.ZERO) < 0) {
-                    throw new BadRequestException(ErrorCode.CONFIG_INVALID_VALUE, "Phí gửi yêu cầu kiểm định không được là số âm");
+                    throw new BadRequestException(ErrorCode.CONFIG_INVALID_VALUE, "Cấu hình số tiền không được là số âm");
                 }
             } catch (NumberFormatException e) {
-                throw new BadRequestException(ErrorCode.CONFIG_INVALID_VALUE, "Phí gửi yêu cầu kiểm định phải là số thập phân hợp lệ");
+                throw new BadRequestException(ErrorCode.CONFIG_INVALID_VALUE, "Cấu hình số tiền phải là số thập phân hợp lệ");
             }
         } else if (key.equals("warehouse_publish_package_id")) {
+
             try {
                 UUID packageId = UUID.fromString(value.trim());
                 if (!packageRepository.existsById(packageId)) {
