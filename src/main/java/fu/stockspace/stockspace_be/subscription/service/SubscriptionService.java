@@ -171,10 +171,95 @@ public class SubscriptionService {
                 .isPresent();
     }
     /**
+     * Preview chuyển đổi gói dịch vụ cho Tenant xem trước khi xác nhận bấm mua.
+     */
+    @Transactional(readOnly = true)
+    public fu.stockspace.stockspace_be.subscription.dto.SubscriptionPreviewResponse previewSubscriptionChange(UUID tenantId, UUID newPackageId) {
+        ServicePackage newPackage = packageRepository.findById(newPackageId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.PACKAGE_NOT_FOUND));
+
+        Optional<Subscription> activeOpt = subscriptionRepository
+                .findFirstByTenantIdAndStatusAndEndDateGreaterThanEqualOrderByEndDateDesc(
+                        tenantId, SubscriptionStatus.ACTIVE, LocalDate.now());
+
+        if (activeOpt.isEmpty()) {
+            return fu.stockspace.stockspace_be.subscription.dto.SubscriptionPreviewResponse.builder()
+                    .newPackageId(newPackage.getId())
+                    .newPackageName(newPackage.getName())
+                    .newMaxStaff(newPackage.getMaxStaff())
+                    .newPrice(newPackage.getPrice())
+                    .transactionType("NEW_PURCHASE")
+                    .canProceed(true)
+                    .message("Đăng ký mới gói dịch vụ " + newPackage.getName())
+                    .build();
+        }
+
+        Subscription activeSub = activeOpt.get();
+        ServicePackage currentPackage = activeSub.getServicePackage();
+
+        java.math.BigDecimal currentPrice = activeSub.getSnapshotPrice() != null
+                ? activeSub.getSnapshotPrice()
+                : currentPackage.getPrice();
+        int currentMaxStaff = activeSub.getSnapshotMaxStaff() > 0
+                ? activeSub.getSnapshotMaxStaff()
+                : currentPackage.getMaxStaff();
+
+        if (currentPackage.getId().equals(newPackageId)) {
+            return fu.stockspace.stockspace_be.subscription.dto.SubscriptionPreviewResponse.builder()
+                    .currentPackageId(currentPackage.getId())
+                    .currentPackageName(currentPackage.getName())
+                    .currentMaxStaff(currentMaxStaff)
+                    .currentPrice(currentPrice)
+                    .newPackageId(newPackage.getId())
+                    .newPackageName(newPackage.getName())
+                    .newMaxStaff(newPackage.getMaxStaff())
+                    .newPrice(newPackage.getPrice())
+                    .transactionType("RENEWAL")
+                    .canProceed(true)
+                    .message("Gia hạn thêm " + newPackage.getDurationDays() + " ngày cho gói " + newPackage.getName())
+                    .build();
+        }
+
+        boolean isLowerPrice = newPackage.getPrice().compareTo(currentPrice) < 0;
+        boolean isLowerStaff = newPackage.getMaxStaff() < currentMaxStaff;
+
+        if (isLowerPrice && isLowerStaff) {
+            return fu.stockspace.stockspace_be.subscription.dto.SubscriptionPreviewResponse.builder()
+                    .currentPackageId(currentPackage.getId())
+                    .currentPackageName(currentPackage.getName())
+                    .currentMaxStaff(currentMaxStaff)
+                    .currentPrice(currentPrice)
+                    .newPackageId(newPackage.getId())
+                    .newPackageName(newPackage.getName())
+                    .newMaxStaff(newPackage.getMaxStaff())
+                    .newPrice(newPackage.getPrice())
+                    .transactionType("DOWNGRADE_BLOCKED")
+                    .canProceed(false)
+                    .message("Không thể hạ xuống gói thấp hơn khi gói hiện tại vẫn đang còn hạn. Bạn chỉ có thể đăng ký gói mới sau khi gói hiện tại hết hạn.")
+                    .build();
+        }
+
+        return fu.stockspace.stockspace_be.subscription.dto.SubscriptionPreviewResponse.builder()
+                .currentPackageId(currentPackage.getId())
+                .currentPackageName(currentPackage.getName())
+                .currentMaxStaff(currentMaxStaff)
+                .currentPrice(currentPrice)
+                .newPackageId(newPackage.getId())
+                .newPackageName(newPackage.getName())
+                .newMaxStaff(newPackage.getMaxStaff())
+                .newPrice(newPackage.getPrice())
+                .transactionType("UPGRADE")
+                .canProceed(true)
+                .message("Nâng cấp từ gói " + currentPackage.getName() + " lên gói " + newPackage.getName() + ". Gói mới có hiệu lực ngay lập tức.")
+                .build();
+    }
+
+    /**
      * Admin xem tất cả các lượt đăng ký gói.
      */
     @Transactional(readOnly = true)
     public Page<SubscriptionResponse> getAllSubscriptions(Pageable pageable) {
+
         return subscriptionRepository.findAll(pageable)
                 .map(this::mapToResponse);
     }
