@@ -40,10 +40,11 @@ public class ServicePackageService {
                 .features(request.getFeatures())
                 .price(request.getPrice())
                 .durationDays(request.getDurationDays())
+                .maxStaff(request.getMaxStaff())
                 .isActive(true)
                 .build();
         servicePackage = packageRepository.save(servicePackage);
-        log.info("Subscription Service: Created service package: {}", servicePackage.getName());
+        log.info("Subscription Service: Created service package: {} with maxStaff: {}", servicePackage.getName(), servicePackage.getMaxStaff());
         return mapToResponse(servicePackage);
     }
     @Transactional
@@ -65,10 +66,14 @@ public class ServicePackageService {
         if (request.getDurationDays() != null) {
             servicePackage.setDurationDays(request.getDurationDays());
         }
+        if (request.getMaxStaff() != null) {
+            servicePackage.setMaxStaff(request.getMaxStaff());
+        }
         servicePackage = packageRepository.save(servicePackage);
         log.info("Subscription Service: Updated service package ID: {}", id);
         return mapToResponse(servicePackage);
     }
+
     @Transactional
     public void deletePackage(java.util.UUID id) {
         ServicePackage servicePackage = packageRepository.findById(id)
