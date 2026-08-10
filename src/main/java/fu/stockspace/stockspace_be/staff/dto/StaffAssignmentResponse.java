@@ -1,7 +1,6 @@
 package fu.stockspace.stockspace_be.staff.dto;
 
 import fu.stockspace.stockspace_be.staff.entity.AssignmentStatus;
-import fu.stockspace.stockspace_be.staff.entity.WarehouseRole;
 import lombok.*;
 
 import java.time.LocalDateTime;
@@ -26,7 +25,6 @@ public class StaffAssignmentResponse {
     private String warehouseName;
     private String warehouseAddress;
 
-    private WarehouseRole role;
     private String customTitle;
 
     private UUID assignedById;

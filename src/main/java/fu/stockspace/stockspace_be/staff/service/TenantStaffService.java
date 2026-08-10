@@ -359,7 +359,6 @@ public class TenantStaffService {
                 .findByStaffIdAndTenantIdAndStatus(staffUserId, tenantId, AssignmentStatus.ACTIVE);
         for (StaffWarehouseAssignment a : existing) {
             if (a.getWarehouse().getId().equals(request.getWarehouseId())) {
-                a.setRole(request.getRole());
                 a.setCustomTitle(request.getCustomTitle());
                 a.setNotes(request.getNotes());
                 return mapToAssignmentResponse(assignmentRepository.save(a));
@@ -371,7 +370,6 @@ public class TenantStaffService {
                 .staff(staff)
                 .tenant(tenant)
                 .warehouse(warehouse)
-                .role(request.getRole())
                 .customTitle(request.getCustomTitle())
                 .assignedBy(tenant)
                 .startDate(LocalDateTime.now())
@@ -495,7 +493,6 @@ public class TenantStaffService {
                 .warehouseId(a.getWarehouse().getId())
                 .warehouseName(a.getWarehouse().getName())
                 .warehouseAddress(a.getWarehouse().getAddress())
-                .role(a.getRole())
                 .customTitle(a.getCustomTitle())
                 .assignedById(a.getAssignedBy().getId())
                 .assignedByName(a.getAssignedBy().getFullName())
