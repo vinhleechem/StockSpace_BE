@@ -41,9 +41,8 @@ public class Subscription extends BaseEntity {
 
     // ==================== Snapshot Fields ====================
     /** Quota Staff tại thời điểm mua (Snapshot) */
-    @Column(name = "snapshot_max_staff", nullable = false)
-    @Builder.Default
-    private int snapshotMaxStaff = 0;
+    @Column(name = "snapshot_max_staff")
+    private Integer snapshotMaxStaff;
 
     /** Giá mua tại thời điểm mua (Snapshot) */
     @Column(name = "snapshot_price", precision = 15, scale = 2)
