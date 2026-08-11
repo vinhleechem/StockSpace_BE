@@ -61,8 +61,12 @@ public class GetMonthlyRevenueTool implements ChatTool {
                 } catch (NumberFormatException ignored) {}
             }
 
-            List<Object[]> monthlyData = transactionRepository.findMonthlyRevenueByTypeAndYear(
-                    TransactionType.COMMISSION, year);
+            List<TransactionType> systemRevenueTypes = List.of(
+                    TransactionType.PACKAGE_PAYMENT,
+                    TransactionType.COMMISSION
+            );
+            List<Object[]> monthlyData = transactionRepository.findMonthlyRevenueByTypesAndYear(
+                    systemRevenueTypes, year);
 
             Map<Integer, BigDecimal> monthMap = new HashMap<>();
             BigDecimal totalCommission = BigDecimal.ZERO;
@@ -71,7 +75,7 @@ public class GetMonthlyRevenueTool implements ChatTool {
                 if (row != null && row.length >= 2 && row[0] != null && row[1] != null) {
                     int month = ((Number) row[0]).intValue();
                     BigDecimal amount = new BigDecimal(row[1].toString());
-                    monthMap.put(month, amount);
+                    monthMap.merge(month, amount, BigDecimal::add);
                     totalCommission = totalCommission.add(amount);
                 }
             }

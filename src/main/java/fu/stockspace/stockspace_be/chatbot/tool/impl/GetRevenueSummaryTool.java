@@ -70,8 +70,12 @@ public class GetRevenueSummaryTool implements ChatTool {
             }
 
             Wallet wallet = walletOpt.get();
-            List<Object[]> monthlyData = transactionRepository.findMonthlyRevenueByWalletIdAndTypeAndYear(
-                    wallet.getId(), TransactionType.DEPOSIT_PAYMENT, year);
+            List<TransactionType> revenueTypes = List.of(
+                    TransactionType.DEPOSIT_RECEIVED,
+                    TransactionType.DEPOSIT_PAYMENT
+            );
+            List<Object[]> monthlyData = transactionRepository.findMonthlyRevenueByWalletIdAndTypesAndYear(
+                    wallet.getId(), revenueTypes, year);
 
             Map<Integer, BigDecimal> monthMap = new HashMap<>();
             BigDecimal totalRevenue = BigDecimal.ZERO;
@@ -80,7 +84,7 @@ public class GetRevenueSummaryTool implements ChatTool {
                 if (row != null && row.length >= 2 && row[0] != null && row[1] != null) {
                     int month = ((Number) row[0]).intValue();
                     BigDecimal amount = new BigDecimal(row[1].toString());
-                    monthMap.put(month, amount);
+                    monthMap.merge(month, amount, BigDecimal::add);
                     totalRevenue = totalRevenue.add(amount);
                 }
             }
