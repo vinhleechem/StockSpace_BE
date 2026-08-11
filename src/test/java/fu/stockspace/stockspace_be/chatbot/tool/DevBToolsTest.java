@@ -90,7 +90,7 @@ class DevBToolsTest {
         GetRevenueSummaryTool tool = new GetRevenueSummaryTool(objectMapper, walletRepository, transactionRepository);
         Wallet wallet = Wallet.builder().id(UUID.randomUUID()).build();
         when(walletRepository.findByUserId(userId)).thenReturn(Optional.of(wallet));
-        when(transactionRepository.findMonthlyRevenueByWalletIdAndTypeAndYear(any(), any(), any(Integer.class)))
+        when(transactionRepository.findMonthlyRevenueByWalletIdAndTypesAndYear(any(), any(), any(Integer.class)))
                 .thenReturn(Collections.emptyList());
 
         String json = tool.execute(Collections.emptyMap(), userId);
