@@ -73,9 +73,11 @@ public interface UserRepository extends JpaRepository<User, UUID> {
                                  @Param("roleName") String roleName,
                                  Pageable pageable);
 
-    /**
-     * Tìm kiếm user theo keyword + filter theo isActive.
-     */
+    @Query("SELECT u FROM User u WHERE u.isDeleted = false AND " +
+           "u.isActive = :isActive AND " +
+           "(:keyword = '' OR LOWER(u.email) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+           "OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+           "OR u.phone LIKE CONCAT('%', :keyword, '%'))")
     Page<User> searchUsersByStatus(@Param("keyword") String keyword,
                                    @Param("isActive") boolean isActive,
                                    Pageable pageable);
