@@ -26,7 +26,7 @@ services:
       - SPRING_PROFILES_ACTIVE=prod
       - SEED_DEMO_USERS=false
       - CHATBOT_RAG_INDEXER_ENABLED=${CHATBOT_RAG_INDEXER_ENABLED:-true}
-      - JAVA_TOOL_OPTIONS=-Xmx768m -Xms256m -XX:+UseContainerSupport
+      - JAVA_TOOL_OPTIONS=-Xmx1536m -Xms512m -XX:+UseContainerSupport -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+ExitOnOutOfMemoryError
 
   adminer:
     image: adminer:4.8.1-standalone
