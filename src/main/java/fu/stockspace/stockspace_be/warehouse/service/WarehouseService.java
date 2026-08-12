@@ -68,18 +68,21 @@ public class WarehouseService {
         List<Warehouse> warehouses = rentalContractRepository.findActiveRentedWarehousesByTenantId(tenantId);
 
         // Nếu người dùng hiện tại là STAFF -> lọc đúng các kho được phân công ACTIVE
-        UUID currentUserId = SecurityUtil.getCurrentUserId();
-        if (currentUserId != null) {
+        boolean isStaff = SecurityUtil.getCurrentUser()
+                .map(user -> user.getRoles().stream()
+                        .anyMatch(r -> r.getName().equals("ROLE_STAFF")))
+                .orElse(false);
+
+        if (isStaff) {
+            UUID currentUserId = SecurityUtil.getCurrentUserId();
             List<StaffWarehouseAssignment> activeAssignments = staffWarehouseAssignmentRepository
                     .findByStaffIdAndTenantIdAndStatus(currentUserId, tenantId, AssignmentStatus.ACTIVE);
-            if (!activeAssignments.isEmpty()) {
-                Set<UUID> assignedWarehouseIds = activeAssignments.stream()
-                        .map(a -> a.getWarehouse().getId())
-                        .collect(Collectors.toSet());
-                warehouses = warehouses.stream()
-                        .filter(w -> assignedWarehouseIds.contains(w.getId()))
-                        .collect(Collectors.toList());
-            }
+            Set<UUID> assignedWarehouseIds = activeAssignments.stream()
+                    .map(a -> a.getWarehouse().getId())
+                    .collect(Collectors.toSet());
+            warehouses = warehouses.stream()
+                    .filter(w -> assignedWarehouseIds.contains(w.getId()))
+                    .collect(Collectors.toList());
         }
 
         return warehouses.stream()
