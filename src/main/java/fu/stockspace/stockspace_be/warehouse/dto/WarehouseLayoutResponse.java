@@ -25,4 +25,7 @@ public class WarehouseLayoutResponse {
     private int emptyBins;
 
     private List<RackResponse> racks;
+
+    /** Mảng vị trí ô lưới, ví dụ: ["1:0","2:1","3:1",...]. 1 = đen/khóa, 0 = trắng/dùng được */
+    private List<String> positions;
 }
