@@ -46,7 +46,7 @@ public class WalletService {
                             .isActive(true)
                             .build();
                     log.info("Lazy-creating wallet for user: {}", userId);
-                    return walletRepository.save(newWallet);
+                    return walletRepository.saveAndFlush(newWallet);
                 });
     }
 
@@ -158,6 +158,9 @@ public class WalletService {
      */
     @Transactional
     public Transaction deductBalance(UUID userId, BigDecimal amount, TransactionType type, String description, UUID bookingId, UUID subscriptionId) {
+        if (amount == null) {
+            amount = BigDecimal.ZERO;
+        }
         getOrCreateWallet(userId);
         Wallet wallet = walletRepository.findByUserIdWithLock(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WALLET_NOT_FOUND));
@@ -186,6 +189,9 @@ public class WalletService {
      */
     @Transactional
     public Transaction refundBalance(UUID userId, BigDecimal amount, TransactionType type, String description, UUID bookingId, UUID subscriptionId) {
+        if (amount == null) {
+            amount = BigDecimal.ZERO;
+        }
         getOrCreateWallet(userId);
         Wallet wallet = walletRepository.findByUserIdWithLock(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WALLET_NOT_FOUND));
