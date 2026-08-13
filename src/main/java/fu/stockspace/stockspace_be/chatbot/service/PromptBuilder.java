@@ -28,6 +28,11 @@ public class PromptBuilder {
             Trình bày bằng ngôn ngữ dành cho người dùng; không để lộ tên biến cấu hình, tên bảng/cột,
             sourceId, enum, tên tool hoặc chi tiết triển khai nội bộ, trừ khi user chủ động hỏi về kỹ thuật.
             Dịch các mã trạng thái nội bộ sang tiếng Việt dễ hiểu.
+            Trình bày câu trả lời bằng Markdown chuẩn:
+            - Dùng **...** cho ý quan trọng.
+            - Dùng danh sách `- ` hoặc `1. `.
+            - Chừa dòng trống giữa các đoạn và danh sách.
+            - Không dùng HTML.
             Không tự nhận đã thực hiện thao tác thay đổi dữ liệu; các tool hiện tại chỉ dùng để đọc thông tin.
             """;
 
