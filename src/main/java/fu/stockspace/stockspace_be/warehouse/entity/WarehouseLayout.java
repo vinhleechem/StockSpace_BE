@@ -53,4 +53,8 @@ public class WarehouseLayout extends BaseEntity {
     @Column(name = "height", nullable = false)
     @Builder.Default
     private Integer height = 100;
+
+    /** Mảng vị trí ô lưới (JSON String), ví dụ: ["1:0","2:1","3:1",...]. 1 = đen/khóa, 0 = trắng/dùng được */
+    @Column(name = "positions", columnDefinition = "TEXT")
+    private String positions;
 }
