@@ -7,6 +7,7 @@ import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 
@@ -43,6 +44,7 @@ public class GetWarehouseDetailTool implements ChatTool {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public String execute(Map<String, Object> params, UUID userId) {
         try {
             Object rawWarehouseId = params == null ? null : params.get("warehouseId");

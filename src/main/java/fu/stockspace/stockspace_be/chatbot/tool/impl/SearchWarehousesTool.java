@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.*;
@@ -33,7 +34,9 @@ public class SearchWarehousesTool implements ChatTool {
     @Override
     public String getDescription() {
         return "Tìm tối đa 5 kho đang sẵn sàng cho thuê theo từ khóa trong tên hoặc địa chỉ, khoảng giá thuê " +
-               "và diện tích tối thiểu. Kết quả được lọc theo dữ liệu có cấu trúc, không phải tìm kiếm ngữ nghĩa.";
+               "và diện tích tối thiểu. Khi ý định là tìm hoặc xem kho nhưng chưa nêu tiêu chí, phải gọi tool " +
+               "này với các tham số rỗng để lấy danh sách mặc định. " +
+               "Kết quả được lọc theo dữ liệu có cấu trúc, không phải tìm kiếm ngữ nghĩa.";
     }
 
     @Override
@@ -50,6 +53,7 @@ public class SearchWarehousesTool implements ChatTool {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public String execute(Map<String, Object> params, UUID userId) {
         try {
             Map<String, Object> safeParams = params == null ? Map.of() : params;
