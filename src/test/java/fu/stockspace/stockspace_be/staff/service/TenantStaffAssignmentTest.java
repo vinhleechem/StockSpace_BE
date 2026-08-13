@@ -86,7 +86,7 @@ class TenantStaffAssignmentTest {
 
         when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenantUser));
         when(userRepository.findById(staffUserId)).thenReturn(Optional.of(staffUser));
-        when(memberRepository.existsByUserIdAndTenantIdAndIsDeletedFalse(staffUserId, tenantId)).thenReturn(true);
+        when(memberRepository.existsByUserIdAndTenantIdAndIsActiveTrueAndIsDeletedFalse(staffUserId, tenantId)).thenReturn(true);
         when(contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(tenantId, warehouseId)).thenReturn(true);
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
         when(assignmentRepository.findByStaffIdAndTenantIdAndStatus(staffUserId, tenantId, AssignmentStatus.ACTIVE))
@@ -112,6 +112,22 @@ class TenantStaffAssignmentTest {
         assertEquals("Trưởng Kho Hà Nội", response.getCustomTitle());
         assertEquals(warehouseId, response.getWarehouseId());
         assertEquals(AssignmentStatus.ACTIVE, response.getStatus());
+    }
+
+    @Test
+    void assignWarehouseToStaff_rejectsInactiveMember() {
+        AssignWarehouseRequest req = AssignWarehouseRequest.builder()
+                .warehouseId(warehouseId)
+                .build();
+
+        when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenantUser));
+        when(userRepository.findById(staffUserId)).thenReturn(Optional.of(staffUser));
+        when(memberRepository.existsByUserIdAndTenantIdAndIsActiveTrueAndIsDeletedFalse(staffUserId, tenantId))
+                .thenReturn(false);
+
+        assertThrows(fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException.class,
+                () -> staffService.assignWarehouseToStaff(tenantId, staffUserId, req));
+        verify(contractRepository, never()).existsByTenantIdAndWarehouseIdAndStatusActive(any(), any());
     }
 
     @Test
