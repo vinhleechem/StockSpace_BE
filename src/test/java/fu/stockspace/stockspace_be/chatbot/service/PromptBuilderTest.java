@@ -15,6 +15,10 @@ class PromptBuilderTest {
 
         assertTrue(prompt.contains("không để lộ tên biến cấu hình"));
         assertTrue(prompt.contains("Dịch các mã trạng thái nội bộ sang tiếng Việt"));
+        assertTrue(prompt.contains("ý định của người dùng"));
+        assertTrue(prompt.contains("searchWarehouses với"));
+        assertTrue(prompt.contains("các tham số rỗng"));
+        assertFalse(prompt.contains("cứ list ra"));
         assertFalse(prompt.contains("deposit_percentage"));
     }
 
