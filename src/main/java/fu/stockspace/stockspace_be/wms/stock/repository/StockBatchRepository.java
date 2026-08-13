@@ -88,6 +88,37 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
             @Param("tenantId") UUID tenantId
     );
 
+    @Query("""
+            SELECT b FROM StockBatch b
+            WHERE b.skuId = :skuId
+              AND b.isActive = true
+              AND b.isDeleted = false
+              AND EXISTS (
+                  SELECT c.id FROM RentalContract c
+                  WHERE c.booking.tenant.id = :tenantId
+                    AND c.booking.warehouse.id = b.warehouse.id
+                    AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
+                    AND c.isActive = true
+                    AND c.isDeleted = false
+                    AND c.booking.isActive = true
+                    AND c.booking.isDeleted = false
+              )
+              AND EXISTS (
+                  SELECT a.id FROM StaffWarehouseAssignment a
+                  WHERE a.staff.id = :staffId
+                    AND a.tenant.id = :tenantId
+                    AND a.warehouse.id = b.warehouse.id
+                    AND a.status = fu.stockspace.stockspace_be.staff.entity.AssignmentStatus.ACTIVE
+                    AND a.isActive = true
+                    AND a.isDeleted = false
+              )
+            """)
+    List<StockBatch> findBySkuIdInActiveAssignedTenantWarehouses(
+            @Param("skuId") UUID skuId,
+            @Param("tenantId") UUID tenantId,
+            @Param("staffId") UUID staffId
+    );
+
     @Query("SELECT COALESCE(SUM(b.quantity), 0) FROM StockBatch b WHERE b.skuId = :skuId AND b.isDeleted = false")
     int sumQuantityBySkuId(@Param("skuId") UUID skuId);
 

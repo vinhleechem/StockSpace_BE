@@ -340,7 +340,7 @@ public class TenantStaffService {
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STAFF_NOT_FOUND));
 
         // 1. Kiểm tra Staff có đang là nhân viên active của Tenant này không
-        boolean isMember = memberRepository.existsByUserIdAndTenantIdAndIsDeletedFalse(staffUserId, tenantId);
+        boolean isMember = memberRepository.existsByUserIdAndTenantIdAndIsActiveTrueAndIsDeletedFalse(staffUserId, tenantId);
         if (!isMember) {
             throw new BadRequestException(ErrorCode.STAFF_NOT_FOUND);
         }

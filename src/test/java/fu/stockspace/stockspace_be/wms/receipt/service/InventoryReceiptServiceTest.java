@@ -54,6 +54,8 @@ class InventoryReceiptServiceTest {
     @Mock private WarehouseBinRepository binRepository;
     @Mock private SubscriptionService subscriptionService;
     @Mock private fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository tenantMemberRepository;
+    @Mock private fu.stockspace.stockspace_be.contract.repository.RentalContractRepository rentalContractRepository;
+    @Mock private fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository assignmentRepository;
 
     @InjectMocks
     private InventoryReceiptService receiptService;
@@ -85,6 +87,9 @@ class InventoryReceiptServiceTest {
 
         binId = UUID.randomUUID();
         bin = WarehouseBin.builder().id(binId).rack(rack).name("Bin 1").build();
+
+        lenient().when(rentalContractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(any(), any())).thenReturn(true);
+        lenient().when(assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(any(), any(), any(), any())).thenReturn(true);
     }
 
     @Test
@@ -92,7 +97,8 @@ class InventoryReceiptServiceTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
         when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
-        when(productSkuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(productSku));
+        when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, userId))
+                .thenReturn(Optional.of(productSku));
         when(rackRepository.findById(rackId)).thenReturn(Optional.of(rack));
         when(binRepository.findById(binId)).thenReturn(Optional.of(bin));
 
@@ -151,7 +157,8 @@ class InventoryReceiptServiceTest {
         when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
         when(receiptRepository.save(any(InventoryReceipt.class))).thenAnswer(i -> i.getArgument(0));
-        when(productSkuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(productSku));
+        when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, userId))
+                .thenReturn(Optional.of(productSku));
         when(rackRepository.findById(rackId)).thenReturn(Optional.of(rack));
         when(binRepository.findById(binId)).thenReturn(Optional.of(binWithLimit));
         when(stockBatchRepository.sumQuantityByBinId(binId)).thenReturn(40); // 40 existing + 20 incoming = 60 > 50
@@ -190,7 +197,8 @@ class InventoryReceiptServiceTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
         when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
-        when(productSkuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(productSku));
+        when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, userId))
+                .thenReturn(Optional.of(productSku));
 
         Warehouse alternateWarehouse = Warehouse.builder().id(UUID.randomUUID()).build();
         WarehouseLayout alternateLayout = WarehouseLayout.builder().id(UUID.randomUUID()).warehouse(alternateWarehouse).build();
@@ -214,6 +222,65 @@ class InventoryReceiptServiceTest {
     }
 
     @Test
+    void testCreateReceipt_RejectsSkuOwnedByAnotherTenant() {
+        when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
+        when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, userId))
+                .thenReturn(Optional.empty());
+
+        ReceiptItemRequest itemRequest = ReceiptItemRequest.builder()
+                .skuId(skuId)
+                .quantity(10)
+                .rackId(rackId)
+                .binId(binId)
+                .build();
+        CreateInventoryReceiptRequest request = CreateInventoryReceiptRequest.builder()
+                .warehouseId(warehouseId)
+                .type(DocumentType.INBOUND)
+                .items(List.of(itemRequest))
+                .build();
+
+        assertThrows(fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException.class,
+                () -> receiptService.createReceipt(userId, request));
+    }
+
+    @Test
+    void testCreateReceipt_StaffWithoutWarehouseAssignment_ThrowsForbiddenException() {
+        UUID staffId = UUID.randomUUID();
+        fu.stockspace.stockspace_be.auth.entity.Role staffRole =
+                fu.stockspace.stockspace_be.auth.entity.Role.builder()
+                        .name(fu.stockspace.stockspace_be.auth.entity.RoleType.ROLE_STAFF.name())
+                        .build();
+        User staff = User.builder().id(staffId).roles(java.util.Set.of(staffRole)).build();
+        fu.stockspace.stockspace_be.staff.entity.TenantMember membership =
+                fu.stockspace.stockspace_be.staff.entity.TenantMember.builder()
+                        .tenant(tenantUser)
+                        .user(staff)
+                        .isActive(true)
+                        .isDeleted(false)
+                        .build();
+
+        when(userRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(staffId))
+                .thenReturn(Optional.of(membership));
+        when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
+                staffId, userId, warehouseId,
+                fu.stockspace.stockspace_be.staff.entity.AssignmentStatus.ACTIVE)).thenReturn(false);
+
+        CreateInventoryReceiptRequest request = CreateInventoryReceiptRequest.builder()
+                .warehouseId(warehouseId)
+                .type(DocumentType.INBOUND)
+                .items(List.of())
+                .build();
+
+        assertThrows(ForbiddenException.class, () -> receiptService.createReceipt(staffId, request));
+        verify(receiptRepository, never()).save(any(InventoryReceipt.class));
+    }
+
+    @Test
     void testApproveReceipt_ByStaff_ThrowsForbiddenException() {
         UUID staffId = UUID.randomUUID();
         fu.stockspace.stockspace_be.auth.entity.Role staffRole = fu.stockspace.stockspace_be.auth.entity.Role.builder()
@@ -227,8 +294,8 @@ class InventoryReceiptServiceTest {
 
     @Test
     void testApproveReceipt_Success_Inbound_NewBatch() {
-        UUID approverId = UUID.randomUUID();
-        User approver = User.builder().id(approverId).email("approver@test.com").build();
+        UUID approverId = userId;
+        User approver = tenantUser;
         when(userRepository.findById(approverId)).thenReturn(Optional.of(approver));
 
         InventoryReceipt receipt = InventoryReceipt.builder()
@@ -266,8 +333,8 @@ class InventoryReceiptServiceTest {
 
     @Test
     void testApproveReceipt_Success_Inbound_ExistingBatch() {
-        UUID approverId = UUID.randomUUID();
-        User approver = User.builder().id(approverId).build();
+        UUID approverId = userId;
+        User approver = tenantUser;
         when(userRepository.findById(approverId)).thenReturn(Optional.of(approver));
 
         InventoryReceipt receipt = InventoryReceipt.builder()
@@ -314,8 +381,8 @@ class InventoryReceiptServiceTest {
 
     @Test
     void testApproveReceipt_Success_Outbound() {
-        UUID approverId = UUID.randomUUID();
-        User approver = User.builder().id(approverId).build();
+        UUID approverId = userId;
+        User approver = tenantUser;
         when(userRepository.findById(approverId)).thenReturn(Optional.of(approver));
 
         InventoryReceipt receipt = InventoryReceipt.builder()
@@ -362,8 +429,8 @@ class InventoryReceiptServiceTest {
 
     @Test
     void testApproveReceipt_Outbound_InsufficientQuantity() {
-        UUID approverId = UUID.randomUUID();
-        User approver = User.builder().id(approverId).build();
+        UUID approverId = userId;
+        User approver = tenantUser;
         when(userRepository.findById(approverId)).thenReturn(Optional.of(approver));
 
         InventoryReceipt receipt = InventoryReceipt.builder()

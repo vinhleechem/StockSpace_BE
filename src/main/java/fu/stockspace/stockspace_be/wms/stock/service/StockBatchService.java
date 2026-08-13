@@ -7,6 +7,8 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenExceptio
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
+import fu.stockspace.stockspace_be.staff.entity.AssignmentStatus;
+import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseBin;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseRack;
@@ -45,6 +47,7 @@ public class StockBatchService {
     private final WarehouseBinRepository binRepository;
     private final SubscriptionService subscriptionService;
     private final RentalContractRepository contractRepository;
+    private final StaffWarehouseAssignmentRepository assignmentRepository;
 
     /**
      * Lấy danh sách toàn bộ tồn kho trong 1 kho (phân trang).
@@ -64,6 +67,17 @@ public class StockBatchService {
                 warehouseId, tenantId, pageable);
 
         return PagedResponse.fromPage(page, this::mapToResponse);
+    }
+
+    /**
+     * Tenant/Staff endpoint variant. A non-null staffId means the caller must
+     * have an ACTIVE assignment to the requested warehouse.
+     */
+    @Transactional(readOnly = true)
+    public PagedResponse<StockBatchResponse> getStockByWarehouse(
+            UUID tenantId, UUID warehouseId, UUID staffId, Pageable pageable) {
+        requireActiveWarehouseAccess(tenantId, warehouseId, staffId);
+        return getStockByWarehouse(tenantId, warehouseId, pageable);
     }
 
     /**
@@ -97,6 +111,15 @@ public class StockBatchService {
      */
     @Transactional(readOnly = true)
     public StockSummaryResponse getStockSummaryBySku(UUID tenantId, UUID skuId) {
+        return getStockSummaryBySku(tenantId, skuId, null);
+    }
+
+    /**
+     * Tenant/Staff endpoint variant. Staff only receives locations from
+     * warehouses assigned to them; Tenant receives the tenant-wide summary.
+     */
+    @Transactional(readOnly = true)
+    public StockSummaryResponse getStockSummaryBySku(UUID tenantId, UUID skuId, UUID staffId) {
         if (!subscriptionService.hasActiveSubscription(tenantId)) {
             throw new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED);
         }
@@ -105,13 +128,16 @@ public class StockBatchService {
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.SKU_NOT_FOUND));
 
         UnitOfMeasure uom = sku.getUom();
-        List<StockBatch> batches =
-                stockBatchRepository.findBySkuIdInActiveTenantWarehouses(skuId, tenantId);
+        List<StockBatch> batches = staffId == null
+                ? stockBatchRepository.findBySkuIdInActiveTenantWarehouses(skuId, tenantId)
+                : stockBatchRepository.findBySkuIdInActiveAssignedTenantWarehouses(skuId, tenantId, staffId);
         int totalQuantity = batches.stream().mapToInt(StockBatch::getQuantity).sum();
 
         List<StockLocationDto> locations = batches.stream()
                 .map(b -> StockLocationDto.builder()
                         .batchId(b.getId())
+                        .warehouseId(b.getWarehouse() != null ? b.getWarehouse().getId() : null)
+                        .warehouseName(b.getWarehouse() != null ? b.getWarehouse().getName() : null)
                         .rackName(b.getRack() != null ? b.getRack().getName() : null)
                         .binName(b.getBin() != null ? b.getBin().getName() : null)
                         .quantity(b.getQuantity())
@@ -131,6 +157,15 @@ public class StockBatchService {
 
     private void requireActiveWarehouseContract(UUID tenantId, UUID warehouseId) {
         if (!contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(tenantId, warehouseId)) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        }
+    }
+
+    private void requireActiveWarehouseAccess(UUID tenantId, UUID warehouseId, UUID staffId) {
+        requireActiveWarehouseContract(tenantId, warehouseId);
+        if (staffId != null
+                && !assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
+                staffId, tenantId, warehouseId, AssignmentStatus.ACTIVE)) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
     }
