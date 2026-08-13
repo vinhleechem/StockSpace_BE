@@ -7,6 +7,8 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestExcepti
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.booking.entity.BookingRequest;
+import fu.stockspace.stockspace_be.booking.entity.ApprovalStatus;
+import fu.stockspace.stockspace_be.booking.repository.BookingRequestRepository;
 import fu.stockspace.stockspace_be.contract.dto.CreateDisputeRequest;
 import fu.stockspace.stockspace_be.contract.dto.DisputeResponse;
 import fu.stockspace.stockspace_be.contract.entity.ContractStatus;
@@ -37,6 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class DisputeService {
     private final DisputeTicketRepository disputeRepository;
     private final RentalContractRepository contractRepository;
+    private final BookingRequestRepository bookingRepository;
     private final ContractService contractService;
     private final UserRepository userRepository;
     private final WarehouseService warehouseService;
@@ -169,6 +172,12 @@ public class DisputeService {
         contract.setStatus(ContractStatus.CANCELLED);
         contractRepository.save(contract);
         warehouseService.markAsAvailable(booking.getWarehouse().getId());
+
+        // [FIX] Đặt BookingRequest cũ → REJECTED để không block việc booking lại kho này
+        booking.setStatus(ApprovalStatus.REJECTED);
+        booking.setRejectReason("Hợp đồng bị hủy do tranh chấp được giải quyết bởi Admin");
+        bookingRepository.save(booking);
+
         log.info("Admin {} resolved dispute {} with depositResolution {}", adminId, disputeId, depositResolution);
         return mapToResponse(ticket);
     }
