@@ -102,6 +102,7 @@ public class TenantProductController {
     }
 
     @PostMapping("/skus")
+    @PreAuthorize("@rbac.hasPermission('PRODUCT_MANAGE') and hasRole('TENANT')")
     @Operation(summary = "Tạo SKU sản phẩm mới")
     public ResponseEntity<ApiResponse<ProductSkuResponse>> createSku(
             @Valid @RequestBody CreateSkuRequest request) {
