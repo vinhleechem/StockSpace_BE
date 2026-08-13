@@ -70,7 +70,9 @@ public class GetAssignedStockTool implements ChatTool {
             }
 
             if (warehouseId != null) {
-                List<StockBatchResponse> stock = stockBatchService.getStockByWarehouse(tenantId, warehouseId, PageRequest.of(0, 50)).getContent();
+                List<StockBatchResponse> stock = stockBatchService
+                        .getStockByWarehouse(tenantId, warehouseId, userId, PageRequest.of(0, 50))
+                        .getContent();
                 return objectMapper.writeValueAsString(stock);
             } else {
                 return "{\"message\":\"Vui lòng cung cấp mã warehouseId để xem tồn kho chi tiết.\"}";

@@ -52,6 +52,7 @@ class StockBatchServiceTest {
     @Mock private WarehouseBinRepository binRepository;
     @Mock private SubscriptionService subscriptionService;
     @Mock private RentalContractRepository contractRepository;
+    @Mock private fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository assignmentRepository;
 
     @InjectMocks
     private StockBatchService stockBatchService;
@@ -248,6 +249,8 @@ class StockBatchServiceTest {
         assertEquals("SKU-01", summary.getSkuCode());
         assertEquals(100, summary.getTotalQuantity());
         assertEquals(2, summary.getLocations().size());
+        assertEquals(warehouseId, summary.getLocations().get(0).getWarehouseId());
+        assertEquals("Test Warehouse", summary.getLocations().get(0).getWarehouseName());
     }
 
 

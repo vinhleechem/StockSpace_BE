@@ -74,7 +74,8 @@ public class InventoryReceiptController {
     ) {
         checkSubscription();
         Pageable pageable = PageRequest.of(page, size);
-        PagedResponse<InventoryReceiptResponse> response = receiptService.getReceiptsByWarehouse(warehouseId, type, pageable);
+        UUID userId = SecurityUtil.getCurrentUserId();
+        PagedResponse<InventoryReceiptResponse> response = receiptService.getReceiptsByWarehouse(userId, warehouseId, type, pageable);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách phiếu thành công", response));
     }
 
@@ -84,7 +85,8 @@ public class InventoryReceiptController {
     @Operation(summary = "Xem chi tiết phiếu nhập/xuất kho")
     public ResponseEntity<ApiResponse<InventoryReceiptResponse>> getReceiptDetail(@PathVariable UUID id) {
         checkSubscription();
-        InventoryReceiptResponse response = receiptService.getReceiptDetail(id);
+        UUID userId = SecurityUtil.getCurrentUserId();
+        InventoryReceiptResponse response = receiptService.getReceiptDetail(userId, id);
         return ResponseEntity.ok(ApiResponse.success("Lấy chi tiết phiếu thành công", response));
     }
 
@@ -96,7 +98,8 @@ public class InventoryReceiptController {
             @RequestParam(required = false) DocumentType type
     ) {
         checkSubscription();
-        byte[] csvData = receiptService.exportReceiptsToCsv(warehouseId, type);
+        UUID userId = SecurityUtil.getCurrentUserId();
+        byte[] csvData = receiptService.exportReceiptsToCsv(userId, warehouseId, type);
         String filename = "inventory_receipts_" + (type != null ? type.name().toLowerCase() : "all") + ".csv";
 
         return ResponseEntity.ok()
