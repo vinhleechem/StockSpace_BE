@@ -380,8 +380,8 @@ public class ContractService {
                 null
             );
             // =========================================================
-            // [FIX] Reset BookingRequest cũ → REJECTED để không block booking lại kho sau này
-            contract.getBooking().setStatus(fu.stockspace.stockspace_be.booking.entity.ApprovalStatus.REJECTED);
+            // [FIX] Reset BookingRequest cũ → CANCELLED để không block booking lại kho sau này
+            contract.getBooking().setStatus(fu.stockspace.stockspace_be.booking.entity.ApprovalStatus.CANCELLED);
             contract.getBooking().setRejectReason("Hợp đồng bị hủy do hai bên đồng thuận hủy");
             bookingRepository.save(contract.getBooking());
             // =========================================================

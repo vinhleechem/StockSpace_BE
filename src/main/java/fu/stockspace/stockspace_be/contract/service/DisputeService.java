@@ -173,8 +173,8 @@ public class DisputeService {
         contractRepository.save(contract);
         warehouseService.markAsAvailable(booking.getWarehouse().getId());
 
-        // [FIX] Đặt BookingRequest cũ → REJECTED để không block việc booking lại kho này
-        booking.setStatus(ApprovalStatus.REJECTED);
+        // [FIX] Đặt BookingRequest cũ → CANCELLED để không block việc booking lại kho này
+        booking.setStatus(ApprovalStatus.CANCELLED);
         booking.setRejectReason("Hợp đồng bị hủy do tranh chấp được giải quyết bởi Admin");
         bookingRepository.save(booking);
 
