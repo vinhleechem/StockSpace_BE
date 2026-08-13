@@ -192,7 +192,8 @@ public class WarehouseLayoutService {
                 layout.setHeight(request.getHeight());
             }
             layout.setPositions(serializePositions(request.getPositions()));
-            layout = layoutRepository.save(layout);
+            WarehouseLayout savedOwnerLayout = layoutRepository.save(layout);
+            if (savedOwnerLayout != null) layout = savedOwnerLayout;
 
         } else if (isTenantRole) {
             boolean hasActiveContract = contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(userId, warehouseId);
@@ -214,7 +215,8 @@ public class WarehouseLayoutService {
                         .build();
             }
             layout.setPositions(serializePositions(request.getPositions()));
-            layout = layoutRepository.save(layout);
+            WarehouseLayout savedTenantLayout = layoutRepository.save(layout);
+            if (savedTenantLayout != null) layout = savedTenantLayout;
             // Tenant không được sửa kích thước tổng không gian kho (layout width/length/height giữ nguyên)
         } else {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
