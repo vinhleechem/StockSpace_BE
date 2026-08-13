@@ -151,6 +151,40 @@ class PublicWarehouseChatToolsTest {
     }
 
     @Test
+    void searchWarehousesListsAvailableWarehousesWhenNoCriteriaAreGiven() throws Exception {
+        Warehouse warehouse = Warehouse.builder()
+                .id(UUID.randomUUID())
+                .name("Kho đang cho thuê")
+                .address("Bình Thạnh")
+                .capacity(new BigDecimal("80"))
+                .pricePerMonth(new BigDecimal("12000000"))
+                .status(WarehouseStatus.AVAILABLE)
+                .build();
+        when(warehouseRepository.searchPublic(
+                eq(null),
+                eq(WarehouseStatus.AVAILABLE),
+                eq(null),
+                eq(null),
+                eq(null),
+                any(Pageable.class)
+        )).thenReturn(new PageImpl<>(List.of(warehouse)));
+
+        JsonNode result = objectMapper.readTree(
+                new SearchWarehousesTool(warehouseRepository, objectMapper).execute(Map.of(), null));
+
+        assertEquals(1, result.get("total").asLong());
+        assertEquals("Kho đang cho thuê", result.at("/warehouses/0/name").asText());
+        verify(warehouseRepository).searchPublic(
+                eq(null),
+                eq(WarehouseStatus.AVAILABLE),
+                eq(null),
+                eq(null),
+                eq(null),
+                any(Pageable.class)
+        );
+    }
+
+    @Test
     void everyPublicToolSchemaUsesLowercaseJsonSchemaTypes() {
         Map<String, Object> searchSchema =
                 new SearchWarehousesTool(warehouseRepository, objectMapper).getParameterSchema();
