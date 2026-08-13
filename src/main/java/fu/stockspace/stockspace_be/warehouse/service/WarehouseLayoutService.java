@@ -17,6 +17,9 @@ import fu.stockspace.stockspace_be.warehouse.repository.WarehouseLayoutRepositor
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRackRepository;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
 import fu.stockspace.stockspace_be.wms.stock.repository.StockBatchRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -41,6 +44,7 @@ public class WarehouseLayoutService {
     private final UserRepository userRepository;
     private final RentalContractRepository contractRepository;
     private final StockBatchRepository stockBatchRepository;
+    private final ObjectMapper objectMapper;
 
     /**
      * Lấy toàn bộ cây sơ đồ layout kho (Rack -> Bin) và số liệu thống kê
@@ -102,6 +106,7 @@ public class WarehouseLayoutService {
                 .width(defaultLayout.getWidth())
                 .length(defaultLayout.getLength())
                 .height(defaultLayout.getHeight())
+                .positions(defaultLayout.getPositions())
                 .build();
         tenantLayout = layoutRepository.save(tenantLayout);
 
@@ -186,6 +191,7 @@ public class WarehouseLayoutService {
                 if (request.getLength() != null) layout.setLength(request.getLength());
                 layout.setHeight(request.getHeight());
             }
+            layout.setPositions(serializePositions(request.getPositions()));
             layout = layoutRepository.save(layout);
 
         } else if (isTenantRole) {
@@ -206,8 +212,9 @@ public class WarehouseLayoutService {
                         .length(request.getLength() != null ? request.getLength() : 100)
                         .height(request.getHeight())
                         .build();
-                layout = layoutRepository.save(layout);
             }
+            layout.setPositions(serializePositions(request.getPositions()));
+            layout = layoutRepository.save(layout);
             // Tenant không được sửa kích thước tổng không gian kho (layout width/length/height giữ nguyên)
         } else {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
@@ -476,7 +483,30 @@ public class WarehouseLayoutService {
                 .occupiedBins(occupiedBins)
                 .emptyBins(emptyBins)
                 .racks(rackResponses)
+                .positions(deserializePositions(layout.getPositions()))
                 .build();
+    }
+
+    /** Serialize List<String> → JSON String để lưu vào DB */
+    private String serializePositions(List<String> positions) {
+        if (positions == null || positions.isEmpty()) return null;
+        try {
+            return objectMapper.writeValueAsString(positions);
+        } catch (JsonProcessingException e) {
+            log.warn("Failed to serialize positions: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /** Deserialize JSON String → List<String> để trả về FE */
+    private List<String> deserializePositions(String positionsJson) {
+        if (positionsJson == null || positionsJson.isBlank()) return null;
+        try {
+            return objectMapper.readValue(positionsJson, new TypeReference<List<String>>() {});
+        } catch (JsonProcessingException e) {
+            log.warn("Failed to deserialize positions: {}", e.getMessage());
+            return null;
+        }
     }
 
     private List<String> calculateOccupiedPositions(Integer startX, Integer startY, Integer width, Integer length) {

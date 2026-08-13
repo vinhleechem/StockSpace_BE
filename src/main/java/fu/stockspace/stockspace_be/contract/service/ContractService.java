@@ -26,6 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -266,9 +267,13 @@ public class ContractService {
         }
 
         // Chuyển tiền cọc sang ví Owner khi Tenant confirm hợp đồng
+        BigDecimal depositAmount = contract.getBooking().getDepositAmount();
+        if (depositAmount == null) {
+            depositAmount = BigDecimal.ZERO;
+        }
         walletService.refundBalance(
             contract.getBooking().getWarehouse().getOwner().getId(),
-            contract.getBooking().getDepositAmount(),
+            depositAmount,
             TransactionType.DEPOSIT_RECEIVED,
             "Nhận cọc thuê kho: " + contract.getBooking().getWarehouse().getName(),
             contract.getBooking().getId(),
