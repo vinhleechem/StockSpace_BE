@@ -64,7 +64,8 @@ public class GetPendingOutboundTool implements ChatTool {
                 } catch (IllegalArgumentException ignored) {}
             }
 
-            PagedResponse<InventoryReceiptResponse> paged = receiptService.getReceiptsByWarehouse(warehouseId, DocumentType.OUTBOUND, PageRequest.of(0, 50));
+            PagedResponse<InventoryReceiptResponse> paged = receiptService.getReceiptsByWarehouse(
+                    userId, warehouseId, DocumentType.OUTBOUND, PageRequest.of(0, 50));
             List<Map<String, Object>> pendingItems = new ArrayList<>();
             for (InventoryReceiptResponse item : paged.getContent()) {
 

@@ -118,7 +118,7 @@ class DevBToolsTest {
         UUID warehouseId = UUID.randomUUID();
         PagedResponse<fu.stockspace.stockspace_be.wms.stock.dto.StockBatchResponse> paged =
                 PagedResponse.<fu.stockspace.stockspace_be.wms.stock.dto.StockBatchResponse>builder().content(Collections.emptyList()).build();
-        when(stockBatchService.getStockByWarehouse(eq(tenantUser.getId()), eq(warehouseId), any()))
+        when(stockBatchService.getStockByWarehouse(eq(tenantUser.getId()), eq(warehouseId), eq(userId), any()))
                 .thenReturn(paged);
 
         String json = tool.execute(java.util.Map.of("warehouseId", warehouseId.toString()), userId);
@@ -130,7 +130,7 @@ class DevBToolsTest {
         GetPendingInboundTool tool = new GetPendingInboundTool(objectMapper, receiptService);
         PagedResponse<fu.stockspace.stockspace_be.wms.receipt.dto.InventoryReceiptResponse> paged =
                 PagedResponse.<fu.stockspace.stockspace_be.wms.receipt.dto.InventoryReceiptResponse>builder().content(Collections.emptyList()).build();
-        when(receiptService.getReceiptsByWarehouse(any(), any(), any())).thenReturn(paged);
+        when(receiptService.getReceiptsByWarehouse(any(), any(), any(), any())).thenReturn(paged);
 
         String json = tool.execute(Collections.emptyMap(), userId);
         assertNotNull(json);
