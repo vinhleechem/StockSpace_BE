@@ -16,7 +16,18 @@ public interface StaffWarehouseAssignmentRepository extends JpaRepository<StaffW
     /**
      * Tìm danh sách các phân công kho đang ACTIVE của Staff dưới 1 Tenant.
      */
-    List<StaffWarehouseAssignment> findByStaffIdAndTenantIdAndStatus(UUID staffId, UUID tenantId, AssignmentStatus status);
+    @Query("""
+            SELECT a FROM StaffWarehouseAssignment a
+            WHERE a.staff.id = :staffId
+              AND a.tenant.id = :tenantId
+              AND a.status = :status
+              AND a.isActive = true
+              AND a.isDeleted = false
+            """)
+    List<StaffWarehouseAssignment> findByStaffIdAndTenantIdAndStatus(
+            @Param("staffId") UUID staffId,
+            @Param("tenantId") UUID tenantId,
+            @Param("status") AssignmentStatus status);
 
     /**
      * Tìm tất cả phân công kho đang ACTIVE của Tenant (tất cả staff).
@@ -27,6 +38,24 @@ public interface StaffWarehouseAssignmentRepository extends JpaRepository<StaffW
      * Kiểm tra Staff có phân công ACTIVE tại 1 kho cụ thể hay không.
      */
     boolean existsByStaffIdAndWarehouseIdAndStatus(UUID staffId, UUID warehouseId, AssignmentStatus status);
+
+    /**
+     * Kiểm tra assignment ACTIVE của Staff tại một warehouse cụ thể trong đúng Tenant.
+     */
+    @Query("""
+            SELECT COUNT(a) > 0 FROM StaffWarehouseAssignment a
+            WHERE a.staff.id = :staffId
+              AND a.tenant.id = :tenantId
+              AND a.warehouse.id = :warehouseId
+              AND a.status = :status
+              AND a.isActive = true
+              AND a.isDeleted = false
+            """)
+    boolean existsActiveByStaffAndTenantAndWarehouse(
+            @Param("staffId") UUID staffId,
+            @Param("tenantId") UUID tenantId,
+            @Param("warehouseId") UUID warehouseId,
+            @Param("status") AssignmentStatus status);
 
     /**
      * Lấy toàn bộ lịch sử phân công kho của Staff trong 1 Tenant (mới nhất lên đầu).

@@ -37,6 +37,11 @@ public interface TenantMemberRepository extends JpaRepository<TenantMember, UUID
     boolean existsByUserIdAndTenantIdAndIsDeletedFalse(UUID userId, UUID tenantId);
 
     /**
+     * Kiểm tra User đang là nhân viên active, chưa bị xóa mềm của Tenant.
+     */
+    boolean existsByUserIdAndTenantIdAndIsActiveTrueAndIsDeletedFalse(UUID userId, UUID tenantId);
+
+    /**
      * Tìm membership active duy nhất của User (Staff chỉ làm 1 Tenant tại 1 thời điểm).
      * Dùng để embed tenantId vào JWT khi Staff đăng nhập.
      */
