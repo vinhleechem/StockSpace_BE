@@ -1,6 +1,8 @@
 package fu.stockspace.stockspace_be.wms.stock.service;
 
 import fu.stockspace.stockspace_be.auth.entity.User;
+import fu.stockspace.stockspace_be.auth.entity.Role;
+import fu.stockspace.stockspace_be.auth.entity.RoleType;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
@@ -93,6 +95,7 @@ class InventoryAuditServiceTest {
         approverUser = User.builder()
                 .id(approverId)
                 .email("manager@test.com")
+                .roles(Set.of(Role.builder().name(RoleType.ROLE_TENANT.name()).build()))
                 .fullName("Trần Thị Manager")
                 .build();
 
@@ -334,6 +337,32 @@ class InventoryAuditServiceTest {
     // ==================== approveAudit ====================
 
     @Test
+    void testApproveAudit_StaffApprover_ThrowsForbidden() {
+        approverUser.setRoles(Set.of(Role.builder().name(RoleType.ROLE_STAFF.name()).build()));
+        when(auditRepository.findById(auditId)).thenReturn(Optional.of(submittedAudit));
+        when(userRepository.findById(approverId)).thenReturn(Optional.of(approverUser));
+
+        assertThrows(ForbiddenException.class,
+                () -> inventoryAuditService.approveAudit(approverId, auditId));
+
+        verify(auditRepository, never()).save(any(InventoryAudit.class));
+        verifyNoInteractions(inventoryReceiptService, notificationService);
+    }
+
+    @Test
+    void testApproveAudit_AdminApprover_ThrowsForbidden() {
+        approverUser.setRoles(Set.of(Role.builder().name(RoleType.ROLE_ADMIN.name()).build()));
+        when(auditRepository.findById(auditId)).thenReturn(Optional.of(submittedAudit));
+        when(userRepository.findById(approverId)).thenReturn(Optional.of(approverUser));
+
+        assertThrows(ForbiddenException.class,
+                () -> inventoryAuditService.approveAudit(approverId, auditId));
+
+        verify(auditRepository, never()).save(any(InventoryAudit.class));
+        verifyNoInteractions(inventoryReceiptService, notificationService);
+    }
+
+    @Test
     void testApproveAudit_WithDiscrepancy_CreatesAdjustmentReceipt() {
         when(auditRepository.findById(auditId)).thenReturn(Optional.of(submittedAudit));
         when(userRepository.findById(approverId)).thenReturn(Optional.of(approverUser));
@@ -512,6 +541,19 @@ class InventoryAuditServiceTest {
     }
 
     // ==================== rejectAudit ====================
+
+    @Test
+    void testRejectAudit_StaffApprover_ThrowsForbidden() {
+        approverUser.setRoles(Set.of(Role.builder().name(RoleType.ROLE_STAFF.name()).build()));
+        when(auditRepository.findById(auditId)).thenReturn(Optional.of(submittedAudit));
+        when(userRepository.findById(approverId)).thenReturn(Optional.of(approverUser));
+
+        assertThrows(ForbiddenException.class,
+                () -> inventoryAuditService.rejectAudit(approverId, auditId, "Kiểm lại"));
+
+        verify(auditRepository, never()).save(any(InventoryAudit.class));
+        verifyNoInteractions(notificationService);
+    }
 
     @Test
     void testRejectAudit_Success_WithReason() {
