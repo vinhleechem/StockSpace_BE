@@ -150,7 +150,7 @@ public class BookingService {
         if (booking.getStatus() != ApprovalStatus.PENDING) {
             throw new BadRequestException(ErrorCode.BOOKING_ALREADY_PROCESSED);
         }
-        booking.setStatus(ApprovalStatus.REJECTED);
+        booking.setStatus(ApprovalStatus.CANCELLED);
         booking.setRejectReason("Tenant tự huỷ yêu cầu");
         bookingRepository.save(booking);
 
