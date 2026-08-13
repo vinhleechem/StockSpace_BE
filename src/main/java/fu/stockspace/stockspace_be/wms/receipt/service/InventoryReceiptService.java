@@ -11,7 +11,10 @@ import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
+import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
+import fu.stockspace.stockspace_be.staff.entity.AssignmentStatus;
+import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseBin;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseRack;
@@ -60,16 +63,15 @@ public class InventoryReceiptService {
     private final WarehouseBinRepository binRepository;
     private final SubscriptionService subscriptionService;
     private final fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository tenantMemberRepository;
+    private final RentalContractRepository rentalContractRepository;
+    private final StaffWarehouseAssignmentRepository assignmentRepository;
 
     @Transactional
     public InventoryReceiptResponse createReceipt(UUID userId, CreateInventoryReceiptRequest request) {
         User creator = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
 
-        // Resolve tenantId từ TenantMember DB để hỗ trợ cả unit test và thread bất đồng bộ
-        UUID tenantId = tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(userId)
-                .map(member -> member.getTenant().getId())
-                .orElse(userId);
+        UUID tenantId = resolveTenantId(creator);
 
         if (!subscriptionService.hasActiveSubscription(tenantId)) {
             throw new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED);
@@ -77,6 +79,7 @@ public class InventoryReceiptService {
 
         Warehouse warehouse = warehouseRepository.findById(request.getWarehouseId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
+        requireWarehouseAccess(creator, tenantId, warehouse.getId());
 
         InventoryReceipt receipt = InventoryReceipt.builder()
                 .warehouse(warehouse)
@@ -90,7 +93,8 @@ public class InventoryReceiptService {
 
         List<InventoryReceiptItem> savedItems = new ArrayList<>();
         for (ReceiptItemRequest itemRequest : request.getItems()) {
-            ProductSku sku = productSkuRepository.findByIdAndIsDeletedFalse(itemRequest.getSkuId())
+            ProductSku sku = productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(
+                            itemRequest.getSkuId(), tenantId)
                     .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.SKU_NOT_FOUND));
 
             WarehouseRack rack = rackRepository.findById(itemRequest.getRackId())
@@ -143,11 +147,13 @@ public class InventoryReceiptService {
             throw new BadRequestException(ErrorCode.RECEIPT_ALREADY_PROCESSED);
         }
 
-        // Check active subscription: tenantId của người tạo phiếu (creator)
-        UUID creatorId = receipt.getCreatedBy().getId();
-        UUID creatorTenantId = tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(creatorId)
-                .map(member -> member.getTenant().getId())
-                .orElse(creatorId);
+        // Check active subscription and warehouse ownership for the receipt tenant.
+        UUID creatorTenantId = resolveTenantId(receipt.getCreatedBy());
+        UUID approverTenantId = resolveTenantId(approver);
+        if (!creatorTenantId.equals(approverTenantId)) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        }
+        requireActiveWarehouseContract(approverTenantId, receipt.getWarehouse().getId());
 
         if (!subscriptionService.hasActiveSubscription(creatorTenantId)) {
             throw new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED);
@@ -232,11 +238,39 @@ public class InventoryReceiptService {
         });
     }
 
+    /**
+     * Tenant/Staff endpoint variant with server-side warehouse authorization.
+     */
+    @Transactional(readOnly = true)
+    public PagedResponse<InventoryReceiptResponse> getReceiptsByWarehouse(
+            UUID userId, UUID warehouseId, DocumentType type, Pageable pageable) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+        UUID tenantId = resolveTenantId(user);
+        requireWarehouseAccess(user, tenantId, warehouseId);
+        return getReceiptsByWarehouse(warehouseId, type, pageable);
+    }
+
 
     @Transactional(readOnly = true)
     public InventoryReceiptResponse getReceiptDetail(UUID receiptId) {
         InventoryReceipt receipt = receiptRepository.findById(receiptId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RECEIPT_NOT_FOUND));
+        List<InventoryReceiptItem> items = receiptItemRepository.findByReceiptId(receiptId);
+        return mapToResponse(receipt, items);
+    }
+
+    /**
+     * Tenant/Staff endpoint variant with server-side warehouse authorization.
+     */
+    @Transactional(readOnly = true)
+    public InventoryReceiptResponse getReceiptDetail(UUID userId, UUID receiptId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+        UUID tenantId = resolveTenantId(user);
+        InventoryReceipt receipt = receiptRepository.findById(receiptId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RECEIPT_NOT_FOUND));
+        requireWarehouseAccess(user, tenantId, receipt.getWarehouse().getId());
         List<InventoryReceiptItem> items = receiptItemRepository.findByReceiptId(receiptId);
         return mapToResponse(receipt, items);
     }
@@ -392,6 +426,18 @@ public class InventoryReceiptService {
         return csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
 
+    /**
+     * Tenant/Staff endpoint variant with server-side warehouse authorization.
+     */
+    @Transactional(readOnly = true)
+    public byte[] exportReceiptsToCsv(UUID userId, UUID warehouseId, DocumentType type) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+        UUID tenantId = resolveTenantId(user);
+        requireWarehouseAccess(user, tenantId, warehouseId);
+        return exportReceiptsToCsv(warehouseId, type);
+    }
+
     private String mapStatusToVietnamese(ApprovalStatus status) {
         if (status == null) return "Chờ duyệt";
         return switch (status) {
@@ -430,6 +476,21 @@ public class InventoryReceiptService {
                 });
     }
 
+    /**
+     * Tenant/Staff endpoint variant with server-side warehouse authorization.
+     */
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<InventoryTransactionResponse> getTransactionsByBatch(
+            UUID userId, UUID batchId, org.springframework.data.domain.Pageable pageable) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+        UUID tenantId = resolveTenantId(user);
+        StockBatch batch = stockBatchRepository.findByIdAndIsDeletedFalse(batchId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STOCK_BATCH_NOT_FOUND));
+        requireWarehouseAccess(user, tenantId, batch.getWarehouse().getId());
+        return getTransactionsByBatch(batchId, pageable);
+    }
+
     private void validateBinCapacity(WarehouseBin bin, int incomingQuantity) {
         if (bin == null) return;
         int currentQtyInBin = stockBatchRepository.sumQuantityByBinId(bin.getId());
@@ -448,5 +509,35 @@ public class InventoryReceiptService {
                         " (Tối đa: " + bin.getMaxVolume() + ", Hiện tại + Nhập mới: " + totalQtyAfterInbound + ")");
             }
         }
+    }
+
+    private UUID resolveTenantId(User user) {
+        if (isStaff(user)) {
+            return tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(user.getId())
+                    .map(member -> member.getTenant().getId())
+                    .orElseThrow(() -> new ForbiddenException(ErrorCode.FORBIDDEN));
+        }
+        return user.getId();
+    }
+
+    private void requireWarehouseAccess(User user, UUID tenantId, UUID warehouseId) {
+        requireActiveWarehouseContract(tenantId, warehouseId);
+
+        if (isStaff(user)
+                && !assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
+                user.getId(), tenantId, warehouseId, AssignmentStatus.ACTIVE)) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        }
+    }
+
+    private void requireActiveWarehouseContract(UUID tenantId, UUID warehouseId) {
+        if (!rentalContractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(tenantId, warehouseId)) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        }
+    }
+
+    private boolean isStaff(User user) {
+        return user.getRoles() != null && user.getRoles().stream()
+                .anyMatch(role -> RoleType.ROLE_STAFF.name().equals(role.getName()));
     }
 }
