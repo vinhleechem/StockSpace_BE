@@ -1,6 +1,7 @@
 package fu.stockspace.stockspace_be.wms.stock.service;
 
 import fu.stockspace.stockspace_be.auth.entity.User;
+import fu.stockspace.stockspace_be.auth.entity.RoleType;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
@@ -149,6 +150,7 @@ public class InventoryAuditService {
 
         User approver = userRepository.findById(approverId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+        ensureApproverIsTenant(approver);
 
         List<InventoryAuditItem> items = auditItemRepository.findByAuditId(auditId);
         UUID warehouseId = audit.getWarehouse().getId();
@@ -197,6 +199,7 @@ public class InventoryAuditService {
 
         User approver = userRepository.findById(approverId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+        ensureApproverIsTenant(approver);
 
         audit.setApprovedBy(approver);
         audit.setStatus(AuditStatus.REJECTED);
@@ -279,6 +282,19 @@ public class InventoryAuditService {
                 .orElse(userId);
         if (!subscriptionService.hasActiveSubscription(tenantId)) {
             throw new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED);
+        }
+    }
+
+    /**
+     * Chỉ Tenant được quyết định kết quả kiểm kê. Staff chỉ kiểm đếm và nộp kết quả.
+     */
+    private void ensureApproverIsTenant(User approver) {
+        boolean isTenant = approver.getRoles() != null && approver.getRoles().stream()
+                .anyMatch(role -> RoleType.ROLE_TENANT.name().equals(role.getName()));
+        if (!isTenant) {
+            throw new ForbiddenException(
+                    "Chỉ Doanh nghiệp (Tenant) có quyền duyệt hoặc từ chối phiếu kiểm kê."
+            );
         }
     }
 
