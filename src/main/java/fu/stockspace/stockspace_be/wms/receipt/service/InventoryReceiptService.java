@@ -12,6 +12,7 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestExcepti
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
+import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
 import fu.stockspace.stockspace_be.staff.entity.AssignmentStatus;
 import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
@@ -65,6 +66,7 @@ public class InventoryReceiptService {
     private final fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository tenantMemberRepository;
     private final RentalContractRepository rentalContractRepository;
     private final StaffWarehouseAssignmentRepository assignmentRepository;
+    private final NotificationService notificationService;
 
     @Transactional
     public InventoryReceiptResponse createReceipt(UUID userId, CreateInventoryReceiptRequest request) {
@@ -223,6 +225,57 @@ public class InventoryReceiptService {
         return mapToResponse(receipt, items);
     }
 
+    @Transactional
+    public InventoryReceiptResponse rejectReceipt(UUID approverId, UUID receiptId, String reason) {
+        User approver = userRepository.findById(approverId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+
+        if (isStaff(approver)) {
+            throw new ForbiddenException("Nhân viên không có quyền từ chối phiếu nhập/xuất kho. Phiếu phải được Doanh nghiệp (Tenant) phê duyệt.");
+        }
+
+        InventoryReceipt receipt = receiptRepository.findById(receiptId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RECEIPT_NOT_FOUND));
+
+        if (receipt.getStatus() != ApprovalStatus.PENDING) {
+            throw new BadRequestException(ErrorCode.RECEIPT_ALREADY_PROCESSED);
+        }
+
+        UUID creatorTenantId = resolveTenantId(receipt.getCreatedBy());
+        UUID approverTenantId = resolveTenantId(approver);
+        if (!creatorTenantId.equals(approverTenantId)) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        }
+        requireActiveWarehouseContract(approverTenantId, receipt.getWarehouse().getId());
+
+        if (!subscriptionService.hasActiveSubscription(creatorTenantId)) {
+            throw new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED);
+        }
+
+        receipt.setStatus(ApprovalStatus.REJECTED);
+        if (reason != null && !reason.isBlank()) {
+            receipt.setRejectReason(reason);
+        }
+        receipt = receiptRepository.save(receipt);
+
+        List<InventoryReceiptItem> items = receiptItemRepository.findByReceiptId(receiptId);
+
+        try {
+            String typeStr = receipt.getType() == DocumentType.INBOUND ? "nhập kho" : "xuất kho";
+            notificationService.push(
+                    receipt.getCreatedBy().getId(),
+                    "Phiếu " + typeStr + " bị từ chối",
+                    "Phiếu " + typeStr + " tại kho " + receipt.getWarehouse().getName() + " đã bị từ chối. Lý do: " + (reason != null && !reason.isBlank() ? reason : "Không có lý do cụ thể"),
+                    "RECEIPT"
+            );
+        } catch (Exception e) {
+            log.warn("Failed to push reject notification for receipt {}: {}", receiptId, e.getMessage());
+        }
+
+        log.info("WMS Receipt: Rejected receipt {} of type {} by user {} (reason: {})", receipt.getId(), receipt.getType(), approverId, reason);
+        return mapToResponse(receipt, items);
+    }
+
     @Transactional(readOnly = true)
     public PagedResponse<InventoryReceiptResponse> getReceiptsByWarehouse(UUID warehouseId, DocumentType type, Pageable pageable) {
         Page<InventoryReceipt> page;
@@ -298,6 +351,7 @@ public class InventoryReceiptService {
                 .type(receipt.getType())
                 .signatureData(receipt.getSignatureData())
                 .status(receipt.getStatus())
+                .rejectReason(receipt.getRejectReason())
                 .items(itemResponses)
                 .createdAt(receipt.getCreatedAt())
                 .updatedAt(receipt.getUpdatedAt())

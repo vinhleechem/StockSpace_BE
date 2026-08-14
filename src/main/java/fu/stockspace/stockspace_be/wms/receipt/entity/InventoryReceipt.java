@@ -46,4 +46,7 @@ public class InventoryReceipt extends BaseEntity {
 
     @Column(name = "reference_id")
     private UUID referenceId;
+
+    @Column(name = "reject_reason", columnDefinition = "TEXT")
+    private String rejectReason;
 }
