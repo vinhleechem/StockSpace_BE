@@ -38,7 +38,7 @@ import java.util.stream.Collectors;
  *
  * Endpoints:
  *   POST /api/disputes        — Mở tranh chấp
- *   GET  /api/disputes/mine   — Danh sách dispute của mình
+ *   GET  /api/disputes/mine   — Danh sách dispute của các hợp đồng mình tham gia
  */
 @Tag(name = "Dispute", description = "API quản lý tranh chấp hợp đồng")
 @RestController
@@ -99,11 +99,11 @@ public class DisputeController {
 
     /**
      * GET /api/disputes/mine
-     * Danh sách dispute do mình mở.
+     * Danh sách dispute của các hợp đồng mà mình là tenant hoặc owner.
      */
     @GetMapping("/mine")
     @PreAuthorize("@rbac.hasPermission('DISPUTE_READ')")
-    @Operation(summary = "Xem danh sách tranh chấp của mình")
+    @Operation(summary = "Xem danh sách tranh chấp của các hợp đồng mình tham gia")
     public ResponseEntity<ApiResponse<PagedResponse<DisputeResponse>>> getMyDisputes(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
