@@ -22,6 +22,7 @@ public class InventoryReceiptResponse {
     private DocumentType type;
     private String signatureData;
     private ApprovalStatus status;
+    private String rejectReason;
     private List<ReceiptItemResponse> items;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
