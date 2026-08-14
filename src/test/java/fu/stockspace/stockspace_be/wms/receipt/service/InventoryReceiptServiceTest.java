@@ -56,6 +56,7 @@ class InventoryReceiptServiceTest {
     @Mock private fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository tenantMemberRepository;
     @Mock private fu.stockspace.stockspace_be.contract.repository.RentalContractRepository rentalContractRepository;
     @Mock private fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository assignmentRepository;
+    @Mock private fu.stockspace.stockspace_be.notification.service.NotificationService notificationService;
 
     @InjectMocks
     private InventoryReceiptService receiptService;
@@ -465,5 +466,62 @@ class InventoryReceiptServiceTest {
                 skuId, warehouseId, rackId, binId)).thenReturn(Optional.of(existingBatch));
 
         assertThrows(BadRequestException.class, () -> receiptService.approveReceipt(approverId, receipt.getId()));
+    }
+
+    @Test
+    void testRejectReceipt_Success() {
+        UUID approverId = userId;
+        User approver = tenantUser;
+        when(userRepository.findById(approverId)).thenReturn(Optional.of(approver));
+
+        InventoryReceipt receipt = InventoryReceipt.builder()
+                .id(UUID.randomUUID())
+                .warehouse(warehouse)
+                .createdBy(tenantUser)
+                .type(DocumentType.INBOUND)
+                .status(ApprovalStatus.PENDING)
+                .build();
+        when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
+        when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
+        when(receiptRepository.save(any(InventoryReceipt.class))).thenAnswer(i -> i.getArgument(0));
+        when(receiptItemRepository.findByReceiptId(receipt.getId())).thenReturn(List.of());
+
+        InventoryReceiptResponse response = receiptService.rejectReceipt(approverId, receipt.getId(), "Hàng bị lỗi");
+
+        assertNotNull(response);
+        assertEquals(ApprovalStatus.REJECTED, response.getStatus());
+        assertEquals("Hàng bị lỗi", response.getRejectReason());
+        verify(receiptRepository, times(1)).save(any(InventoryReceipt.class));
+        verify(notificationService, times(1)).push(eq(tenantUser.getId()), anyString(), anyString(), eq("RECEIPT"));
+    }
+
+    @Test
+    void testRejectReceipt_ByStaff_ThrowsForbiddenException() {
+        UUID staffId = UUID.randomUUID();
+        fu.stockspace.stockspace_be.auth.entity.Role staffRole = fu.stockspace.stockspace_be.auth.entity.Role.builder()
+                .name(fu.stockspace.stockspace_be.auth.entity.RoleType.ROLE_STAFF.name()).build();
+        User staffUser = User.builder().id(staffId).roles(java.util.Set.of(staffRole)).build();
+        when(userRepository.findById(staffId)).thenReturn(Optional.of(staffUser));
+
+        UUID receiptId = UUID.randomUUID();
+        assertThrows(ForbiddenException.class, () -> receiptService.rejectReceipt(staffId, receiptId, "Reason"));
+    }
+
+    @Test
+    void testRejectReceipt_AlreadyProcessed_ThrowsBadRequestException() {
+        UUID approverId = userId;
+        User approver = tenantUser;
+        when(userRepository.findById(approverId)).thenReturn(Optional.of(approver));
+
+        InventoryReceipt receipt = InventoryReceipt.builder()
+                .id(UUID.randomUUID())
+                .warehouse(warehouse)
+                .createdBy(tenantUser)
+                .type(DocumentType.INBOUND)
+                .status(ApprovalStatus.APPROVED)
+                .build();
+        when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
+
+        assertThrows(BadRequestException.class, () -> receiptService.rejectReceipt(approverId, receipt.getId(), "Reason"));
     }
 }

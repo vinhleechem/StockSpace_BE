@@ -7,10 +7,10 @@ import fu.stockspace.stockspace_be.common.dto.ApiResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
-import fu.stockspace.stockspace_be.wms.receipt.dto.CreateInventoryReceiptRequest;
 import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.wms.receipt.dto.CreateInventoryReceiptRequest;
 import fu.stockspace.stockspace_be.wms.receipt.dto.InventoryReceiptResponse;
+import fu.stockspace.stockspace_be.wms.receipt.dto.RejectReceiptRequest;
 import fu.stockspace.stockspace_be.wms.receipt.entity.DocumentType;
 import fu.stockspace.stockspace_be.wms.receipt.service.InventoryReceiptService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -61,6 +61,20 @@ public class InventoryReceiptController {
         UUID userId = SecurityUtil.getCurrentUserId();
         InventoryReceiptResponse response = receiptService.approveReceipt(userId, id);
         return ResponseEntity.ok(ApiResponse.success("Duyệt phiếu thành công, kho hàng đã cập nhật", response));
+    }
+
+    @PatchMapping("/{id}/reject")
+    @PreAuthorize("@rbac.hasPermission('INVENTORY_UPDATE')")
+    @Operation(summary = "Từ chối phiếu nhập/xuất kho")
+    public ResponseEntity<ApiResponse<InventoryReceiptResponse>> rejectReceipt(
+            @PathVariable UUID id,
+            @Valid @RequestBody(required = false) RejectReceiptRequest request
+    ) {
+        checkSubscription();
+        UUID userId = SecurityUtil.getCurrentUserId();
+        String reason = request != null ? request.getReason() : null;
+        InventoryReceiptResponse response = receiptService.rejectReceipt(userId, id, reason);
+        return ResponseEntity.ok(ApiResponse.success("Từ chối phiếu thành công", response));
     }
 
     @GetMapping
