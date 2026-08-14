@@ -30,7 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * Chức năng:
  * - Mở tranh chấp → đổi Contract sang DISPUTED
- * - Xem dispute của mình
+ * - Xem dispute của các hợp đồng mà mình tham gia
  * - Admin giải quyết dispute → gọi từ AdminDisputeService
  */
 @Slf4j
@@ -110,12 +110,13 @@ public class DisputeService {
         return mapToResponse(ticket);
     }
     /**
-     * Xem danh sách dispute của user hiện tại.
+     * Xem danh sách tranh chấp của các hợp đồng mà user hiện tại tham gia,
+     * bao gồm cả bên mở tranh chấp và bên còn lại (tenant hoặc owner).
      */
     @Transactional(readOnly = true)
     public Page<DisputeResponse> getMyDisputes(UUID userId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        return disputeRepository.findByRaisedById(userId, pageable)
+        return disputeRepository.findByInvolvedUserId(userId, pageable)
                 .map(this::mapToResponse);
     }
     // ==================== Admin internal ====================
