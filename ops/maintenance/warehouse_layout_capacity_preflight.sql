@@ -43,8 +43,10 @@ WHERE r.coordinate_x
 SELECT b.id, b.name, r.id AS rack_id
 FROM warehouse_bins b
 JOIN warehouse_racks r ON r.id = b.rack_id
-WHERE b.coordinate_x + b.width > r.width
-   OR b.coordinate_y + b.length > r.length
+WHERE b.coordinate_x
+          + b.width > CASE WHEN COALESCE(r.rotation, 0) IN (90, 270) THEN r.length ELSE r.width END
+   OR b.coordinate_y
+          + b.length > CASE WHEN COALESCE(r.rotation, 0) IN (90, 270) THEN r.width ELSE r.length END
    OR b.position_z + b.height > r.height;
 
 -- 6. Duplicate logical layouts/codes that would prevent safe unique indexes.
