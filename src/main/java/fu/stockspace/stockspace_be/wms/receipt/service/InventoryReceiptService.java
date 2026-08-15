@@ -104,13 +104,13 @@ public class InventoryReceiptService {
                             itemRequest.getSkuId(), tenantId)
                     .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.SKU_NOT_FOUND));
 
-            WarehouseRack rack = rackRepository.findById(itemRequest.getRackId())
+            WarehouseRack rack = rackRepository.findByIdAndIsDeletedFalse(itemRequest.getRackId())
                     .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RACK_NOT_FOUND));
             if (!rack.getLayout().getWarehouse().getId().equals(warehouse.getId())) {
                 throw new BadRequestException(ErrorCode.LAYOUT_INVALID_COORDINATES);
             }
 
-            WarehouseBin bin = binRepository.findById(itemRequest.getBinId())
+            WarehouseBin bin = binRepository.findByIdAndIsDeletedFalse(itemRequest.getBinId())
                     .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_BIN_NOT_FOUND));
             if (!bin.getRack().getId().equals(rack.getId())) {
                 throw new BadRequestException(ErrorCode.LAYOUT_INVALID_COORDINATES);

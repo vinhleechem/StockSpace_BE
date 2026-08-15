@@ -15,9 +15,12 @@ import java.util.UUID;
 @Repository
 public interface WarehouseRackRepository extends JpaRepository<WarehouseRack, UUID> {
 
-    List<WarehouseRack> findAllByLayoutId(UUID layoutId);
+    @Query("select r from WarehouseRack r where r.layout.id = :layoutId and r.isDeleted = false")
+    List<WarehouseRack> findAllByLayoutId(@Param("layoutId") UUID layoutId);
+
+    Optional<WarehouseRack> findByIdAndIsDeletedFalse(UUID id);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select r from WarehouseRack r where r.id = :id")
+    @Query("select r from WarehouseRack r where r.id = :id and r.isDeleted = false")
     Optional<WarehouseRack> findByIdForUpdate(@Param("id") UUID id);
 }

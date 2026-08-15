@@ -15,13 +15,17 @@ import java.util.UUID;
 @Repository
 public interface WarehouseBinRepository extends JpaRepository<WarehouseBin, UUID> {
 
-    List<WarehouseBin> findAllByRackId(UUID rackId);
+    @Query("select b from WarehouseBin b where b.rack.id = :rackId and b.isDeleted = false")
+    List<WarehouseBin> findAllByRackId(@Param("rackId") UUID rackId);
 
-    List<WarehouseBin> findAllByRackLayoutId(UUID layoutId);
+    @Query("select b from WarehouseBin b where b.rack.layout.id = :layoutId and b.isDeleted = false")
+    List<WarehouseBin> findAllByRackLayoutId(@Param("layoutId") UUID layoutId);
+
+    Optional<WarehouseBin> findByIdAndIsDeletedFalse(UUID id);
 
     Optional<WarehouseBin> findByCode(String code);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select b from WarehouseBin b where b.id = :id")
+    @Query("select b from WarehouseBin b where b.id = :id and b.isDeleted = false")
     Optional<WarehouseBin> findByIdForUpdate(@Param("id") UUID id);
 }

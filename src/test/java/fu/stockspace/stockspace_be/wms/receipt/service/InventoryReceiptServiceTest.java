@@ -100,8 +100,8 @@ class InventoryReceiptServiceTest {
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
         when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, userId))
                 .thenReturn(Optional.of(productSku));
-        when(rackRepository.findById(rackId)).thenReturn(Optional.of(rack));
-        when(binRepository.findById(binId)).thenReturn(Optional.of(bin));
+        when(rackRepository.findByIdAndIsDeletedFalse(rackId)).thenReturn(Optional.of(rack));
+        when(binRepository.findByIdAndIsDeletedFalse(binId)).thenReturn(Optional.of(bin));
 
         InventoryReceipt receipt = InventoryReceipt.builder()
                 .id(UUID.randomUUID())
@@ -160,8 +160,8 @@ class InventoryReceiptServiceTest {
         when(receiptRepository.save(any(InventoryReceipt.class))).thenAnswer(i -> i.getArgument(0));
         when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, userId))
                 .thenReturn(Optional.of(productSku));
-        when(rackRepository.findById(rackId)).thenReturn(Optional.of(rack));
-        when(binRepository.findById(binId)).thenReturn(Optional.of(binWithLimit));
+        when(rackRepository.findByIdAndIsDeletedFalse(rackId)).thenReturn(Optional.of(rack));
+        when(binRepository.findByIdAndIsDeletedFalse(binId)).thenReturn(Optional.of(binWithLimit));
         productSku.setUnitWeightKg(java.math.BigDecimal.ONE);
         productSku.setUnitVolumeM3(java.math.BigDecimal.ONE);
         StockBatch existingBatch = StockBatch.builder()
@@ -210,8 +210,8 @@ class InventoryReceiptServiceTest {
         when(receiptRepository.save(any(InventoryReceipt.class))).thenAnswer(i -> i.getArgument(0));
         when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, userId))
                 .thenReturn(Optional.of(productSku));
-        when(rackRepository.findById(rackId)).thenReturn(Optional.of(limitedRack));
-        when(binRepository.findById(binId)).thenReturn(Optional.of(unlimitedBin));
+        when(rackRepository.findByIdAndIsDeletedFalse(rackId)).thenReturn(Optional.of(limitedRack));
+        when(binRepository.findByIdAndIsDeletedFalse(binId)).thenReturn(Optional.of(unlimitedBin));
         when(stockBatchRepository.findByRackId(rackId)).thenReturn(List.of());
 
         ReceiptItemRequest firstItem = ReceiptItemRequest.builder()
@@ -247,8 +247,8 @@ class InventoryReceiptServiceTest {
         when(receiptRepository.save(any(InventoryReceipt.class))).thenAnswer(i -> i.getArgument(0));
         when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, userId))
                 .thenReturn(Optional.of(productSku));
-        when(rackRepository.findById(rackId)).thenReturn(Optional.of(rack));
-        when(binRepository.findById(binId)).thenReturn(Optional.of(volumeLimitedBin));
+        when(rackRepository.findByIdAndIsDeletedFalse(rackId)).thenReturn(Optional.of(rack));
+        when(binRepository.findByIdAndIsDeletedFalse(binId)).thenReturn(Optional.of(volumeLimitedBin));
         when(stockBatchRepository.findByBinId(binId)).thenReturn(List.of());
 
         ReceiptItemRequest item = ReceiptItemRequest.builder()
@@ -289,7 +289,7 @@ class InventoryReceiptServiceTest {
         Warehouse alternateWarehouse = Warehouse.builder().id(UUID.randomUUID()).build();
         WarehouseLayout alternateLayout = WarehouseLayout.builder().id(UUID.randomUUID()).warehouse(alternateWarehouse).build();
         WarehouseRack invalidRack = WarehouseRack.builder().id(rackId).layout(alternateLayout).build();
-        when(rackRepository.findById(rackId)).thenReturn(Optional.of(invalidRack));
+        when(rackRepository.findByIdAndIsDeletedFalse(rackId)).thenReturn(Optional.of(invalidRack));
 
         ReceiptItemRequest itemRequest = ReceiptItemRequest.builder()
                 .skuId(skuId)
