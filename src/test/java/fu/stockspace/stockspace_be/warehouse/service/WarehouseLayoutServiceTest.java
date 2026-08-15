@@ -204,6 +204,39 @@ class WarehouseLayoutServiceTest {
     }
 
     @Test
+    void testSaveLayoutBulk_AllowsDecimalMeters() {
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)).thenReturn(Optional.of(defaultLayout));
+        when(layoutRepository.save(any(WarehouseLayout.class))).thenReturn(defaultLayout);
+        when(rackRepository.findAllByLayoutId(defaultLayout.getId())).thenReturn(Collections.emptyList());
+        when(binRepository.findAllByRackLayoutId(defaultLayout.getId())).thenReturn(Collections.emptyList());
+        when(rackRepository.save(any(WarehouseRack.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        RackSaveRequest rackReq = RackSaveRequest.builder()
+                .name("Decimal Rack")
+                .code("R_DECIMAL")
+                .coordinateX(new BigDecimal("1.25"))
+                .coordinateY(new BigDecimal("2.50"))
+                .positionZ(new BigDecimal("0.75"))
+                .width(new BigDecimal("3.50"))
+                .length(new BigDecimal("4.25"))
+                .height(new BigDecimal("2.80"))
+                .build();
+
+        BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
+                .width(new BigDecimal("20.50"))
+                .length(new BigDecimal("30.50"))
+                .height(new BigDecimal("10.00"))
+                .racks(List.of(rackReq))
+                .build();
+
+        assertDoesNotThrow(() -> layoutService.saveLayoutBulk(warehouseId, userId, "OWNER", request));
+        verify(rackRepository).save(argThat(rack ->
+                new BigDecimal("1.25").compareTo(rack.getCoordinateX()) == 0
+                        && new BigDecimal("3.50").compareTo(rack.getWidth()) == 0));
+    }
+
+    @Test
     void testSaveLayoutBulk_DeleteNonEmptyBin_ThrowsException() {
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
         when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)).thenReturn(Optional.of(defaultLayout));
