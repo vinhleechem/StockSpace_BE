@@ -347,6 +347,7 @@ public class WarehouseService {
         }
 
         warehouse.setStatus(WarehouseStatus.AVAILABLE);
+        warehouse.setRejectReason(null);
         warehouse = warehouseRepository.save(warehouse);
 
         if (warehouse.getOwner() != null) {
@@ -366,23 +367,30 @@ public class WarehouseService {
      * Admin từ chối Warehouse listing — set status = INACTIVE.
      */
     @Transactional
-    public WarehouseResponse rejectWarehouse(UUID warehouseId) {
+    public WarehouseResponse rejectWarehouse(UUID warehouseId, String reason) {
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
 
         warehouse.setStatus(WarehouseStatus.INACTIVE);
+        if (StringUtils.hasText(reason)) {
+            warehouse.setRejectReason(reason.trim());
+        }
         warehouse = warehouseRepository.save(warehouse);
 
         if (warehouse.getOwner() != null) {
+            String message = StringUtils.hasText(reason)
+                    ? "Yêu cầu đăng kho bãi '" + warehouse.getName() + "' của bạn không được phê duyệt. Lý do từ chối: " + reason.trim()
+                    : "Yêu cầu đăng kho bãi '" + warehouse.getName() + "' của bạn không được phê duyệt. Vui lòng kiểm tra lại thông tin.";
+
             notificationService.push(
                     warehouse.getOwner().getId(),
                     "Bài đăng kho bãi không được duyệt",
-                    "Yêu cầu đăng kho bãi '" + warehouse.getName() + "' của bạn không được phê duyệt. Vui lòng kiểm tra lại thông tin.",
+                    message,
                     "SYSTEM"
             );
         }
 
-        log.info("Admin rejected warehouse listing {}", warehouseId);
+        log.info("Admin rejected warehouse listing {} with reason: {}", warehouseId, reason);
         return mapToResponse(warehouse);
     }
 
@@ -496,6 +504,7 @@ public class WarehouseService {
                 .capacity(w.getCapacity())
                 .pricePerMonth(w.getPricePerMonth())
                 .status(w.getStatus().name())
+                .rejectReason(w.getRejectReason())
                 .isVerified(w.isVerified())
                 .typeId(w.getType() != null ? w.getType().getId() : null)
                 .typeName(w.getType() != null ? w.getType().getName() : null)
