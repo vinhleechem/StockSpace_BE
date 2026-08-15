@@ -1,5 +1,6 @@
 package fu.stockspace.stockspace_be.admin.dto;
 
+import fu.stockspace.stockspace_be.common.validation.PhoneValidationPatterns;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -22,6 +23,6 @@ public class UpdateUserRequest {
     @Size(max = 150, message = "Họ tên không vượt quá 150 ký tự")
     private String fullName;
 
-    @Pattern(regexp = "^(\\+84|0)[0-9]{9,10}$", message = "Số điện thoại không hợp lệ")
+    @Pattern(regexp = PhoneValidationPatterns.VIETNAMESE_MOBILE, message = "Số điện thoại di động Việt Nam không hợp lệ")
     private String phone;
 }
