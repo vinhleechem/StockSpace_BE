@@ -77,7 +77,7 @@ class ChatbotServiceTest {
         ReflectionTestUtils.setField(service, "maxAssistantResponseChars", 16_000);
     }
 
-    /** Configures the ChatStreamRuntime mock for tests that exercise SSE streaming. */
+
     private void configureStreamRuntime() {
         when(chatStreamRuntime.effectiveTimeout()).thenReturn(Duration.ofSeconds(90));
         when(chatStreamRuntime.submit(any(Runnable.class))).thenAnswer(invocation -> {

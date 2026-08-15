@@ -18,13 +18,13 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
-/**
- * Explicit, bounded indexer for the small in-application knowledge base.
- *
- * <p>Database work is deliberately split into two short transactions. The
- * embedding HTTP call runs between them and never holds a database connection
- * or entity transaction open.</p>
- */
+
+
+
+
+
+
+
 @Service
 @RequiredArgsConstructor
 public class KnowledgeIndexService {
@@ -60,7 +60,7 @@ public class KnowledgeIndexService {
                 .map(DocumentSnapshot::embeddingText)
                 .toList();
 
-        // External I/O is intentionally outside both transaction callbacks.
+
         List<List<Float>> embeddings = embeddingClient.getEmbeddings(inputs, dimensions);
         List<IndexedDocument> completed = new ArrayList<>();
         int failed = 0;
@@ -86,8 +86,8 @@ public class KnowledgeIndexService {
                         transactionTemplate.execute(status -> saveCompleted(completed)),
                         0
                 );
-        // A document edited/deactivated during the HTTP call is skipped during
-        // save and counted as failed so it can be safely retried later.
+
+
         failed += completed.size() - indexed;
 
         return new ReindexResult(

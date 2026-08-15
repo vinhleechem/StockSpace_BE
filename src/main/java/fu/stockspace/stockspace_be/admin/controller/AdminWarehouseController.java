@@ -18,9 +18,9 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
-/**
- * Controller xử lý các API quản lý và duyệt kho dành cho Admin và Inspector.
- */
+
+
+
 @Tag(name = "Admin — Warehouse Management", description = "Các API duyệt và quản lý Kho của Admin/Inspector")
 @RestController
 @RequestMapping("/api/admin/warehouses")
@@ -30,10 +30,10 @@ public class AdminWarehouseController {
 
     private final WarehouseService warehouseService;
 
-    /**
-     * GET /api/admin/warehouses
-     * Lấy danh sách toàn bộ các kho (không lọc verified) có phân trang, tìm kiếm và lọc.
-     */
+
+
+
+
     @GetMapping
     @Operation(summary = "Lấy danh sách tất cả các kho (phân trang, tìm kiếm, lọc)")
     public ResponseEntity<ApiResponse<PagedResponse<WarehouseResponse>>> getAllWarehouses(
@@ -60,10 +60,10 @@ public class AdminWarehouseController {
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách kho thành công", result));
     }
 
-    /**
-     * POST /api/admin/warehouses/{id}/verify
-     * Admin duyệt kho (xác minh thành công).
-     */
+
+
+
+
     @PostMapping("/{id}/verify")
     @Operation(summary = "Duyệt kho (Xác minh thành công)")
     public ResponseEntity<ApiResponse<WarehouseResponse>> verifyWarehouse(
@@ -73,10 +73,10 @@ public class AdminWarehouseController {
         return ResponseEntity.ok(ApiResponse.success("Duyệt kho thành công. Kho hiện đã sẵn sàng hoạt động.", response));
     }
 
-    /**
-     * POST /api/admin/warehouses/{id}/reject
-     * Admin từ chối duyệt kho (thiết lập trạng thái INACTIVE).
-     */
+
+
+
+
     @PostMapping("/{id}/reject")
     @Operation(summary = "Từ chối duyệt kho")
     public ResponseEntity<ApiResponse<WarehouseResponse>> rejectWarehouse(

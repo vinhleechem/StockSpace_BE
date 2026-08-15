@@ -14,7 +14,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class RackSaveRequest {
-    private UUID id; // null nếu tạo mới
+    private UUID id;
 
 
     @NotBlank(message = "Tên Rack không được để trống")

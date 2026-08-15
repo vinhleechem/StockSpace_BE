@@ -19,10 +19,10 @@ public class ChatRetentionService {
     private final ChatSessionRepository sessionRepository;
     private final ChatMessageRepository messageRepository;
 
-    /**
-     * Hard-deletes an old anonymous batch so TTL also bounds retained content,
-     * not merely API access.
-     */
+
+
+
+
     @Transactional
     public int purgeExpiredGuestBatch(Duration purgeAfter, int requestedBatchSize) {
         Duration grace = purgeAfter == null

@@ -22,10 +22,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
-/**
- * Per-instance safety net for the public, paid AI endpoint. Nginx applies a
- * second independent limit in production.
- */
+
+
+
+
 @Component
 @RequiredArgsConstructor
 public class GuestChatRateLimitFilter extends OncePerRequestFilter {
@@ -104,11 +104,11 @@ public class GuestChatRateLimitFilter extends OncePerRequestFilter {
         }
     }
 
-    /**
-     * A servlet filter returns as soon as MVC hands an SSE response to the
-     * async container. Keep the concurrency slot until that async request
-     * actually completes, fails, times out, or is cancelled by the client.
-     */
+
+
+
+
+
     private void releaseWhenRequestTerminates(HttpServletRequest request,
                                               Runnable release) {
         if (!request.isAsyncStarted()) {
@@ -145,8 +145,8 @@ public class GuestChatRateLimitFilter extends OncePerRequestFilter {
         try {
             request.getAsyncContext().addListener(listener);
         } catch (IllegalStateException exception) {
-            // The async request terminated between isAsyncStarted() and
-            // listener registration. Release immediately in that race.
+
+
             release.run();
         }
     }

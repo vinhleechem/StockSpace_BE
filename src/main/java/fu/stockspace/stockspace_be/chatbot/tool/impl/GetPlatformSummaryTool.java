@@ -14,10 +14,10 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Tool: getPlatformSummary
- * Xem thống kê tổng quan toàn nền tảng dành cho Admin.
- */
+
+
+
+
 @Slf4j
 @Component
 @RequiredArgsConstructor

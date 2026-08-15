@@ -13,12 +13,12 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 import java.util.LinkedHashSet;
 import java.util.Set;
 
-/**
- * STOMP endpoint for server-pushed, authenticated notifications.
- *
- * <p>Clients connect to {@code /ws}, send their JWT in the STOMP CONNECT
- * Authorization header, then subscribe to {@code /user/queue/notifications}.</p>
- */
+
+
+
+
+
+
 @Configuration
 @EnableWebSocketMessageBroker
 @RequiredArgsConstructor

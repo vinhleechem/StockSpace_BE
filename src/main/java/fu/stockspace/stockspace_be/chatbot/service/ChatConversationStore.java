@@ -30,10 +30,10 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Owns chat persistence and keeps database transactions short. No external
- * provider request is ever made from this class.
- */
+
+
+
+
 @Service
 @RequiredArgsConstructor
 public class ChatConversationStore {
@@ -64,10 +64,10 @@ public class ChatConversationStore {
         return new PreparedChatSession(session.getId(), null, buildHistory(session.getId()));
     }
 
-    /**
-     * A missing token creates a server-minted session. A supplied unknown token
-     * is rejected instead of being used to create a client-chosen session.
-     */
+
+
+
+
     @Transactional(noRollbackFor = ResourceNotFoundException.class)
     public PreparedChatSession prepareGuestSession(String rawToken) {
         if (rawToken == null || rawToken.isBlank()) {
@@ -86,7 +86,7 @@ public class ChatConversationStore {
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CHAT_SESSION_NOT_FOUND));
         ensureGuestSessionActive(session);
 
-        // Transparently migrate legacy plaintext tokens.
+
         if (!tokenHash.equals(session.getSessionToken())) {
             session.setSessionToken(tokenHash);
         }

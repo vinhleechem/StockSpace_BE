@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-/** Sends persisted notifications to the matching authenticated STOMP user. */
+
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -26,7 +26,7 @@ public class NotificationWebSocketPublisher {
                     event.notification()
             );
         } catch (Exception exception) {
-            // Realtime delivery must not turn a successfully committed business action into a failed API call.
+
             log.error("Could not deliver notification {} to WebSocket user {}",
                     event.notification().getId(), event.recipientEmail(), exception);
         }

@@ -30,9 +30,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-/**
- * Khởi tạo dữ liệu mẫu (Roles, Permissions, default Users) khi chạy ứng dụng lần đầu.
- */
+
+
+
 @Component
 @Order(1)
 @RequiredArgsConstructor
@@ -56,7 +56,7 @@ public class DataInitializer implements CommandLineRunner {
     @Transactional
     public void run(String... args) throws Exception {
         log.info("Starting DataInitializer to seed roles and permissions...");
-        // 1. Khởi tạo permissions
+
         Permission whRead = getOrCreatePermission("WAREHOUSE_READ", "Xem thông tin kho bãi");
         Permission whCreate = getOrCreatePermission("WAREHOUSE_CREATE", "Tạo mới kho bãi");
         Permission whUpdate = getOrCreatePermission("WAREHOUSE_UPDATE", "Cập nhật kho bãi");
@@ -75,24 +75,24 @@ public class DataInitializer implements CommandLineRunner {
         Permission outboundCreate = getOrCreatePermission("OUTBOUND_CREATE", "Tạo phiếu xuất kho");
         Permission staffManage = getOrCreatePermission("STAFF_MANAGE", "Quản lý nhân viên");
         Permission pkgPurchase = getOrCreatePermission("PACKAGE_PURCHASE", "Mua gói dịch vụ");
-        // 2. Khởi tạo default roles và gán permissions
-        
-        // ROLE_ADMIN — có tất cả quyền
+
+
+
         Set<Permission> adminPermissions = new HashSet<>(permissionRepository.findAll());
         getOrCreateRole(RoleType.ROLE_ADMIN.name(), "Administrator với đầy đủ quyền hạn", adminPermissions);
-        // ROLE_OWNER — Quản lý kho bãi của họ + duyệt thuê + xem thanh tra
+
         Set<Permission> ownerPermissions = Set.of(whRead, whCreate, whUpdate, whDelete, rentalRead, rentalProcess, inspectRead);
         getOrCreateRole(RoleType.ROLE_OWNER.name(), "Chủ kho bãi (Warehouse Owner)", ownerPermissions);
-        // ROLE_TENANT — Thuê kho, quản lý hàng hóa, staff, mua gói dịch vụ
+
         Set<Permission> tenantPermissions = Set.of(whRead, rentalCreate, rentalRead, invRead, invCreate, invUpdate, invDelete, inboundCreate, outboundCreate, staffManage, pkgPurchase);
         getOrCreateRole(RoleType.ROLE_TENANT.name(), "Người thuê kho (Tenant)", tenantPermissions);
-        // ROLE_STAFF — Quản lý hàng hóa, phiếu nhập/xuất
+
         Set<Permission> staffPermissions = Set.of(invRead, invCreate, invUpdate, invDelete, inboundCreate, outboundCreate);
         getOrCreateRole(RoleType.ROLE_STAFF.name(), "Nhân viên kho (Warehouse Staff)", staffPermissions);
-        // ROLE_INSPECTOR — Thanh tra chất lượng kho
+
         Set<Permission> inspectorPermissions = Set.of(whRead, inspectRead, inspectCreate, inspectApprove);
         getOrCreateRole(RoleType.ROLE_INSPECTOR.name(), "Thanh tra kho bãi (Inspector)", inspectorPermissions);
-        // 3. Tài khoản demo phải được bật chủ động; production luôn tắt.
+
         if (seedDemoUsers) {
             createDefaultUser("admin@stockspace.com", "Password123", "System Admin", "0987654321", RoleType.ROLE_ADMIN.name(), BigDecimal.ZERO);
             createDefaultUser("owner@stockspace.com", "Password123", "Nguyen Owner", "0987654322", RoleType.ROLE_OWNER.name(), new BigDecimal("200000000.00"));
@@ -102,15 +102,15 @@ public class DataInitializer implements CommandLineRunner {
         } else {
             log.info("Demo account seeding is disabled");
         }
-        // 4. Khởi tạo chính sách/cam kết ràng buộc mặc định
+
         seedDefaultSystemPolicy();
-        // 5. Khởi tạo các gói dịch vụ mặc định
+
         seedDefaultPackages();
-        // 6. Khởi tạo cấu hình hệ thống mặc định
+
         seedSystemConfig();
-        // 7. Khởi tạo Đơn vị tính (UOM) mặc định
+
         seedDefaultUoms();
-        // 8. Khởi tạo Cơ sở tri thức (Policy & FAQ RAG)
+
         seedSystemKnowledge();
         log.info("DataInitializer finished seeding successfully!");
     }
@@ -201,7 +201,7 @@ public class DataInitializer implements CommandLineRunner {
         }
     }
     private void seedSystemConfig() {
-        // First check or seed "Phí Đăng Bài Kho Bãi" package
+
         ServicePackage postingFeePkg = packageRepository.findByName("Phí Đăng Bài Kho Bãi")
                 .orElseGet(() -> packageRepository.save(ServicePackage.builder()
                         .name("Phí Đăng Bài Kho Bãi")

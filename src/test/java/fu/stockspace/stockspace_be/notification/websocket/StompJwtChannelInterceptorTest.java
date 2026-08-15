@@ -39,7 +39,7 @@ class StompJwtChannelInterceptorTest {
 
         StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.CONNECT);
         accessor.setNativeHeader("Authorization", "Bearer valid-token");
-        // Spring leaves inbound STOMP headers mutable until the interceptor chain completes.
+
         accessor.setLeaveMutable(true);
         Message<byte[]> message = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
 

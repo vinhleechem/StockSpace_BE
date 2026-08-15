@@ -5,9 +5,9 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 import java.math.BigDecimal;
 import java.util.UUID;
-/**
- * Entity Transaction - Lưu lịch sử biến động số dư và giao dịch.
- */
+
+
+
 @Entity
 @Table(name = "transactions", indexes = {
         @Index(name = "idx_transactions_wallet_id", columnList = "wallet_id"),
@@ -39,16 +39,16 @@ public class Transaction extends BaseEntity {
     @Column(name = "status", nullable = false, length = 20)
     @Builder.Default
     private TransactionStatus status = TransactionStatus.PENDING;
-    /** Mã chuyển khoản duy nhất (ví dụ: STSPX7F2A) */
+
     @Column(name = "payment_code", unique = true, length = 50)
     private String paymentCode;
-    /** ID giao dịch đối tác (VNPAY, Momo, v.v.) phục vụ đối soát và tránh trùng lặp */
+
     @Column(name = "reference_id", unique = true, length = 100)
     private String referenceId;
-    /** ID của booking liên quan (nếu có) - Loose coupling kiểu UUID */
+
     @Column(name = "booking_id")
     private UUID bookingId;
-    /** ID của subscription liên quan (nếu có) - Loose coupling kiểu UUID */
+
     @Column(name = "subscription_id")
     private UUID subscriptionId;
 }

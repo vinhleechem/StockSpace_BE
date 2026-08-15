@@ -13,10 +13,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Tool: getContractDetail
- * Xem chi tiết một hợp đồng cụ thể của Tenant.
- */
+
+
+
+
 @Slf4j
 @Component
 @RequiredArgsConstructor

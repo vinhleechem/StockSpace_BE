@@ -22,21 +22,21 @@ public class AdminDisputeService {
     private final DisputeTicketRepository disputeRepository;
     private final DisputeService disputeService;
 
-    /**
-     * Admin/Inspector xem toàn bộ danh sách tranh chấp (có lọc trạng thái và phân trang).
-     */
+
+
+
     @Transactional(readOnly = true)
     public Page<DisputeResponse> getAllDisputes(String status, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         String queryStatus = (status == null || status.trim().isEmpty()) ? null : status.trim().toUpperCase();
-        
+
         return disputeRepository.findAllByStatusOptional(queryStatus, pageable)
                 .map(this::mapToResponse);
     }
 
-    /**
-     * Admin/Inspector giải quyết tranh chấp.
-     */
+
+
+
     @Transactional
     public DisputeResponse resolveDispute(java.util.UUID disputeId, java.util.UUID adminId, ResolveDisputeRequest request) {
         log.info("Admin {} resolving dispute {} with decision {}", adminId, disputeId, request.getDepositResolution());

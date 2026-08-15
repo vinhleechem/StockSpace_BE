@@ -20,20 +20,20 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
-/**
- * Controller xử lý authentication endpoints.
- *
- * Endpoints:
- * POST /api/auth/register — Đăng ký (OWNER / TENANT)
- * POST /api/auth/login — Đăng nhập
- * POST /api/auth/refresh — Lấy access token mới
- * POST /api/auth/logout — Logout thiết bị hiện tại
- * POST /api/auth/logout-all — Logout tất cả thiết bị
- * GET /api/auth/me — Thông tin user hiện tại
- * POST /api/auth/forgot-password — Gửi OTP đặt lại mật khẩu
- * POST /api/auth/reset-password — Đặt lại mật khẩu bằng OTP
- * GET /api/auth/google/callback — Đăng nhập bằng Google OAuth
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
@@ -44,7 +44,7 @@ public class AuthController {
         private final RefreshTokenService refreshTokenService;
         private final fu.stockspace.stockspace_be.staff.service.TenantStaffService tenantStaffService;
 
-        // ==================== Register ====================
+
 
 
         @PostMapping("/register")
@@ -55,7 +55,7 @@ public class AuthController {
                 return buildAuthResponse(result, HttpStatus.CREATED, "Registration successful");
         }
 
-        // ==================== Login ====================
+
 
         @PostMapping("/login")
         @Operation(summary = "Đăng nhập bằng email và mật khẩu")
@@ -65,14 +65,14 @@ public class AuthController {
                 return buildAuthResponse(result, HttpStatus.OK, "Login successful");
         }
 
-        // ==================== Google OAuth ====================
 
-        /**
-         * POST /api/auth/google
-         *
-         * Frontend gọi Google SDK để lấy auth code, sau đó gửi body JSON chứa code về
-         * backend.
-         */
+
+
+
+
+
+
+
         @PostMapping("/google")
         @Operation(summary = "Đăng nhập / Đăng ký bằng Google OAuth. FE gửi authorization code lên.")
         public ResponseEntity<ApiResponse<LoginResponse>> googleLogin(
@@ -81,15 +81,15 @@ public class AuthController {
                 return buildAuthResponse(result, HttpStatus.OK, "Google login successful");
         }
 
-        // ==================== Forgot Password ====================
 
-        /**
-         * POST /api/auth/forgot-password
-         * Body: { "email": "user@example.com" }
-         *
-         * Gửi đường dẫn đặt lại mật khẩu về email. Luôn trả 200 dù email không tồn tại
-         * (bảo mật).
-         */
+
+
+
+
+
+
+
+
         @PostMapping("/forgot-password")
         @Operation(summary = "Yêu cầu đặt lại mật khẩu — gửi đường dẫn đặt lại mật khẩu về email")
         public ResponseEntity<ApiResponse<Void>> forgotPassword(
@@ -100,10 +100,10 @@ public class AuthController {
                                 null));
         }
 
-        /**
-         * POST /api/auth/reset-password
-         * Body: { "email": "...", "token": "...", "newPassword": "..." }
-         */
+
+
+
+
         @PostMapping("/reset-password")
         @Operation(summary = "Đặt lại mật khẩu bằng mã token nhận qua email")
         public ResponseEntity<ApiResponse<Void>> resetPassword(
@@ -113,7 +113,7 @@ public class AuthController {
                                 "Mật khẩu đã được đặt lại thành công. Vui lòng đăng nhập lại.", null));
         }
 
-        // ==================== Staff Invitation Endpoints ====================
+
 
         @GetMapping("/staff/invite")
         @Operation(summary = "Xem trước thông tin lời mời nhân viên kho từ token trong email")
@@ -137,7 +137,7 @@ public class AuthController {
                                 "Xác nhận tham gia và thiết lập mật khẩu thành công. Vui lòng đăng nhập lại.", null));
         }
 
-        // ==================== Refresh Token ====================
+
 
         @PostMapping("/refresh")
         @Operation(summary = "Lấy access token mới bằng refresh token (cookie)")
@@ -152,7 +152,7 @@ public class AuthController {
                 return buildAuthResponse(result, HttpStatus.OK, "Token refreshed successfully");
         }
 
-        // ==================== Logout ====================
+
 
         @PostMapping("/logout")
         @PreAuthorize("@rbac.hasPermission('AUTH_SESSION_MANAGE')")
@@ -183,7 +183,7 @@ public class AuthController {
                                 .body(ApiResponse.success("Logged out from all devices successfully", null));
         }
 
-        // ==================== Me ====================
+
 
         @GetMapping("/me")
         @PreAuthorize("@rbac.hasPermission('PROFILE_READ')")
@@ -201,7 +201,7 @@ public class AuthController {
                 try {
                         tenantId = fu.stockspace.stockspace_be.auth.util.TenantContextUtil.getCurrentTenantId();
                 } catch (Exception e) {
-                        // ignore if not resolved (e.g. admin or users with old token)
+
                 }
 
                 UserInfoResponse info = new UserInfoResponse(
@@ -219,7 +219,7 @@ public class AuthController {
                 return ResponseEntity.ok(ApiResponse.success("User info retrieved", info));
         }
 
-        // ==================== Private helpers ====================
+
 
         private ResponseEntity<ApiResponse<LoginResponse>> buildAuthResponse(
                         AuthService.AuthResult result,
@@ -232,7 +232,7 @@ public class AuthController {
                                 .body(ApiResponse.success(message, result.loginResponse()));
         }
 
-        // ==================== Inner records ====================
+
 
         public record UserInfoResponse(
                         UUID userId,

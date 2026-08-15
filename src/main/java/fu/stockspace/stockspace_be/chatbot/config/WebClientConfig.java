@@ -12,9 +12,9 @@ import reactor.netty.http.client.HttpClient;
 
 import java.time.Duration;
 
-/**
- * Config WebClient để gọi OpenRouter AI API.
- */
+
+
+
 @Configuration
 public class WebClientConfig {
 

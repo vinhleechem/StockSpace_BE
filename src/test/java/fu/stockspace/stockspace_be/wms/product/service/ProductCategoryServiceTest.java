@@ -111,7 +111,7 @@ class ProductCategoryServiceTest {
         UUID catId = UUID.randomUUID();
         ProductCategory systemCategory = ProductCategory.builder()
                 .id(catId)
-                .tenant(null) // System category
+                .tenant(null)
                 .name("SystemCat")
                 .build();
 
@@ -149,7 +149,7 @@ class ProductCategoryServiceTest {
                 .build();
 
         when(categoryRepository.findByIdAndIsDeletedFalse(catId)).thenReturn(Optional.of(category));
-        when(skuRepository.existsByCategoryIdAndIsDeletedFalse(catId)).thenReturn(true); // Has linked SKUs
+        when(skuRepository.existsByCategoryIdAndIsDeletedFalse(catId)).thenReturn(true);
 
         assertThrows(BadRequestException.class, () -> categoryService.deleteCategory(tenantId, catId));
         verify(categoryRepository, never()).save(any(ProductCategory.class));

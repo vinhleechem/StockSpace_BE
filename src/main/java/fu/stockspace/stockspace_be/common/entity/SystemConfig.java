@@ -5,10 +5,10 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 import java.util.UUID;
 
-/**
- * Entity SystemConfig — Lưu trữ các tham số cấu hình động toàn hệ thống dưới dạng Key-Value.
- * Map với bảng: system_configs
- */
+
+
+
+
 @Entity
 @Table(name = "system_configs")
 @Getter

@@ -17,10 +17,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * Controller dành riêng cho tài khoản Staff tự tra cứu thông tin cá nhân / lịch sử làm việc.
- * Base path: /api/staff
- */
+
+
+
+
 @Slf4j
 @RestController
 @RequestMapping("/api/staff")

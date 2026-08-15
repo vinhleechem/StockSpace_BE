@@ -94,7 +94,7 @@ class TenantStaffServiceTest {
                 .build();
     }
 
-    // ==================== sendInvitation Tests ====================
+
 
     @Test
     void testSendInvitation_Success() {
@@ -107,7 +107,7 @@ class TenantStaffServiceTest {
         when(subscriptionRepository.findFirstByTenantIdAndStatusAndEndDateGreaterThanEqualOrderByEndDateDesc(
                 eq(tenantId), eq(SubscriptionStatus.ACTIVE), any(LocalDate.class)))
                 .thenReturn(Optional.of(activeSubscription));
-        when(memberRepository.countByTenantIdAndIsActiveTrueAndIsDeletedFalse(tenantId)).thenReturn(2L); // Under quota (2 < 5)
+        when(memberRepository.countByTenantIdAndIsActiveTrueAndIsDeletedFalse(tenantId)).thenReturn(2L);
         when(invitationRepository.existsByEmailAndTenantIdAndStatus("staff@example.com", tenantId, InvitationStatus.PENDING))
                 .thenReturn(false);
         when(userRepository.findByEmail("staff@example.com")).thenReturn(Optional.empty());
@@ -132,7 +132,7 @@ class TenantStaffServiceTest {
         when(subscriptionRepository.findFirstByTenantIdAndStatusAndEndDateGreaterThanEqualOrderByEndDateDesc(
                 eq(tenantId), eq(SubscriptionStatus.ACTIVE), any(LocalDate.class)))
                 .thenReturn(Optional.of(activeSubscription));
-        when(memberRepository.countByTenantIdAndIsActiveTrueAndIsDeletedFalse(tenantId)).thenReturn(5L); // Quota reached (5 >= 5)
+        when(memberRepository.countByTenantIdAndIsActiveTrueAndIsDeletedFalse(tenantId)).thenReturn(5L);
 
         assertThrows(BadRequestException.class, () -> staffService.sendInvitation(tenantId, request));
         verify(invitationRepository, never()).save(any(StaffInvitation.class));
@@ -149,7 +149,7 @@ class TenantStaffServiceTest {
                 eq(tenantId), eq(SubscriptionStatus.ACTIVE), any(LocalDate.class)))
                 .thenReturn(Optional.of(activeSubscription));
         when(memberRepository.countByTenantIdAndIsActiveTrueAndIsDeletedFalse(tenantId)).thenReturn(3L);
-        when(invitationRepository.countByTenantIdAndStatus(tenantId, InvitationStatus.PENDING)).thenReturn(2L); // Total 3 + 2 = 5 >= 5
+        when(invitationRepository.countByTenantIdAndStatus(tenantId, InvitationStatus.PENDING)).thenReturn(2L);
 
         assertThrows(BadRequestException.class, () -> staffService.sendInvitation(tenantId, request));
         verify(invitationRepository, never()).save(any(StaffInvitation.class));
@@ -167,7 +167,7 @@ class TenantStaffServiceTest {
                 .thenReturn(Optional.of(activeSubscription));
         when(memberRepository.countByTenantIdAndIsActiveTrueAndIsDeletedFalse(tenantId)).thenReturn(2L);
         when(invitationRepository.existsByEmailAndTenantIdAndStatus("staff@example.com", tenantId, InvitationStatus.PENDING))
-                .thenReturn(true); // Duplicate invitation PENDING
+                .thenReturn(true);
 
         assertThrows(ResourceConflictException.class, () -> staffService.sendInvitation(tenantId, request));
         verify(invitationRepository, never()).save(any(StaffInvitation.class));
@@ -199,7 +199,7 @@ class TenantStaffServiceTest {
         verify(invitationRepository, never()).save(any(StaffInvitation.class));
     }
 
-    // ==================== previewInvitation Tests ====================
+
 
     @Test
     void testPreviewInvitation_Success() {
@@ -229,7 +229,7 @@ class TenantStaffServiceTest {
                 .fullName("Le Staff")
                 .tenant(tenantUser)
                 .status(InvitationStatus.PENDING)
-                .expiresAt(LocalDateTime.now().minusHours(1)) // Expired 1 hour ago
+                .expiresAt(LocalDateTime.now().minusHours(1))
                 .build();
 
         when(invitationRepository.findByToken(token)).thenReturn(Optional.of(invitation));
@@ -240,7 +240,7 @@ class TenantStaffServiceTest {
         assertTrue(response.getMessage().contains("hết hạn"));
     }
 
-    // ==================== acceptInvitation Tests ====================
+
 
     @Test
     void testAcceptInvitation_NewUser_Success() {
@@ -261,7 +261,7 @@ class TenantStaffServiceTest {
         Role staffRole = Role.builder().name(RoleType.ROLE_STAFF.name()).build();
 
         when(invitationRepository.findByToken("token-xyz")).thenReturn(Optional.of(invitation));
-        when(userRepository.findByEmail("newstaff@example.com")).thenReturn(Optional.empty()); // New user
+        when(userRepository.findByEmail("newstaff@example.com")).thenReturn(Optional.empty());
         when(roleRepository.findByName(RoleType.ROLE_STAFF.name())).thenReturn(Optional.of(staffRole));
         when(passwordEncoder.encode("Password123!")).thenReturn("encodedPassword");
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -272,7 +272,7 @@ class TenantStaffServiceTest {
         verify(memberRepository, times(1)).save(any(TenantMember.class));
     }
 
-    // ==================== listStaffs Tests ====================
+
 
     @Test
     void testListStaffs() {
@@ -290,7 +290,7 @@ class TenantStaffServiceTest {
         assertEquals("staff@example.com", response.getContent().get(0).getEmail());
     }
 
-    // ==================== removeStaff Tests ====================
+
 
     @Test
     void testRemoveStaff_Success() {
@@ -315,7 +315,7 @@ class TenantStaffServiceTest {
     }
 
 
-    // ==================== deactivateExcessStaffs Tests ====================
+
 
     @Test
     void testDeactivateExcessStaffs_Triggered() {
@@ -323,14 +323,14 @@ class TenantStaffServiceTest {
         TenantMember m2 = TenantMember.builder().id(UUID.randomUUID()).isActive(true).isDeleted(false).build();
         TenantMember m3 = TenantMember.builder().id(UUID.randomUUID()).isActive(true).isDeleted(false).build();
 
-        // 3 active staff members, new limit is 2. So the newest (m3) should be deactivated.
+
         when(memberRepository.findActiveStaffsOrderByJoinedAtAsc(tenantId)).thenReturn(List.of(m1, m2, m3));
 
         staffService.deactivateExcessStaffs(tenantId, 2);
 
         assertTrue(m1.isActive());
         assertTrue(m2.isActive());
-        assertFalse(m3.isActive()); // Excess staff deactivated
+        assertFalse(m3.isActive());
         verify(memberRepository, times(1)).save(m3);
     }
 }

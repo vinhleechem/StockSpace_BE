@@ -21,11 +21,11 @@ public class InventoryAuditResponse {
     private AuditStatus status;
     private String note;
 
-    // Người yêu cầu
+
     private UUID requestedById;
     private String requestedByName;
 
-    // Người duyệt (null nếu chưa duyệt)
+
     private UUID approvedById;
     private String approvedByName;
 

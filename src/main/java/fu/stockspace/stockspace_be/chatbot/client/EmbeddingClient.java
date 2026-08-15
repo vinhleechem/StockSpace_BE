@@ -15,13 +15,13 @@ import java.util.Map;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Fault-tolerant OpenRouter embedding client.
- *
- * <p>The public batch API preserves input order and represents an unavailable
- * embedding with an empty list. Callers can therefore fall back to lexical
- * retrieval without making an external outage a chatbot outage.</p>
- */
+
+
+
+
+
+
+
 @Slf4j
 @Component
 public class EmbeddingClient {
@@ -75,10 +75,10 @@ public class EmbeddingClient {
         return getEmbeddings(texts, embeddingDimensions);
     }
 
-    /**
-     * Embeds inputs in bounded remote batches while preserving input indexes.
-     * Blank inputs and failed batches produce empty vectors at their positions.
-     */
+
+
+
+
     public List<List<Float>> getEmbeddings(List<String> texts, int dimensions) {
         if (texts == null || texts.isEmpty()) {
             return List.of();
@@ -126,10 +126,10 @@ public class EmbeddingClient {
         return embeddingDimensions;
     }
 
-    /**
-     * Serializes a validated vector for the TEXT column. Empty input is null,
-     * never the misleading literal {@code []}.
-     */
+
+
+
+
     public String toVectorString(List<Float> vector) {
         if (vector == null || vector.isEmpty()) {
             return null;
@@ -149,11 +149,11 @@ public class EmbeddingClient {
         return serialized.append(']').toString();
     }
 
-    /**
-     * Bisects only input-related 4xx failures. This isolates a permanently
-     * invalid or oversized document without turning a provider outage,
-     * authentication failure, or rate limit into a request storm.
-     */
+
+
+
+
+
     private List<List<Float>> requestBatchWithIsolation(
             List<String> batch,
             int dimensions
@@ -228,7 +228,7 @@ public class EmbeddingClient {
             Thread.currentThread().interrupt();
             return new BatchAttempt(emptyBatch(batch.size()), false);
         } catch (WebClientResponseException exception) {
-            // Do not log the response body: providers can echo submitted text.
+
             boolean inputSpecificFailure = isInputSpecificFailure(exception);
             log.warn(
                     "[EmbeddingClient] Embedding batch rejected " +
@@ -242,8 +242,8 @@ public class EmbeddingClient {
                     inputSpecificFailure
             );
         } catch (Exception exception) {
-            // Do not include request text or exception messages: upstream errors
-            // can echo the submitted plaintext.
+
+
             log.warn(
                     "[EmbeddingClient] Embedding batch failed (items={}, cause={})",
                     batch.size(),

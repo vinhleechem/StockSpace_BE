@@ -162,7 +162,7 @@ class InventoryReceiptServiceTest {
                 .thenReturn(Optional.of(productSku));
         when(rackRepository.findById(rackId)).thenReturn(Optional.of(rack));
         when(binRepository.findById(binId)).thenReturn(Optional.of(binWithLimit));
-        when(stockBatchRepository.sumQuantityByBinId(binId)).thenReturn(40); // 40 existing + 20 incoming = 60 > 50
+        when(stockBatchRepository.sumQuantityByBinId(binId)).thenReturn(40);
 
         ReceiptItemRequest itemRequest = ReceiptItemRequest.builder()
                 .skuId(skuId)

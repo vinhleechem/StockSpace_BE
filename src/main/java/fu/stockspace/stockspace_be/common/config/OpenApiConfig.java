@@ -8,9 +8,9 @@ import io.swagger.v3.oas.models.security.SecurityScheme;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/**
- * Cấu hình OpenAPI (Swagger UI) hỗ trợ định dạng JWT Bearer Token để test API.
- */
+
+
+
 @Configuration
 public class OpenApiConfig {
 

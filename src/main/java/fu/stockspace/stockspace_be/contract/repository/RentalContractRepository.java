@@ -16,7 +16,7 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
 
     Optional<RentalContract> findByBookingId(UUID bookingId);
 
-    /** Hợp đồng của Tenant */
+
     @Query("""
             SELECT c FROM RentalContract c
             WHERE c.booking.tenant.id = :tenantId
@@ -24,7 +24,7 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
             """)
     Page<RentalContract> findByTenantId(@Param("tenantId") UUID tenantId, Pageable pageable);
 
-    /** Hợp đồng liên quan đến kho của Owner */
+
     @Query("""
             SELECT c FROM RentalContract c
             WHERE c.booking.warehouse.owner.id = :ownerId

@@ -1,6 +1,3 @@
-# Makefile — StockSpace shortcuts
-# Dùng: make <target>
-# Yêu cầu: make. Trên Windows dùng Git Bash hoặc WSL.
 
 PROD_FILES := -f docker-compose.yml -f docker-compose.prod.yml
 
@@ -9,7 +6,6 @@ PROD_FILES := -f docker-compose.yml -f docker-compose.prod.yml
         prod-up prod-down prod-build prod-logs prod-logs-db prod-logs-nginx prod-restart \
         status backup shell-app shell-db
 
-# ─────────────────────────────────────────────────────────────────────────────
 help:
 	@echo ""
 	@echo "  StockSpace — Available commands"
@@ -38,10 +34,6 @@ help:
 	@echo "  make shell-db       Shell vào postgres"
 	@echo ""
 
-# ─────────────────────────────────────────────────────────────────────────────
-# DEV LOCAL
-# docker compose tự merge docker-compose.yml + docker-compose.override.yml
-# ─────────────────────────────────────────────────────────────────────────────
 dev-up:
 	docker compose up -d
 
@@ -60,10 +52,6 @@ dev-logs-db:
 dev-restart:
 	docker compose restart app
 
-# ─────────────────────────────────────────────────────────────────────────────
-# PRODUCTION
-# Merge rõ ràng: docker-compose.yml + docker-compose.prod.yml
-# ─────────────────────────────────────────────────────────────────────────────
 prod-up:
 	docker compose $(PROD_FILES) up -d
 
@@ -85,9 +73,6 @@ prod-logs-nginx:
 prod-restart:
 	docker compose $(PROD_FILES) restart app
 
-# ─────────────────────────────────────────────────────────────────────────────
-# COMMON
-# ─────────────────────────────────────────────────────────────────────────────
 status:
 	@echo "── DEV ──────────────────────────────────────────"
 	docker compose ps 2>/dev/null || true

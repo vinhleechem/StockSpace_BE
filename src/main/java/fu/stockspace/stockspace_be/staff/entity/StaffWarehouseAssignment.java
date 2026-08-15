@@ -10,10 +10,10 @@ import lombok.experimental.SuperBuilder;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * Entity StaffWarehouseAssignment — Lưu vết lịch sử phân công Staff vào từng Kho cụ thể.
- * Map với bảng: staff_warehouse_assignments
- */
+
+
+
+
 @Entity
 @Table(
     name = "staff_warehouse_assignments",
@@ -36,45 +36,45 @@ public class StaffWarehouseAssignment extends BaseEntity {
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
-    /** Nhân viên kho được phân công */
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "staff_id", nullable = false)
     private User staff;
 
-    /** Doanh nghiệp sở hữu (Tenant) thực hiện phân công */
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tenant_id", nullable = false)
     private User tenant;
 
-    /** Kho hàng được phân công */
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "warehouse_id", nullable = false)
     private Warehouse warehouse;
 
-    /** Chức danh hiển thị tùy chỉnh (do Tenant tự điền, vd: "Thủ kho Ca 1") */
+
     @Column(name = "custom_title", length = 150)
     private String customTitle;
 
-    /** Người thực hiện phân công (User Tenant) */
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assigned_by", nullable = false)
     private User assignedBy;
 
-    /** Mốc thời gian bắt đầu phân công */
+
     @Column(name = "start_date", nullable = false)
     private LocalDateTime startDate;
 
-    /** Mốc thời gian kết thúc (null = đang hoạt động vô thời hạn) */
+
     @Column(name = "end_date")
     private LocalDateTime endDate;
 
-    /** Trạng thái phân công: ACTIVE, REVOKED, EXPIRED */
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)
     @Builder.Default
     private AssignmentStatus status = AssignmentStatus.ACTIVE;
 
-    /** Ghi chú / Lý do phân công */
+
     @Column(name = "notes", length = 500)
     private String notes;
 }

@@ -30,7 +30,7 @@ public class SystemConfigService {
     private final SystemConfigRepository configRepository;
     private final ServicePackageRepository packageRepository;
 
-    // Local in-memory cache to optimize configurations lookups
+
     private final Map<String, String> cache = new ConcurrentHashMap<>();
 
     @Transactional(readOnly = true)
@@ -87,7 +87,7 @@ public class SystemConfigService {
             config.setDescription(description);
         }
         configRepository.save(config);
-        cache.put(key, value); // Update local cache
+        cache.put(key, value);
         log.info("SystemConfig updated and local cache updated: {} = {}", key, value);
     }
 
@@ -136,7 +136,7 @@ public class SystemConfigService {
         }
 
         config = configRepository.save(config);
-        cache.put(configKey.getKey(), config.getConfigValue()); // Update local cache
+        cache.put(configKey.getKey(), config.getConfigValue());
         log.info("SystemConfig updated via Admin API and local cache updated: {} = {}", configKey.getKey(), config.getConfigValue());
 
         return SystemConfigResponse.builder()

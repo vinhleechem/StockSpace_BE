@@ -7,10 +7,10 @@ import lombok.experimental.SuperBuilder;
 import java.math.BigDecimal;
 import java.util.UUID;
 
-/**
- * Entity WarehouseBin — ô chứa nhỏ nhất/tầng kệ trong một kệ hàng (Rack).
- * Map với bảng: warehouse_bins
- */
+
+
+
+
 @Entity
 @Table(name = "warehouse_bins")
 @Getter

@@ -13,7 +13,7 @@ import java.util.UUID;
 @Builder
 public class CreateSkuRequest {
 
-    private UUID categoryId; // nullable
+    private UUID categoryId;
 
     @NotBlank(message = "Mã SKU không được để trống")
     private String skuCode;

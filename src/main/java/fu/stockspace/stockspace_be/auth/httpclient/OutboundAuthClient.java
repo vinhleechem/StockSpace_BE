@@ -7,9 +7,9 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 
-/**
- * Feign client gọi Google OAuth2 để exchange authorization code lấy access token.
- */
+
+
+
 @FeignClient(name = "outbound-auth-client", url = "https://oauth2.googleapis.com")
 public interface OutboundAuthClient {
 

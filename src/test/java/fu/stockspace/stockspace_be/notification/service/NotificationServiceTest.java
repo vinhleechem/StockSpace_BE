@@ -50,7 +50,7 @@ class NotificationServiceTest {
     void testPush_Success() {
         UUID userId = UUID.randomUUID();
         User user = User.builder().id(userId).email("user@test.com").build();
-        
+
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(notificationRepository.save(any(Notification.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -77,7 +77,7 @@ class NotificationServiceTest {
         UUID userId = UUID.randomUUID();
         when(userRepository.findById(userId)).thenReturn(Optional.empty());
 
-        assertThrows(ResourceNotFoundException.class, () -> 
+        assertThrows(ResourceNotFoundException.class, () ->
                 notificationService.push(userId, "Title", "Message", "SYSTEM")
         );
         verify(notificationRepository, never()).save(any(Notification.class));
@@ -146,7 +146,7 @@ class NotificationServiceTest {
 
         when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(notification));
 
-        assertThrows(ForbiddenException.class, () -> 
+        assertThrows(ForbiddenException.class, () ->
                 notificationService.markAsRead(userId, notificationId)
         );
         assertFalse(notification.isRead());
@@ -159,7 +159,7 @@ class NotificationServiceTest {
         UUID notificationId = UUID.randomUUID();
         when(notificationRepository.findById(notificationId)).thenReturn(Optional.empty());
 
-        assertThrows(ResourceNotFoundException.class, () -> 
+        assertThrows(ResourceNotFoundException.class, () ->
                 notificationService.markAsRead(userId, notificationId)
         );
         verify(notificationRepository, never()).save(any(Notification.class));

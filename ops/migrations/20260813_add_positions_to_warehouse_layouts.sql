@@ -1,6 +1,3 @@
--- Migration: Add positions column to warehouse_layouts
--- Date: 2026-08-13
--- Reason: Store the grid cell lock/paint states array sent by FE (e.g. ["1:0","2:1",...])
 
 DO $$
 BEGIN

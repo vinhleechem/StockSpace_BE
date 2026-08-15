@@ -7,10 +7,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
-/**
- * Fails closed when a production deployment would start with missing signing
- * material or without the privacy routing expected for private chatbot tools.
- */
+
+
+
+
 @Component
 @Profile("prod")
 public class ProductionConfigurationValidator {

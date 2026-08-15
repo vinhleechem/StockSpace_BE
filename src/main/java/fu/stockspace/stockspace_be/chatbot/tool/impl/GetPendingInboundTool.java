@@ -15,10 +15,10 @@ import org.springframework.stereotype.Component;
 
 import java.util.*;
 
-/**
- * Tool: getPendingInboundOrders
- * Xem danh sách các phiếu nhập kho (INBOUND) đang ở trạng thái PENDING chờ xử lý.
- */
+
+
+
+
 @Slf4j
 @Component
 @RequiredArgsConstructor

@@ -13,7 +13,7 @@ public class ResolveDisputeRequest {
     private String adminNote;
 
     @NotBlank(message = "Quyết định xử lý tiền cọc không được để trống")
-    @Pattern(regexp = "^(REFUND_TO_TENANT|FORFEIT_TO_OWNER|KEEP_IN_SYSTEM)$", 
+    @Pattern(regexp = "^(REFUND_TO_TENANT|FORFEIT_TO_OWNER|KEEP_IN_SYSTEM)$",
              message = "depositResolution phải là REFUND_TO_TENANT hoặc FORFEIT_TO_OWNER hoặc KEEP_IN_SYSTEM")
     private String depositResolution;
 }

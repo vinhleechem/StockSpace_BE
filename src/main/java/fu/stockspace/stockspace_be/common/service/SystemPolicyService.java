@@ -35,13 +35,13 @@ public class SystemPolicyService {
     public SystemPolicyResponse createPolicy(CreateSystemPolicyRequest request) {
         log.info("Admin creating new system policy version: {}", request.getVersion());
 
-        // Kiểm tra xem phiên bản chính sách đã tồn tại chưa
+
         boolean exists = systemPolicyRepository.findFirstByVersionAndIsDeletedFalse(request.getVersion()).isPresent();
         if (exists) {
             throw new ResourceConflictException("Phiên bản chính sách " + request.getVersion() + " đã tồn tại trong hệ thống");
         }
 
-        // Deactivate all old active policies
+
         List<SystemPolicy> activePolicies = systemPolicyRepository.findAllActivePolicies();
         for (SystemPolicy oldPolicy : activePolicies) {
             oldPolicy.setActive(false);

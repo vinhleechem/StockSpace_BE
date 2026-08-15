@@ -221,7 +221,7 @@ class ProductSkuServiceTest {
         ProductSku systemSku = ProductSku.builder()
                 .id(skuId)
                 .skuCode("SYS-SKU")
-                .tenant(null) // System SKU
+                .tenant(null)
                 .name("System Sku Name")
                 .uom(defaultUom)
                 .build();
@@ -270,7 +270,7 @@ class ProductSkuServiceTest {
                 .build();
 
         when(skuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(sku));
-        when(stockBatchRepository.existsBySkuIdAndIsDeletedFalse(skuId)).thenReturn(true); // Linked to stock batches
+        when(stockBatchRepository.existsBySkuIdAndIsDeletedFalse(skuId)).thenReturn(true);
 
         assertThrows(BadRequestException.class, () -> skuService.deleteSku(tenantId, skuId));
         verify(skuRepository, never()).save(any(ProductSku.class));

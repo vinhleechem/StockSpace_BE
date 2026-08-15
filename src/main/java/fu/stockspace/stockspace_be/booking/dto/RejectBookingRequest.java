@@ -4,9 +4,9 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.Setter;
 
-/**
- * DTO khi Owner từ chối một BookingRequest.
- */
+
+
+
 @Getter
 @Setter
 public class RejectBookingRequest {

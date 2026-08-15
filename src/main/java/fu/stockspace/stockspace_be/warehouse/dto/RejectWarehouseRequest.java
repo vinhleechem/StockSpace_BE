@@ -7,9 +7,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * DTO khi Admin từ chối duyệt một bài đăng Warehouse.
- */
+
+
+
 @Getter
 @Setter
 @NoArgsConstructor

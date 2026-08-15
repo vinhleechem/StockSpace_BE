@@ -12,9 +12,9 @@ import lombok.experimental.SuperBuilder;
 
 import java.time.LocalDateTime;
 
-/**
- * Base class cho tất cả các JPA entities chứa các thông tin kiểm toán (audit) chung.
- */
+
+
+
 @MappedSuperclass
 @Getter
 @Setter

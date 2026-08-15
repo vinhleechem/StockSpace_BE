@@ -18,7 +18,7 @@ public class WarehouseLayoutResponse {
     private Integer length;
     private Integer height;
 
-    // Layout Statistics
+
     private int totalRacks;
     private int totalBins;
     private int occupiedBins;
@@ -26,6 +26,6 @@ public class WarehouseLayoutResponse {
 
     private List<RackResponse> racks;
 
-    /** Mảng vị trí ô lưới, ví dụ: ["1:0","2:1","3:1",...]. 1 = đen/khóa, 0 = trắng/dùng được */
+
     private List<String> positions;
 }

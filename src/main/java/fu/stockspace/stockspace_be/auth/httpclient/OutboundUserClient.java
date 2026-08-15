@@ -5,9 +5,9 @@ import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
-/**
- * Feign client gọi Google API để lấy thông tin user bằng access token.
- */
+
+
+
 @FeignClient(name = "outbound-user-client", url = "https://www.googleapis.com")
 public interface OutboundUserClient {
 

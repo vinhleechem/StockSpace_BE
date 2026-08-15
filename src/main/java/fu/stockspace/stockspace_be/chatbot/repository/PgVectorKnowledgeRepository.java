@@ -12,13 +12,13 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Executes bounded nearest-neighbour retrieval inside PostgreSQL/pgvector.
- *
- * <p>Hibernate Vector renders {@code cosine_distance()} as pgvector's
- * index-eligible {@code <=>} operator. The direct distance ordering and hard
- * limit are intentional so PostgreSQL can use the partial HNSW index.</p>
- */
+
+
+
+
+
+
+
 @Repository
 public class PgVectorKnowledgeRepository {
 
@@ -93,11 +93,11 @@ public class PgVectorKnowledgeRepository {
         return List.copyOf(matches);
     }
 
-    /**
-     * pgvector applies ordinary WHERE filters after an approximate HNSW scan.
-     * Iterative scanning keeps expanding that scan until enough filtered rows
-     * are found, while strict_order preserves distance ordering.
-     */
+
+
+
+
+
     private void configureFilteredHnswScan() {
         Query iterativeScan = entityManager.createNativeQuery(
                 "SET LOCAL hnsw.iterative_scan = strict_order"

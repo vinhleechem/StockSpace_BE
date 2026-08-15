@@ -37,9 +37,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
-/**
- * Service quản lý toàn bộ vòng đời nhân viên kho (Staff) trong tổ chức Tenant.
- */
+
+
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -57,22 +57,22 @@ public class TenantStaffService {
     private final PasswordEncoder passwordEncoder;
 
 
-    // ==================== Gửi Lời Mời ====================
 
-    /**
-     * Tenant gửi lời mời nhân viên qua email.
-     *
-     * Kiểm tra:
-     *  1. Quota max_staff chưa đạt giới hạn
-     *  2. Chưa tồn tại lời mời PENDING cho email + tenant này
-     *  3. Email này chưa là Staff active của Tenant
-     */
+
+
+
+
+
+
+
+
+
     @Transactional
     public InvitationSentResponse sendInvitation(UUID tenantId, InviteStaffRequest request) {
         User tenant = userRepository.findById(tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
 
-        // 1. Kiểm tra quota max_staff
+
         Subscription activeSubscription = subscriptionRepository
                 .findFirstByTenantIdAndStatusAndEndDateGreaterThanEqualOrderByEndDateDesc(
                         tenantId, SubscriptionStatus.ACTIVE, LocalDate.now())
@@ -82,7 +82,7 @@ public class TenantStaffService {
         int maxStaff = (activeSubscription.getSnapshotMaxStaff() != null && activeSubscription.getSnapshotMaxStaff() > 0)
                 ? activeSubscription.getSnapshotMaxStaff()
                 : (activePkg != null && activePkg.getMaxStaff() != null ? activePkg.getMaxStaff() : 0);
-        if (maxStaff > 0) { // 0 = không giới hạn
+        if (maxStaff > 0) {
             long activeStaffCount = memberRepository.countByTenantIdAndIsActiveTrueAndIsDeletedFalse(tenantId);
             long pendingInviteCount = invitationRepository.countByTenantIdAndStatus(tenantId, InvitationStatus.PENDING);
             if ((activeStaffCount + pendingInviteCount) >= maxStaff) {
@@ -90,13 +90,13 @@ public class TenantStaffService {
             }
         }
 
-        // 2. Kiểm tra đã có lời mời PENDING chưa
+
         String email = request.getEmail().toLowerCase().trim();
         if (invitationRepository.existsByEmailAndTenantIdAndStatus(email, tenantId, InvitationStatus.PENDING)) {
             throw new ResourceConflictException(ErrorCode.STAFF_INVITATION_DUPLICATE);
         }
 
-        // 3. Kiểm tra email đã là Tenant/Owner hoặc đã là Staff active của Tenant chưa
+
         userRepository.findByEmail(email).ifPresent(existingUser -> {
             boolean isTenantOrOwner = existingUser.getRoles().stream()
                     .anyMatch(r -> RoleType.ROLE_TENANT.name().equals(r.getName()) || RoleType.ROLE_OWNER.name().equals(r.getName()));
@@ -108,7 +108,7 @@ public class TenantStaffService {
             }
         });
 
-        // 4. Tạo lời mời với token ngẫu nhiên (hết hạn sau 48 giờ)
+
         String token = UUID.randomUUID().toString();
         LocalDateTime expiresAt = LocalDateTime.now().plusHours(48);
 
@@ -123,7 +123,7 @@ public class TenantStaffService {
                 .build();
         invitationRepository.save(invitation);
 
-        // 5. Gửi email bất đồng bộ (không block response)
+
         emailService.sendStaffInvitationEmail(email, request.getFullName(), tenant.getFullName(), token);
 
         log.info("Staff invitation sent: tenant={} → email={}", tenantId, email);
@@ -136,12 +136,12 @@ public class TenantStaffService {
                 .build();
     }
 
-    // ==================== Preview Token (FE dùng trước khi render form) ====================
 
-    /**
-     * Validate token và trả về thông tin preview để FE render form nhập mật khẩu.
-     * Endpoint public, không cần xác thực.
-     */
+
+
+
+
+
     @Transactional(readOnly = true)
     public InvitationPreviewResponse previewInvitation(String token) {
         StaffInvitation invitation = invitationRepository.findByToken(token)
@@ -162,7 +162,7 @@ public class TenantStaffService {
         }
 
         if (invitation.isExpired() || invitation.getStatus() == InvitationStatus.EXPIRED) {
-            // Cập nhật trạng thái nếu chưa được cập nhật
+
             return InvitationPreviewResponse.builder()
                     .valid(false)
                     .message("Lời mời đã hết hạn. Vui lòng yêu cầu doanh nghiệp gửi lại lời mời mới.")
@@ -179,21 +179,21 @@ public class TenantStaffService {
                 .build();
     }
 
-    // ==================== Xác Nhận Lời Mời (Staff thiết lập mật khẩu) ====================
 
-    /**
-     * Staff xác nhận lời mời bằng cách thiết lập mật khẩu.
-     *
-     * Nếu email đã tồn tại trong hệ thống (là Tenant ở chỗ khác, hoặc Staff cũ):
-     *   → Không tạo User mới, chỉ tạo thêm TenantMember liên kết
-     *   → Staff vẫn đăng nhập bằng mật khẩu CŨ của họ (không reset)
-     *
-     * Nếu email chưa tồn tại:
-     *   → Tạo User mới với ROLE_STAFF + mật khẩu vừa nhập
-     */
+
+
+
+
+
+
+
+
+
+
+
     @Transactional
     public void acceptInvitation(AcceptInvitationRequest request) {
-        // 1. Validate token
+
         StaffInvitation invitation = invitationRepository.findByToken(request.getToken())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STAFF_INVITATION_NOT_FOUND));
 
@@ -207,29 +207,29 @@ public class TenantStaffService {
             throw new BadRequestException(ErrorCode.STAFF_INVITATION_EXPIRED);
         }
 
-        // 2. Validate password match
+
         if (!request.getPassword().equals(request.getConfirmPassword())) {
             throw new BadRequestException("Mật khẩu xác nhận không khớp");
         }
 
-        // 3. Tìm hoặc tạo User
+
         User staffUser = userRepository.findByEmail(invitation.getEmail())
                 .orElseGet(() -> createNewStaffUser(invitation, request.getPassword()));
 
-        // Nếu User đã tồn tại nhưng đang bị deactivate → kích hoạt lại
+
         if (!staffUser.isActive()) {
             staffUser.setActive(true);
             userRepository.save(staffUser);
         }
 
-        // 4. Kiểm tra chưa là thành viên của Tenant này
+
         UUID tenantId = invitation.getTenant().getId();
         if (memberRepository.existsByUserIdAndTenantIdAndIsDeletedFalse(
                 staffUser.getId(), tenantId)) {
             throw new ResourceConflictException(ErrorCode.STAFF_ALREADY_MEMBER);
         }
 
-        // 4.1 Kiểm tra lại Quota Staff trước khi cho phép gia nhập
+
         subscriptionRepository
                 .findFirstByTenantIdAndStatusAndEndDateGreaterThanEqualOrderByEndDateDesc(
                         tenantId, SubscriptionStatus.ACTIVE, LocalDate.now())
@@ -246,7 +246,7 @@ public class TenantStaffService {
                     }
                 });
 
-        // 5. Tạo TenantMember mới
+
         TenantMember member = TenantMember.builder()
                 .user(staffUser)
                 .tenant(invitation.getTenant())
@@ -255,7 +255,7 @@ public class TenantStaffService {
                 .build();
         memberRepository.save(member);
 
-        // 6. Cập nhật trạng thái lời mời
+
         invitation.setStatus(InvitationStatus.ACCEPTED);
         invitationRepository.save(invitation);
 
@@ -279,11 +279,11 @@ public class TenantStaffService {
         return userRepository.save(newUser);
     }
 
-    // ==================== Danh Sách Nhân Viên ====================
 
-    /**
-     * Lấy danh sách nhân viên của Tenant, hỗ trợ tìm kiếm và phân trang.
-     */
+
+
+
+
     @Transactional(readOnly = true)
     public Page<StaffMemberResponse> listStaffs(UUID tenantId, String keyword, Pageable pageable) {
         String kw = (keyword != null) ? keyword.trim() : "";
@@ -291,18 +291,18 @@ public class TenantStaffService {
                 .map(this::mapToResponse);
     }
 
-    // ==================== Xóa Nhân Viên ====================
 
-    /**
-     * Tenant xóa mềm nhân viên khỏi tổ chức (is_deleted = true).
-     * Cập nhật mốc thời gian nghỉ việc (resignedAt) và tự động thu hồi (REVOKE) toàn bộ phân công kho active.
-     */
+
+
+
+
+
     @Transactional
     public void removeStaff(UUID tenantId, UUID memberId) {
         TenantMember member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STAFF_NOT_FOUND));
 
-        // Kiểm tra membership này có thuộc Tenant này không
+
         if (!member.getTenant().getId().equals(tenantId)) {
             throw new ResourceNotFoundException(ErrorCode.STAFF_NOT_FOUND);
         }
@@ -317,7 +317,7 @@ public class TenantStaffService {
         member.setResignedAt(now);
         memberRepository.save(member);
 
-        // Tự động thu hồi toàn bộ phân công kho ACTIVE của Staff này dưới Tenant
+
         List<StaffWarehouseAssignment> activeAssignments = assignmentRepository
                 .findByStaffIdAndTenantIdAndStatus(member.getUser().getId(), tenantId, AssignmentStatus.ACTIVE);
         for (StaffWarehouseAssignment a : activeAssignments) {
@@ -330,7 +330,7 @@ public class TenantStaffService {
                 memberId, tenantId, activeAssignments.size());
     }
 
-    // ==================== Phân Công Kho Cho Nhân Viên ====================
+
 
     @Transactional
     public StaffAssignmentResponse assignWarehouseToStaff(UUID tenantId, UUID staffUserId, AssignWarehouseRequest request) {
@@ -339,13 +339,13 @@ public class TenantStaffService {
         User staff = userRepository.findById(staffUserId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STAFF_NOT_FOUND));
 
-        // 1. Kiểm tra Staff có đang là nhân viên active của Tenant này không
+
         boolean isMember = memberRepository.existsByUserIdAndTenantIdAndIsActiveTrueAndIsDeletedFalse(staffUserId, tenantId);
         if (!isMember) {
             throw new BadRequestException(ErrorCode.STAFF_NOT_FOUND);
         }
 
-        // 2. Kiểm tra Kho có đang được Tenant này thuê với hợp đồng ACTIVE không
+
         boolean isRented = contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(tenantId, request.getWarehouseId());
         if (!isRented) {
             throw new BadRequestException(ErrorCode.WAREHOUSE_NOT_FOUND);
@@ -354,7 +354,7 @@ public class TenantStaffService {
         Warehouse warehouse = warehouseRepository.findById(request.getWarehouseId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
 
-        // 3. Nếu Staff đã có phân công ACTIVE tại kho này -> cập nhật role / customTitle / notes
+
         List<StaffWarehouseAssignment> existing = assignmentRepository
                 .findByStaffIdAndTenantIdAndStatus(staffUserId, tenantId, AssignmentStatus.ACTIVE);
         for (StaffWarehouseAssignment a : existing) {
@@ -365,7 +365,7 @@ public class TenantStaffService {
             }
         }
 
-        // 4. Tạo mới bản ghi phân công kho
+
         StaffWarehouseAssignment assignment = StaffWarehouseAssignment.builder()
                 .staff(staff)
                 .tenant(tenant)
@@ -401,7 +401,7 @@ public class TenantStaffService {
         return list.stream().map(this::mapToAssignmentResponse).toList();
     }
 
-    // ==================== Lịch Sử Công Tác Sự Nghiệp Staff ====================
+
 
     @Transactional(readOnly = true)
     public StaffWorkHistoryResponse getStaffWorkHistory(UUID staffUserId) {
@@ -437,27 +437,27 @@ public class TenantStaffService {
                 .build();
     }
 
-    // ==================== Xử Lý Downgrade Gói ====================
 
-    /**
-     * Được gọi sau khi Tenant nâng/hạ cấp gói dịch vụ.
-     * Tự động khóa (isActive = false) các nhân viên mới nhất vượt quota mới.
-     *
-     * @param tenantId  UUID của Tenant
-     * @param maxStaff  Giới hạn mới từ gói vừa mua (0 = không giới hạn)
-     */
+
+
+
+
+
+
+
+
     @Transactional
     public void deactivateExcessStaffs(UUID tenantId, int maxStaff) {
         if (maxStaff <= 0) {
-            return; // 0 = không giới hạn, không cần khóa ai
+            return;
         }
 
         List<TenantMember> activeStaffs = memberRepository.findActiveStaffsOrderByJoinedAtAsc(tenantId);
         if (activeStaffs.size() <= maxStaff) {
-            return; // Không vượt quota, không cần làm gì
+            return;
         }
 
-        // Giữ maxStaff người đầu tiên (join sớm nhất), khóa phần còn lại
+
         List<TenantMember> toDeactivate = activeStaffs.subList(maxStaff, activeStaffs.size());
         for (TenantMember m : toDeactivate) {
             m.setActive(false);
@@ -466,7 +466,7 @@ public class TenantStaffService {
         }
     }
 
-    // ==================== Helper ====================
+
 
     private StaffMemberResponse mapToResponse(TenantMember member) {
         User user = member.getUser();

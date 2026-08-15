@@ -32,19 +32,19 @@ public class InventoryAuditItem extends BaseEntity {
     @JoinColumn(name = "batch_id", nullable = false)
     private StockBatch batch;
 
-    /** Số lượng hệ thống ghi nhận tại thời điểm tạo phiếu kiểm kê */
+
     @Column(name = "expected_quantity", nullable = false)
     private int expectedQuantity;
 
-    /** Số lượng thực đếm được — được điền khi submitAudit */
+
     @Column(name = "actual_quantity")
     private Integer actualQuantity;
 
-    /**
-     * Chênh lệch: actualQuantity - expectedQuantity
-     * Âm = thiếu, Dương = thừa.
-     * Tính toán và lưu lại khi submit.
-     */
+
+
+
+
+
     @Column(name = "discrepancy")
     private Integer discrepancy;
 

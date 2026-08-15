@@ -54,13 +54,13 @@ public class InventoryAuditService {
     private final SubscriptionService subscriptionService;
     private final TenantMemberRepository tenantMemberRepository;
 
-    // ==================== Tenant / Staff ====================
 
-    /**
-     * Tạo phiếu kiểm kê mới với status PENDING.
-     * Tự động snapshot expectedQuantity từ StockBatch.quantity hiện tại
-     * cho từng lô hàng trong kho.
-     */
+
+
+
+
+
+
     @Transactional
     public InventoryAuditResponse createAudit(UUID userId, CreateInventoryAuditRequest request) {
         checkSubscription(userId);
@@ -78,7 +78,7 @@ public class InventoryAuditService {
                 .build();
         audit = auditRepository.save(audit);
 
-        // Snapshot tồn kho hiện tại
+
         List<StockBatch> batches = stockBatchRepository.findByWarehouseIdAndIsDeletedFalse(
                 warehouse.getId(), Pageable.unpaged()).getContent();
 
@@ -99,10 +99,10 @@ public class InventoryAuditService {
         return mapToResponse(audit, items);
     }
 
-    /**
-     * Người dùng điền số lượng thực tế và tính discrepancy cho từng dòng.
-     * Chuyển status từ PENDING → SUBMITTED.
-     */
+
+
+
+
     @Transactional
     public InventoryAuditResponse submitAudit(UUID userId, UUID auditId, SubmitAuditRequest request) {
         InventoryAudit audit = getAuditForUser(auditId, userId);
@@ -128,17 +128,17 @@ public class InventoryAuditService {
         audit.setStatus(AuditStatus.SUBMITTED);
         audit = auditRepository.save(audit);
 
-        // Re-fetch updated items
+
         List<InventoryAuditItem> updatedItems = auditItemRepository.findByAuditId(auditId);
         log.info("InventoryAudit: Audit {} submitted by user {}", auditId, userId);
         return mapToResponse(audit, updatedItems);
     }
 
-    /**
-     * Duyệt phiếu kiểm kê — tự động sinh phiếu INBOUND/OUTBOUND điều chỉnh
-     * cho mỗi dòng có discrepancy != 0, cập nhật StockBatch và ghi InventoryTransaction.
-     * Chuyển status → APPROVED.
-     */
+
+
+
+
+
     @Transactional
     public InventoryAuditResponse approveAudit(UUID approverId, UUID auditId) {
         InventoryAudit audit = auditRepository.findById(auditId)
@@ -161,7 +161,7 @@ public class InventoryAuditService {
             int absDiscrepancy = Math.abs(item.getDiscrepancy());
             DocumentType type = item.getDiscrepancy() > 0 ? DocumentType.INBOUND : DocumentType.OUTBOUND;
 
-            // Tạo phiếu điều chỉnh tự động (internal call)
+
             inventoryReceiptService.createAdjustmentReceipt(
                     approverId, auditId, warehouseId,
                     type, item.getBatch().getId(), absDiscrepancy
@@ -172,7 +172,7 @@ public class InventoryAuditService {
         audit.setStatus(AuditStatus.APPROVED);
         audit = auditRepository.save(audit);
 
-        // Push notification cho người yêu cầu kiểm kê
+
         String warehouseName = audit.getWarehouse().getName();
         notificationService.push(
                 audit.getRequestedBy().getId(),
@@ -185,9 +185,9 @@ public class InventoryAuditService {
         return mapToResponse(audit, items);
     }
 
-    /**
-     * Từ chối phiếu kiểm kê — chuyển status → REJECTED.
-     */
+
+
+
     @Transactional
     public InventoryAuditResponse rejectAudit(UUID approverId, UUID auditId, String reason) {
         InventoryAudit audit = auditRepository.findById(auditId)
@@ -210,7 +210,7 @@ public class InventoryAuditService {
         }
         audit = auditRepository.save(audit);
 
-        // Push notification cho người yêu cầu
+
         String warehouseName = audit.getWarehouse().getName();
         notificationService.push(
                 audit.getRequestedBy().getId(),
@@ -224,9 +224,9 @@ public class InventoryAuditService {
         return mapToResponse(audit, items);
     }
 
-    /**
-     * Lấy danh sách phiếu kiểm kê của người dùng hiện tại (phân trang).
-     */
+
+
+
     @Transactional(readOnly = true)
     public PagedResponse<InventoryAuditResponse> getMyAudits(UUID userId, Pageable pageable) {
         Page<InventoryAudit> page = auditRepository.findByRequestedByIdAndIsDeletedFalse(userId, pageable);
@@ -236,9 +236,9 @@ public class InventoryAuditService {
         });
     }
 
-    /**
-     * Xem chi tiết phiếu kiểm kê — kiểm tra quyền truy cập.
-     */
+
+
+
     @Transactional(readOnly = true)
     public InventoryAuditResponse getAuditDetail(UUID userId, UUID auditId) {
         InventoryAudit audit = getAuditForUser(auditId, userId);
@@ -246,11 +246,11 @@ public class InventoryAuditService {
         return mapToResponse(audit, items);
     }
 
-    // ==================== Admin ====================
 
-    /**
-     * Admin xem toàn bộ phiếu kiểm kê hệ thống (phân trang).
-     */
+
+
+
+
     @Transactional(readOnly = true)
     public PagedResponse<InventoryAuditResponse> getAllAudits(Pageable pageable) {
         Page<InventoryAudit> page = auditRepository.findByIsDeletedFalse(pageable);
@@ -260,12 +260,12 @@ public class InventoryAuditService {
         });
     }
 
-    // ==================== Private Helpers ====================
+
 
     private InventoryAudit getAuditForUser(UUID auditId, UUID userId) {
         InventoryAudit audit = auditRepository.findById(auditId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.AUDIT_NOT_FOUND));
-        // Cho phép: người tạo phiếu hoặc approver
+
         boolean isRequester = audit.getRequestedBy().getId().equals(userId);
         boolean isApprover = audit.getApprovedBy() != null && audit.getApprovedBy().getId().equals(userId);
         if (!isRequester && !isApprover) {
@@ -285,9 +285,9 @@ public class InventoryAuditService {
         }
     }
 
-    /**
-     * Chỉ Tenant được quyết định kết quả kiểm kê. Staff chỉ kiểm đếm và nộp kết quả.
-     */
+
+
+
     private void ensureApproverIsTenant(User approver) {
         boolean isTenant = approver.getRoles() != null && approver.getRoles().stream()
                 .anyMatch(role -> RoleType.ROLE_TENANT.name().equals(role.getName()));

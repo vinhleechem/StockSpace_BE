@@ -12,7 +12,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class BinSaveRequest {
-    private UUID id; // null nếu tạo mới
+    private UUID id;
 
     private Integer shelfLevel;
 

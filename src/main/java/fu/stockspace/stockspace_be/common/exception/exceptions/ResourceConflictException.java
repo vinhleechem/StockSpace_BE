@@ -4,9 +4,9 @@ import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ResponseStatus;
 
-/**
- * Exception đại diện cho HTTP 409 Conflict.
- */
+
+
+
 @ResponseStatus(HttpStatus.CONFLICT)
 public class ResourceConflictException extends RuntimeException {
 

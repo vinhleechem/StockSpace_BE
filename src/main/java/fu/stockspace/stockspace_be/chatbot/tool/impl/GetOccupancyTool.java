@@ -12,10 +12,10 @@ import org.springframework.stereotype.Component;
 
 import java.util.*;
 
-/**
- * Tool: getOccupancyRate
- * Xem tỷ lệ lấp đầy kho và danh sách kho đang được thuê (RENTED) của Owner.
- */
+
+
+
+
 @Slf4j
 @Component
 @RequiredArgsConstructor

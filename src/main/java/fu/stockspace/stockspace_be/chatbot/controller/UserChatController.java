@@ -23,15 +23,15 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Controller xử lý chat cho user đã đăng nhập.
- *
- * Endpoints:
- *   POST   /api/chat/send              — Gửi tin nhắn (auto-detect role từ JWT)
- *   GET    /api/chat/sessions          — Danh sách phiên hội thoại
- *   GET    /api/chat/sessions/{id}/messages — Lịch sử tin nhắn
- *   DELETE /api/chat/sessions/{id}     — Xóa mềm phiên
- */
+
+
+
+
+
+
+
+
+
 @Tag(name = "Chatbot - User", description = "Chat API cho user đã đăng nhập")
 @RestController
 @RequestMapping("/api/chat")

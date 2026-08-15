@@ -13,29 +13,29 @@ import java.util.Optional;
 @Repository
 public interface RefreshTokenRepository extends JpaRepository<RefreshToken, java.util.UUID> {
 
-    /**
-     * Tìm token theo giá trị — dùng khi client gửi refresh request.
-     */
+
+
+
     @Query("SELECT rt FROM RefreshToken rt WHERE rt.token = :token AND rt.isDeleted = false")
     Optional<RefreshToken> findByToken(String token);
 
-    /**
-     * Xóa tất cả token của 1 user — dùng khi logout all devices.
-     */
+
+
+
     @Modifying
     @Query("UPDATE RefreshToken rt SET rt.isDeleted = true WHERE rt.user = :user")
     void deleteAllByUser(User user);
 
-    /**
-     * Xóa token cụ thể theo value — dùng khi logout 1 thiết bị.
-     */
+
+
+
     @Modifying
     @Query("UPDATE RefreshToken rt SET rt.isDeleted = true WHERE rt.token = :token")
     void deleteByToken(String token);
 
-    /**
-     * Xóa tất cả token đã hết hạn — dùng cho scheduled cleanup (nếu cần).
-     */
+
+
+
     @Modifying
     @Query("UPDATE RefreshToken rt SET rt.isDeleted = true WHERE rt.expiresAt < :now")
     void deleteAllExpiredBefore(LocalDateTime now);

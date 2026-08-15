@@ -11,26 +11,26 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface SystemPolicyRepository extends JpaRepository<SystemPolicy, UUID> {
-    
-    /**
-     * Tìm chính sách hệ thống đang hiệu lực và mới nhất theo thời gian tạo.
-     */
+
+
+
+
     Optional<SystemPolicy> findFirstByIsActiveTrueAndIsDeletedFalseOrderByCreatedAtDesc();
 
-    /**
-     * Tìm chính sách theo phiên bản.
-     */
+
+
+
     Optional<SystemPolicy> findFirstByVersionAndIsDeletedFalse(String version);
 
-    /**
-     * Lấy toàn bộ chính sách đang active.
-     */
+
+
+
     @Query("SELECT p FROM SystemPolicy p WHERE p.isActive = true AND p.isDeleted = false")
     List<SystemPolicy> findAllActivePolicies();
 
-    /**
-     * Lấy danh sách tất cả chính sách chưa xóa.
-     */
+
+
+
     @Query("SELECT p FROM SystemPolicy p WHERE p.isDeleted = false")
     Page<SystemPolicy> findAllPolicies(Pageable pageable);
 }

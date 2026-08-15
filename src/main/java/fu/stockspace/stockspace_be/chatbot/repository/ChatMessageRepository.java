@@ -10,13 +10,13 @@ import java.util.UUID;
 
 public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> {
 
-    /** Lấy 10 tin nhắn gần nhất của session làm context cho model. */
+
     List<ChatMessage> findTop10BySession_IdAndIsDeletedFalseOrderByCreatedAtDesc(UUID sessionId);
 
-    /**
-     * API legacy trả List nhưng được chặn ở 200 tin gần nhất để tránh tải toàn
-     * bộ một session không giới hạn vào bộ nhớ.
-     */
+
+
+
+
     List<ChatMessage> findTop200BySession_IdAndIsDeletedFalseOrderByCreatedAtDesc(UUID sessionId);
 
     @Modifying

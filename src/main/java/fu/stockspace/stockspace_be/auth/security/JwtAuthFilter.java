@@ -17,13 +17,13 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
-/**
- * Filter chạy một lần mỗi request — đọc JWT từ header và set SecurityContext.
- *
- * Flow: Request → JwtAuthFilter → SecurityConfig rules → Controller
- *
- * Chỉ Dev 1 sửa file này.
- */
+
+
+
+
+
+
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -41,13 +41,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         final String authHeader = request.getHeader("Authorization");
 
-        // Nếu không có header hoặc không phải Bearer token → skip
+
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        final String jwt = authHeader.substring(7); // Bỏ "Bearer " prefix
+        final String jwt = authHeader.substring(7);
         String userEmail = null;
 
         try {
@@ -56,7 +56,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             log.warn("Cannot extract email from JWT: {}", e.getMessage());
         }
 
-        // Nếu có email và chưa authenticate trong context hiện tại
+
         if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             UserDetails userDetails = userDetailsService.loadUserByUsername(userEmail);
 
@@ -68,12 +68,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 );
                 authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
-                // Set vào SecurityContext — từ đây @PreAuthorize sẽ hoạt động
+
                 SecurityContextHolder.getContext().setAuthentication(authToken);
 
-                // Lưu tenantId từ JWT claim vào request attribute để TenantContextUtil đọc
-                // Với Tenant/Owner/Admin: tenantId = userId của chính họ
-                // Với Staff: tenantId = UUID của Tenant mà Staff đang làm việc
+
+
+
                 String tenantIdClaim = jwtUtil.extractTenantId(jwt);
                 if (tenantIdClaim != null) {
                     request.setAttribute("tenantId", tenantIdClaim);

@@ -31,14 +31,14 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
-/**
- * Service xử lý nghiệp vụ RentalContract.
- *
- * Chức năng:
- * - Tạo hợp đồng từ BookingRequest (internal, gọi từ BookingService)
- * - Xem hợp đồng (Owner / Tenant)
- * - Xác nhận bàn giao — khi cả 2 confirm → COMPLETED + warehouse AVAILABLE
- */
+
+
+
+
+
+
+
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -51,12 +51,12 @@ public class ContractService {
     private final WalletService walletService;
     private final WarehouseLayoutService warehouseLayoutService;
     private final NotificationService notificationService;
-    // ==================== Internal ====================
-    /**
-     * Tạo RentalContract từ BookingRequest đã được APPROVED.
-     * Mặc định: startDate = hôm nay, endDate = 1 tháng sau.
-     * Gọi từ BookingService.approveBooking().
-     */
+
+
+
+
+
+
     @Transactional
     public RentalContract createContractFromBooking(UUID bookingId) {
         BookingRequest booking = bookingRepository.findById(bookingId)
@@ -73,28 +73,28 @@ public class ContractService {
         log.info("RentalContract created: {} in UNDER_NEGOTIATION state for booking {}", contract.getId(), bookingId);
         return contract;
     }
-    // ==================== Query ====================
-    /**
-     * Xem danh sách hợp đồng của Tenant (phân trang).
-     */
+
+
+
+
     @Transactional(readOnly = true)
     public Page<RentalContractResponse> getMyContractsAsTenant(UUID tenantId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         return contractRepository.findByTenantId(tenantId, pageable)
                 .map(this::mapToResponse);
     }
-    /**
-     * Xem danh sách hợp đồng của Owner (phân trang).
-     */
+
+
+
     @Transactional(readOnly = true)
     public Page<RentalContractResponse> getMyContractsAsOwner(UUID ownerId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         return contractRepository.findByOwnerId(ownerId, pageable)
                 .map(this::mapToResponse);
     }
-    /**
-     * Xem chi tiết hợp đồng — chỉ Owner hoặc Tenant liên quan mới xem được.
-     */
+
+
+
     @Transactional(readOnly = true)
     public RentalContractResponse getContractById(UUID contractId, UUID userId) {
         RentalContract contract = contractRepository.findById(contractId)
@@ -108,14 +108,14 @@ public class ContractService {
     }
 
 
-    // ==================== Confirm handover ====================
-    /**
-     * Một bên xác nhận bàn giao kho.
-     *
-     * Khi cả 2 bên confirm:
-     * - Contract status → COMPLETED
-     * - Warehouse status → AVAILABLE
-     */
+
+
+
+
+
+
+
+
     @Transactional
     public RentalContractResponse confirmHandover(UUID userId, UUID contractId) {
         RentalContract contract = contractRepository.findById(contractId)
@@ -140,7 +140,7 @@ public class ContractService {
         } else {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
-        // Cả 2 bên đã confirm → hoàn thành hợp đồng
+
         if (contract.isTenantConfirmed() && contract.isOwnerConfirmed()) {
             contract.setStatus(ContractStatus.COMPLETED);
             warehouseService.markAsAvailable(contract.getBooking().getWarehouse().getId());
@@ -152,10 +152,10 @@ public class ContractService {
         contract = contractRepository.save(contract);
         return mapToResponse(contract);
     }
-    // ==================== Admin internal ====================
-    /**
-     * Admin / Dispute handler: set contract status = DISPUTED.
-     */
+
+
+
+
     @Transactional
     public void setDisputed(UUID contractId) {
         RentalContract contract = contractRepository.findById(contractId)
@@ -163,7 +163,7 @@ public class ContractService {
         contract.setStatus(ContractStatus.DISPUTED);
         contractRepository.save(contract);
     }
-    // ==================== Private helpers ====================
+
     public RentalContractResponse mapToResponse(RentalContract c) {
         BookingRequest b = c.getBooking();
         var tenant = b.getTenant();
@@ -194,10 +194,10 @@ public class ContractService {
                 .cancelEvidence(c.getCancelEvidence())
                 .build();
     }
-    // ==================== Phase 1 Deal / Negotiation ====================
-    /**
-     * Owner cấu hình hợp đồng online sau khi ký hợp đồng giấy thành công.
-     */
+
+
+
+
     @Transactional
     public RentalContractResponse submitOnlineContract(UUID ownerId, UUID contractId, SubmitContractRequest request) {
         log.info("Owner {} submitting online contract for contract {}", ownerId, contractId);
@@ -221,7 +221,7 @@ public class ContractService {
         contract = contractRepository.save(contract);
         log.info("Contract {} status updated to PENDING_TENANT_CONFIRM", contractId);
 
-        // Push thông báo cho Tenant (Module 8 — Dev B)
+
         try {
             UUID tenantId = contract.getBooking().getTenant().getId();
             String warehouseName = contract.getBooking().getWarehouse().getName();
@@ -237,9 +237,9 @@ public class ContractService {
 
         return mapToResponse(contract);
     }
-    /**
-     * Tenant xác nhận kích hoạt hợp đồng (trong hạn 7 ngày).
-     */
+
+
+
     @Transactional
     public RentalContractResponse tenantConfirmContract(UUID tenantId, UUID contractId) {
         log.info("Tenant {} confirming contract {}", tenantId, contractId);
@@ -252,7 +252,7 @@ public class ContractService {
         if (contract.getStatus() != ContractStatus.PENDING_TENANT_CONFIRM) {
             throw new BadRequestException("Hợp đồng không ở trạng thái chờ xác nhận");
         }
-        // Kiểm tra thời hạn 7 ngày
+
         if (contract.getSubmittedAt() != null && contract.getSubmittedAt().plusDays(7).isBefore(LocalDateTime.now())) {
             throw new BadRequestException("Hợp đồng đã quá hạn 7 ngày để xác nhận. Tiền cọc đã bị xử lý.");
         }
@@ -266,7 +266,7 @@ public class ContractService {
             log.error("Failed to auto-clone layout for tenant {} after contract activation: {}", actualTenantId, e.getMessage());
         }
 
-        // Chuyển tiền cọc sang ví Owner khi Tenant confirm hợp đồng
+
         BigDecimal depositAmount = contract.getBooking().getDepositAmount();
         if (depositAmount == null) {
             depositAmount = BigDecimal.ZERO;
@@ -279,14 +279,14 @@ public class ContractService {
             contract.getBooking().getId(),
             null
         );
-        // =========================================================
+
         contract = contractRepository.save(contract);
         log.info("Contract {} is now ACTIVE", contractId);
         return mapToResponse(contract);
     }
-    /**
-     * Tenant báo thương thảo thất bại (report trước hoặc sau khi owner submit hợp đồng).
-     */
+
+
+
     @Transactional
     public RentalContractResponse tenantReportFailed(UUID tenantId, UUID contractId, TenantReportFailedRequest request) {
         log.info("Tenant {} reporting contract failed: {}", tenantId, contractId);
@@ -296,11 +296,11 @@ public class ContractService {
         if (!tenantId.equals(actualTenantId)) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
-        if (contract.getStatus() != ContractStatus.UNDER_NEGOTIATION 
+        if (contract.getStatus() != ContractStatus.UNDER_NEGOTIATION
                 && contract.getStatus() != ContractStatus.PENDING_TENANT_CONFIRM) {
             throw new BadRequestException("Không thể báo cáo sự cố hợp đồng ở trạng thái hiện tại");
         }
-        // Kiểm tra đã có tranh chấp chưa
+
         if (disputeRepository.findByContractId(contract.getId()).isPresent()) {
             throw new BadRequestException("Hợp đồng này đã có tranh chấp đang mở");
         }
@@ -320,9 +320,9 @@ public class ContractService {
         log.info("Dispute ticket opened for contract {} by Tenant", contractId);
         return mapToResponse(contract);
     }
-    /**
-     * Owner đề xuất hủy thương lượng (Cancel deal).
-     */
+
+
+
     @Transactional
     public RentalContractResponse ownerRequestCancel(UUID ownerId, UUID contractId, OwnerCancelRequest request) {
         log.info("Owner {} requesting cancellation for contract {}", ownerId, contractId);
@@ -332,7 +332,7 @@ public class ContractService {
         if (!ownerId.equals(actualOwnerId)) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
-        if (contract.getStatus() != ContractStatus.UNDER_NEGOTIATION 
+        if (contract.getStatus() != ContractStatus.UNDER_NEGOTIATION
                 && contract.getStatus() != ContractStatus.PENDING_TENANT_CONFIRM) {
             throw new BadRequestException("Không thể đề xuất hủy hợp đồng ở trạng thái hiện tại");
         }
@@ -344,9 +344,9 @@ public class ContractService {
         log.info("Contract {} is now PENDING_CANCEL", contractId);
         return mapToResponse(contract);
     }
-    /**
-     * Tenant phản hồi yêu cầu hủy deal của Owner.
-     */
+
+
+
     @Transactional
     public RentalContractResponse tenantRespondCancel(UUID tenantId, UUID contractId, boolean agree) {
         log.info("Tenant {} responding to cancel request for contract {}, agree={}", tenantId, contractId, agree);
@@ -360,17 +360,17 @@ public class ContractService {
             throw new BadRequestException("Hợp đồng không có yêu cầu hủy nào đang chờ phản hồi");
         }
         if (agree) {
-            // Tenant đồng ý hủy -> hoàn cọc 10%, trả lại kho về AVAILABLE
+
             contract.setStatus(ContractStatus.CANCELLED);
             warehouseService.markAsAvailable(contract.getBooking().getWarehouse().getId());
-            // =========================================================
-            // [INTEGRATION POINT — Dev B]
-            // Hoàn cọc 10% cho Tenant:
-            // walletService.refundBalance(
-            //     tenantId,
-            //     contract.getBooking().getDepositAmount(),
-            //     "Hoàn đặt cọc thuê kho do hai bên đồng thuận hủy: " + contract.getBooking().getWarehouse().getName()
-            // );
+
+
+
+
+
+
+
+
             walletService.refundBalance(
                 tenantId,
                 contract.getBooking().getDepositAmount(),
@@ -379,15 +379,15 @@ public class ContractService {
                 contract.getBooking().getId(),
                 null
             );
-            // =========================================================
-            // [FIX] Reset BookingRequest cũ → CANCELLED để không block booking lại kho sau này
+
+
             contract.getBooking().setStatus(fu.stockspace.stockspace_be.booking.entity.ApprovalStatus.CANCELLED);
             contract.getBooking().setRejectReason("Hợp đồng bị hủy do hai bên đồng thuận hủy");
             bookingRepository.save(contract.getBooking());
-            // =========================================================
+
             log.info("Contract {} cancelled by mutual agreement", contractId);
         } else {
-            // Tenant KHÔNG đồng ý hủy -> chuyển thành DISPUTED để Inspector giải quyết
+
             if (disputeRepository.findByContractId(contract.getId()).isPresent()) {
                 throw new BadRequestException("Hợp đồng này đã có tranh chấp đang mở");
             }

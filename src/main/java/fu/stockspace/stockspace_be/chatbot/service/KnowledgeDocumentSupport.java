@@ -9,9 +9,9 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 
-/**
- * Canonical serialization and hashing rules shared by indexing and retrieval.
- */
+
+
+
 public final class KnowledgeDocumentSupport {
 
     private KnowledgeDocumentSupport() {
