@@ -18,6 +18,7 @@ import fu.stockspace.stockspace_be.wms.product.entity.UnitOfMeasure;
 import fu.stockspace.stockspace_be.wms.product.repository.ProductSkuRepository;
 import fu.stockspace.stockspace_be.wms.stock.dto.StockBatchResponse;
 import fu.stockspace.stockspace_be.wms.stock.dto.StockSummaryResponse;
+import fu.stockspace.stockspace_be.wms.stock.dto.WarehouseStockOverviewResponse;
 import fu.stockspace.stockspace_be.wms.stock.entity.StockBatch;
 import fu.stockspace.stockspace_be.wms.stock.repository.StockBatchRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -169,6 +170,52 @@ class StockBatchServiceTest {
         assertEquals(ErrorCode.FORBIDDEN.getMessage(), exception.getMessage());
         verify(stockBatchRepository, never())
                 .findByWarehouseIdAndTenantId(any(), any(), any(Pageable.class));
+    }
+
+    @Test
+    void testGetStockOverviewByWarehouse_Success_IsScopedToWarehouseAndKeepsZeroStockSku() {
+        ProductSkuRepository.WarehouseStockOverviewProjection projection =
+                mock(ProductSkuRepository.WarehouseStockOverviewProjection.class);
+        when(projection.getSkuId()).thenReturn(skuId);
+        when(projection.getSkuCode()).thenReturn("SKU-01");
+        when(projection.getSkuName()).thenReturn("Product 1");
+        when(projection.getCategoryId()).thenReturn(null);
+        when(projection.getCategoryName()).thenReturn(null);
+        when(projection.getUomSymbol()).thenReturn("BOX");
+        when(projection.getUomName()).thenReturn("Box");
+        when(projection.getTotalQuantity()).thenReturn(0L);
+
+        when(subscriptionService.hasActiveSubscription(tenantId)).thenReturn(true);
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(tenantId, warehouseId))
+                .thenReturn(true);
+        PageRequest pageable = PageRequest.of(0, 20);
+        when(productSkuRepository.findWarehouseStockOverview(tenantId, warehouseId, pageable))
+                .thenReturn(new PageImpl<>(List.of(projection), pageable, 1));
+
+        PagedResponse<WarehouseStockOverviewResponse> response =
+                stockBatchService.getStockOverviewByWarehouse(tenantId, warehouseId, pageable);
+
+        assertNotNull(response);
+        assertEquals(1, response.getContent().size());
+        assertEquals(skuId, response.getContent().get(0).getSkuId());
+        assertEquals(warehouseId, response.getContent().get(0).getWarehouseId());
+        assertEquals(0, response.getContent().get(0).getTotalQuantity());
+        verify(productSkuRepository).findWarehouseStockOverview(tenantId, warehouseId, pageable);
+    }
+
+    @Test
+    void testGetStockOverviewByWarehouse_RejectsTenantWithoutActiveContract() {
+        when(subscriptionService.hasActiveSubscription(tenantId)).thenReturn(true);
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(tenantId, warehouseId))
+                .thenReturn(false);
+
+        PageRequest pageable = PageRequest.of(0, 20);
+        assertThrows(ForbiddenException.class,
+                () -> stockBatchService.getStockOverviewByWarehouse(tenantId, warehouseId, pageable));
+
+        verify(productSkuRepository, never()).findWarehouseStockOverview(any(), any(), any(Pageable.class));
     }
 
     // ==================== getStockSummaryByWarehouse ====================
