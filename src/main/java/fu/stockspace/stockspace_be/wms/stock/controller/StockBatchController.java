@@ -11,6 +11,7 @@ import fu.stockspace.stockspace_be.wms.receipt.service.InventoryReceiptService;
 import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.wms.stock.dto.StockBatchResponse;
 import fu.stockspace.stockspace_be.wms.stock.dto.StockSummaryResponse;
+import fu.stockspace.stockspace_be.wms.stock.dto.WarehouseStockOverviewResponse;
 import fu.stockspace.stockspace_be.wms.stock.service.StockBatchService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -49,6 +50,19 @@ public class StockBatchController {
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách tồn kho thành công", response));
     }
 
+
+    @GetMapping("/overview")
+    @Operation(summary = "View product-level stock overview for one warehouse")
+    public ResponseEntity<ApiResponse<PagedResponse<WarehouseStockOverviewResponse>>> getStockOverviewByWarehouse(
+            @RequestParam UUID warehouseId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        UUID tenantId = TenantContextUtil.getCurrentTenantId();
+        PagedResponse<WarehouseStockOverviewResponse> response = stockBatchService.getStockOverviewByWarehouse(
+                tenantId, warehouseId, getCurrentStaffIdIfApplicable(), PageRequest.of(page, size));
+        return ResponseEntity.ok(ApiResponse.success("Stock overview loaded successfully", response));
+    }
 
     @GetMapping("/sku/{skuId}")
     @Operation(summary = "Xem tồn kho chi tiết theo SKU — tổng hợp tất cả vị trí lưu trữ")
