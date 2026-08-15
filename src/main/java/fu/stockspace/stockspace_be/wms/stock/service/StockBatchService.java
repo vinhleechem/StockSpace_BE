@@ -108,9 +108,13 @@ public class StockBatchService {
                 .categoryName(row.getCategoryName())
                 .uomSymbol(row.getUomSymbol())
                 .uomName(row.getUomName())
+                .unitWeightKg(row.getUnitWeightKg())
+                .unitVolumeM3(row.getUnitVolumeM3())
                 .warehouseId(warehouse.getId())
                 .warehouseName(warehouse.getName())
                 .totalQuantity(row.getTotalQuantity())
+                .totalWeightKg(row.getTotalWeightKg())
+                .totalVolumeM3(row.getTotalVolumeM3())
                 .build());
     }
 

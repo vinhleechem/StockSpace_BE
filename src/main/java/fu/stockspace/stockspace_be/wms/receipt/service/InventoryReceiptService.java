@@ -44,9 +44,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.math.BigDecimal;
 
 @Slf4j
 @Service
@@ -94,6 +98,7 @@ public class InventoryReceiptService {
         receipt = receiptRepository.save(receipt);
 
         List<InventoryReceiptItem> savedItems = new ArrayList<>();
+        List<CapacityItem> capacityItems = new ArrayList<>();
         for (ReceiptItemRequest itemRequest : request.getItems()) {
             ProductSku sku = productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(
                             itemRequest.getSkuId(), tenantId)
@@ -112,7 +117,7 @@ public class InventoryReceiptService {
             }
 
             if (request.getType() == DocumentType.INBOUND) {
-                validateBinCapacity(bin, itemRequest.getQuantity());
+                capacityItems.add(new CapacityItem(bin, rack, sku, itemRequest.getQuantity()));
             }
 
             InventoryReceiptItem item = InventoryReceiptItem.builder()
@@ -125,6 +130,10 @@ public class InventoryReceiptService {
                     .build();
 
             savedItems.add(receiptItemRepository.save(item));
+        }
+
+        if (request.getType() == DocumentType.INBOUND) {
+            validateInboundCapacity(capacityItems, false);
         }
 
         log.info("WMS Receipt: Created receipt {} of type {} for warehouse {}", receipt.getId(), receipt.getType(), warehouse.getId());
@@ -163,6 +172,12 @@ public class InventoryReceiptService {
 
         List<InventoryReceiptItem> items = receiptItemRepository.findByReceiptId(receiptId);
 
+        if (receipt.getType() == DocumentType.INBOUND) {
+            validateInboundCapacity(items.stream()
+                    .map(item -> new CapacityItem(item.getBin(), item.getRack(), item.getSku(), item.getQuantity()))
+                    .toList(), true);
+        }
+
         for (InventoryReceiptItem item : items) {
             UUID skuId = item.getSku().getId();
             UUID warehouseId = receipt.getWarehouse().getId();
@@ -170,7 +185,6 @@ public class InventoryReceiptService {
             UUID binId = item.getBin().getId();
 
             if (receipt.getType() == DocumentType.INBOUND) {
-                validateBinCapacity(item.getBin(), item.getQuantity());
                 StockBatch batch = stockBatchRepository
                         .findBySkuIdAndWarehouseIdAndRackIdAndBinIdAndIsDeletedFalse(skuId, warehouseId, rackId, binId)
                         .orElse(null);
@@ -373,6 +387,22 @@ public class InventoryReceiptService {
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
+        if (quantity <= 0) {
+            throw new BadRequestException("Adjustment quantity must be greater than 0");
+        }
+
+        StockBatch batch = stockBatchRepository.findByIdAndIsDeletedFalse(batchId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STOCK_BATCH_NOT_FOUND));
+        ProductSku sku = productSkuRepository.findByIdAndIsDeletedFalse(batch.getSkuId())
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.SKU_NOT_FOUND));
+
+        int delta = (type == DocumentType.INBOUND) ? quantity : -quantity;
+        if (batch.getQuantity() + delta < 0) {
+            throw new BadRequestException(ErrorCode.STOCK_INSUFFICIENT_QUANTITY);
+        }
+        if (type == DocumentType.INBOUND) {
+            validateInboundCapacity(List.of(new CapacityItem(batch.getBin(), batch.getRack(), sku, quantity)), true);
+        }
 
 
         InventoryReceipt receipt = InventoryReceipt.builder()
@@ -386,11 +416,6 @@ public class InventoryReceiptService {
         receipt = receiptRepository.save(receipt);
 
 
-        StockBatch batch = stockBatchRepository.findById(batchId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STOCK_BATCH_NOT_FOUND));
-        ProductSku sku = productSkuRepository.findByIdAndIsDeletedFalse(batch.getSkuId())
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.SKU_NOT_FOUND));
-
         InventoryReceiptItem item = InventoryReceiptItem.builder()
                 .receipt(receipt)
                 .sku(sku)
@@ -402,7 +427,6 @@ public class InventoryReceiptService {
         receiptItemRepository.save(item);
 
 
-        int delta = (type == DocumentType.INBOUND) ? quantity : -quantity;
         batch.setQuantity(batch.getQuantity() + delta);
         stockBatchRepository.save(batch);
 
@@ -545,23 +569,134 @@ public class InventoryReceiptService {
         return getTransactionsByBatch(batchId, pageable);
     }
 
-    private void validateBinCapacity(WarehouseBin bin, int incomingQuantity) {
-        if (bin == null) return;
-        int currentQtyInBin = stockBatchRepository.sumQuantityByBinId(bin.getId());
-        java.math.BigDecimal totalQtyAfterInbound = java.math.BigDecimal.valueOf((long) currentQtyInBin + incomingQuantity);
+    private void validateInboundCapacity(List<CapacityItem> items, boolean lockLocations) {
+        if (items == null || items.isEmpty()) return;
 
-        if (bin.getMaxWeight() != null && bin.getMaxWeight().compareTo(java.math.BigDecimal.ZERO) > 0) {
-            if (totalQtyAfterInbound.compareTo(bin.getMaxWeight()) > 0) {
-                throw new BadRequestException("Vượt quá sức chứa trọng lượng tối đa của ô " + bin.getName() +
-                        " (Tối đa: " + bin.getMaxWeight() + ", Hiện tại + Nhập mới: " + totalQtyAfterInbound + ")");
+        items.forEach(item -> {
+            if (item.quantity() <= 0) {
+                throw new BadRequestException("Inbound quantity must be greater than 0");
             }
+        });
+
+        Map<UUID, WarehouseRack> racks = new HashMap<>();
+        Map<UUID, WarehouseBin> bins = new HashMap<>();
+        for (CapacityItem item : items) {
+            WarehouseRack rack = item.rack() != null
+                    ? item.rack()
+                    : item.bin() != null ? item.bin().getRack() : null;
+            if (rack != null && rack.getId() != null) racks.put(rack.getId(), rack);
+            if (item.bin() != null && item.bin().getId() != null) bins.put(item.bin().getId(), item.bin());
         }
 
-        if (bin.getMaxVolume() != null && bin.getMaxVolume().compareTo(java.math.BigDecimal.ZERO) > 0) {
-            if (totalQtyAfterInbound.compareTo(bin.getMaxVolume()) > 0) {
-                throw new BadRequestException("Vượt quá sức chứa thể tích tối đa của ô " + bin.getName() +
-                        " (Tối đa: " + bin.getMaxVolume() + ", Hiện tại + Nhập mới: " + totalQtyAfterInbound + ")");
+        if (lockLocations) {
+            racks.keySet().stream().sorted(UUID::compareTo).forEach(rackId ->
+                    Optional.ofNullable(rackRepository.findByIdForUpdate(rackId))
+                            .flatMap(optional -> optional)
+                            .ifPresent(rack -> racks.put(rackId, rack)));
+            bins.keySet().stream().sorted(UUID::compareTo).forEach(binId ->
+                    Optional.ofNullable(binRepository.findByIdForUpdate(binId))
+                            .flatMap(optional -> optional)
+                            .ifPresent(bin -> bins.put(binId, bin)));
+        }
+
+        for (WarehouseRack rack : racks.values()) {
+            boolean weightLimited = isLimited(rack.getMaxWeight());
+            boolean volumeLimited = isLimited(rack.getMaxVolume());
+            if (!weightLimited && !volumeLimited) continue;
+
+            PhysicalLoad current = calculateLoad(stockBatchRepository.findByRackId(rack.getId()),
+                    weightLimited, volumeLimited);
+            PhysicalLoad incoming = calculateLoad(items.stream()
+                    .filter(item -> sameRack(item, rack))
+                    .toList(), weightLimited, volumeLimited);
+            assertCapacity("rack", rack.getName(), rack.getMaxWeight(), rack.getMaxVolume(),
+                    current.plus(incoming));
+        }
+
+        for (WarehouseBin bin : bins.values()) {
+            boolean weightLimited = isLimited(bin.getMaxWeight());
+            boolean volumeLimited = isLimited(bin.getMaxVolume());
+            if (!weightLimited && !volumeLimited) continue;
+
+            PhysicalLoad current = calculateLoad(stockBatchRepository.findByBinId(bin.getId()),
+                    weightLimited, volumeLimited);
+            PhysicalLoad incoming = calculateLoad(items.stream()
+                    .filter(item -> item.bin() != null && bin.getId().equals(item.bin().getId()))
+                    .toList(), weightLimited, volumeLimited);
+            assertCapacity("bin", bin.getName(), bin.getMaxWeight(), bin.getMaxVolume(),
+                    current.plus(incoming));
+        }
+    }
+
+    private boolean sameRack(CapacityItem item, WarehouseRack rack) {
+        WarehouseRack itemRack = item.rack() != null
+                ? item.rack()
+                : item.bin() != null ? item.bin().getRack() : null;
+        return itemRack != null && rack.getId().equals(itemRack.getId());
+    }
+
+    private PhysicalLoad calculateLoad(List<?> source, boolean weightRequired, boolean volumeRequired) {
+        BigDecimal weight = BigDecimal.ZERO;
+        BigDecimal volume = BigDecimal.ZERO;
+
+        for (Object value : source) {
+            ProductSku sku;
+            int quantity;
+            if (value instanceof StockBatch batch) {
+                if (batch.isDeleted() || !batch.isActive()) continue;
+                sku = productSkuRepository.findByIdAndIsDeletedFalse(batch.getSkuId())
+                        .orElseThrow(() -> new BadRequestException("An active stock batch references a missing SKU"));
+                quantity = batch.getQuantity();
+            } else {
+                CapacityItem item = (CapacityItem) value;
+                sku = item.sku();
+                quantity = item.quantity();
             }
+
+            if (weightRequired && !hasPositive(sku.getUnitWeightKg())) {
+                throw new BadRequestException("SKU " + sku.getSkuCode()
+                        + " is missing unitWeightKg; capacity-limited inbound is not allowed");
+            }
+            if (volumeRequired && !hasPositive(sku.getUnitVolumeM3())) {
+                throw new BadRequestException("SKU " + sku.getSkuCode()
+                        + " is missing unitVolumeM3; capacity-limited inbound is not allowed");
+            }
+            if (weightRequired) {
+                weight = weight.add(sku.getUnitWeightKg().multiply(BigDecimal.valueOf(quantity)));
+            }
+            if (volumeRequired) {
+                volume = volume.add(sku.getUnitVolumeM3().multiply(BigDecimal.valueOf(quantity)));
+            }
+        }
+        return new PhysicalLoad(weight, volume);
+    }
+
+    private void assertCapacity(String type, String name, BigDecimal maxWeight,
+                                BigDecimal maxVolume, PhysicalLoad total) {
+        if (isLimited(maxWeight) && total.weight().compareTo(maxWeight) > 0) {
+            throw new BadRequestException("Physical weight capacity exceeded for " + type + " " + name
+                    + " (limit=" + maxWeight + " kg, requested=" + total.weight() + " kg)");
+        }
+        if (isLimited(maxVolume) && total.volume().compareTo(maxVolume) > 0) {
+            throw new BadRequestException("Physical volume capacity exceeded for " + type + " " + name
+                    + " (limit=" + maxVolume + " m3, requested=" + total.volume() + " m3)");
+        }
+    }
+
+    private boolean isLimited(BigDecimal capacity) {
+        return capacity != null && capacity.signum() > 0;
+    }
+
+    private boolean hasPositive(BigDecimal value) {
+        return value != null && value.signum() > 0;
+    }
+
+    private record CapacityItem(WarehouseBin bin, WarehouseRack rack, ProductSku sku, int quantity) {
+    }
+
+    private record PhysicalLoad(BigDecimal weight, BigDecimal volume) {
+        private PhysicalLoad plus(PhysicalLoad other) {
+            return new PhysicalLoad(weight.add(other.weight), volume.add(other.volume));
         }
     }
 

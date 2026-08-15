@@ -162,7 +162,15 @@ class InventoryReceiptServiceTest {
                 .thenReturn(Optional.of(productSku));
         when(rackRepository.findById(rackId)).thenReturn(Optional.of(rack));
         when(binRepository.findById(binId)).thenReturn(Optional.of(binWithLimit));
-        when(stockBatchRepository.sumQuantityByBinId(binId)).thenReturn(40);
+        productSku.setUnitWeightKg(java.math.BigDecimal.ONE);
+        productSku.setUnitVolumeM3(java.math.BigDecimal.ONE);
+        StockBatch existingBatch = StockBatch.builder()
+                .skuId(skuId)
+                .bin(binWithLimit)
+                .rack(rack)
+                .quantity(40)
+                .build();
+        when(stockBatchRepository.findByBinId(binId)).thenReturn(List.of(existingBatch));
 
         ReceiptItemRequest itemRequest = ReceiptItemRequest.builder()
                 .skuId(skuId)
@@ -178,6 +186,83 @@ class InventoryReceiptServiceTest {
                 .build();
 
         assertThrows(BadRequestException.class, () -> receiptService.createReceipt(userId, request));
+    }
+
+    @Test
+    void testCreateReceipt_Inbound_AggregatesPhysicalWeightAcrossItems() {
+        WarehouseRack limitedRack = WarehouseRack.builder()
+                .id(rackId)
+                .layout(layout)
+                .name("Rack Limited")
+                .maxWeight(java.math.BigDecimal.valueOf(50))
+                .build();
+        WarehouseBin unlimitedBin = WarehouseBin.builder()
+                .id(binId)
+                .rack(limitedRack)
+                .name("Bin 1")
+                .build();
+        productSku.setUnitWeightKg(java.math.BigDecimal.valueOf(2));
+        productSku.setUnitVolumeM3(java.math.BigDecimal.valueOf(0.1));
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
+        when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(receiptRepository.save(any(InventoryReceipt.class))).thenAnswer(i -> i.getArgument(0));
+        when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, userId))
+                .thenReturn(Optional.of(productSku));
+        when(rackRepository.findById(rackId)).thenReturn(Optional.of(limitedRack));
+        when(binRepository.findById(binId)).thenReturn(Optional.of(unlimitedBin));
+        when(stockBatchRepository.findByRackId(rackId)).thenReturn(List.of());
+
+        ReceiptItemRequest firstItem = ReceiptItemRequest.builder()
+                .skuId(skuId).quantity(15).rackId(rackId).binId(binId).build();
+        ReceiptItemRequest secondItem = ReceiptItemRequest.builder()
+                .skuId(skuId).quantity(15).rackId(rackId).binId(binId).build();
+        CreateInventoryReceiptRequest request = CreateInventoryReceiptRequest.builder()
+                .warehouseId(warehouseId)
+                .type(DocumentType.INBOUND)
+                .items(List.of(firstItem, secondItem))
+                .build();
+
+        BadRequestException exception = assertThrows(BadRequestException.class,
+                () -> receiptService.createReceipt(userId, request));
+
+        assertTrue(exception.getMessage().contains("weight capacity exceeded"));
+    }
+
+    @Test
+    void testCreateReceipt_Inbound_UsesCubicMetersForVolumeCapacity() {
+        WarehouseBin volumeLimitedBin = WarehouseBin.builder()
+                .id(binId)
+                .rack(rack)
+                .name("Volume Limited Bin")
+                .maxVolume(java.math.BigDecimal.valueOf(0.5))
+                .build();
+        productSku.setUnitWeightKg(java.math.BigDecimal.ONE);
+        productSku.setUnitVolumeM3(java.math.BigDecimal.valueOf(0.1));
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
+        when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(receiptRepository.save(any(InventoryReceipt.class))).thenAnswer(i -> i.getArgument(0));
+        when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, userId))
+                .thenReturn(Optional.of(productSku));
+        when(rackRepository.findById(rackId)).thenReturn(Optional.of(rack));
+        when(binRepository.findById(binId)).thenReturn(Optional.of(volumeLimitedBin));
+        when(stockBatchRepository.findByBinId(binId)).thenReturn(List.of());
+
+        ReceiptItemRequest item = ReceiptItemRequest.builder()
+                .skuId(skuId).quantity(6).rackId(rackId).binId(binId).build();
+        CreateInventoryReceiptRequest request = CreateInventoryReceiptRequest.builder()
+                .warehouseId(warehouseId)
+                .type(DocumentType.INBOUND)
+                .items(List.of(item))
+                .build();
+
+        BadRequestException exception = assertThrows(BadRequestException.class,
+                () -> receiptService.createReceipt(userId, request));
+
+        assertTrue(exception.getMessage().contains("volume capacity exceeded"));
     }
 
     @Test
