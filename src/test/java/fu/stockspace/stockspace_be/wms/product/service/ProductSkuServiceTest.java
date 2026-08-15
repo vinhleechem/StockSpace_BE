@@ -26,6 +26,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
 import java.util.Collections;
+import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -136,6 +137,8 @@ class ProductSkuServiceTest {
                 .skuCode("NEW-SKU")
                 .name("New product")
                 .uomId(defaultUom.getId())
+                .unitWeightKg(new BigDecimal("2.5"))
+                .unitVolumeM3(new BigDecimal("0.08"))
                 .specifications(Collections.singletonMap("weight", "1kg"))
                 .build();
 
@@ -155,6 +158,8 @@ class ProductSkuServiceTest {
         assertEquals("NEW-SKU", response.getSkuCode());
         assertEquals("New product", response.getName());
         assertEquals(defaultUom.getId(), response.getUomId());
+        assertEquals(new BigDecimal("2.5"), response.getUnitWeightKg());
+        assertEquals(new BigDecimal("0.08"), response.getUnitVolumeM3());
         assertEquals("PCS", response.getUomCode());
         assertEquals("1kg", response.getSpecifications().get("weight"));
         verify(skuRepository, times(1)).save(any(ProductSku.class));
@@ -200,6 +205,8 @@ class ProductSkuServiceTest {
         UpdateSkuRequest request = UpdateSkuRequest.builder()
                 .name("New Name")
                 .uomId(newUom.getId())
+                .unitWeightKg(new BigDecimal("1.25"))
+                .unitVolumeM3(new BigDecimal("0.05"))
                 .build();
 
         when(skuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(sku));
