@@ -29,12 +29,14 @@ WHERE coordinate_x IS NULL OR coordinate_y IS NULL OR position_z IS NULL
    OR max_weight < 0 OR max_volume < 0
    OR (max_volume > 0 AND max_volume > width * length * height);
 
--- 4. Rack bounds against the parent layout (rotation 0/180 only).
+-- 4. Rack bounds against the parent layout (rotation-aware).
 SELECT r.id, r.name, l.id AS layout_id
 FROM warehouse_racks r
 JOIN warehouse_layouts l ON l.id = r.layout_id
-WHERE r.coordinate_x + r.width > l.width
-   OR r.coordinate_y + r.length > l.length
+WHERE r.coordinate_x
+          + CASE WHEN COALESCE(r.rotation, 0) IN (90, 270) THEN r.length ELSE r.width END > l.width
+   OR r.coordinate_y
+          + CASE WHEN COALESCE(r.rotation, 0) IN (90, 270) THEN r.width ELSE r.length END > l.length
    OR r.position_z + r.height > l.height;
 
 -- 5. Bin bounds against the parent rack. Bin coordinates are rack-local.
@@ -78,13 +80,40 @@ WHERE is_deleted = false
 GROUP BY sku_id, warehouse_id, rack_id, bin_id
 HAVING COUNT(*) > 1;
 
--- 8. Existing stock whose SKU cannot be converted to physical load.
-SELECT DISTINCT s.id, s.sku_code, s.name, s.unit_weight_kg, s.unit_volume_m3
+-- 8a. The next check depends on the SKU physical-property migration.
+-- This status query is safe to run before that migration.
+SELECT CASE
+           WHEN COUNT(*) = 2 THEN 'READY: SKU physical-property columns exist; run check 8b.'
+           ELSE 'SKIPPED: run 20260815_add_sku_physical_properties.sql, then rerun check 8b.'
+       END AS sku_physical_property_check_status
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name = 'product_skus'
+  AND column_name IN ('unit_weight_kg', 'unit_volume_m3');
+
+-- 8b. Existing stock whose SKU cannot be converted to physical load.
+-- Uses JSON field access so this file remains parseable before the migration.
+WITH schema_state AS (
+    SELECT COUNT(*) = 2 AS physical_columns_ready
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'product_skus'
+      AND column_name IN ('unit_weight_kg', 'unit_volume_m3')
+)
+SELECT DISTINCT s.id,
+       s.sku_code,
+       s.name,
+       NULLIF(to_jsonb(s) ->> 'unit_weight_kg', '')::numeric AS unit_weight_kg,
+       NULLIF(to_jsonb(s) ->> 'unit_volume_m3', '')::numeric AS unit_volume_m3
 FROM product_skus s
 JOIN stock_batches b ON b.sku_id = s.id
-WHERE b.is_deleted = false
-  AND (s.unit_weight_kg IS NULL OR s.unit_weight_kg <= 0
-    OR s.unit_volume_m3 IS NULL OR s.unit_volume_m3 <= 0);
+CROSS JOIN schema_state
+WHERE schema_state.physical_columns_ready
+  AND b.is_deleted = false
+  AND (NULLIF(to_jsonb(s) ->> 'unit_weight_kg', '')::numeric IS NULL
+    OR NULLIF(to_jsonb(s) ->> 'unit_weight_kg', '')::numeric <= 0
+    OR NULLIF(to_jsonb(s) ->> 'unit_volume_m3', '')::numeric IS NULL
+    OR NULLIF(to_jsonb(s) ->> 'unit_volume_m3', '')::numeric <= 0);
 
 -- 9. Legacy zero capacities. Current application treats NULL and 0 as unlimited.
 -- Review these rows before normalizing 0 to NULL.
