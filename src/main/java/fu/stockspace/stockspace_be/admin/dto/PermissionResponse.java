@@ -5,9 +5,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * DTO trả về thông tin chi tiết của Permission.
- */
+
+
+
 @Data
 @Builder
 @NoArgsConstructor

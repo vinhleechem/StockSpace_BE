@@ -29,9 +29,9 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
-/**
- * Bounded hybrid retrieval over the application-managed system knowledge base.
- */
+
+
+
 @Slf4j
 @Component
 public class SearchSystemPolicyTool implements ChatTool {
@@ -160,7 +160,7 @@ public class SearchSystemPolicyTool implements ChatTool {
                             maxCandidates
                     );
                 } catch (RuntimeException exception) {
-                    // Database details and user text are deliberately omitted.
+
                     log.warn(
                             "[SearchSystemPolicyTool] pgvector retrieval unavailable; using lexical fallback (cause={})",
                             exception.getClass().getSimpleName()
@@ -188,11 +188,11 @@ public class SearchSystemPolicyTool implements ChatTool {
             boolean usedPgVector = !semanticScores.isEmpty();
             boolean usedLegacyText = false;
             if (pgQueryVector != null) {
-                // One-release expand/contract bridge. During a partial
-                // backfill, merge TEXT cosine scores for candidates that do
-                // not yet have a native pgvector score. Waiting until the
-                // native result set is completely empty would make the first
-                // indexed row hide semantic-only legacy rows.
+
+
+
+
+
                 for (SystemKnowledge candidate : lexicalCandidates) {
                     if (semanticScores.containsKey(candidate.getId())) {
                         continue;
@@ -275,7 +275,7 @@ public class SearchSystemPolicyTool implements ChatTool {
             }
             return objectMapper.writeValueAsString(response);
         } catch (Exception exception) {
-            // Queries and upstream exception messages can contain user plaintext.
+
             log.error(
                     "[SearchSystemPolicyTool] Retrieval failed (cause={})",
                     exception.getClass().getSimpleName()
@@ -292,8 +292,8 @@ public class SearchSystemPolicyTool implements ChatTool {
         return Arrays.stream(KnowledgeCategory.values())
                 .filter(category -> normalize(categoryLabel(category)).equals(normalizedCategory))
                 .findFirst()
-                // Continue accepting the former values for in-flight tool calls,
-                // but never advertise or return those internal enum names.
+
+
                 .or(() -> KnowledgeCategory.fromExternalValue(rawCategory))
                 .map(category -> new CategorySelection(category, true))
                 .orElseGet(() -> new CategorySelection(null, false));

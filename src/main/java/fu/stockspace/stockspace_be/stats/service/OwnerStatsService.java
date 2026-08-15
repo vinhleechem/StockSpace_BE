@@ -37,10 +37,10 @@ public class OwnerStatsService {
 
         Wallet wallet = walletService.getOrCreateWallet(ownerId);
 
-        // Owner revenue = DEPOSIT_RECEIVED (nhận tiền cọc từ Tenant)
+
         List<TransactionType> revenueTypes = List.of(
                 TransactionType.DEPOSIT_RECEIVED,
-                TransactionType.DEPOSIT_PAYMENT   // backward compat: dữ liệu cũ dùng type này
+                TransactionType.DEPOSIT_PAYMENT
         );
         List<Object[]> monthlyData = transactionRepository.findMonthlyRevenueByWalletIdAndTypesAndYear(
                 wallet.getId(), revenueTypes, targetYear);

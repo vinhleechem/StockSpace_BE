@@ -16,10 +16,10 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/**
- * Opt-in database integration test. It must only target an isolated pgvector
- * database because the complete application schema and seed initializer run.
- */
+
+
+
+
 @SpringBootTest(properties = {
         "app.chatbot.rag.indexer.enabled=false",
         "app.data.seed-demo-users=false"

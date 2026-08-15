@@ -218,7 +218,7 @@ class StockBatchServiceTest {
         verify(productSkuRepository, never()).findWarehouseStockOverview(any(), any(), any(Pageable.class));
     }
 
-    // ==================== getStockSummaryByWarehouse ====================
+
 
     @Test
     void testGetStockSummaryByWarehouse_ReturnsTenantAggregateOnly() {
@@ -258,7 +258,7 @@ class StockBatchServiceTest {
                 .summarizeByWarehouseIdAndTenantId(any(), any());
     }
 
-    // ==================== getStockSummaryBySku ====================
+
 
     @Test
     void testGetStockSummaryBySku_Success_MultipleLocations() {
@@ -336,7 +336,7 @@ class StockBatchServiceTest {
         assertTrue(summary.getLocations().isEmpty());
     }
 
-    // ==================== adjustQuantity ====================
+
 
     @Test
     void testAdjustQuantity_Increase_Success() {
@@ -368,7 +368,7 @@ class StockBatchServiceTest {
                 () -> stockBatchService.adjustQuantity(batchId, 10));
     }
 
-    // ==================== findOrCreateBatch ====================
+
 
     @Test
     void testFindOrCreateBatch_Found_ExistingBatch() {
@@ -442,7 +442,7 @@ class StockBatchServiceTest {
         assertNull(result.getBin());
     }
 
-    // ==================== getAdminStockByWarehouse ====================
+
 
     @Test
     void testGetAdminStockByWarehouse_Success() {

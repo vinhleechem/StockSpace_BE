@@ -7,9 +7,9 @@ import lombok.NoArgsConstructor;
 
 import java.util.Set;
 
-/**
- * DTO trả về thông tin chi tiết của vai trò (Role) kèm permissions.
- */
+
+
+
 @Data
 @Builder
 @NoArgsConstructor

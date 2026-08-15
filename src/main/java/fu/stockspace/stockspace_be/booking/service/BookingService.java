@@ -38,19 +38,19 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.stream.Collectors;
-/**
- * Service xử lý nghiệp vụ Booking Request (Thuê kho).
- *
- * Luồng chính:
- *   1. Tenant gửi yêu cầu thuê → status PENDING
- *   2. Owner approve → deductBalance (Dev B) + tạo RentalContract + Warehouse RENTED
- *   3. Owner reject  → status REJECTED (không deduct)
- *   4. Tenant cancel → status REJECTED (nếu còn PENDING)
- *
- * ⚠️ Dependency với Dev B:
- *   - approveBooking() cần gọi WalletService.deductBalance() khi Dev B hoàn thành.
- *   - Placeholder comment được đặt tại điểm gọi để Dev A không bị block.
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -64,14 +64,14 @@ public class BookingService {
     private final WalletService walletService;
     private final SystemConfigService systemConfigService;
     private final NotificationService notificationService;
-    // ==================== Tenant ====================
-    /**
-     * Tenant gửi yêu cầu thuê kho.
-     *
-     * Kiểm tra:
-     * - Warehouse phải tồn tại và status = AVAILABLE
-     * - Tenant chưa có booking PENDING cho kho này
-     */
+
+
+
+
+
+
+
+
     @Transactional
     public BookingResponse sendBookingRequest(UUID tenantId, CreateBookingRequest request) {
         log.info("Tenant {} sending booking request for warehouse {}", tenantId, request.getWarehouseId());
@@ -79,17 +79,17 @@ public class BookingService {
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
         Warehouse warehouse = warehouseRepository.findById(request.getWarehouseId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
-        // Kho phải AVAILABLE
+
         if (warehouse.getStatus() != WarehouseStatus.AVAILABLE) {
             throw new BadRequestException(ErrorCode.WAREHOUSE_NOT_AVAILABLE);
         }
-        // Khóa giữ chỗ: Kiểm tra nếu kho đó đã có BookingRequest ở trạng thái PENDING hoặc APPROVED thì báo lỗi
+
         boolean hasExistingBooking = bookingRepository.existsByWarehouseIdAndStatusIn(
                 warehouse.getId(), List.of(ApprovalStatus.PENDING, ApprovalStatus.APPROVED));
         if (hasExistingBooking) {
             throw new BadRequestException("Kho bãi đã được đặt chỗ hoặc đang trong quá trình thỏa thuận hợp đồng");
         }
-        // Không cho spam booking
+
         boolean hasPending = bookingRepository.existsByTenantIdAndWarehouseIdAndStatus(
                 tenantId, warehouse.getId(), ApprovalStatus.PENDING);
         if (hasPending) {
@@ -97,8 +97,8 @@ public class BookingService {
         }
         SystemPolicy policy = systemPolicyRepository.findFirstByIsActiveTrueAndIsDeletedFalseOrderByCreatedAtDesc()
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy chính sách/cam kết ràng buộc hiệu lực nào trong hệ thống"));
-        
-        // Lấy tỷ lệ cọc từ System_Config (mặc định 10%) tính toán số tiền cọc dựa trên giá kho pricePerMonth
+
+
         int depositPercent = systemConfigService.getIntValue("deposit_percentage", 10);
         BigDecimal depositPercentage = BigDecimal.valueOf(depositPercent);
         BigDecimal depositAmount = warehouse.getPricePerMonth()
@@ -114,7 +114,7 @@ public class BookingService {
                 .build();
         booking = bookingRepository.save(booking);
 
-        // Trừ ngay tiền cọc từ ví Tenant
+
         walletService.deductBalance(
                 tenantId,
                 depositAmount,
@@ -124,7 +124,7 @@ public class BookingService {
                 null
         );
 
-        // Push thông báo cho Owner
+
         try {
             notificationService.push(
                     warehouse.getOwner().getId(),
@@ -140,9 +140,9 @@ public class BookingService {
                 booking.getId(), tenantId, warehouse.getId(), depositAmount);
         return mapToResponse(booking);
     }
-    /**
-     * Tenant huỷ booking (chỉ khi status còn PENDING).
-     */
+
+
+
     @Transactional
     public void cancelBooking(UUID tenantId, UUID bookingId) {
         BookingRequest booking = bookingRepository.findByIdAndTenantId(bookingId, tenantId)
@@ -154,7 +154,7 @@ public class BookingService {
         booking.setRejectReason("Tenant tự huỷ yêu cầu");
         bookingRepository.save(booking);
 
-        // Hoàn cọc 100% cho Tenant
+
         walletService.refundBalance(
                 tenantId,
                 booking.getDepositAmount(),
@@ -166,48 +166,41 @@ public class BookingService {
 
         log.info("Tenant {} cancelled booking {}", tenantId, bookingId);
     }
-    /**
-     * Tenant xem lịch sử booking của mình (phân trang).
-     */
+
+
+
     @Transactional(readOnly = true)
     public PagedResponse<BookingResponse> getMyBookings(UUID tenantId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         Page<BookingRequest> bookingPage = bookingRepository.findByTenantId(tenantId, pageable);
         return toPagedResponse(bookingPage);
     }
-    // ==================== Owner ====================
-    /**
-     * Owner xem danh sách yêu cầu thuê đến kho của mình (phân trang).
-     */
+
+
+
+
     @Transactional(readOnly = true)
     public PagedResponse<BookingResponse> getIncomingRequests(UUID ownerId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         Page<BookingRequest> bookingPage = bookingRepository.findByWarehouseOwnerId(ownerId, pageable);
         return toPagedResponse(bookingPage);
     }
-    /**
-     * Owner chấp nhận yêu cầu thuê kho.
-     *
-     * Hành động:
-     * 1. Đổi booking status → APPROVED
-     * 2. [TODO - Dev B] Deduct deposit từ ví Tenant:
-     *    walletService.deductBalance(booking.getTenant().getId(), booking.getDepositAmount(), "Đặt cọc thuê kho")
-     * 3. Tạo RentalContract (gọi ContractService)
-     * 4. Đổi Warehouse status → RENTED
-     */
+
+
+
     @Transactional
     public BookingResponse approveBooking(UUID ownerId, UUID bookingId) {
         BookingRequest booking = getOwnerBooking(ownerId, bookingId);
         validatePending(booking);
         booking.setStatus(ApprovalStatus.APPROVED);
         booking = bookingRepository.save(booking);
-        
-        // Tạo RentalContract
+
+
         contractService.createContractFromBooking(booking.getId());
-        // Đổi warehouse sang RENTED
+
         warehouseService.markAsRented(booking.getWarehouse().getId());
 
-        // Push thông báo cho Tenant
+
         try {
             notificationService.push(
                     booking.getTenant().getId(),
@@ -223,9 +216,9 @@ public class BookingService {
                 ownerId, bookingId, booking.getWarehouse().getId());
         return mapToResponse(booking);
     }
-    /**
-     * Owner từ chối yêu cầu thuê kho.
-     */
+
+
+
     @Transactional
     public BookingResponse rejectBooking(UUID ownerId, UUID bookingId, String reason) {
         BookingRequest booking = getOwnerBooking(ownerId, bookingId);
@@ -234,7 +227,7 @@ public class BookingService {
         booking.setRejectReason(reason);
         booking = bookingRepository.save(booking);
 
-        // Hoàn cọc 100% cho Tenant
+
         walletService.refundBalance(
                 booking.getTenant().getId(),
                 booking.getDepositAmount(),
@@ -244,7 +237,7 @@ public class BookingService {
                 null
         );
 
-        // Push thông báo cho Tenant
+
         try {
             notificationService.push(
                     booking.getTenant().getId(),
@@ -259,7 +252,7 @@ public class BookingService {
         log.info("Owner {} rejected booking {} (reason: {})", ownerId, bookingId, reason);
         return mapToResponse(booking);
     }
-    // ==================== Private helpers ====================
+
     private BookingRequest getOwnerBooking(UUID ownerId, UUID bookingId) {
         return bookingRepository.findByIdAndOwnerId(bookingId, ownerId)
                 .orElseThrow(() -> new ForbiddenException(ErrorCode.BOOKING_NOT_FOUND));

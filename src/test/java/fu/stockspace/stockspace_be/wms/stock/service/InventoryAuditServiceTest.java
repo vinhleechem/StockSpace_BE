@@ -150,7 +150,7 @@ class InventoryAuditServiceTest {
                 .build();
     }
 
-    // ==================== createAudit ====================
+
 
     @Test
     void testCreateAudit_Success_SnapshotsCurrentStock() {
@@ -167,7 +167,7 @@ class InventoryAuditServiceTest {
                 .id(UUID.randomUUID())
                 .audit(pendingAudit)
                 .batch(stockBatch)
-                .expectedQuantity(100) // snapshot từ batch.quantity
+                .expectedQuantity(100)
                 .actualQuantity(null)
                 .discrepancy(null)
                 .build();
@@ -186,7 +186,7 @@ class InventoryAuditServiceTest {
         assertEquals(AuditStatus.PENDING, response.getStatus());
         assertEquals(warehouseId, response.getWarehouseId());
         assertEquals(1, response.getItems().size());
-        // expectedQuantity phải snapshot từ StockBatch.quantity hiện tại
+
         assertEquals(100, response.getItems().get(0).getExpectedQuantity());
         verify(auditItemRepository, times(1)).saveAll(anyList());
     }
@@ -244,11 +244,11 @@ class InventoryAuditServiceTest {
         assertTrue(response.getItems().isEmpty());
     }
 
-    // ==================== submitAudit ====================
+
 
     @Test
     void testSubmitAudit_Success_CalculatesDiscrepancy() {
-        // Trạng thái PENDING → có thể submit
+
         when(auditRepository.findById(auditId)).thenReturn(Optional.of(pendingAudit));
 
         InventoryAuditItem mutableItem = InventoryAuditItem.builder()
@@ -274,7 +274,7 @@ class InventoryAuditServiceTest {
 
         SubmitAuditItemRequest itemReq = SubmitAuditItemRequest.builder()
                 .batchId(batchId)
-                .actualQuantity(85) // thiếu 15
+                .actualQuantity(85)
                 .note("Mất 15 thùng")
                 .build();
 
@@ -286,7 +286,7 @@ class InventoryAuditServiceTest {
 
         assertNotNull(response);
         assertEquals(AuditStatus.SUBMITTED, response.getStatus());
-        // Kiểm tra discrepancy được tính: actualQty(85) - expectedQty(100) = -15
+
         assertEquals(85, mutableItem.getActualQuantity());
         assertEquals(-15, mutableItem.getDiscrepancy());
     }
@@ -308,7 +308,7 @@ class InventoryAuditServiceTest {
 
         SubmitAuditItemRequest itemReq = SubmitAuditItemRequest.builder()
                 .batchId(batchId)
-                .actualQuantity(110) // thừa 10
+                .actualQuantity(110)
                 .build();
 
         InventoryAuditResponse response = inventoryAuditService.submitAudit(userId, auditId,
@@ -320,10 +320,10 @@ class InventoryAuditServiceTest {
 
     @Test
     void testSubmitAudit_WrongStatus_ThrowsBadRequest() {
-        // Audit đã SUBMITTED → không thể submit lại
+
         when(auditRepository.findById(auditId)).thenReturn(Optional.of(submittedAudit));
 
-        // Cho phép truy cập (là requester)
+
         SubmitAuditRequest request = SubmitAuditRequest.builder()
                 .items(List.of())
                 .build();
@@ -334,7 +334,7 @@ class InventoryAuditServiceTest {
         assertEquals(ErrorCode.AUDIT_INVALID_STATUS.getMessage(), ex.getMessage());
     }
 
-    // ==================== approveAudit ====================
+
 
     @Test
     void testApproveAudit_StaffApprover_ThrowsForbidden() {
@@ -367,7 +367,7 @@ class InventoryAuditServiceTest {
         when(auditRepository.findById(auditId)).thenReturn(Optional.of(submittedAudit));
         when(userRepository.findById(approverId)).thenReturn(Optional.of(approverUser));
 
-        // Item có discrepancy = -15 (thiếu hàng) → cần sinh OUTBOUND receipt
+
         InventoryAuditItem itemWithDeficit = InventoryAuditItem.builder()
                 .id(UUID.randomUUID())
                 .audit(submittedAudit)
@@ -393,17 +393,17 @@ class InventoryAuditServiceTest {
         assertNotNull(response);
         assertEquals(AuditStatus.APPROVED, response.getStatus());
 
-        // Phải tạo 1 phiếu điều chỉnh OUTBOUND vì thiếu 15
+
         verify(inventoryReceiptService, times(1)).createAdjustmentReceipt(
                 eq(approverId),
                 eq(auditId),
                 eq(warehouseId),
                 eq(DocumentType.OUTBOUND),
                 eq(batchId),
-                eq(15) // absDiscrepancy
+                eq(15)
         );
 
-        // Phải push thông báo cho người yêu cầu kiểm kê
+
         verify(notificationService, times(1)).push(
                 eq(userId),
                 anyString(),
@@ -417,7 +417,7 @@ class InventoryAuditServiceTest {
         when(auditRepository.findById(auditId)).thenReturn(Optional.of(submittedAudit));
         when(userRepository.findById(approverId)).thenReturn(Optional.of(approverUser));
 
-        // discrepancy = +10 (thừa hàng) → cần sinh INBOUND receipt
+
         InventoryAuditItem surplusItem = InventoryAuditItem.builder()
                 .id(UUID.randomUUID())
                 .audit(submittedAudit)
@@ -455,7 +455,7 @@ class InventoryAuditServiceTest {
         when(auditRepository.findById(auditId)).thenReturn(Optional.of(submittedAudit));
         when(userRepository.findById(approverId)).thenReturn(Optional.of(approverUser));
 
-        // discrepancy = 0 → không tạo phiếu điều chỉnh
+
         InventoryAuditItem exactItem = InventoryAuditItem.builder()
                 .id(UUID.randomUUID())
                 .audit(submittedAudit)
@@ -478,7 +478,7 @@ class InventoryAuditServiceTest {
 
         inventoryAuditService.approveAudit(approverId, auditId);
 
-        // Không được gọi createAdjustmentReceipt khi không có discrepancy
+
         verify(inventoryReceiptService, never()).createAdjustmentReceipt(any(), any(), any(), any(), any(), anyInt());
     }
 
@@ -506,17 +506,17 @@ class InventoryAuditServiceTest {
                 .quantity(50)
                 .build();
 
-        // Item 1: thiếu 5
+
         InventoryAuditItem item1 = InventoryAuditItem.builder()
                 .id(UUID.randomUUID()).audit(submittedAudit).batch(stockBatch)
                 .expectedQuantity(100).actualQuantity(95).discrepancy(-5).build();
 
-        // Item 2: thừa 8
+
         InventoryAuditItem item2 = InventoryAuditItem.builder()
                 .id(UUID.randomUUID()).audit(submittedAudit).batch(stockBatch2)
                 .expectedQuantity(50).actualQuantity(58).discrepancy(8).build();
 
-        // Item 3: đúng (discrepancy = null → skip)
+
         InventoryAuditItem item3 = InventoryAuditItem.builder()
                 .id(UUID.randomUUID()).audit(submittedAudit).batch(stockBatch)
                 .expectedQuantity(20).actualQuantity(20).discrepancy(null).build();
@@ -531,7 +531,7 @@ class InventoryAuditServiceTest {
 
         inventoryAuditService.approveAudit(approverId, auditId);
 
-        // Item 1: OUTBOUND qty=5, Item 2: INBOUND qty=8, Item 3: null discrepancy → skip
+
         verify(inventoryReceiptService, times(1)).createAdjustmentReceipt(
                 any(), any(), any(), eq(DocumentType.OUTBOUND), eq(batchId), eq(5));
         verify(inventoryReceiptService, times(1)).createAdjustmentReceipt(
@@ -540,7 +540,7 @@ class InventoryAuditServiceTest {
                 any(), any(), any(), any(), any(), anyInt());
     }
 
-    // ==================== rejectAudit ====================
+
 
     @Test
     void testRejectAudit_StaffApprover_ThrowsForbidden() {
@@ -582,7 +582,7 @@ class InventoryAuditServiceTest {
         assertNotNull(response);
         assertEquals(AuditStatus.REJECTED, response.getStatus());
 
-        // Phải push thông báo từ chối
+
         verify(notificationService, times(1)).push(
                 eq(userId),
                 anyString(),
@@ -590,13 +590,13 @@ class InventoryAuditServiceTest {
                 eq("AUDIT")
         );
 
-        // Không được tạo phiếu điều chỉnh
+
         verify(inventoryReceiptService, never()).createAdjustmentReceipt(any(), any(), any(), any(), any(), anyInt());
     }
 
     @Test
     void testRejectAudit_PendingStatus_Success() {
-        // Được phép reject cả khi đang PENDING
+
         when(auditRepository.findById(auditId)).thenReturn(Optional.of(pendingAudit));
         when(userRepository.findById(approverId)).thenReturn(Optional.of(approverUser));
 
@@ -630,7 +630,7 @@ class InventoryAuditServiceTest {
         assertEquals(ErrorCode.AUDIT_ALREADY_PROCESSED.getMessage(), ex.getMessage());
     }
 
-    // ==================== getMyAudits ====================
+
 
     @Test
     void testGetMyAudits_Success_Paginated() {
@@ -666,7 +666,7 @@ class InventoryAuditServiceTest {
         assertTrue(response.getContent().isEmpty());
     }
 
-    // ==================== getAuditDetail ====================
+
 
     @Test
     void testGetAuditDetail_Success_Requester() {
@@ -678,7 +678,7 @@ class InventoryAuditServiceTest {
         when(auditItemRepository.findByAuditId(auditId)).thenReturn(List.of(item));
         when(productSkuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(productSku));
 
-        // userId là requestedBy → được truy cập
+
         InventoryAuditResponse response = inventoryAuditService.getAuditDetail(userId, auditId);
 
         assertNotNull(response);
@@ -692,7 +692,7 @@ class InventoryAuditServiceTest {
         UUID strangerUserId = UUID.randomUUID();
         when(auditRepository.findById(auditId)).thenReturn(Optional.of(pendingAudit));
 
-        // strangerUserId không phải requestedBy, cũng không phải approvedBy
+
         ForbiddenException ex = assertThrows(ForbiddenException.class,
                 () -> inventoryAuditService.getAuditDetail(strangerUserId, auditId));
 
@@ -707,7 +707,7 @@ class InventoryAuditServiceTest {
                 () -> inventoryAuditService.getAuditDetail(userId, auditId));
     }
 
-    // ==================== getAllAudits (Admin) ====================
+
 
     @Test
     void testGetAllAudits_Admin_Success() {

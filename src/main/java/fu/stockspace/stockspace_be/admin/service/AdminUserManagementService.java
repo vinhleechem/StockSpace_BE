@@ -30,18 +30,18 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-/**
- * Service xử lý nghiệp vụ quản lý người dùng (User Management) cho Admin.
- *
- * Chức năng:
- * - Xem danh sách / tìm kiếm user (phân trang, filter theo role/status)
- * - Xem chi tiết user
- * - Tạo user mới (Admin có thể tạo bất kỳ role)
- * - Cập nhật thông tin user
- * - Kích hoạt / khóa tài khoản
- * - Đặt lại mật khẩu
- * - Xóa user
- */
+
+
+
+
+
+
+
+
+
+
+
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -51,19 +51,19 @@ public class AdminUserManagementService {
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
 
-    // ==================== Query ====================
 
-    /**
-     * Lấy danh sách người dùng có phân trang, tìm kiếm và lọc.
-     *
-     * @param keyword  Từ khóa tìm kiếm (email / fullName / phone), null = tất cả
-     * @param roleName Lọc theo tên role (ví dụ: ROLE_OWNER), null = tất cả
-     * @param isActive Lọc theo trạng thái, null = tất cả
-     * @param page     Số trang (0-indexed)
-     * @param size     Số phần tử mỗi trang
-     * @param sortBy   Trường sắp xếp (createdAt, fullName, email)
-     * @param sortDir  Chiều sắp xếp (asc/desc)
-     */
+
+
+
+
+
+
+
+
+
+
+
+
     @Transactional(readOnly = true)
     public PagedResponse<UserResponse> getUsers(String keyword, String roleName, Boolean isActive,
                                       int page, int size, String sortBy, String sortDir) {
@@ -73,17 +73,17 @@ public class AdminUserManagementService {
                 : Sort.by(sortBy).descending();
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        // Normalize keyword: blank → "" để tránh lỗi null bytea trên PostgreSQL
+
         String kw = StringUtils.hasText(keyword) ? keyword.trim() : "";
 
         Page<User> userPage;
         if (StringUtils.hasText(roleName) && isActive != null) {
-            // Filter cả role lẫn status: dùng kết hợp trong memory (2 query nhỏ)
+
             userPage = userRepository.searchUsersByRole(kw, roleName.trim(), pageable);
             List<User> filtered = userPage.getContent().stream()
                     .filter(u -> u.isActive() == isActive)
                     .collect(Collectors.toList());
-            // Wrap lại bằng custom paged (chấp nhận tổng trang bị lệch khi kết hợp 2 filter)
+
             return buildPagedResponse(filtered, page, size,
                     filtered.size(), userPage.getTotalPages());
         } else if (StringUtils.hasText(roleName)) {
@@ -108,9 +108,9 @@ public class AdminUserManagementService {
                 .build();
     }
 
-    /**
-     * Xem chi tiết thông tin một User theo ID.
-     */
+
+
+
     @Transactional(readOnly = true)
     public UserResponse getUserById(UUID id) {
         User user = userRepository.findById(id)
@@ -119,23 +119,23 @@ public class AdminUserManagementService {
         return mapToUserResponse(user);
     }
 
-    // ==================== Create ====================
 
-    /**
-     * Admin tạo mới một User với role bất kỳ.
-     * Khác với self-register (chỉ OWNER/TENANT), Admin tạo được cả ADMIN, STAFF, INSPECTOR, v.v.
-     */
+
+
+
+
+
     @Transactional
     public UserResponse createUser(CreateUserRequest request) {
         log.info("Admin creating new user with email: {}", request.getEmail());
 
-        // Kiểm tra email trùng
+
         if (userRepository.existsByEmail(request.getEmail())) {
             log.warn("Email already exists: {}", request.getEmail());
             throw new ResourceConflictException(ErrorCode.USER_ALREADY_EXISTS);
         }
 
-        // Load các role được chỉ định
+
         Set<Role> roles = loadRoles(request.getRoleIds());
 
         User user = User.builder()
@@ -153,13 +153,13 @@ public class AdminUserManagementService {
         return mapToUserResponse(user);
     }
 
-    // ==================== Update ====================
 
-    /**
-     * Cập nhật thông tin cơ bản của User (fullName, phone).
-     * Email không được thay đổi — dùng làm định danh duy nhất.
-     * Để thay đổi role → dùng API assign/remove role trong AdminRoleController.
-     */
+
+
+
+
+
+
     @Transactional
     public UserResponse updateUser(UUID id, UpdateUserRequest request) {
         User user = userRepository.findById(id)
@@ -180,33 +180,33 @@ public class AdminUserManagementService {
         return mapToUserResponse(user);
     }
 
-    // ==================== Status Toggle ====================
 
-    /**
-     * Kích hoạt hoặc khóa tài khoản User.
-     *
-     * Ràng buộc:
-     * - Admin không thể tự khóa tài khoản của chính mình
-     * - Admin không thể khóa tài khoản Admin khác (bảo vệ hệ thống)
-     *
-     * @param id       ID của user cần thay đổi
-     * @param activate true = mở khóa, false = khóa
-     */
+
+
+
+
+
+
+
+
+
+
+
     @Transactional
     public UserResponse setUserStatus(UUID id, boolean activate) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
 
-        // Lấy email của Admin đang thực hiện thao tác
+
         String currentAdminEmail = SecurityContextHolder.getContext()
                 .getAuthentication().getName();
 
-        // Không tự khóa chính mình
+
         if (!activate && user.getEmail().equalsIgnoreCase(currentAdminEmail)) {
             throw new ForbiddenException(ErrorCode.CANNOT_DEACTIVATE_SELF);
         }
 
-        // Không khóa Admin khác (chỉ cần check khi deactivate)
+
         if (!activate && hasAdminRole(user)) {
             throw new ForbiddenException(ErrorCode.CANNOT_DEACTIVATE_SELF);
         }
@@ -220,18 +220,18 @@ public class AdminUserManagementService {
         return mapToUserResponse(user);
     }
 
-    // ==================== Password Reset ====================
 
-    /**
-     * Admin đặt lại mật khẩu cho User.
-     * Không cần biết mật khẩu cũ — quyền Admin.
-     */
+
+
+
+
+
     @Transactional
     public void resetPassword(UUID id, ResetPasswordRequest request) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
 
-        // Kiểm tra confirmPassword khớp
+
         if (!request.getNewPassword().equals(request.getConfirmPassword())) {
             throw new BadRequestException(ErrorCode.PASSWORD_MISMATCH);
         }
@@ -244,15 +244,15 @@ public class AdminUserManagementService {
         log.info("Password reset successfully for user ID: {}", id);
     }
 
-    // ==================== Delete ====================
 
-    /**
-     * Xóa vĩnh viễn User khỏi hệ thống.
-     *
-     * Ràng buộc:
-     * - Không thể xóa tài khoản có role ADMIN
-     * - Không thể xóa chính mình
-     */
+
+
+
+
+
+
+
+
     @Transactional
     public void deleteUser(UUID id) {
         User user = userRepository.findById(id)
@@ -261,12 +261,12 @@ public class AdminUserManagementService {
         String currentAdminEmail = SecurityContextHolder.getContext()
                 .getAuthentication().getName();
 
-        // Không tự xóa chính mình
+
         if (user.getEmail().equalsIgnoreCase(currentAdminEmail)) {
             throw new ForbiddenException(ErrorCode.CANNOT_DELETE_ADMIN);
         }
 
-        // Không xóa tài khoản Admin khác
+
         if (hasAdminRole(user)) {
             throw new ForbiddenException(ErrorCode.CANNOT_DELETE_ADMIN);
         }
@@ -277,11 +277,11 @@ public class AdminUserManagementService {
         log.info("User ID: {} deleted successfully", id);
     }
 
-    // ==================== Private helpers ====================
 
-    /**
-     * Load và validate danh sách Role từ set roleId.
-     */
+
+
+
+
     private Set<Role> loadRoles(Set<java.util.UUID> roleIds) {
         Set<Role> roles = new HashSet<>();
         for (java.util.UUID roleId : roleIds) {
@@ -292,17 +292,17 @@ public class AdminUserManagementService {
         return roles;
     }
 
-    /**
-     * Kiểm tra user có role ADMIN không.
-     */
+
+
+
     private boolean hasAdminRole(User user) {
         return user.getRoles().stream()
                 .anyMatch(r -> RoleType.ROLE_ADMIN.name().equals(r.getName()));
     }
 
-    /**
-     * Chuyển User entity sang UserResponse DTO.
-     */
+
+
+
     private UserResponse mapToUserResponse(User user) {
         Set<RoleResponse> roleResponses = user.getRoles().stream()
                 .map(role -> RoleResponse.builder()
@@ -331,9 +331,9 @@ public class AdminUserManagementService {
                 .build();
     }
 
-    /**
-     * Build PagedResponse từ danh sách đã filter sẵn (dùng khi kết hợp 2 filter).
-     */
+
+
+
     private PagedResponse<UserResponse> buildPagedResponse(List<User> users, int page, int size,
                                                   long total, int totalPages) {
         List<UserResponse> content = users.stream()

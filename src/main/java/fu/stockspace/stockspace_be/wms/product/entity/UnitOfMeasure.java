@@ -32,7 +32,7 @@ public class UnitOfMeasure extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tenant_id")
-    private User tenant; // null if system-wide default UOM
+    private User tenant;
 
     @Column(name = "description", length = 255)
     private String description;

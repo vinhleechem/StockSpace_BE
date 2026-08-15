@@ -7,9 +7,9 @@ import lombok.NoArgsConstructor;
 
 import java.util.UUID;
 
-/**
- * Mô tả vị trí lưu kho của một lô hàng (dùng trong StockSummaryResponse).
- */
+
+
+
 @Data
 @Builder
 @NoArgsConstructor

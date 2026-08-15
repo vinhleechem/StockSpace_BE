@@ -11,10 +11,10 @@ import org.springframework.stereotype.Component;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Tool: getInspectionDetail
- * Xem chi tiết biên bản / yêu cầu kiểm định kho bãi của Inspector.
- */
+
+
+
+
 @Slf4j
 @Component
 @RequiredArgsConstructor

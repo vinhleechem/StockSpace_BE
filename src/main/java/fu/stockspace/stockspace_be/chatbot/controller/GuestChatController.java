@@ -17,14 +17,14 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 
-/**
- * Controller xử lý chat cho GUEST (không cần đăng nhập).
- * SecurityConfig đã permit /api/chat/guest/** cho tất cả.
- *
- * Endpoints:
- *   POST /api/chat/guest/send    — Gửi tin nhắn không cần đăng nhập
- *   GET  /api/chat/guest/history — Lịch sử chat bằng bearer token trong header
- */
+
+
+
+
+
+
+
+
 @Tag(name = "Chatbot - Guest", description = "Chat API công khai cho khách vãng lai")
 @RestController
 @RequestMapping("/api/chat/guest")

@@ -17,25 +17,25 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Global exception handler — xử lý tập trung tất cả exception.
- *
- * HTTP Status mapping:
- *   400 — Validation lỗi, IllegalArgumentException
- *   401 — Chưa đăng nhập / sai credentials
- *   403 — Không đủ quyền
- *   500 — Lỗi server không xác định
- */
+
+
+
+
+
+
+
+
+
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    // ==================== 400 Bad Request ====================
 
-    /**
-     * Validation lỗi — @Valid annotation bắt được.
-     * Trả về map field → message lỗi cụ thể.
-     */
+
+
+
+
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Map<String, String>>> handleValidationErrors(
             MethodArgumentNotValidException ex
@@ -55,9 +55,9 @@ public class GlobalExceptionHandler {
                         .build());
     }
 
-    /**
-     * Dữ liệu JSON hoặc tham số không đọc/parse được (ví dụ FE truyền chuỗi id giả "rack_01" không đúng định dạng UUID).
-     */
+
+
+
     @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResponse<Void>> handleHttpMessageNotReadable(
             org.springframework.http.converter.HttpMessageNotReadableException ex
@@ -86,9 +86,9 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error("Tham số '" + ex.getName() + "' không đúng định dạng dữ liệu (ví dụ: UUID không hợp lệ)"));
     }
 
-    /**
-     * Xử lý lỗi BadRequestException (400).
-     */
+
+
+
     @ExceptionHandler(BadRequestException.class)
 
     public ResponseEntity<ApiResponse<Void>> handleBadRequest(BadRequestException ex) {
@@ -96,115 +96,115 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(ex.getMessage()));
     }
 
-    /**
-     * Xử lý lỗi UnauthorizedException (401).
-     */
+
+
+
     @ExceptionHandler(UnauthorizedException.class)
     public ResponseEntity<ApiResponse<Void>> handleUnauthorized(UnauthorizedException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(ApiResponse.error(ex.getMessage()));
     }
 
-    /**
-     * Xử lý lỗi ForbiddenException (403).
-     */
+
+
+
     @ExceptionHandler(ForbiddenException.class)
     public ResponseEntity<ApiResponse<Void>> handleForbidden(ForbiddenException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiResponse.error(ex.getMessage()));
     }
 
-    /**
-     * Xử lý lỗi ResourceNotFoundException (404).
-     */
+
+
+
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleResourceNotFound(ResourceNotFoundException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ApiResponse.error(ex.getMessage()));
     }
 
-    /**
-     * Xử lý lỗi ResourceConflictException (409).
-     */
+
+
+
     @ExceptionHandler(ResourceConflictException.class)
     public ResponseEntity<ApiResponse<Void>> handleResourceConflict(ResourceConflictException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiResponse.error(ex.getMessage()));
     }
 
-    /**
-     * Xử lý lỗi InternalServerException (500).
-     */
+
+
+
     @ExceptionHandler(InternalServerException.class)
     public ResponseEntity<ApiResponse<Void>> handleInternalServer(InternalServerException ex) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponse.error(ex.getMessage()));
     }
 
-    /**
-     * Preserve the provider-specific HTTP status (429/502/503/504) without
-     * leaking the upstream response body.
-     */
+
+
+
+
     @ExceptionHandler(ChatProviderException.class)
     public ResponseEntity<ApiResponse<Void>> handleChatProvider(ChatProviderException ex) {
         return ResponseEntity.status(ex.getErrorCode().getStatus())
                 .body(ApiResponse.error(ex.getMessage()));
     }
 
-    /**
-     * Business logic lỗi — các trường hợp IllegalArgumentException chung.
-     */
+
+
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse<Void>> handleIllegalArgument(IllegalArgumentException ex) {
         return ResponseEntity.badRequest()
                 .body(ApiResponse.error(ex.getMessage()));
     }
 
-    // ==================== 401 Unauthorized ====================
 
-    /**
-     * Sai email/password khi login.
-     */
+
+
+
+
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<ApiResponse<Void>> handleBadCredentials(BadCredentialsException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(ApiResponse.error("Invalid email or password"));
     }
 
-    /**
-     * Tài khoản bị disabled.
-     */
+
+
+
     @ExceptionHandler(DisabledException.class)
     public ResponseEntity<ApiResponse<Void>> handleDisabledAccount(DisabledException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(ApiResponse.error("Account is disabled. Please contact admin."));
     }
 
-    /**
-     * Chưa authenticate (không có token hoặc token invalid).
-     */
+
+
+
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<ApiResponse<Void>> handleAuthenticationException(AuthenticationException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(ApiResponse.error("Authentication required: " + ex.getMessage()));
     }
 
-    // ==================== 403 Forbidden ====================
 
-    /**
-     * Đã authenticate nhưng không đủ quyền — @PreAuthorize bắn ra.
-     */
+
+
+
+
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiResponse.error("Access denied: You do not have permission to perform this action"));
     }
 
-    // ==================== 500 Internal Server Error ====================
 
-    /**
-     * Catch-all cho các exception không xử lý được.
-     */
+
+
+
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGenericException(Exception ex) {
         log.error("Unexpected error occurred: {}", ex.getMessage(), ex);

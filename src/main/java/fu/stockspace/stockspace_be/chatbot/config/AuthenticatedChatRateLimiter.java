@@ -12,9 +12,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 
-/**
- * Per-instance cost and concurrency guard for authenticated chatbot traffic.
- */
+
+
+
 @Component
 public class AuthenticatedChatRateLimiter {
 
@@ -40,10 +40,10 @@ public class AuthenticatedChatRateLimiter {
         }
     }
 
-    /**
-     * Acquires a concurrency/rate permit which the caller must retain for the
-     * complete lifetime of an asynchronous request.
-     */
+
+
+
+
     public Permit acquire(UUID userId) {
         if (!enabled) {
             return new Permit(null);
@@ -119,10 +119,10 @@ public class AuthenticatedChatRateLimiter {
         }
     }
 
-    /**
-     * Idempotent lease so timeout, disconnect and worker completion may safely
-     * race without decrementing the in-flight count more than once.
-     */
+
+
+
+
     public static final class Permit implements AutoCloseable {
 
         private final UserWindow window;

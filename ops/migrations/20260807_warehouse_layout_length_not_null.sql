@@ -1,6 +1,3 @@
--- Repair legacy layout rows before enforcing the non-null constraint declared
--- by WarehouseLayout.length. The value 100 matches the entity's default.
--- Safe to run repeatedly and on a fresh database.
 
 DO $migration$
 BEGIN

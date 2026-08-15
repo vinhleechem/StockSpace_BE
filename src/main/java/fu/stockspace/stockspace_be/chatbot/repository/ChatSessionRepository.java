@@ -18,19 +18,19 @@ import java.util.List;
 
 public interface ChatSessionRepository extends JpaRepository<ChatSession, UUID> {
 
-    /** Lấy session của user (đã đăng nhập), phân trang, sắp xếp mới nhất trước */
+
     @Query("SELECT s FROM ChatSession s WHERE s.user.id = :userId AND s.isDeleted = false ORDER BY s.updatedAt DESC")
     Page<ChatSession> findByUserIdAndNotDeleted(UUID userId, Pageable pageable);
 
-    /** Tìm session theo sessionToken (GUEST) */
+
     @Query("SELECT s FROM ChatSession s WHERE s.sessionToken = :token AND s.isDeleted = false")
     Optional<ChatSession> findBySessionTokenAndIsDeletedFalse(String token);
 
-    /** Tìm session theo id + userId (kiểm tra quyền) */
+
     @Query("SELECT s FROM ChatSession s WHERE s.id = :id AND s.user.id = :userId AND s.isDeleted = false")
     Optional<ChatSession> findByIdAndUserId(UUID id, UUID userId);
 
-    /** Lock only for the short transaction which appends one complete turn. */
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT s FROM ChatSession s WHERE s.id = :id AND s.user.id = :userId AND s.isDeleted = false")
     Optional<ChatSession> findByIdAndUserIdForUpdate(@Param("id") UUID id,

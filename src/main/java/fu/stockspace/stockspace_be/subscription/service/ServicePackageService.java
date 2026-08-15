@@ -78,7 +78,7 @@ public class ServicePackageService {
     public void deletePackage(java.util.UUID id) {
         ServicePackage servicePackage = packageRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.PACKAGE_NOT_FOUND));
-        // Soft delete bằng cách set isActive = false
+
         servicePackage.setActive(false);
         packageRepository.save(servicePackage);
         log.info("Subscription Service: Soft-deleted service package ID: {}", id);

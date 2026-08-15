@@ -1,41 +1,31 @@
-# ── Git ───────────────────────────────────────
 .git
 .gitignore
 .gitattributes
 
-# ── IDE / Editor ──────────────────────────────
 .idea
 .vscode
 *.iml
 *.iws
 .history
 
-# ── Maven build output ────────────────────────
 target/
 
-# ── Sensitive / local env ─────────────────────
 .env
 .env.local
 .env.*.local
 
-# ── Logs ──────────────────────────────────────
 *.log
 logs/
 
-# ── Test files ────────────────────────────────
 src/test/
 
-# ── OS files ──────────────────────────────────
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# ── Docs / Markdown ───────────────────────────
 *.md
 !README.md
 
-# ── Backups ───────────────────────────────────
 backups/
 
-# ── Nginx SSL certs (mount at runtime) ────────
 nginx/ssl/

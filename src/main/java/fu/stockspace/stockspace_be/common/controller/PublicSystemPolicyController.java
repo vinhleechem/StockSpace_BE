@@ -11,9 +11,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * Controller công khai để xem thông tin về các chính sách hệ thống (Cam kết ràng buộc).
- */
+
+
+
 @Tag(name = "Public — System Policies", description = "Các API công khai liên quan đến chính sách/cam kết ràng buộc")
 @RestController
 @RequestMapping("/api/system-policies")
@@ -22,10 +22,10 @@ public class PublicSystemPolicyController {
 
     private final SystemPolicyService systemPolicyService;
 
-    /**
-     * GET /api/system-policies/active
-     * Lấy chính sách cam kết ràng buộc đang có hiệu lực mới nhất.
-     */
+
+
+
+
     @GetMapping("/active")
     @Operation(summary = "Xem cam kết ràng buộc đang hiệu lực mới nhất")
     public ResponseEntity<ApiResponse<SystemPolicyResponse>> getActivePolicy() {

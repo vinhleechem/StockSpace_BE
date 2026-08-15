@@ -9,10 +9,10 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * DTO request khi Admin tạo mới một tài khoản User.
- * Admin có thể tạo bất kỳ role nào (không bị giới hạn như self-register).
- */
+
+
+
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -38,9 +38,9 @@ public class CreateUserRequest {
     @Pattern(regexp = "^(\\+84|0)[0-9]{9,10}$", message = "Số điện thoại không hợp lệ")
     private String phone;
 
-    /**
-     * Danh sách role ID sẽ gán cho user mới (ít nhất 1).
-     */
+
+
+
     @jakarta.validation.constraints.NotEmpty(message = "Người dùng phải có ít nhất một vai trò")
     private java.util.Set<java.util.UUID> roleIds;
 }

@@ -11,6 +11,6 @@ public class ServicePackageResponse {
     private String features;
     private BigDecimal price;
     private Integer durationDays;
-    /** Số nhân viên tối đa. 0 = không giới hạn */
+
     private int maxStaff;
 }

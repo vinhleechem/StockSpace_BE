@@ -3,7 +3,7 @@ package fu.stockspace.stockspace_be.auth.dto;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.*;
 
-/** Thông tin user trả về từ Google API (GET /oauth2/v1/userinfo) */
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

@@ -1,9 +1,5 @@
--- Idempotent rollout migration for chatbot/RAG changes.
--- Safe on a fresh database: each block runs only when the legacy table exists.
 
 CREATE EXTENSION IF NOT EXISTS vector;
--- The pinned image provides the tested extension files; existing volumes may
--- still record an older installed extension version.
 ALTER EXTENSION vector UPDATE;
 
 DO $migration$

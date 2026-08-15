@@ -8,9 +8,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * DTO request khi Admin đặt lại mật khẩu cho User.
- */
+
+
+
 @Data
 @Builder
 @NoArgsConstructor

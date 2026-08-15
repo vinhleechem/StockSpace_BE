@@ -1,12 +1,5 @@
-# =============================================================================
-# BASE — Shared config giữa dev và prod
-# Không chạy file này trực tiếp.
-#   Dev:  docker compose up              (tự merge với docker-compose.override.yml)
-#   Prod: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-# =============================================================================
 
 services:
-  # ─── PostgreSQL ────────────────────────────────────────────────────────────
   postgres:
     image: pgvector/pgvector:0.8.5-pg16
     container_name: stockspace-db
@@ -26,7 +19,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # ─── Spring Boot App ───────────────────────────────────────────────────────
   app:
     build:
       context: .

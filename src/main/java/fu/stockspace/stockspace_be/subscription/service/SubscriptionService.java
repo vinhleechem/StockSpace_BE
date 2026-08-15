@@ -33,13 +33,13 @@ public class SubscriptionService {
     private final WalletService walletService;
     private final ServicePackageService packageService;
     private final fu.stockspace.stockspace_be.staff.service.TenantStaffService tenantStaffService;
-    /**
-     * Mua gói dịch vụ. Khấu trừ tiền ví Tenant và kích hoạt gói.
-     * Hỗ trợ 3 trường hợp:
-     *  1. Gia hạn (Renewal - Mua cùng gói cũ): Nối tiếp thời hạn endDate += durationDays.
-     *  2. Nâng cấp (Upgrade - Mua gói mới bằng hoặc cao hơn): Kích hoạt ngay gói mới, ngắt gói cũ (SUPERSEDED).
-     *  3. Hạ cấp (Downgrade - Mua gói thấp hơn khi gói cũ còn hạn): Chặn và báo lỗi.
-     */
+
+
+
+
+
+
+
     @Transactional
     public SubscriptionResponse purchasePackage(UUID tenantId, PurchasePackageRequest request) {
         ServicePackage servicePackage = packageRepository.findById(request.getPackageId())
@@ -61,19 +61,19 @@ public class SubscriptionService {
             Subscription activeSub = activeOpt.get();
             ServicePackage activePkg = activeSub.getServicePackage();
 
-            // 1. Gia hạn (Same package)
+
             if (activePkg != null && activePkg.getId().equals(servicePackage.getId())) {
                 log.info("Renewal package: Tenant {} renewing package '{}'", tenantId, servicePackage.getName());
                 LocalDate newEndDate = activeSub.getEndDate().plusDays(servicePackage.getDurationDays());
                 activeSub.setEndDate(newEndDate);
-                // Cập nhật snapshot nếu gói đã được Admin điều chỉnh
+
                 activeSub.setSnapshotMaxStaff(servicePackage.getMaxStaff());
                 activeSub.setSnapshotPrice(servicePackage.getPrice());
                 activeSub.setSnapshotFeatures(servicePackage.getFeatures());
                 activeSub.setSnapshotPackageName(servicePackage.getName());
                 subscription = subscriptionRepository.save(activeSub);
             } else {
-                // Kiểm tra Hạ cấp (Downgrade Check)
+
                 java.math.BigDecimal currentPrice = activeSub.getSnapshotPrice() != null
                         ? activeSub.getSnapshotPrice()
                         : (activePkg != null ? activePkg.getPrice() : java.math.BigDecimal.ZERO);
@@ -88,7 +88,7 @@ public class SubscriptionService {
                     throw new BadRequestException("Không thể hạ xuống gói dịch vụ thấp hơn khi gói hiện tại vẫn đang còn hạn. Vui lòng hạ gói sau khi gói hiện tại kết thúc.");
                 }
 
-                // 2. Nâng cấp (Upgrade): Ngắt gói cũ thành SUPERSEDED và tạo gói mới
+
                 String oldPkgName = activeSub.getSnapshotPackageName() != null
                         ? activeSub.getSnapshotPackageName()
                         : (activePkg != null ? activePkg.getName() : "Gói hiện tại");
@@ -117,7 +117,7 @@ public class SubscriptionService {
                 subscription = subscriptionRepository.save(subscription);
             }
         } else {
-            // 3. Mua mới hoàn toàn
+
             LocalDate startDate = LocalDate.now();
             LocalDate endDate = startDate.plusDays(servicePackage.getDurationDays());
 
@@ -135,10 +135,10 @@ public class SubscriptionService {
             subscription = subscriptionRepository.save(subscription);
         }
 
-        // Tự động kiểm tra và khóa bớt Staff nếu vượt quota gói mới mua
+
         tenantStaffService.deactivateExcessStaffs(tenantId, servicePackage.getMaxStaff());
 
-        // Trừ tiền ví Tenant
+
         walletService.deductBalance(
                 tenantId,
                 servicePackage.getPrice(),
@@ -148,7 +148,7 @@ public class SubscriptionService {
                 subscription.getId()
         );
 
-        // Ghi nhận doanh thu cho hệ thống: Cộng tiền tương ứng vào Ví System Admin
+
         final UUID subId = subscription.getId();
         userRepository.findFirstByRoles_Name(fu.stockspace.stockspace_be.auth.entity.RoleType.ROLE_ADMIN.name())
                 .ifPresent(adminUser -> {
@@ -172,9 +172,9 @@ public class SubscriptionService {
         return mapToResponse(subscription);
     }
 
-    /**
-     * Lấy thông tin gói dịch vụ đang active của Tenant.
-     */
+
+
+
     @Transactional(readOnly = true)
     public SubscriptionResponse getMyActiveSubscription(UUID tenantId) {
         Subscription subscription = subscriptionRepository
@@ -183,9 +183,9 @@ public class SubscriptionService {
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.SUBSCRIPTION_NOT_FOUND));
         return mapToResponse(subscription);
     }
-    /**
-     * Helper kiểm tra nhanh xem Tenant có gói active không.
-     */
+
+
+
     @Transactional(readOnly = true)
     public boolean hasActiveSubscription(UUID tenantId) {
         return subscriptionRepository
@@ -194,9 +194,9 @@ public class SubscriptionService {
                 .isPresent();
     }
 
-    /**
-     * Preview chuyển đổi gói dịch vụ cho Tenant xem trước khi xác nhận bấm mua.
-     */
+
+
+
     @Transactional(readOnly = true)
     public fu.stockspace.stockspace_be.subscription.dto.SubscriptionPreviewResponse previewSubscriptionChange(UUID tenantId, UUID newPackageId) {
 
@@ -291,9 +291,9 @@ public class SubscriptionService {
     }
 
 
-    /**
-     * Admin xem tất cả các lượt đăng ký gói.
-     */
+
+
+
     @Transactional(readOnly = true)
     public Page<SubscriptionResponse> getAllSubscriptions(Pageable pageable) {
 

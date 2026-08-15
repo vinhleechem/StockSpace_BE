@@ -29,7 +29,7 @@ public class ProductCategory extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tenant_id")
-    private User tenant; // null if system-wide recommended category
+    private User tenant;
 
     @Column(name = "name", nullable = false)
     private String name;

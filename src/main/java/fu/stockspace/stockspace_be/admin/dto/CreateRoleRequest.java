@@ -7,9 +7,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * DTO dùng để tạo hoặc cập nhật vai trò (Role).
- */
+
+
+
 @Data
 @Builder
 @NoArgsConstructor

@@ -15,11 +15,11 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
-/**
- * Authenticates a STOMP connection from the JWT provided in its CONNECT frame.
- * Browser WebSocket handshakes cannot reliably carry an Authorization header,
- * so authentication is intentionally performed here instead of at the handshake.
- */
+
+
+
+
+
 @Component
 @RequiredArgsConstructor
 @Slf4j

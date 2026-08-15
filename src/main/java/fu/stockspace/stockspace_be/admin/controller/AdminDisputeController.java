@@ -18,9 +18,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-/**
- * Controller xử lý các API quản lý và giải quyết tranh chấp dành cho Admin và Inspector.
- */
+
+
+
 @Tag(name = "Admin — Dispute Management", description = "Các API giải quyết tranh chấp hợp đồng và phân xử cọc của Admin/Inspector")
 @RestController
 @RequestMapping("/api/admin/disputes")
@@ -30,10 +30,10 @@ public class AdminDisputeController {
 
     private final AdminDisputeService adminDisputeService;
 
-    /**
-     * GET /api/admin/disputes
-     * Admin/Inspector xem danh sách toàn bộ các tranh chấp (có phân trang và lọc status).
-     */
+
+
+
+
     @GetMapping
     @Operation(summary = "Xem danh sách các tranh chấp (phân trang, lọc trạng thái)")
     public ResponseEntity<ApiResponse<PagedResponse<DisputeResponse>>> getAllDisputes(
@@ -45,10 +45,10 @@ public class AdminDisputeController {
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách tranh chấp thành công", PagedResponse.fromPage(result)));
     }
 
-    /**
-     * POST /api/admin/disputes/{id}/resolve
-     * Admin/Inspector giải quyết tranh chấp và phân xử tiền đặt cọc.
-     */
+
+
+
+
     @PostMapping("/{id}/resolve")
     @Operation(summary = "Giải quyết tranh chấp và phân xử tiền đặt cọc")
     public ResponseEntity<ApiResponse<DisputeResponse>> resolve(

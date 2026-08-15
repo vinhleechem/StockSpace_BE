@@ -7,9 +7,9 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 import java.math.BigDecimal;
 import java.util.UUID;
-/**
- * Entity WithdrawRequest - Yêu cầu rút tiền từ ví của người dùng.
- */
+
+
+
 @Entity
 @Table(name = "withdraw_requests", indexes = {
         @Index(name = "idx_withdraw_requests_user_id", columnList = "user_id"),
@@ -28,7 +28,7 @@ public class WithdrawRequest extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
-    /** Liên kết 1-1 tới giao dịch hoàn tất (nullable khi chưa duyệt) */
+
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "transaction_id", unique = true)
     private Transaction transaction;
@@ -44,7 +44,7 @@ public class WithdrawRequest extends BaseEntity {
     @Column(name = "status", nullable = false, length = 20)
     @Builder.Default
     private ApprovalStatus status = ApprovalStatus.PENDING;
-    /** Ghi chú lý do từ chối hoặc duyệt của Admin */
+
     @Column(name = "admin_notes", columnDefinition = "TEXT")
     private String adminNotes;
 }

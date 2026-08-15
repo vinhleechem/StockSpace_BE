@@ -28,10 +28,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * Service quản lý sơ đồ Layout kho bãi (3 tầng: Layout -> Rack -> Bin)
- * Hỗ trợ 2D & 3D rendering (positionX, positionY, positionZ, rotation, dimensions)
- */
+
+
+
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -46,9 +46,9 @@ public class WarehouseLayoutService {
     private final StockBatchRepository stockBatchRepository;
     private final ObjectMapper objectMapper;
 
-    /**
-     * Lấy toàn bộ cây sơ đồ layout kho (Rack -> Bin) và số liệu thống kê
-     */
+
+
+
     @Transactional(readOnly = true)
     public WarehouseLayoutResponse getLayoutTree(UUID warehouseId, UUID userId, String role) {
         log.info("Fetching layout tree for warehouse: {}, user: {}, role: {}", warehouseId, userId, role);
@@ -58,14 +58,14 @@ public class WarehouseLayoutService {
         if ("OWNER".equalsIgnoreCase(role) || "ADMIN".equalsIgnoreCase(role)) {
             layout = layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId).orElse(null);
         } else if ("TENANT".equalsIgnoreCase(role)) {
-            // Thử tìm layout tùy biến của tenant này
+
             layout = layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId).orElse(null);
             if (layout == null) {
-                // Nếu chưa có layout tùy biến, dùng layout mặc định làm cơ sở
+
                 layout = layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId).orElse(null);
             }
         } else {
-            // Khách vãng lai public hoặc guest
+
             layout = layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId).orElse(null);
         }
 
@@ -76,9 +76,9 @@ public class WarehouseLayoutService {
         return mapToLayoutResponse(layout);
     }
 
-    /**
-     * Nhân bản sơ đồ mặc định của Owner sang Tenant khi thuê kho thành công
-     */
+
+
+
     @Transactional
     public void cloneLayout(UUID warehouseId, UUID tenantId) {
         log.info("Cloning layout of warehouse {} to tenant {}", warehouseId, tenantId);
@@ -110,7 +110,7 @@ public class WarehouseLayoutService {
                 .build();
         tenantLayout = layoutRepository.save(tenantLayout);
 
-        // Lấy dữ liệu default racks & bins
+
         List<WarehouseRack> defaultRacks = rackRepository.findAllByLayoutId(defaultLayout.getId());
         List<WarehouseBin> defaultBins = binRepository.findAllByRackLayoutId(defaultLayout.getId());
 
@@ -156,9 +156,9 @@ public class WarehouseLayoutService {
         log.info("Layout cloning completed successfully.");
     }
 
-    /**
-     * Smart Sync lưu sơ đồ hàng loạt (Chỉ Owner có quyền thêm/xóa/sửa kích thước, Tenant chỉ được di chuyển/xoay tọa độ)
-     */
+
+
+
     @Transactional
     public WarehouseLayoutResponse saveLayoutBulk(UUID warehouseId, UUID userId, String role, BulkLayoutSaveRequest request) {
         log.info("Performing bulk save for warehouse layout: {} by user: {}, role: {}", warehouseId, userId, role);
@@ -217,12 +217,12 @@ public class WarehouseLayoutService {
             layout.setPositions(serializePositions(request.getPositions()));
             WarehouseLayout savedTenantLayout = layoutRepository.save(layout);
             if (savedTenantLayout != null) layout = savedTenantLayout;
-            // Tenant không được sửa kích thước tổng không gian kho (layout width/length/height giữ nguyên)
+
         } else {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
 
-        // Fetch DB state
+
         List<WarehouseRack> dbRacks = rackRepository.findAllByLayoutId(layout.getId());
         List<WarehouseBin> dbBins = binRepository.findAllByRackLayoutId(layout.getId());
 
@@ -243,9 +243,9 @@ public class WarehouseLayoutService {
             }
         }
 
-        // ==================== Ràng buộc đối với TENANT ROLE ====================
+
         if (isTenantRole) {
-            // 1. Chặn thêm mới (bản ghi không có ID trong request)
+
             if (request.getRacks() != null) {
                 for (RackSaveRequest rReq : request.getRacks()) {
                     if (rReq.getId() == null || !dbRackMap.containsKey(rReq.getId())) {
@@ -261,20 +261,20 @@ public class WarehouseLayoutService {
                 }
             }
 
-            // 2. Chặn xóa (số lượng bản ghi trong DB phải khớp với request)
+
             if (reqRackIds.size() != dbRacks.size() || reqBinIds.size() != dbBins.size()) {
                 throw new BadRequestException("Tenant không được phép xóa kệ hàng hoặc ô chứa khỏi sơ đồ.");
             }
         }
 
-        // ==================== Delete Handling (Dành riêng cho Owner) ====================
+
         if (!isTenantRole) {
             List<UUID> racksToDelete = dbRacks.stream().map(WarehouseRack::getId)
                     .filter(id -> !reqRackIds.contains(id)).collect(Collectors.toList());
             List<UUID> binsToDelete = dbBins.stream().map(WarehouseBin::getId)
                     .filter(id -> !reqBinIds.contains(id)).collect(Collectors.toList());
 
-            // Inventory Guard: Không cho xóa ô/kệ đang có tồn kho
+
             for (UUID binId : binsToDelete) {
                 if (stockBatchRepository.existsByBinIdAndQuantityGreaterThanAndIsDeletedFalse(binId, 0)) {
                     WarehouseBin bin = dbBinMap.get(binId);
@@ -300,10 +300,10 @@ public class WarehouseLayoutService {
             }
         }
 
-        // ==================== Perform Save & Update ====================
+
         if (request.getRacks() != null) {
             for (RackSaveRequest rReq : request.getRacks()) {
-                // Ràng buộc biên: Rack trong Layout
+
                 if (rReq.getCoordinateX() < 0 || rReq.getCoordinateY() < 0 ||
                         rReq.getCoordinateX() + (rReq.getWidth() != null ? rReq.getWidth() : 0) > layout.getWidth() ||
                         rReq.getCoordinateY() + (rReq.getLength() != null ? rReq.getLength() : 0) > layout.getLength()) {
@@ -315,13 +315,13 @@ public class WarehouseLayoutService {
                 if (rReq.getId() != null && dbRackMap.containsKey(rReq.getId())) {
                     rack = dbRackMap.get(rReq.getId());
                     if (isTenantRole) {
-                        // Tenant CHỈ ĐƯỢC PHÉP CẬP NHẬT TỌA ĐỘ VÀ GÓC XOAY
+
                         rack.setCoordinateX(rReq.getCoordinateX());
                         rack.setCoordinateY(rReq.getCoordinateY());
                         if (rReq.getPositionZ() != null) rack.setPositionZ(rReq.getPositionZ());
                         if (rReq.getRotation() != null) rack.setRotation(rReq.getRotation());
                     } else {
-                        // Owner cập nhật đầy đủ
+
                         rack.setName(rReq.getName());
                         rack.setCode(rReq.getCode());
                         rack.setMaxWeight(rReq.getMaxWeight());
@@ -400,9 +400,9 @@ public class WarehouseLayoutService {
         return mapToLayoutResponse(layout);
     }
 
-    /**
-     * Helper ánh xạ đệ quy từ Entity sang Response DTO (2D/3D + Thống kê ô chứa)
-     */
+
+
+
     private WarehouseLayoutResponse mapToLayoutResponse(WarehouseLayout layout) {
         List<WarehouseRack> racks = rackRepository.findAllByLayoutId(layout.getId());
         List<WarehouseBin> bins = binRepository.findAllByRackLayoutId(layout.getId());
@@ -489,7 +489,7 @@ public class WarehouseLayoutService {
                 .build();
     }
 
-    /** Serialize List<String> → JSON String để lưu vào DB */
+
     private String serializePositions(List<String> positions) {
         if (positions == null || positions.isEmpty()) return null;
         try {
@@ -500,7 +500,7 @@ public class WarehouseLayoutService {
         }
     }
 
-    /** Deserialize JSON String → List<String> để trả về FE */
+
     private List<String> deserializePositions(String positionsJson) {
         if (positionsJson == null || positionsJson.isBlank()) return null;
         try {

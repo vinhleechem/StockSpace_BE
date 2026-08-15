@@ -12,12 +12,12 @@ import java.math.BigDecimal;
 import java.util.Optional;
 
 
-/**
- * Repository cho Warehouse.
- *
- * searchWarehouses — public search: filter theo keyword, status, price, capacity
- * findByOwnerId    — owner xem kho của mình
- */
+
+
+
+
+
+
 import java.util.UUID;
 
 public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
@@ -34,7 +34,7 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
     @Query("SELECT COUNT(w) FROM Warehouse w WHERE w.isDeleted = false")
     long count();
 
-    // ==================== Public Search ====================
+
 
     @Query("""
             SELECT w FROM Warehouse w
@@ -45,10 +45,10 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
             """)
     Optional<Warehouse> findPublicAvailableById(@Param("id") UUID id);
 
-    /**
-     * Tìm kiếm kho công khai: trả về kho đã được duyệt đăng bài (không cần đã kiểm định)
-     * Filter: keyword (name/address), pricePerMonth, capacity
-     */
+
+
+
+
     @Query("""
             SELECT w FROM Warehouse w
             WHERE w.isActive = true
@@ -69,7 +69,7 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
             Pageable pageable
     );
 
-    // ==================== Admin Search (all warehouses) ====================
+
 
     @Query("""
             SELECT w FROM Warehouse w
@@ -86,7 +86,7 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
             Pageable pageable
     );
 
-    // ==================== Owner ====================
+
 
     @Query("SELECT w FROM Warehouse w WHERE w.owner.id = ?1 AND w.isDeleted = false")
     Page<Warehouse> findByOwnerId(UUID ownerId, Pageable pageable);
@@ -94,7 +94,7 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
     @Query("SELECT w FROM Warehouse w WHERE w.id = ?1 AND w.owner.id = ?2 AND w.isDeleted = false")
     Optional<Warehouse> findByIdAndOwnerId(UUID id, UUID ownerId);
 
-    // ==================== Misc ====================
+
 
     @Query("SELECT COUNT(w) > 0 FROM Warehouse w WHERE w.id = ?1 AND w.owner.id = ?2 AND w.isDeleted = false")
     boolean existsByIdAndOwnerId(UUID id, UUID ownerId);

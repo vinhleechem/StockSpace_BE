@@ -18,14 +18,14 @@ import org.springframework.web.bind.annotation.*;
 
 
 
-/**
- * Controller xử lý các API Booking của Warehouse Owner.
- *
- * Endpoints:
- *   GET   /api/owner/bookings              — Xem yêu cầu đến (phân trang)
- *   PATCH /api/owner/bookings/{id}/approve — Chấp nhận yêu cầu
- *   PATCH /api/owner/bookings/{id}/reject  — Từ chối yêu cầu
- */
+
+
+
+
+
+
+
+
 @Tag(name = "Owner — Booking", description = "API xét duyệt yêu cầu thuê kho của Owner")
 @RestController
 @RequestMapping("/api/owner/bookings")
@@ -34,10 +34,10 @@ public class OwnerBookingController {
 
     private final BookingService bookingService;
 
-    /**
-     * GET /api/owner/bookings
-     * Danh sách yêu cầu thuê đến kho của Owner, phân trang.
-     */
+
+
+
+
     @GetMapping
     @PreAuthorize("@rbac.hasPermission('RENTAL_REQUEST_READ')")
     @Operation(summary = "Xem danh sách yêu cầu thuê kho đến (Owner)")
@@ -50,11 +50,11 @@ public class OwnerBookingController {
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách yêu cầu thuê thành công", result));
     }
 
-    /**
-     * PATCH /api/owner/bookings/{id}/approve
-     * Chấp nhận yêu cầu thuê kho.
-     * Tự động: deduct deposit + tạo hợp đồng + warehouse RENTED.
-     */
+
+
+
+
+
     @PatchMapping("/{id}/approve")
     @PreAuthorize("@rbac.hasPermission('RENTAL_REQUEST_PROCESS')")
     @Operation(summary = "Chấp nhận yêu cầu thuê kho")
@@ -64,11 +64,11 @@ public class OwnerBookingController {
         return ResponseEntity.ok(ApiResponse.success("Chấp nhận yêu cầu thuê kho thành công", response));
     }
 
-    /**
-     * PATCH /api/owner/bookings/{id}/reject
-     * Từ chối yêu cầu thuê kho.
-     * Body: { "reason": "..." }
-     */
+
+
+
+
+
     @PatchMapping("/{id}/reject")
     @PreAuthorize("@rbac.hasPermission('RENTAL_REQUEST_PROCESS')")
     @Operation(summary = "Từ chối yêu cầu thuê kho")

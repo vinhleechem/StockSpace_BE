@@ -25,14 +25,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-/**
- * Service xử lý nghiệp vụ Dispute Ticket.
- *
- * Chức năng:
- * - Mở tranh chấp → đổi Contract sang DISPUTED
- * - Xem dispute của các hợp đồng mà mình tham gia
- * - Admin giải quyết dispute → gọi từ AdminDisputeService
- */
+
+
+
+
+
+
+
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -45,31 +45,31 @@ public class DisputeService {
     private final WarehouseService warehouseService;
     private final WalletService walletService;
     private final NotificationService notificationService;
-    // ==================== User ====================
-    /**
-     * Mở tranh chấp cho hợp đồng.
-     *
-     * Ràng buộc:
-     * - Hợp đồng phải ACTIVE hoặc PENDING_HANDOVER
-     * - Chỉ Owner hoặc Tenant của hợp đồng được mở
-     * - Mỗi hợp đồng chỉ có 1 dispute tại một thời điểm
-     */
+
+
+
+
+
+
+
+
+
     @Transactional
     public DisputeResponse raiseDispute(UUID userId, CreateDisputeRequest request) {
         RentalContract contract = contractRepository.findById(request.getContractId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
-        // Chỉ cho phép dispute khi contract chưa hoàn thành/hủy và chưa có dispute
+
         if (contract.getStatus() == ContractStatus.COMPLETED
                 || contract.getStatus() == ContractStatus.CANCELLED
                 || contract.getStatus() == ContractStatus.DISPUTED) {
             throw new BadRequestException("Không thể mở tranh chấp cho hợp đồng ở trạng thái hiện tại");
         }
-        // Kiểm tra đã có dispute chưa
+
         boolean exists = disputeRepository.findByContractId(contract.getId()).isPresent();
         if (exists) {
             throw new ResourceConflictException(ErrorCode.DISPUTE_ALREADY_OPEN);
         }
-        // Kiểm tra user là tenant hoặc owner của hợp đồng
+
         UUID tenantId = contract.getBooking().getTenant().getId();
         UUID ownerId = contract.getBooking().getWarehouse().getOwner().getId();
         if (!userId.equals(tenantId) && !userId.equals(ownerId)) {
@@ -77,7 +77,7 @@ public class DisputeService {
         }
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
-        // Chuyển ảnh thành JSON string đơn giản
+
         String evidenceJson = request.getEvidenceImages() != null
                 ? request.getEvidenceImages().toString()
                 : null;
@@ -89,10 +89,10 @@ public class DisputeService {
                 .status("OPEN")
                 .build();
         ticket = disputeRepository.save(ticket);
-        // Đổi contract → DISPUTED
+
         contractService.setDisputed(contract.getId());
 
-        // Push thông báo cho bên kia trong hợp đồng (owner hoặc tenant)
+
         try {
             UUID notifyUserId = userId.equals(tenantId) ? ownerId : tenantId;
             String warehouseName = contract.getBooking().getWarehouse().getName();
@@ -109,21 +109,21 @@ public class DisputeService {
         log.info("Dispute {} opened by user {} for contract {}", ticket.getId(), userId, contract.getId());
         return mapToResponse(ticket);
     }
-    /**
-     * Xem danh sách tranh chấp của các hợp đồng mà user hiện tại tham gia,
-     * bao gồm cả bên mở tranh chấp và bên còn lại (tenant hoặc owner).
-     */
+
+
+
+
     @Transactional(readOnly = true)
     public Page<DisputeResponse> getMyDisputes(UUID userId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         return disputeRepository.findByInvolvedUserId(userId, pageable)
                 .map(this::mapToResponse);
     }
-    // ==================== Admin internal ====================
-    /**
-     * Admin giải quyết dispute.
-     * Gọi từ AdminDisputeService.
-     */
+
+
+
+
+
     @Transactional
     public DisputeResponse resolveDispute(UUID disputeId, UUID adminId, String adminNote, String depositResolution) {
         DisputeTicket ticket = disputeRepository.findById(disputeId)
@@ -134,15 +134,15 @@ public class DisputeService {
         ticket.setHandledBy(admin);
         ticket.setAdminNote(adminNote);
         ticket = disputeRepository.save(ticket);
-        // Xử lý cọc theo kết quả phân xử của Inspector/Admin
+
         RentalContract contract = ticket.getContract();
         BookingRequest booking = contract.getBooking();
-        
+
         if ("REFUND_TO_TENANT".equalsIgnoreCase(depositResolution)) {
-            // =========================================================
-            // [INTEGRATION POINT — Dev B]
-            // Hoàn cọc cho Tenant:
-            // walletService.refundBalance(booking.getTenant().getId(), booking.getDepositAmount(), "Hoàn đặt cọc phân xử tranh chấp...");
+
+
+
+
             walletService.refundBalance(
                 booking.getTenant().getId(),
                 booking.getDepositAmount(),
@@ -151,13 +151,13 @@ public class DisputeService {
                 booking.getId(),
                 null
             );
-            // =========================================================
+
             log.info("Deposit resolved to be refunded to Tenant for contract {}", contract.getId());
         } else if ("FORFEIT_TO_OWNER".equalsIgnoreCase(depositResolution)) {
-            // =========================================================
-            // [INTEGRATION POINT — Dev B]
-            // Phạt cọc, chuyển cho Owner:
-            // walletService.addBalance(booking.getWarehouse().getOwner().getId(), booking.getDepositAmount(), "Nhận tiền cọc phạt cọc tranh chấp...");
+
+
+
+
             walletService.refundBalance(
                 booking.getWarehouse().getOwner().getId(),
                 booking.getDepositAmount(),
@@ -166,15 +166,15 @@ public class DisputeService {
                 booking.getId(),
                 null
             );
-            // =========================================================
+
             log.info("Deposit resolved to be forfeited to Owner for contract {}", contract.getId());
         }
-        // Hủy bỏ hợp đồng/deal và khôi phục trạng thái kho bãi về AVAILABLE
+
         contract.setStatus(ContractStatus.CANCELLED);
         contractRepository.save(contract);
         warehouseService.markAsAvailable(booking.getWarehouse().getId());
 
-        // [FIX] Đặt BookingRequest cũ → CANCELLED để không block việc booking lại kho này
+
         booking.setStatus(ApprovalStatus.CANCELLED);
         booking.setRejectReason("Hợp đồng bị hủy do tranh chấp được giải quyết bởi Admin");
         bookingRepository.save(booking);
@@ -182,7 +182,7 @@ public class DisputeService {
         log.info("Admin {} resolved dispute {} with depositResolution {}", adminId, disputeId, depositResolution);
         return mapToResponse(ticket);
     }
-    // ==================== Private helpers ====================
+
     private DisputeResponse mapToResponse(DisputeTicket t) {
         return DisputeResponse.builder()
                 .id(t.getId())

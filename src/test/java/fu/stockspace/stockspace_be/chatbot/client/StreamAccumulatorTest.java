@@ -12,19 +12,19 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
 
-/**
- * Unit tests for the private {@code StreamAccumulator} inner class inside
- * {@link OpenRouterClient}.
- *
- * <p>The accumulator is accessed via reflection because it is private-scoped,
- * matching the pattern already used in {@link OpenRouterClientTest}.</p>
- */
+
+
+
+
+
+
+
 class StreamAccumulatorTest {
 
     private final OpenRouterClient client =
             new OpenRouterClient(mock(WebClient.class), new ObjectMapper());
 
-    /** Create a new accumulator instance via reflection. */
+
     private Object newAccumulator(java.util.function.Consumer<String> onDelta) {
         try {
             Class<?> clazz = Class.forName(
@@ -46,7 +46,7 @@ class StreamAccumulatorTest {
         return ReflectionTestUtils.invokeMethod(acc, "finish");
     }
 
-    // -------------------------------------------------------------------------
+
 
     @Test
     void assemblesTextDeltasAndFiresCallbackForEachChunk() {
@@ -72,7 +72,7 @@ class StreamAccumulatorTest {
         accept(acc, "[DONE]");
         accept(acc, "{\"choices\":[{\"delta\":{\"content\":\"OK\"}}]}");
 
-        // second accept after DONE is just a trailing duplicate — should still work
+
         OpenRouterClient.AiResponse response = finish(acc);
         assertEquals("OK", response.text());
     }
@@ -81,13 +81,13 @@ class StreamAccumulatorTest {
     void assemblesToolCallFromMultipleChunks() {
         Object acc = newAccumulator(null);
 
-        // First chunk: id, name, start of args
+
         accept(acc, """
                 {"choices":[{"delta":{"tool_calls":[{
                   "id":"call_abc",
                   "function":{"name":"searchWarehouses","arguments":"{\\"keyword\\":\\""}
                 }]}}]}""");
-        // Second chunk: rest of args
+
         accept(acc, """
                 {"choices":[{"delta":{"tool_calls":[{
                   "function":{"arguments":"Quận 7\\"}"}
@@ -138,7 +138,7 @@ class StreamAccumulatorTest {
     @Test
     void throwsChatProviderExceptionOnFinishWithEmptyText() {
         Object acc = newAccumulator(null);
-        // Provide no content at all
+
         accept(acc, "[DONE]");
 
         assertThrows(ChatProviderException.class, () -> finish(acc));
@@ -148,7 +148,7 @@ class StreamAccumulatorTest {
     void skipsChunksWithMalformedJson() {
         Object acc = newAccumulator(null);
 
-        accept(acc, "not-json-at-all");  // must not throw
+        accept(acc, "not-json-at-all");
         accept(acc, "{\"choices\":[{\"delta\":{\"content\":\"OK\"}}]}");
 
         OpenRouterClient.AiResponse response = finish(acc);
@@ -159,7 +159,7 @@ class StreamAccumulatorTest {
     void skipsChunksWithMissingChoices() {
         Object acc = newAccumulator(null);
 
-        accept(acc, "{\"id\":\"chatcmpl-xyz\"}");  // no choices field
+        accept(acc, "{\"id\":\"chatcmpl-xyz\"}");
         accept(acc, "{\"choices\":[{\"delta\":{\"content\":\"Hi\"}}]}");
 
         OpenRouterClient.AiResponse response = finish(acc);

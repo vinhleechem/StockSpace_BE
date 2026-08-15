@@ -6,11 +6,11 @@ import org.springframework.stereotype.Component;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Tool: askLoginPrompt
- * Không query DB — chỉ trả về action yêu cầu frontend redirect đến trang đăng nhập.
- * Dùng khi GUEST hỏi thông tin cần xác thực (hợp đồng, ví, tồn kho...).
- */
+
+
+
+
+
 @Component
 public class AskLoginPromptTool implements ChatTool {
 

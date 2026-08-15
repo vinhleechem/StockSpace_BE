@@ -5,9 +5,9 @@ import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
-/**
- * DTO khi Admin tạo mới loại kho.
- */
+
+
+
 @Getter
 @Setter
 public class CreateWarehouseTypeRequest {

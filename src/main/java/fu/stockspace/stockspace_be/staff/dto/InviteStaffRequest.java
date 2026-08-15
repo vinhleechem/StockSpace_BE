@@ -7,10 +7,10 @@ import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
-/**
- * Request body khi Tenant gửi lời mời nhân viên kho.
- * POST /api/tenant/staffs/invite
- */
+
+
+
+
 @Getter
 @Setter
 public class InviteStaffRequest {

@@ -12,15 +12,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Entity InspectionReport — báo cáo kiểm định kho.
- * Map với bảng: inspection_reports
- *
- * Luồng:
- *   Owner request → PENDING
- *   Admin gán Inspector → IN_PROGRESS
- *   Inspector nộp báo cáo → PASSED (verify kho) | FAILED
- */
+
+
+
+
+
+
+
+
+
 @Entity
 @Table(name = "inspection_reports", indexes = {
         @Index(name = "idx_inspection_reports_warehouse_id",  columnList = "warehouse_id"),
@@ -42,15 +42,15 @@ public class InspectionReport extends BaseEntity {
     @JoinColumn(name = "warehouse_id", nullable = false)
     private Warehouse warehouse;
 
-    /** null cho đến khi Admin gán Inspector */
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "inspector_id")
     private User inspector;
 
-    /**
-     * Dữ liệu checklist kiểm định — lưu dạng JSON string.
-     * Ví dụ: {"fireExtinguisher": true, "electricalSafety": false, ...}
-     */
+
+
+
+
     @Column(name = "checklist_data", columnDefinition = "TEXT")
     private String checklistData;
 

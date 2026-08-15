@@ -12,9 +12,9 @@ import lombok.Setter;
 import java.math.BigDecimal;
 import java.util.List;
 
-/**
- * DTO nhận dữ liệu khi Owner tạo mới Warehouse.
- */
+
+
+
 @Getter
 @Setter
 public class CreateWarehouseRequest {
@@ -41,6 +41,6 @@ public class CreateWarehouseRequest {
     @DecimalMin(value = "0.0", inclusive = false, message = "Giá thuê phải lớn hơn 0")
     private BigDecimal pricePerMonth;
 
-    /** Danh sách URL ảnh (tuỳ chọn khi tạo, có thể upload sau) */
+
     private List<String> imageUrls;
 }

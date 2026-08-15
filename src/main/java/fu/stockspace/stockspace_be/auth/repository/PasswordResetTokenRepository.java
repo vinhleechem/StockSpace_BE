@@ -16,7 +16,7 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
 
     Optional<PasswordResetToken> findByUserAndToken(User user, String token);
 
-    /** Xóa tất cả token cũ của user trước khi tạo mới */
+
     @Modifying
     @Query("DELETE FROM PasswordResetToken p WHERE p.user = :user")
     void deleteAllByUser(@Param("user") User user);

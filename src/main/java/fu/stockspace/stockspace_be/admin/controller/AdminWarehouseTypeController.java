@@ -15,12 +15,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-/**
- * Controller xử lý các API Quản lý Loại kho (Warehouse Type Management) cho Admin.
- *
- * Tất cả endpoints yêu cầu role ADMIN.
- * Base path: /api/admin/warehouse-types
- */
+
+
+
+
+
+
 @Tag(name = "Admin — Warehouse Type Management", description = "Các API quản lý Loại kho của Admin")
 @RestController
 @RequestMapping("/api/admin/warehouse-types")
@@ -30,10 +30,10 @@ public class AdminWarehouseTypeController {
 
     private final WarehouseTypeService warehouseTypeService;
 
-    /**
-     * GET /api/admin/warehouse-types
-     * Lấy danh sách loại kho có phân trang và tìm kiếm.
-     */
+
+
+
+
     @GetMapping
     @Operation(summary = "Lấy danh sách loại kho (phân trang, tìm kiếm)")
     public ResponseEntity<ApiResponse<PagedResponse<WarehouseTypeResponse>>> getTypes(
@@ -51,10 +51,10 @@ public class AdminWarehouseTypeController {
     }
 
 
-    /**
-     * GET /api/admin/warehouse-types/{id}
-     * Xem chi tiết thông tin một loại kho theo ID.
-     */
+
+
+
+
     @GetMapping("/{id}")
     @Operation(summary = "Xem chi tiết loại kho theo ID")
     public ResponseEntity<ApiResponse<WarehouseTypeResponse>> getTypeById(
@@ -64,10 +64,10 @@ public class AdminWarehouseTypeController {
         return ResponseEntity.ok(ApiResponse.success("Lấy thông tin loại kho thành công", type));
     }
 
-    /**
-     * POST /api/admin/warehouse-types
-     * Admin tạo mới loại kho.
-     */
+
+
+
+
     @PostMapping
     @Operation(summary = "Tạo mới một loại kho")
     public ResponseEntity<ApiResponse<WarehouseTypeResponse>> createType(
@@ -78,10 +78,10 @@ public class AdminWarehouseTypeController {
                 .body(ApiResponse.success("Tạo loại kho thành công", type));
     }
 
-    /**
-     * PUT /api/admin/warehouse-types/{id}
-     * Admin cập nhật loại kho.
-     */
+
+
+
+
     @PutMapping("/{id}")
     @Operation(summary = "Cập nhật loại kho")
     public ResponseEntity<ApiResponse<WarehouseTypeResponse>> updateType(
@@ -92,10 +92,10 @@ public class AdminWarehouseTypeController {
         return ResponseEntity.ok(ApiResponse.success("Cập nhật loại kho thành công", type));
     }
 
-    /**
-     * DELETE /api/admin/warehouse-types/{id}
-     * Admin xóa loại kho.
-     */
+
+
+
+
     @DeleteMapping("/{id}")
     @Operation(summary = "Xóa loại kho")
     public ResponseEntity<ApiResponse<Void>> deleteType(

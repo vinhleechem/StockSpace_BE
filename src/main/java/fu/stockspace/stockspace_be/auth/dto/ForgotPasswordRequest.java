@@ -4,7 +4,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
-/** Request body cho POST /api/auth/forgot-password */
+
 @Data
 public class ForgotPasswordRequest {
 

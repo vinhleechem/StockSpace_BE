@@ -4,10 +4,10 @@ import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
 
 import java.util.Locale;
 
-/**
- * Localizes domain values at the chatbot boundary without changing the enums
- * used by repositories and business services.
- */
+
+
+
+
 final class ChatToolLocalization {
 
     private ChatToolLocalization() {

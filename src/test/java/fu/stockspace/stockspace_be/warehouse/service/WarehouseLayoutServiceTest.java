@@ -178,7 +178,7 @@ class WarehouseLayoutServiceTest {
         when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)).thenReturn(Optional.of(defaultLayout));
         when(layoutRepository.save(any(WarehouseLayout.class))).thenReturn(defaultLayout);
 
-        // Rack width + coordinateX = 110 > Layout width (100)
+
         RackSaveRequest rackReq = RackSaveRequest.builder()
                 .name("Rack Out")
                 .code("R_OUT")
@@ -221,7 +221,7 @@ class WarehouseLayoutServiceTest {
                 .width(100)
                 .length(100)
                 .height(10)
-                .racks(Collections.emptyList()) // Xoá hết
+                .racks(Collections.emptyList())
                 .build();
 
         when(stockBatchRepository.existsByBinIdAndQuantityGreaterThanAndIsDeletedFalse(binId, 0)).thenReturn(true);
@@ -243,7 +243,7 @@ class WarehouseLayoutServiceTest {
         when(rackRepository.findAllByLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
         when(binRepository.findAllByRackLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
 
-        // Request gửi thêm rack mới (id = null)
+
         RackSaveRequest newRack = RackSaveRequest.builder().name("New Rack").code("R_NEW").coordinateX(0).coordinateY(0).width(5).length(5).height(3).build();
         BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder().width(100).length(100).height(10).racks(List.of(newRack)).build();
 

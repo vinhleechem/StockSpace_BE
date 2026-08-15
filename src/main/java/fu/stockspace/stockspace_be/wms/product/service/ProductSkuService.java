@@ -46,7 +46,7 @@ public class ProductSkuService {
         ProductSku sku = skuRepository.findByIdAndIsDeletedFalse(skuId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.SKU_NOT_FOUND));
 
-        // Must be visible to the tenant
+
         if (sku.getTenant() != null && !sku.getTenant().getId().equals(tenantId)) {
             throw new BadRequestException(ErrorCode.FORBIDDEN);
         }
@@ -64,7 +64,7 @@ public class ProductSkuService {
             category = categoryRepository.findByIdAndIsDeletedFalse(request.getCategoryId())
                     .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.PRODUCT_CATEGORY_NOT_FOUND));
 
-            // Category must be visible to the tenant
+
             if (category.getTenant() != null && !category.getTenant().getId().equals(tenantId)) {
                 throw new BadRequestException(ErrorCode.FORBIDDEN);
             }
@@ -73,12 +73,12 @@ public class ProductSkuService {
         UnitOfMeasure uom = uomRepository.findByIdAndIsDeletedFalse(request.getUomId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.UOM_NOT_FOUND));
 
-        // UOM must be visible to the tenant
+
         if (uom.getTenant() != null && !uom.getTenant().getId().equals(tenantId)) {
             throw new BadRequestException(ErrorCode.FORBIDDEN);
         }
 
-        // Validate uniqueness of skuCode per tenant
+
         if (skuRepository.existsBySkuCodeAndTenantOrSystem(request.getSkuCode(), tenantId)) {
             throw new BadRequestException(ErrorCode.SKU_CODE_DUPLICATE);
         }
@@ -101,12 +101,12 @@ public class ProductSkuService {
         ProductSku sku = skuRepository.findByIdAndIsDeletedFalse(skuId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.SKU_NOT_FOUND));
 
-        // System SKUs cannot be updated by tenants
+
         if (sku.getTenant() == null) {
             throw new BadRequestException(ErrorCode.FORBIDDEN);
         }
 
-        // Must own the SKU
+
         if (!sku.getTenant().getId().equals(tenantId)) {
             throw new BadRequestException(ErrorCode.FORBIDDEN);
         }
@@ -116,7 +116,7 @@ public class ProductSkuService {
             category = categoryRepository.findByIdAndIsDeletedFalse(request.getCategoryId())
                     .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.PRODUCT_CATEGORY_NOT_FOUND));
 
-            // Category must be visible to the tenant
+
             if (category.getTenant() != null && !category.getTenant().getId().equals(tenantId)) {
                 throw new BadRequestException(ErrorCode.FORBIDDEN);
             }
@@ -125,7 +125,7 @@ public class ProductSkuService {
         UnitOfMeasure uom = uomRepository.findByIdAndIsDeletedFalse(request.getUomId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.UOM_NOT_FOUND));
 
-        // UOM must be visible to the tenant
+
         if (uom.getTenant() != null && !uom.getTenant().getId().equals(tenantId)) {
             throw new BadRequestException(ErrorCode.FORBIDDEN);
         }
@@ -144,17 +144,17 @@ public class ProductSkuService {
         ProductSku sku = skuRepository.findByIdAndIsDeletedFalse(skuId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.SKU_NOT_FOUND));
 
-        // System SKUs cannot be deleted by tenants
+
         if (sku.getTenant() == null) {
             throw new BadRequestException(ErrorCode.FORBIDDEN);
         }
 
-        // Must own the SKU
+
         if (!sku.getTenant().getId().equals(tenantId)) {
             throw new BadRequestException(ErrorCode.FORBIDDEN);
         }
 
-        // Check constraint: Block deletion if any StockBatch is linked to this SKU (even if quantity is 0)
+
         if (stockBatchRepository.existsBySkuIdAndIsDeletedFalse(skuId)) {
             throw new BadRequestException(ErrorCode.SKU_IN_USE);
         }

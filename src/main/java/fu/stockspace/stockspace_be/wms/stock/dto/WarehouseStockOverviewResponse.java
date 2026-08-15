@@ -7,13 +7,13 @@ import lombok.NoArgsConstructor;
 
 import java.util.UUID;
 
-/**
- * Product-level stock quantity for one selected warehouse.
- *
- * <p>This response intentionally contains one row per visible SKU. The
- * quantity is aggregated only from StockBatch records belonging to the
- * requested warehouse.</p>
- */
+
+
+
+
+
+
+
 @Data
 @Builder
 @NoArgsConstructor
