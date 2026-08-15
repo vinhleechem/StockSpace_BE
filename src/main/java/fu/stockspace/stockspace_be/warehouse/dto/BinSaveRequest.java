@@ -2,6 +2,7 @@ package fu.stockspace.stockspace_be.warehouse.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.DecimalMin;
 import lombok.*;
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -26,18 +27,26 @@ public class BinSaveRequest {
     private BigDecimal maxVolume;
 
     @NotNull(message = "Tọa độ X của Bin không được để trống")
-    private Integer coordinateX;
+    @DecimalMin(value = "0.0", inclusive = true, message = "Bin coordinateX must be non-negative")
+    private BigDecimal coordinateX;
 
     @NotNull(message = "Tọa độ Y của Bin không được để trống")
-    private Integer coordinateY;
+    @DecimalMin(value = "0.0", inclusive = true, message = "Bin coordinateY must be non-negative")
+    private BigDecimal coordinateY;
 
-    private Integer positionZ;
+    @DecimalMin(value = "0.0", inclusive = true, message = "Bin positionZ must be non-negative")
+    private BigDecimal positionZ;
 
     @NotNull(message = "Chiều rộng của Bin không được để trống")
-    private Integer width;
+    @DecimalMin(value = "0.000001", message = "Bin width must be greater than 0")
+    private BigDecimal width;
 
-    private Integer length;
+    @DecimalMin(value = "0.000001", message = "Bin length must be greater than 0")
+    @NotNull(message = "Bin length is required")
+    @DecimalMin(value = "0.000001", message = "Bin length must be greater than 0")
+    private BigDecimal length;
 
     @NotNull(message = "Chiều cao của Bin không được để trống")
-    private Integer height;
+    @DecimalMin(value = "0.000001", message = "Bin height must be greater than 0")
+    private BigDecimal height;
 }

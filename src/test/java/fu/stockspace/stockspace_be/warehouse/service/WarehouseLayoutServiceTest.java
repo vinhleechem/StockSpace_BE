@@ -17,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.*;
+import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -60,9 +61,9 @@ class WarehouseLayoutServiceTest {
                 .id(UUID.randomUUID())
                 .warehouse(warehouse)
                 .isDefault(true)
-                .width(100)
-                .length(100)
-                .height(10)
+                .width(new BigDecimal("100"))
+                .length(new BigDecimal("100"))
+                .height(new BigDecimal("10"))
                 .build();
     }
 
@@ -74,22 +75,22 @@ class WarehouseLayoutServiceTest {
                 .id(UUID.randomUUID())
                 .layout(defaultLayout)
                 .name("Rack A1")
-                .coordinateX(0)
-                .coordinateY(0)
-                .width(10)
-                .length(10)
-                .height(5)
+                .coordinateX(new BigDecimal("0"))
+                .coordinateY(new BigDecimal("0"))
+                .width(new BigDecimal("10"))
+                .length(new BigDecimal("10"))
+                .height(new BigDecimal("5"))
                 .build();
 
         WarehouseBin bin = WarehouseBin.builder()
                 .id(UUID.randomUUID())
                 .rack(rack)
                 .name("Bin A1-1")
-                .coordinateX(0)
-                .coordinateY(0)
-                .width(2)
-                .length(2)
-                .height(1)
+                .coordinateX(new BigDecimal("0"))
+                .coordinateY(new BigDecimal("0"))
+                .width(new BigDecimal("2"))
+                .length(new BigDecimal("2"))
+                .height(new BigDecimal("1"))
                 .build();
 
         when(rackRepository.findAllByLayoutId(defaultLayout.getId())).thenReturn(List.of(rack));
@@ -131,9 +132,9 @@ class WarehouseLayoutServiceTest {
                 .warehouse(warehouse)
                 .tenant(tenantUser)
                 .isDefault(false)
-                .width(100)
-                .length(100)
-                .height(10)
+                .width(new BigDecimal("100"))
+                .length(new BigDecimal("100"))
+                .height(new BigDecimal("10"))
                 .build();
         when(layoutRepository.save(any(WarehouseLayout.class))).thenReturn(clonedLayout);
 
@@ -141,22 +142,22 @@ class WarehouseLayoutServiceTest {
                 .id(UUID.randomUUID())
                 .layout(defaultLayout)
                 .name("Rack A1")
-                .coordinateX(0)
-                .coordinateY(0)
-                .width(10)
-                .length(10)
-                .height(5)
+                .coordinateX(new BigDecimal("0"))
+                .coordinateY(new BigDecimal("0"))
+                .width(new BigDecimal("10"))
+                .length(new BigDecimal("10"))
+                .height(new BigDecimal("5"))
                 .build();
 
         WarehouseBin bin = WarehouseBin.builder()
                 .id(UUID.randomUUID())
                 .rack(rack)
                 .name("Bin A1-1")
-                .coordinateX(0)
-                .coordinateY(0)
-                .width(2)
-                .length(2)
-                .height(1)
+                .coordinateX(new BigDecimal("0"))
+                .coordinateY(new BigDecimal("0"))
+                .width(new BigDecimal("2"))
+                .length(new BigDecimal("2"))
+                .height(new BigDecimal("1"))
                 .build();
 
         when(rackRepository.findAllByLayoutId(defaultLayout.getId())).thenReturn(List.of(rack));
@@ -182,24 +183,24 @@ class WarehouseLayoutServiceTest {
         RackSaveRequest rackReq = RackSaveRequest.builder()
                 .name("Rack Out")
                 .code("R_OUT")
-                .coordinateX(60)
-                .coordinateY(10)
-                .width(50)
-                .length(10)
-                .height(5)
+                .coordinateX(new BigDecimal("60"))
+                .coordinateY(new BigDecimal("10"))
+                .width(new BigDecimal("50"))
+                .length(new BigDecimal("10"))
+                .height(new BigDecimal("5"))
                 .build();
 
         BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
-                .width(100)
-                .length(100)
-                .height(10)
+                .width(new BigDecimal("100"))
+                .length(new BigDecimal("100"))
+                .height(new BigDecimal("10"))
                 .racks(List.of(rackReq))
                 .build();
 
         BadRequestException ex = assertThrows(BadRequestException.class, () ->
                 layoutService.saveLayoutBulk(warehouseId, userId, "OWNER", request));
 
-        assertTrue(ex.getMessage().contains("vượt quá biên giới hạn"));
+        assertTrue(ex.getMessage().contains("parent bounds"));
     }
 
     @Test
@@ -211,16 +212,16 @@ class WarehouseLayoutServiceTest {
         UUID rackId = UUID.randomUUID();
         UUID binId = UUID.randomUUID();
 
-        WarehouseRack rack = WarehouseRack.builder().id(rackId).layout(defaultLayout).name("Rack A1").coordinateX(0).coordinateY(0).width(10).length(10).height(5).build();
-        WarehouseBin bin = WarehouseBin.builder().id(binId).rack(rack).name("Bin A1-1").coordinateX(0).coordinateY(0).width(2).length(2).height(1).build();
+        WarehouseRack rack = WarehouseRack.builder().id(rackId).layout(defaultLayout).name("Rack A1").coordinateX(new BigDecimal("0")).coordinateY(new BigDecimal("0")).width(new BigDecimal("10")).length(new BigDecimal("10")).height(new BigDecimal("5")).build();
+        WarehouseBin bin = WarehouseBin.builder().id(binId).rack(rack).name("Bin A1-1").coordinateX(new BigDecimal("0")).coordinateY(new BigDecimal("0")).width(new BigDecimal("2")).length(new BigDecimal("2")).height(new BigDecimal("1")).build();
 
         when(rackRepository.findAllByLayoutId(defaultLayout.getId())).thenReturn(List.of(rack));
         when(binRepository.findAllByRackLayoutId(defaultLayout.getId())).thenReturn(List.of(bin));
 
         BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
-                .width(100)
-                .length(100)
-                .height(10)
+                .width(new BigDecimal("100"))
+                .length(new BigDecimal("100"))
+                .height(new BigDecimal("10"))
                 .racks(Collections.emptyList())
                 .build();
 
@@ -244,8 +245,8 @@ class WarehouseLayoutServiceTest {
         when(binRepository.findAllByRackLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
 
 
-        RackSaveRequest newRack = RackSaveRequest.builder().name("New Rack").code("R_NEW").coordinateX(0).coordinateY(0).width(5).length(5).height(3).build();
-        BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder().width(100).length(100).height(10).racks(List.of(newRack)).build();
+        RackSaveRequest newRack = RackSaveRequest.builder().name("New Rack").code("R_NEW").coordinateX(new BigDecimal("0")).coordinateY(new BigDecimal("0")).width(new BigDecimal("5")).length(new BigDecimal("5")).height(new BigDecimal("3")).build();
+        BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder().width(new BigDecimal("100")).length(new BigDecimal("100")).height(new BigDecimal("10")).racks(List.of(newRack)).build();
 
         BadRequestException ex = assertThrows(BadRequestException.class, () ->
                 layoutService.saveLayoutBulk(warehouseId, userId, "TENANT", request));
@@ -259,9 +260,9 @@ class WarehouseLayoutServiceTest {
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
 
         BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
-                .width(100)
-                .length(100)
-                .height(10)
+                .width(new BigDecimal("100"))
+                .length(new BigDecimal("100"))
+                .height(new BigDecimal("10"))
                 .racks(Collections.emptyList())
                 .build();
 
