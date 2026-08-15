@@ -43,7 +43,6 @@ public class RackSaveRequest {
     @DecimalMin(value = "0.000001", message = "Rack width must be greater than 0")
     private BigDecimal width;
 
-    @DecimalMin(value = "0.000001", message = "Rack length must be greater than 0")
     @NotNull(message = "Rack length is required")
     @DecimalMin(value = "0.000001", message = "Rack length must be greater than 0")
     private BigDecimal length;

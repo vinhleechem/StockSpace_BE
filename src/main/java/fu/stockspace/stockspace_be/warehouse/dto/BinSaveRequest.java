@@ -41,7 +41,6 @@ public class BinSaveRequest {
     @DecimalMin(value = "0.000001", message = "Bin width must be greater than 0")
     private BigDecimal width;
 
-    @DecimalMin(value = "0.000001", message = "Bin length must be greater than 0")
     @NotNull(message = "Bin length is required")
     @DecimalMin(value = "0.000001", message = "Bin length must be greater than 0")
     private BigDecimal length;
