@@ -8,6 +8,7 @@ import lombok.experimental.SuperBuilder;
 
 
 import java.util.UUID;
+import java.math.BigDecimal;
 
 
 
@@ -44,15 +45,15 @@ public class WarehouseLayout extends BaseEntity {
 
     @Column(name = "width", nullable = false)
     @Builder.Default
-    private Integer width = 100;
+    private BigDecimal width = new BigDecimal("100.000000");
 
     @Column(name = "length", nullable = false)
     @Builder.Default
-    private Integer length = 100;
+    private BigDecimal length = new BigDecimal("100.000000");
 
     @Column(name = "height", nullable = false)
     @Builder.Default
-    private Integer height = 100;
+    private BigDecimal height = new BigDecimal("100.000000");
 
 
     @Column(name = "positions", columnDefinition = "TEXT")

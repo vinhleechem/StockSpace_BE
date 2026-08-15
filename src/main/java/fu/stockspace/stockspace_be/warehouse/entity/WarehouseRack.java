@@ -36,32 +36,32 @@ public class WarehouseRack extends BaseEntity {
     @Column(name = "code", nullable = false, length = 50)
     private String code;
 
-    @Column(name = "max_weight", precision = 10, scale = 2)
+    @Column(name = "max_weight", precision = 14, scale = 6)
     private BigDecimal maxWeight;
 
-    @Column(name = "max_volume", precision = 10, scale = 2)
+    @Column(name = "max_volume", precision = 14, scale = 6)
     private BigDecimal maxVolume;
 
     @Column(name = "coordinate_x")
-    private Integer coordinateX;
+    private BigDecimal coordinateX;
 
     @Column(name = "coordinate_y")
-    private Integer coordinateY;
+    private BigDecimal coordinateY;
 
     @Column(name = "position_z")
     @Builder.Default
-    private Integer positionZ = 0;
+    private BigDecimal positionZ = BigDecimal.ZERO;
 
     @Column(name = "rotation")
     @Builder.Default
     private Integer rotation = 0;
 
     @Column(name = "width")
-    private Integer width;
+    private BigDecimal width;
 
     @Column(name = "length")
-    private Integer length;
+    private BigDecimal length;
 
     @Column(name = "height")
-    private Integer height;
+    private BigDecimal height;
 }
