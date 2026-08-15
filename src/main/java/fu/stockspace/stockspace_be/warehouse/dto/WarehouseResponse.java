@@ -24,6 +24,7 @@ public class WarehouseResponse {
     private BigDecimal capacity;
     private BigDecimal pricePerMonth;
     private String status;
+    private String rejectReason;
     private boolean isVerified;
 
     /** Thông tin loại kho */

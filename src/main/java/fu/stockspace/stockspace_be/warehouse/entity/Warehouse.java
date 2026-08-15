@@ -78,6 +78,9 @@ public class Warehouse extends BaseEntity {
     @Builder.Default
     private WarehouseStatus status = WarehouseStatus.PENDING_APPROVAL;
 
+    @Column(name = "reject_reason", columnDefinition = "TEXT")
+    private String rejectReason;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "policy_version_id", nullable = false)
     private SystemPolicy policy;

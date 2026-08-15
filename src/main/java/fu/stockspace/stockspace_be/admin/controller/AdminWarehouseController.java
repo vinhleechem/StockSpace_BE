@@ -2,6 +2,7 @@ package fu.stockspace.stockspace_be.admin.controller;
 
 import fu.stockspace.stockspace_be.common.dto.ApiResponse;
 import fu.stockspace.stockspace_be.common.dto.PagedResponse;
+import fu.stockspace.stockspace_be.warehouse.dto.RejectWarehouseRequest;
 import fu.stockspace.stockspace_be.warehouse.dto.WarehouseResponse;
 import fu.stockspace.stockspace_be.warehouse.dto.WarehouseSearchRequest;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
@@ -9,6 +10,7 @@ import fu.stockspace.stockspace_be.warehouse.service.WarehouseService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -78,9 +80,11 @@ public class AdminWarehouseController {
     @PostMapping("/{id}/reject")
     @Operation(summary = "Từ chối duyệt kho")
     public ResponseEntity<ApiResponse<WarehouseResponse>> rejectWarehouse(
-            @PathVariable UUID id
+            @PathVariable UUID id,
+            @Valid @RequestBody(required = false) RejectWarehouseRequest request
     ) {
-        WarehouseResponse response = warehouseService.rejectWarehouse(id);
+        String reason = request != null ? request.getReason() : null;
+        WarehouseResponse response = warehouseService.rejectWarehouse(id, reason);
         return ResponseEntity.ok(ApiResponse.success("Từ chối duyệt kho thành công", response));
     }
 }
