@@ -27,6 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 import java.util.stream.Collectors;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 
 
@@ -57,7 +59,16 @@ public class WarehouseLayoutService {
 
         if ("OWNER".equalsIgnoreCase(role) || "ADMIN".equalsIgnoreCase(role)) {
             layout = layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId).orElse(null);
+            if (layout != null && "OWNER".equalsIgnoreCase(role)
+                    && (userId == null || layout.getWarehouse().getOwner() == null
+                    || !layout.getWarehouse().getOwner().getId().equals(userId))) {
+                throw new ForbiddenException(ErrorCode.WAREHOUSE_NOT_OWNED);
+            }
         } else if ("TENANT".equalsIgnoreCase(role)) {
+            if (userId == null
+                    || !contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(userId, warehouseId)) {
+                throw new ForbiddenException(ErrorCode.FORBIDDEN);
+            }
 
             layout = layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId).orElse(null);
             if (layout == null) {
@@ -183,7 +194,7 @@ public class WarehouseLayoutService {
                         .warehouse(warehouse)
                         .isDefault(true)
                         .width(request.getWidth())
-                        .length(request.getLength() != null ? request.getLength() : 100)
+                        .length(request.getLength() != null ? request.getLength() : new BigDecimal("100"))
                         .height(request.getHeight())
                         .build();
             } else {
@@ -203,16 +214,9 @@ public class WarehouseLayoutService {
 
             layout = layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId).orElse(null);
             if (layout == null) {
-                User tenantUser = userRepository.findById(userId)
-                        .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
-                layout = WarehouseLayout.builder()
-                        .warehouse(warehouse)
-                        .tenant(tenantUser)
-                        .isDefault(false)
-                        .width(request.getWidth())
-                        .length(request.getLength() != null ? request.getLength() : 100)
-                        .height(request.getHeight())
-                        .build();
+                cloneLayout(warehouseId, userId);
+                layout = layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId)
+                        .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.LAYOUT_NOT_FOUND));
             }
             layout.setPositions(serializePositions(request.getPositions()));
             WarehouseLayout savedTenantLayout = layoutRepository.save(layout);
@@ -228,6 +232,8 @@ public class WarehouseLayoutService {
 
         Map<UUID, WarehouseRack> dbRackMap = dbRacks.stream().collect(Collectors.toMap(WarehouseRack::getId, r -> r));
         Map<UUID, WarehouseBin> dbBinMap = dbBins.stream().collect(Collectors.toMap(WarehouseBin::getId, b -> b));
+
+        validateRequestGeometry(layout, request, isTenantRole);
 
         Set<UUID> reqRackIds = new HashSet<>();
         Set<UUID> reqBinIds = new HashSet<>();
@@ -303,14 +309,6 @@ public class WarehouseLayoutService {
 
         if (request.getRacks() != null) {
             for (RackSaveRequest rReq : request.getRacks()) {
-
-                if (rReq.getCoordinateX() < 0 || rReq.getCoordinateY() < 0 ||
-                        rReq.getCoordinateX() + (rReq.getWidth() != null ? rReq.getWidth() : 0) > layout.getWidth() ||
-                        rReq.getCoordinateY() + (rReq.getLength() != null ? rReq.getLength() : 0) > layout.getLength()) {
-                    throw new BadRequestException(ErrorCode.LAYOUT_INVALID_COORDINATES,
-                            "Tọa độ/Kích thước Rack " + rReq.getName() + " vượt quá biên giới hạn của Layout (" + layout.getWidth() + "x" + layout.getLength() + ")");
-                }
-
                 WarehouseRack rack;
                 if (rReq.getId() != null && dbRackMap.containsKey(rReq.getId())) {
                     rack = dbRackMap.get(rReq.getId());
@@ -343,10 +341,10 @@ public class WarehouseLayoutService {
                             .maxVolume(rReq.getMaxVolume())
                             .coordinateX(rReq.getCoordinateX())
                             .coordinateY(rReq.getCoordinateY())
-                            .positionZ(rReq.getPositionZ() != null ? rReq.getPositionZ() : 0)
+                            .positionZ(rReq.getPositionZ() != null ? rReq.getPositionZ() : BigDecimal.ZERO)
                             .rotation(rReq.getRotation() != null ? rReq.getRotation() : 0)
                             .width(rReq.getWidth())
-                            .length(rReq.getLength() != null ? rReq.getLength() : 1)
+                            .length(rReq.getLength() != null ? rReq.getLength() : BigDecimal.ONE)
                             .height(rReq.getHeight())
                             .build();
                 }
@@ -385,9 +383,9 @@ public class WarehouseLayoutService {
                                     .shelfLevel(bReq.getShelfLevel() != null ? bReq.getShelfLevel() : 1)
                                     .coordinateX(bReq.getCoordinateX())
                                     .coordinateY(bReq.getCoordinateY())
-                                    .positionZ(bReq.getPositionZ() != null ? bReq.getPositionZ() : 0)
+                                    .positionZ(bReq.getPositionZ() != null ? bReq.getPositionZ() : BigDecimal.ZERO)
                                     .width(bReq.getWidth())
-                                    .length(bReq.getLength() != null ? bReq.getLength() : 1)
+                                    .length(bReq.getLength() != null ? bReq.getLength() : BigDecimal.ONE)
                                     .height(bReq.getHeight())
                                     .build();
                         }
@@ -511,14 +509,186 @@ public class WarehouseLayoutService {
         }
     }
 
-    private List<String> calculateOccupiedPositions(Integer startX, Integer startY, Integer width, Integer length) {
+    private void validateRequestGeometry(WarehouseLayout layout, BulkLayoutSaveRequest request, boolean tenantRole) {
+        requirePositive("layout.width", request.getWidth());
+        requirePositive("layout.length", request.getLength());
+        requirePositive("layout.height", request.getHeight());
+
+        BigDecimal layoutWidth = tenantRole && layout.getWidth() != null ? layout.getWidth() : request.getWidth();
+        BigDecimal layoutLength = tenantRole && layout.getLength() != null ? layout.getLength() : request.getLength();
+        BigDecimal layoutHeight = tenantRole && layout.getHeight() != null ? layout.getHeight() : request.getHeight();
+        requirePositive("stored layout.width", layoutWidth);
+        requirePositive("stored layout.length", layoutLength);
+        requirePositive("stored layout.height", layoutHeight);
+        List<RackSaveRequest> racks = request.getRacks() == null ? Collections.emptyList() : request.getRacks();
+        Set<String> rackCodes = new HashSet<>();
+
+        for (int i = 0; i < racks.size(); i++) {
+            RackSaveRequest rack = racks.get(i);
+            if (rack.getName() == null || rack.getName().isBlank()
+                    || rack.getCode() == null || rack.getCode().isBlank()) {
+                throw invalidGeometry("Rack name and code are required");
+            }
+            if (!rackCodes.add(rack.getCode().trim().toLowerCase(Locale.ROOT))) {
+                throw invalidGeometry("Rack code must be unique within a layout: " + rack.getCode());
+            }
+            validateCapacity("rack", rack.getName(), rack.getMaxWeight(), rack.getMaxVolume());
+            validateRotation(rack.getRotation());
+            requireNonNegative("rack.coordinateX", rack.getCoordinateX());
+            requireNonNegative("rack.coordinateY", rack.getCoordinateY());
+            requireNonNegative("rack.positionZ", rack.getPositionZ() == null ? BigDecimal.ZERO : rack.getPositionZ());
+            requirePositive("rack.width", rack.getWidth());
+            requirePositive("rack.length", rack.getLength());
+            requirePositive("rack.height", rack.getHeight());
+
+            BigDecimal rackWidth = effectiveWidth(rack.getWidth(), rack.getLength(), rack.getRotation());
+            BigDecimal rackLength = effectiveLength(rack.getWidth(), rack.getLength(), rack.getRotation());
+            BigDecimal rackX = rack.getCoordinateX();
+            BigDecimal rackY = rack.getCoordinateY();
+            BigDecimal rackZ = rack.getPositionZ() == null ? BigDecimal.ZERO : rack.getPositionZ();
+            ensureInside("Rack " + rack.getName(), rackX, rackY, rackZ,
+                    rackWidth, rackLength, rack.getHeight(), layoutWidth, layoutLength, layoutHeight);
+            validateGeometricCapacity("rack", rack.getName(), rackWidth, rackLength, rack.getHeight(), rack.getMaxVolume());
+
+            for (int previousIndex = 0; previousIndex < i; previousIndex++) {
+                RackSaveRequest previous = racks.get(previousIndex);
+                if (overlaps(
+                        rackX, rackY, rackZ, rackWidth, rackLength, rack.getHeight(),
+                        previous.getCoordinateX(), previous.getCoordinateY(),
+                        previous.getPositionZ() == null ? BigDecimal.ZERO : previous.getPositionZ(),
+                        effectiveWidth(previous.getWidth(), previous.getLength(), previous.getRotation()),
+                        effectiveLength(previous.getWidth(), previous.getLength(), previous.getRotation()),
+                        previous.getHeight())) {
+                    throw invalidGeometry("Rack " + rack.getName() + " overlaps rack " + previous.getName());
+                }
+            }
+
+            List<BinSaveRequest> bins = rack.getBins() == null ? Collections.emptyList() : rack.getBins();
+            Set<String> binCodes = new HashSet<>();
+            for (int binIndex = 0; binIndex < bins.size(); binIndex++) {
+                BinSaveRequest bin = bins.get(binIndex);
+                if (bin.getName() == null || bin.getName().isBlank()
+                        || bin.getCode() == null || bin.getCode().isBlank()) {
+                    throw invalidGeometry("Bin name and code are required");
+                }
+                if (!binCodes.add(bin.getCode().trim().toLowerCase(Locale.ROOT))) {
+                    throw invalidGeometry("Bin code must be unique within rack " + rack.getName()
+                            + ": " + bin.getCode());
+                }
+                validateCapacity("bin", bin.getName(), bin.getMaxWeight(), bin.getMaxVolume());
+                requireNonNegative("bin.coordinateX", bin.getCoordinateX());
+                requireNonNegative("bin.coordinateY", bin.getCoordinateY());
+                requireNonNegative("bin.positionZ", bin.getPositionZ() == null ? BigDecimal.ZERO : bin.getPositionZ());
+                requirePositive("bin.width", bin.getWidth());
+                requirePositive("bin.length", bin.getLength());
+                requirePositive("bin.height", bin.getHeight());
+
+                BigDecimal binZ = bin.getPositionZ() == null ? BigDecimal.ZERO : bin.getPositionZ();
+                ensureInside("Bin " + bin.getName() + " in rack " + rack.getName(),
+                        bin.getCoordinateX(), bin.getCoordinateY(), binZ,
+                        bin.getWidth(), bin.getLength(), bin.getHeight(),
+                        rackWidth, rackLength, rack.getHeight());
+                validateGeometricCapacity("bin", bin.getName(), bin.getWidth(), bin.getLength(), bin.getHeight(), bin.getMaxVolume());
+
+                for (int previousIndex = 0; previousIndex < binIndex; previousIndex++) {
+                    BinSaveRequest previous = bins.get(previousIndex);
+                    if (overlaps(
+                            bin.getCoordinateX(), bin.getCoordinateY(), binZ,
+                            bin.getWidth(), bin.getLength(), bin.getHeight(),
+                            previous.getCoordinateX(), previous.getCoordinateY(),
+                            previous.getPositionZ() == null ? BigDecimal.ZERO : previous.getPositionZ(),
+                            previous.getWidth(), previous.getLength(), previous.getHeight())) {
+                        throw invalidGeometry("Bin " + bin.getName() + " overlaps bin " + previous.getName()
+                                + " in rack " + rack.getName());
+                    }
+                }
+            }
+        }
+    }
+
+    private void validateCapacity(String type, String name, BigDecimal maxWeight, BigDecimal maxVolume) {
+        if (maxWeight != null && maxWeight.signum() < 0) {
+            throw invalidGeometry(type + " " + name + " maxWeight cannot be negative");
+        }
+        if (maxVolume != null && maxVolume.signum() < 0) {
+            throw invalidGeometry(type + " " + name + " maxVolume cannot be negative");
+        }
+    }
+
+    private void validateGeometricCapacity(String type, String name, BigDecimal width, BigDecimal length,
+                                            BigDecimal height, BigDecimal maxVolume) {
+        if (maxVolume != null && maxVolume.signum() > 0
+                && maxVolume.compareTo(width.multiply(length).multiply(height)) > 0) {
+            throw invalidGeometry(type + " " + name + " maxVolume cannot exceed its geometric volume");
+        }
+    }
+
+    private void ensureInside(String name, BigDecimal x, BigDecimal y, BigDecimal z,
+                              BigDecimal width, BigDecimal length, BigDecimal height,
+                              BigDecimal parentWidth, BigDecimal parentLength, BigDecimal parentHeight) {
+        if (x.add(width).compareTo(parentWidth) > 0
+                || y.add(length).compareTo(parentLength) > 0
+                || z.add(height).compareTo(parentHeight) > 0) {
+            throw invalidGeometry(name + " exceeds its parent bounds");
+        }
+    }
+
+    private boolean overlaps(BigDecimal x1, BigDecimal y1, BigDecimal z1,
+                             BigDecimal width1, BigDecimal length1, BigDecimal height1,
+                             BigDecimal x2, BigDecimal y2, BigDecimal z2,
+                             BigDecimal width2, BigDecimal length2, BigDecimal height2) {
+        return x1.compareTo(x2.add(width2)) < 0 && x1.add(width1).compareTo(x2) > 0
+                && y1.compareTo(y2.add(length2)) < 0 && y1.add(length1).compareTo(y2) > 0
+                && z1.compareTo(z2.add(height2)) < 0 && z1.add(height1).compareTo(z2) > 0;
+    }
+
+    private BigDecimal effectiveWidth(BigDecimal width, BigDecimal length, Integer rotation) {
+        return isQuarterTurn(rotation) ? length : width;
+    }
+
+    private BigDecimal effectiveLength(BigDecimal width, BigDecimal length, Integer rotation) {
+        return isQuarterTurn(rotation) ? width : length;
+    }
+
+    private boolean isQuarterTurn(Integer rotation) {
+        return rotation != null && (Math.floorMod(rotation, 180) == 90);
+    }
+
+    private void validateRotation(Integer rotation) {
+        if (rotation != null && (rotation != 0 && rotation != 90 && rotation != 180 && rotation != 270)) {
+            throw invalidGeometry("rotation must be one of 0, 90, 180, 270 degrees");
+        }
+    }
+
+    private void requirePositive(String field, BigDecimal value) {
+        if (value == null || value.signum() <= 0) {
+            throw invalidGeometry(field + " must be greater than 0 meters");
+        }
+    }
+
+    private void requireNonNegative(String field, BigDecimal value) {
+        if (value == null || value.signum() < 0) {
+            throw invalidGeometry(field + " must be non-negative meters");
+        }
+    }
+
+    private BadRequestException invalidGeometry(String message) {
+        return new BadRequestException(ErrorCode.LAYOUT_INVALID_COORDINATES, message);
+    }
+
+    private List<String> calculateOccupiedPositions(BigDecimal startX, BigDecimal startY,
+                                                     BigDecimal width, BigDecimal length) {
         List<String> positions = new java.util.ArrayList<>();
         if (startX == null || startY == null) return positions;
-        int w = width != null && width > 0 ? width : 1;
-        int l = length != null && length > 0 ? length : 1;
+        int startCellX = startX.setScale(0, RoundingMode.FLOOR).intValue();
+        int startCellY = startY.setScale(0, RoundingMode.FLOOR).intValue();
+        int endCellX = startX.add(width == null ? BigDecimal.ONE : width)
+                .setScale(0, RoundingMode.CEILING).intValue();
+        int endCellY = startY.add(length == null ? BigDecimal.ONE : length)
+                .setScale(0, RoundingMode.CEILING).intValue();
 
-        for (int x = startX; x < startX + w; x++) {
-            for (int y = startY; y < startY + l; y++) {
+        for (int x = startCellX; x < endCellX; x++) {
+            for (int y = startCellY; y < endCellY; y++) {
                 positions.add(x + ":" + y);
             }
         }

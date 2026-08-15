@@ -17,13 +17,13 @@ public class RackResponse {
     private String code;
     private BigDecimal maxWeight;
     private BigDecimal maxVolume;
-    private Integer coordinateX;
-    private Integer coordinateY;
-    private Integer positionZ;
+    private BigDecimal coordinateX;
+    private BigDecimal coordinateY;
+    private BigDecimal positionZ;
     private Integer rotation;
-    private Integer width;
-    private Integer length;
-    private Integer height;
+    private BigDecimal width;
+    private BigDecimal length;
+    private BigDecimal height;
     private List<String> occupiedPositions;
     private List<WarehouseBinResponse> bins;
 }

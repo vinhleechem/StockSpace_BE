@@ -398,8 +398,8 @@ class StockBatchServiceTest {
                 skuId, warehouseId, rackId, binId))
                 .thenReturn(Optional.empty());
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
-        when(rackRepository.findById(rackId)).thenReturn(Optional.of(rack));
-        when(binRepository.findById(binId)).thenReturn(Optional.of(bin));
+        when(rackRepository.findByIdAndIsDeletedFalse(rackId)).thenReturn(Optional.of(rack));
+        when(binRepository.findByIdAndIsDeletedFalse(binId)).thenReturn(Optional.of(bin));
 
         StockBatch newBatch = StockBatch.builder()
                 .id(UUID.randomUUID())

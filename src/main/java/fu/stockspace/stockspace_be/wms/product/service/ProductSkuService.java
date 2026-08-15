@@ -23,6 +23,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 @Slf4j
@@ -83,12 +84,16 @@ public class ProductSkuService {
             throw new BadRequestException(ErrorCode.SKU_CODE_DUPLICATE);
         }
 
+        validatePhysicalProperties(request.getUnitWeightKg(), request.getUnitVolumeM3());
+
         ProductSku sku = ProductSku.builder()
                 .tenant(tenant)
                 .category(category)
                 .skuCode(request.getSkuCode())
                 .name(request.getName())
                 .uom(uom)
+                .unitWeightKg(request.getUnitWeightKg())
+                .unitVolumeM3(request.getUnitVolumeM3())
                 .specifications(request.getSpecifications())
                 .build();
 
@@ -110,6 +115,8 @@ public class ProductSkuService {
         if (!sku.getTenant().getId().equals(tenantId)) {
             throw new BadRequestException(ErrorCode.FORBIDDEN);
         }
+
+        validatePhysicalProperties(request.getUnitWeightKg(), request.getUnitVolumeM3());
 
         ProductCategory category = null;
         if (request.getCategoryId() != null) {
@@ -133,6 +140,13 @@ public class ProductSkuService {
         sku.setCategory(category);
         sku.setName(request.getName());
         sku.setUom(uom);
+        if (stockBatchRepository.existsBySkuIdAndIsDeletedFalse(skuId)
+                && (!request.getUnitWeightKg().equals(sku.getUnitWeightKg())
+                || !request.getUnitVolumeM3().equals(sku.getUnitVolumeM3()))) {
+            throw new BadRequestException("Physical properties cannot be changed after stock has been recorded");
+        }
+        sku.setUnitWeightKg(request.getUnitWeightKg());
+        sku.setUnitVolumeM3(request.getUnitVolumeM3());
         sku.setSpecifications(request.getSpecifications());
 
         ProductSku saved = skuRepository.save(sku);
@@ -175,7 +189,16 @@ public class ProductSkuService {
                 .uomId(sku.getUom() != null ? sku.getUom().getId() : null)
                 .uomCode(sku.getUom() != null ? sku.getUom().getCode() : null)
                 .uomName(sku.getUom() != null ? sku.getUom().getName() : null)
+                .unitWeightKg(sku.getUnitWeightKg())
+                .unitVolumeM3(sku.getUnitVolumeM3())
                 .specifications(sku.getSpecifications())
                 .build();
+    }
+
+    private void validatePhysicalProperties(BigDecimal unitWeightKg, BigDecimal unitVolumeM3) {
+        if (unitWeightKg == null || unitWeightKg.signum() <= 0
+                || unitVolumeM3 == null || unitVolumeM3.signum() <= 0) {
+            throw new BadRequestException("unitWeightKg and unitVolumeM3 must both be greater than 0");
+        }
     }
 }
