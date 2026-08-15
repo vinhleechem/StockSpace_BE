@@ -108,9 +108,13 @@ public class StockBatchService {
                 .categoryName(row.getCategoryName())
                 .uomSymbol(row.getUomSymbol())
                 .uomName(row.getUomName())
+                .unitWeightKg(row.getUnitWeightKg())
+                .unitVolumeM3(row.getUnitVolumeM3())
                 .warehouseId(warehouse.getId())
                 .warehouseName(warehouse.getName())
                 .totalQuantity(row.getTotalQuantity())
+                .totalWeightKg(row.getTotalWeightKg())
+                .totalVolumeM3(row.getTotalVolumeM3())
                 .build());
     }
 
@@ -256,10 +260,10 @@ public class StockBatchService {
                     Warehouse warehouse = warehouseRepository.findById(warehouseId)
                             .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
                     WarehouseRack rack = rackId != null
-                            ? rackRepository.findById(rackId).orElse(null)
+                            ? rackRepository.findByIdAndIsDeletedFalse(rackId).orElse(null)
                             : null;
                     WarehouseBin bin = binId != null
-                            ? binRepository.findById(binId).orElse(null)
+                            ? binRepository.findByIdAndIsDeletedFalse(binId).orElse(null)
                             : null;
 
                     StockBatch newBatch = StockBatch.builder()

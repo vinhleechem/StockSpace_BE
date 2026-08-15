@@ -37,6 +37,10 @@ public interface ProductSkuRepository extends JpaRepository<ProductSku, UUID> {
                    c.name AS categoryName,
                    u.code AS uomSymbol,
                    u.name AS uomName,
+                   s.unitWeightKg AS unitWeightKg,
+                   s.unitVolumeM3 AS unitVolumeM3,
+                   COALESCE(SUM(b.quantity * s.unitWeightKg), 0) AS totalWeightKg,
+                   COALESCE(SUM(b.quantity * s.unitVolumeM3), 0) AS totalVolumeM3,
                    COALESCE(SUM(b.quantity), 0) AS totalQuantity
             FROM ProductSku s
             LEFT JOIN s.category c
@@ -60,7 +64,8 @@ public interface ProductSkuRepository extends JpaRepository<ProductSku, UUID> {
                     )
               )
             GROUP BY s.id, s.skuCode, s.name,
-                     c.id, c.name, u.code, u.name
+                     c.id, c.name, u.code, u.name,
+                     s.unitWeightKg, s.unitVolumeM3
             ORDER BY s.name ASC, s.skuCode ASC
             """,
             countQuery = """
@@ -103,6 +108,14 @@ public interface ProductSkuRepository extends JpaRepository<ProductSku, UUID> {
         String getUomSymbol();
 
         String getUomName();
+
+        java.math.BigDecimal getUnitWeightKg();
+
+        java.math.BigDecimal getUnitVolumeM3();
+
+        java.math.BigDecimal getTotalWeightKg();
+
+        java.math.BigDecimal getTotalVolumeM3();
 
         long getTotalQuantity();
     }
