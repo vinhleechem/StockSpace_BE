@@ -1,12 +1,12 @@
 package fu.stockspace.stockspace_be.auth.entity;
 
-/**
- * Canonical permissions enforced by the API.
- *
- * <p>Names in this enum are persisted in {@code permissions} and used by
- * {@code @PreAuthorize}.  Keeping them here prevents a permission from being
- * seeded but never enforced (or the other way around).</p>
- */
+
+
+
+
+
+
+
 public enum PermissionCode {
     AUTH_SESSION_MANAGE("Manage the authenticated session"),
     PROFILE_READ("View own profile"),

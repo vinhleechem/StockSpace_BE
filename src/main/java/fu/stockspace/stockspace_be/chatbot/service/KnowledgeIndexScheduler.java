@@ -7,13 +7,13 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-/**
- * Optional maintenance trigger for bounded RAG indexing.
- *
- * <p>Disabled by default, so normal startup never calls the embedding
- * provider. Deployments that opt in should provide an embedding API key and
- * explicitly enable {@code app.chatbot.rag.indexer.enabled}.</p>
- */
+
+
+
+
+
+
+
 @Slf4j
 @Component
 @RequiredArgsConstructor

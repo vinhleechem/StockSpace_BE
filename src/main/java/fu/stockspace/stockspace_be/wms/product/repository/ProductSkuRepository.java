@@ -25,10 +25,10 @@ public interface ProductSkuRepository extends JpaRepository<ProductSku, UUID> {
     @Query("SELECT s FROM ProductSku s WHERE s.id = :id AND s.isDeleted = false AND (s.tenant.id = :tenantId OR s.tenant IS NULL)")
     Optional<ProductSku> findByIdAndTenantIdOrSystemAndIsDeletedFalse(@Param("id") UUID id, @Param("tenantId") UUID tenantId);
 
-    /**
-     * Returns one product-level row per visible SKU for a selected warehouse.
-     * The LEFT JOIN keeps visible SKUs with no stock in the warehouse at zero.
-     */
+
+
+
+
     @Query(value = """
             SELECT s.id AS skuId,
                    s.skuCode AS skuCode,

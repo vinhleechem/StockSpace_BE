@@ -10,14 +10,14 @@ import java.time.LocalDateTime;
 
 import java.util.UUID;
 
-/**
- * Entity RentalContract — hợp đồng thuê kho được tạo tự động khi Owner approve Booking.
- * Map với bảng: rental_contracts
- *
- * Cơ chế bàn giao (handover):
- *   - ownerConfirmed + tenantConfirmed = true → status → COMPLETED
- *   - warehouse status → AVAILABLE
- */
+
+
+
+
+
+
+
+
 @Entity
 @Table(name = "rental_contracts")
 @Getter
@@ -32,12 +32,12 @@ public class RentalContract extends BaseEntity {
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
-    /** 1-1 với BookingRequest */
+
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "booking_id", unique = true, nullable = false)
     private BookingRequest booking;
 
-    // ==================== Xác nhận bàn giao ====================
+
 
     @Column(name = "tenant_confirmed", nullable = false)
     @Builder.Default
@@ -47,9 +47,9 @@ public class RentalContract extends BaseEntity {
     @Builder.Default
     private boolean ownerConfirmed = false;
 
-    // ==================== Thông tin hợp đồng ====================
 
-    /** URL ảnh hợp đồng giấy (JSON array dạng String) */
+
+
     @Column(name = "paper_contract_images", columnDefinition = "TEXT")
     private String paperContractImages;
 

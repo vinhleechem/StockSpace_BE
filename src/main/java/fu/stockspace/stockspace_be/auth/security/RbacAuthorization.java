@@ -5,13 +5,13 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
-/**
- * SpEL entry point used by {@code @PreAuthorize("@rbac.hasPermission('...')")}.
- *
- * <p>This deliberately has no implicit ADMIN bypass.  Platform-wide actions
- * are exposed through explicit admin permissions/endpoints; actions on an
- * Owner's or Tenant's data still require the service-level ownership check.</p>
- */
+
+
+
+
+
+
+
 @Component("rbac")
 public class RbacAuthorization {
 

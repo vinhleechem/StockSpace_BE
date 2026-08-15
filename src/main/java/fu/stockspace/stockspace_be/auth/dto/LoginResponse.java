@@ -6,9 +6,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import java.util.UUID;
 
-/**
- * Response trả về sau khi login hoặc register thành công.
- */
+
+
+
 @Data
 @Builder
 @NoArgsConstructor

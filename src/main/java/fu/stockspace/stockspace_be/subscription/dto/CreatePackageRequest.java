@@ -19,7 +19,7 @@ public class CreatePackageRequest {
     @NotNull(message = "Thời hạn gói không được để trống")
     @Min(value = 1, message = "Thời hạn gói tối thiểu là 1 ngày")
     private Integer durationDays;
-    /** Số nhân viên tối đa. 0 = không giới hạn */
+
     @Min(value = 0, message = "maxStaff không được âm")
     @Builder.Default
     private int maxStaff = 0;

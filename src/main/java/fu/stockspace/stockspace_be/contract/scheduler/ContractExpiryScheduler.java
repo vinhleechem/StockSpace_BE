@@ -48,7 +48,7 @@ public class ContractExpiryScheduler {
             try {
                 log.info("Processing expired contract: ID = {}", contract.getId());
 
-                // 1. Forfeit Tenant's deposit to Owner
+
                 User owner = contract.getBooking().getWarehouse().getOwner();
                 walletService.refundBalance(
                         owner.getId(),
@@ -62,15 +62,15 @@ public class ContractExpiryScheduler {
 
                 User tenant = contract.getBooking().getTenant();
 
-                // 3. Mark contract as CANCELLED
+
                 contract.setStatus(ContractStatus.CANCELLED);
                 contract.setCancelReason("Tenant quá hạn xác nhận ký hợp đồng online (" + expiryDays + " ngày)");
                 contractRepository.save(contract);
 
-                // 4. Reset warehouse status to AVAILABLE
+
                 warehouseService.markAsAvailable(contract.getBooking().getWarehouse().getId());
 
-                // 5. Send notifications
+
                 if (tenant != null) {
                     notificationService.push(
                             tenant.getId(),

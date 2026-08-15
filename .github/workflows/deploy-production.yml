@@ -9,7 +9,6 @@ on:
 permissions:
   contents: read
 
-# Do not cancel a deployment that may already be rebuilding containers on the VPS.
 concurrency:
   group: production-deploy
   cancel-in-progress: false

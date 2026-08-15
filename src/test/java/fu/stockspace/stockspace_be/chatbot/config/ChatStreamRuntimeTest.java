@@ -36,7 +36,7 @@ class ChatStreamRuntimeTest {
             });
             assertTrue(workerStarted.await(2, TimeUnit.SECONDS));
             runtime.submit(() -> {
-                // Occupies the single bounded queue slot.
+
             });
 
             assertThrows(

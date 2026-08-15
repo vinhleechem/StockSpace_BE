@@ -4,9 +4,9 @@ import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ResponseStatus;
 
-/**
- * Exception đại diện cho HTTP 401 Unauthorized.
- */
+
+
+
 @ResponseStatus(HttpStatus.UNAUTHORIZED)
 public class UnauthorizedException extends RuntimeException {
 

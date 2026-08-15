@@ -19,14 +19,14 @@ import org.springframework.web.bind.annotation.*;
 
 
 
-/**
- * Controller xử lý các API Booking của Tenant.
- *
- * Endpoints:
- *   POST   /api/tenant/bookings       — Gửi yêu cầu thuê kho
- *   GET    /api/tenant/bookings       — Xem lịch sử booking (phân trang)
- *   DELETE /api/tenant/bookings/{id}  — Huỷ booking (chỉ khi PENDING)
- */
+
+
+
+
+
+
+
+
 @Tag(name = "Tenant — Booking", description = "API gửi và quản lý yêu cầu thuê kho của Tenant")
 @RestController
 @RequestMapping("/api/tenant/bookings")
@@ -35,10 +35,10 @@ public class TenantBookingController {
 
     private final BookingService bookingService;
 
-    /**
-     * POST /api/tenant/bookings
-     * Gửi yêu cầu thuê kho.
-     */
+
+
+
+
     @PostMapping
     @PreAuthorize("@rbac.hasPermission('RENTAL_REQUEST_CREATE')")
     @Operation(summary = "Gửi yêu cầu thuê kho")
@@ -51,10 +51,10 @@ public class TenantBookingController {
                 .body(ApiResponse.success("Gửi yêu cầu thuê kho thành công. Đang chờ Owner xét duyệt.", response));
     }
 
-    /**
-     * GET /api/tenant/bookings
-     * Danh sách booking của Tenant, phân trang.
-     */
+
+
+
+
     @GetMapping
     @PreAuthorize("@rbac.hasPermission('RENTAL_REQUEST_READ')")
     @Operation(summary = "Xem lịch sử yêu cầu thuê kho")
@@ -67,10 +67,10 @@ public class TenantBookingController {
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách booking thành công", result));
     }
 
-    /**
-     * DELETE /api/tenant/bookings/{id}
-     * Tenant tự huỷ yêu cầu (chỉ được khi status PENDING).
-     */
+
+
+
+
     @DeleteMapping("/{id}")
     @PreAuthorize("@rbac.hasPermission('RENTAL_REQUEST_CREATE')")
     @Operation(summary = "Huỷ yêu cầu thuê kho")

@@ -21,18 +21,18 @@ public class TransactionService {
     private final TransactionRepository transactionRepository;
     private final WalletRepository walletRepository;
     private final WalletService walletService;
-    /**
-     * Lấy danh sách giao dịch của user hiện tại (phân trang).
-     */
+
+
+
     @Transactional(readOnly = true)
     public PagedResponse<TransactionResponse> getMyTransactions(UUID userId, Pageable pageable) {
         Wallet wallet = walletService.getOrCreateWallet(userId);
         Page<Transaction> page = transactionRepository.findByWalletId(wallet.getId(), pageable);
         return PagedResponse.fromPage(page, this::mapToResponse);
     }
-    /**
-     * API dành cho Admin xem toàn bộ giao dịch hệ thống.
-     */
+
+
+
     @Transactional(readOnly = true)
     public PagedResponse<TransactionResponse> getAllTransactions(Pageable pageable) {
         Page<Transaction> page = transactionRepository.findAll(pageable);
@@ -40,19 +40,19 @@ public class TransactionService {
     }
 
 
-    /**
-     * Lấy thông tin trạng thái giao dịch theo mã paymentCode.
-     * Kiểm tra quyền sở hữu ví của người dùng.
-     */
+
+
+
+
     @Transactional(readOnly = true)
     public TransactionResponse getTransactionStatus(UUID userId, String paymentCode) {
         Transaction transaction = transactionRepository.findByPaymentCode(paymentCode)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.TRANSACTION_NOT_FOUND));
-        
+
         if (!transaction.getWallet().getUser().getId().equals(userId)) {
             throw new fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException(ErrorCode.FORBIDDEN);
         }
-        
+
         return mapToResponse(transaction);
     }
 

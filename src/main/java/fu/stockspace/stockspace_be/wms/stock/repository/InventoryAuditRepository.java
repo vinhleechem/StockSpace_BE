@@ -18,6 +18,6 @@ public interface InventoryAuditRepository extends JpaRepository<InventoryAudit, 
 
     Page<InventoryAudit> findByStatusAndIsDeletedFalse(AuditStatus status, Pageable pageable);
 
-    // Admin — toàn hệ thống
+
     Page<InventoryAudit> findByIsDeletedFalse(Pageable pageable);
 }

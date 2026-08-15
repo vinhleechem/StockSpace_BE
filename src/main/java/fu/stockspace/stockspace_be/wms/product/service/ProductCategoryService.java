@@ -54,17 +54,17 @@ public class ProductCategoryService {
         ProductCategory category = categoryRepository.findByIdAndIsDeletedFalse(categoryId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.PRODUCT_CATEGORY_NOT_FOUND));
 
-        // System categories cannot be deleted by tenants
+
         if (category.getTenant() == null) {
             throw new BadRequestException(ErrorCode.FORBIDDEN);
         }
 
-        // Must own the category
+
         if (!category.getTenant().getId().equals(tenantId)) {
             throw new BadRequestException(ErrorCode.FORBIDDEN);
         }
 
-        // Cannot delete if there are active SKUs linked to this category
+
         if (skuRepository.existsByCategoryIdAndIsDeletedFalse(categoryId)) {
             throw new BadRequestException(ErrorCode.PRODUCT_CATEGORY_IN_USE);
         }

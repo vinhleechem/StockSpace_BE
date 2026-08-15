@@ -12,13 +12,13 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
-/**
- * Immutable role-to-tool registry.
- *
- * <p>The registry advertises only implemented tools. Authorization is enforced
- * again by {@code ChatbotService}, which resolves model calls exclusively from
- * the role-scoped list returned here.</p>
- */
+
+
+
+
+
+
+
 @Slf4j
 @Component
 public class ChatToolRegistry {
@@ -89,9 +89,9 @@ public class ChatToolRegistry {
         return toolsByRole.getOrDefault(key, toolsByRole.get(GUEST_KEY));
     }
 
-    /**
-     * Metadata lookup only. Do not use this method as an authorization check.
-     */
+
+
+
     public Optional<ChatTool> findByName(String name) {
         return Optional.ofNullable(toolsByName.get(name));
     }

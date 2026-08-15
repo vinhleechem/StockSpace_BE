@@ -47,7 +47,7 @@ public class TenantProductController {
         }
     }
 
-    // ==================== Category APIs ====================
+
 
     @GetMapping("/categories")
     @Operation(summary = "Lấy danh sách danh mục sản phẩm (bao gồm danh mục đề xuất)")
@@ -77,7 +77,7 @@ public class TenantProductController {
         return ResponseEntity.ok(ApiResponse.success("Xóa danh mục thành công", null));
     }
 
-    // ==================== SKU APIs ====================
+
 
     @GetMapping("/skus")
     @Operation(summary = "Lấy danh sách SKU sản phẩm phân trang (bao gồm SKU đề xuất)")
@@ -132,11 +132,11 @@ public class TenantProductController {
         return ResponseEntity.ok(ApiResponse.success("Xóa SKU thành công", null));
     }
 
-    // ==================== UOMs ====================
 
-    /**
-     * Lấy danh sách các Đơn vị tính (UOM) hệ thống + của riêng Tenant
-     */
+
+
+
+
     @GetMapping("/uoms")
     @Operation(summary = "Lấy danh sách Đơn vị tính (UOM)")
     public ResponseEntity<ApiResponse<PagedResponse<UnitOfMeasureResponse>>> getUoms(

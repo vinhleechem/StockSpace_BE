@@ -8,10 +8,10 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 
-/**
- * DTO khi Owner cập nhật thông tin Warehouse.
- * Chỉ cho phép sửa các trường không ảnh hưởng tới duyệt.
- */
+
+
+
+
 @Getter
 @Setter
 public class UpdateWarehouseRequest {

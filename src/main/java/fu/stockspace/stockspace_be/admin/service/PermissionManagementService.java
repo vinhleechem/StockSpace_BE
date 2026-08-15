@@ -14,9 +14,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.stream.Collectors;
 
-/**
- * Service xử lý các nghiệp vụ liên quan đến Permission cho Admin.
- */
+
+
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -24,9 +24,9 @@ public class PermissionManagementService {
 
     private final PermissionRepository permissionRepository;
 
-    /**
-     * Lấy danh sách tất cả các quyền (Permissions) trong hệ thống.
-     */
+
+
+
     @Transactional(readOnly = true)
     public List<PermissionResponse> getAllPermissions() {
         log.info("Fetching all permissions from database");
@@ -35,9 +35,9 @@ public class PermissionManagementService {
                 .collect(Collectors.toList());
     }
 
-    /**
-     * Tạo mới một Permission trong hệ thống.
-     */
+
+
+
     @Transactional
     public PermissionResponse createPermission(CreatePermissionRequest request) {
         String name = request.getName().trim().toUpperCase().replace(" ", "_");

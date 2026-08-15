@@ -36,14 +36,14 @@ import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepo
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * Service xử lý nghiệp vụ Warehouse.
- *
- * Chức năng:
- * - Owner: tạo / sửa / xoá / cập nhật trạng thái / thêm ảnh / xem kho của mình
- * - Public/Tenant: tìm kiếm & xem chi tiết kho (chỉ kho đã verified)
- * - Admin (internal): verify / reject listing, xem tất cả kho
- */
+
+
+
+
+
+
+
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -67,7 +67,7 @@ public class WarehouseService {
     public List<WarehouseResponse> getActiveRentedWarehouses(UUID tenantId) {
         List<Warehouse> warehouses = rentalContractRepository.findActiveRentedWarehousesByTenantId(tenantId);
 
-        // Nếu người dùng hiện tại là STAFF -> lọc đúng các kho được phân công ACTIVE
+
         boolean isStaff = SecurityUtil.getCurrentUser()
                 .map(user -> user.getRoles().stream()
                         .anyMatch(r -> r.getName().equals("ROLE_STAFF")))
@@ -92,12 +92,12 @@ public class WarehouseService {
 
 
 
-    // ==================== Owner: CRUD ====================
 
-    /**
-     * Owner tạo mới Warehouse.
-     * Kho sẽ ở trạng thái PENDING_APPROVAL cho đến khi được Admin duyệt bài đăng.
-     */
+
+
+
+
+
     @Transactional
     public WarehouseResponse createWarehouse(UUID ownerId, CreateWarehouseRequest request) {
         log.info("Owner {} creating new warehouse: {}", ownerId, request.getName());
@@ -124,7 +124,7 @@ public class WarehouseService {
                 .policy(policy)
                 .build();
 
-        // Deduct posting fee from Owner's wallet using SystemConfig warehouse_publish_fee
+
         java.math.BigDecimal publishFee = null;
         String feeStr = systemConfigService.getValue("warehouse_publish_fee", null);
         if (feeStr != null && !feeStr.trim().isEmpty()) {
@@ -133,7 +133,7 @@ public class WarehouseService {
             } catch (NumberFormatException ignored) {}
         }
 
-        // Fallback: Check warehouse_publish_package_id if direct fee not configured
+
         if (publishFee == null) {
             String pkgIdStr = systemConfigService.getValue("warehouse_publish_package_id", null);
             if (pkgIdStr != null) {
@@ -162,7 +162,7 @@ public class WarehouseService {
 
         warehouse = warehouseRepository.save(warehouse);
 
-        // Thêm ảnh nếu có
+
         if (request.getImageUrls() != null && !request.getImageUrls().isEmpty()) {
             attachImages(warehouse, request.getImageUrls());
         }
@@ -171,9 +171,9 @@ public class WarehouseService {
         return mapToResponse(warehouse);
     }
 
-    /**
-     * Owner cập nhật thông tin Warehouse.
-     */
+
+
+
     @Transactional
     public WarehouseResponse updateWarehouse(UUID ownerId, UUID warehouseId, UpdateWarehouseRequest request) {
         Warehouse warehouse = getOwnedWarehouse(ownerId, warehouseId);
@@ -204,10 +204,10 @@ public class WarehouseService {
         return mapToResponse(warehouse);
     }
 
-    /**
-     * Owner xoá Warehouse.
-     * Ràng buộc: chỉ xoá được khi không có tenant đang thuê (status != RENTED).
-     */
+
+
+
+
     @Transactional
     public void deleteWarehouse(UUID ownerId, UUID warehouseId) {
         Warehouse warehouse = getOwnedWarehouse(ownerId, warehouseId);
@@ -221,10 +221,10 @@ public class WarehouseService {
         log.info("Owner {} deleted warehouse {}", ownerId, warehouseId);
     }
 
-    /**
-     * Owner cập nhật trạng thái Warehouse (AVAILABLE ↔ INACTIVE).
-     * Không cho phép tự set RENTED hoặc PENDING_APPROVAL qua API này.
-     */
+
+
+
+
     @Transactional
     public WarehouseResponse updateStatus(UUID ownerId, UUID warehouseId, WarehouseStatus newStatus) {
         if (newStatus == WarehouseStatus.RENTED || newStatus == WarehouseStatus.PENDING_APPROVAL) {
@@ -239,9 +239,9 @@ public class WarehouseService {
         return mapToResponse(warehouse);
     }
 
-    /**
-     * Owner xem danh sách kho của mình (phân trang).
-     */
+
+
+
     @Transactional(readOnly = true)
     public PagedResponse<WarehouseResponse> getMyWarehouses(UUID ownerId, int page, int size, String sortBy, String sortDir) {
         Sort sort = "asc".equalsIgnoreCase(sortDir)
@@ -253,12 +253,12 @@ public class WarehouseService {
         return toPagedResponse(warehousePage);
     }
 
-    // ==================== Owner: Images ====================
 
-    /**
-     * Owner thêm ảnh vào Warehouse.
-     * Giới hạn tối đa MAX_IMAGES_PER_WAREHOUSE ảnh.
-     */
+
+
+
+
+
     @Transactional
     public List<String> addImages(UUID ownerId, UUID warehouseId, List<String> imageUrls) {
         Warehouse warehouse = getOwnedWarehouse(ownerId, warehouseId);
@@ -273,9 +273,9 @@ public class WarehouseService {
         return saved;
     }
 
-    /**
-     * Owner xóa tất cả ảnh và thay bằng danh sách mới.
-     */
+
+
+
     @Transactional
     public List<String> replaceImages(UUID ownerId, UUID warehouseId, List<String> imageUrls) {
         Warehouse warehouse = getOwnedWarehouse(ownerId, warehouseId);
@@ -288,11 +288,11 @@ public class WarehouseService {
         return saved;
     }
 
-    // ==================== Public / Tenant: Search & Detail ====================
 
-    /**
-     * Tìm kiếm kho công khai — chỉ trả về kho đã verified.
-     */
+
+
+
+
     @Transactional(readOnly = true)
     public PagedResponse<WarehouseResponse> searchWarehouses(WarehouseSearchRequest request,
                                                     int page, int size, String sortBy, String sortDir) {
@@ -315,10 +315,10 @@ public class WarehouseService {
         return toPagedResponse(result);
     }
 
-    /**
-     * Xem chi tiết một Warehouse theo ID.
-     * Public: chỉ xem được kho đã duyệt đăng bài (không bắt buộc đã kiểm định).
-     */
+
+
+
+
     @Transactional(readOnly = true)
     public WarehouseResponse getWarehouseDetail(UUID warehouseId) {
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
@@ -331,12 +331,12 @@ public class WarehouseService {
         return mapToResponse(warehouse);
     }
 
-    // ==================== Admin (internal) ====================
 
-    /**
-     * Admin duyệt bài đăng Warehouse listing — set status = AVAILABLE.
-     * Gọi từ AdminWarehouseService.
-     */
+
+
+
+
+
     @Transactional
     public WarehouseResponse verifyWarehouse(UUID warehouseId) {
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
@@ -363,9 +363,9 @@ public class WarehouseService {
         return mapToResponse(warehouse);
     }
 
-    /**
-     * Admin từ chối Warehouse listing — set status = INACTIVE.
-     */
+
+
+
     @Transactional
     public WarehouseResponse rejectWarehouse(UUID warehouseId, String reason) {
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
@@ -394,9 +394,9 @@ public class WarehouseService {
         return mapToResponse(warehouse);
     }
 
-    /**
-     * Admin / Inspector xem tất cả kho (không lọc verified).
-     */
+
+
+
     @Transactional(readOnly = true)
     public PagedResponse<WarehouseResponse> getAllWarehouses(WarehouseSearchRequest request,
                                                    int page, int size, String sortBy, String sortDir) {
@@ -417,10 +417,10 @@ public class WarehouseService {
         return toPagedResponse(result);
     }
 
-    /**
-     * Inspector set isVerified = true khi kiểm định PASSED.
-     * Gọi từ InspectionService.
-     */
+
+
+
+
     @Transactional
     public void markAsVerifiedByInspection(UUID warehouseId) {
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
@@ -432,10 +432,10 @@ public class WarehouseService {
         log.info("Warehouse {} verified via inspection", warehouseId);
     }
 
-    /**
-     * Cập nhật status kho về AVAILABLE sau khi hợp đồng kết thúc.
-     * Gọi từ ContractService.
-     */
+
+
+
+
     @Transactional
     public void markAsAvailable(UUID warehouseId) {
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
@@ -446,10 +446,10 @@ public class WarehouseService {
         log.info("Warehouse {} marked as AVAILABLE", warehouseId);
     }
 
-    /**
-     * Set warehouse status = RENTED sau khi booking được approve.
-     * Gọi từ BookingService.
-     */
+
+
+
+
     @Transactional
     public void markAsRented(UUID warehouseId) {
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
@@ -460,7 +460,7 @@ public class WarehouseService {
         log.info("Warehouse {} marked as RENTED", warehouseId);
     }
 
-    // ==================== Private helpers ====================
+
 
     private Warehouse getOwnedWarehouse(UUID ownerId, UUID warehouseId) {
         return warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId)

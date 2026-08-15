@@ -11,16 +11,16 @@ import java.math.BigDecimal;
 
 import java.util.UUID;
 
-/**
- * Entity BookingRequest — yêu cầu thuê kho từ Tenant.
- * Map với bảng: booking_requests
- *
- * Luồng:
- *   Tenant tạo → PENDING
- *   Owner approve → APPROVED → tạo RentalContract + deduct deposit
- *   Owner reject  → REJECTED
- *   Tenant cancel → REJECTED (nếu còn PENDING)
- */
+
+
+
+
+
+
+
+
+
+
 @Entity
 @Table(name = "booking_requests", indexes = {
         @Index(name = "idx_booking_requests_tenant_id",    columnList = "tenant_id"),
@@ -38,7 +38,7 @@ public class BookingRequest extends BaseEntity {
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
-    // ==================== Relations ====================
+
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tenant_id", nullable = false)
@@ -48,7 +48,7 @@ public class BookingRequest extends BaseEntity {
     @JoinColumn(name = "warehouse_id", nullable = false)
     private Warehouse warehouse;
 
-    // ==================== Fields ====================
+
 
     @Column(name = "deposit_amount", nullable = false, precision = 15, scale = 2)
     private BigDecimal depositAmount;
@@ -58,7 +58,7 @@ public class BookingRequest extends BaseEntity {
     @Builder.Default
     private ApprovalStatus status = ApprovalStatus.PENDING;
 
-    /** Lý do từ chối (nếu REJECTED) */
+
     @Column(name = "reject_reason", columnDefinition = "TEXT")
     private String rejectReason;
 

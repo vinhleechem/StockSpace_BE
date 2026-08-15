@@ -6,9 +6,9 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.Locale;
 
-/**
- * Builds role-aware, evidence-first system prompts.
- */
+
+
+
 @Component
 public class PromptBuilder {
 

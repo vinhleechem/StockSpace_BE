@@ -33,13 +33,13 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/**
- * Controller xử lý các API Dispute Ticket.
- *
- * Endpoints:
- *   POST /api/disputes        — Mở tranh chấp
- *   GET  /api/disputes/mine   — Danh sách dispute của các hợp đồng mình tham gia
- */
+
+
+
+
+
+
+
 @Tag(name = "Dispute", description = "API quản lý tranh chấp hợp đồng")
 @RestController
 @RequestMapping("/api/disputes")
@@ -51,10 +51,10 @@ public class DisputeController {
     private final ObjectMapper objectMapper;
     private final Validator validator;
 
-    /**
-     * POST /api/disputes
-     * Mở tranh chấp cho hợp đồng (hỗ trợ upload ảnh bằng chứng).
-     */
+
+
+
+
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("@rbac.hasPermission('DISPUTE_CREATE')")
     @Operation(summary = "Mở tranh chấp hợp đồng")
@@ -86,7 +86,7 @@ public class DisputeController {
             throw new BadRequestException("Validation failed: " + errorMsg);
         }
 
-        // Upload ảnh bằng chứng lên Cloudinary nếu có gửi file
+
         if (files != null && !files.isEmpty()) {
             List<String> urls = cloudinaryService.uploadImages(files);
             request.setEvidenceImages(urls);
@@ -97,10 +97,10 @@ public class DisputeController {
                 .body(ApiResponse.success("Đã mở tranh chấp thành công. Admin sẽ xử lý sớm.", response));
     }
 
-    /**
-     * GET /api/disputes/mine
-     * Danh sách dispute của các hợp đồng mà mình là tenant hoặc owner.
-     */
+
+
+
+
     @GetMapping("/mine")
     @PreAuthorize("@rbac.hasPermission('DISPUTE_READ')")
     @Operation(summary = "Xem danh sách tranh chấp của các hợp đồng mình tham gia")

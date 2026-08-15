@@ -6,9 +6,9 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 import java.math.BigDecimal;
 import java.util.UUID;
-/**
- * Entity Wallet - Ví của người dùng trong hệ thống.
- */
+
+
+
 @Entity
 @Table(name = "wallets", indexes = {
         @Index(name = "idx_wallets_user_id", columnList = "user_id", unique = true)

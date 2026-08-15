@@ -12,7 +12,7 @@ import java.util.UUID;
 @Builder
 public class ProductSkuResponse {
     private UUID id;
-    private UUID tenantId; // null if system recommended SKU
+    private UUID tenantId;
     private UUID categoryId;
     private String categoryName;
     private String skuCode;

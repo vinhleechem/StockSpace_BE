@@ -8,11 +8,11 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * DTO request khi Admin cập nhật thông tin User.
- * Không cho phép thay đổi email (primary key / unique identifier).
- * Để đổi role → dùng API gán/xóa role riêng biệt.
- */
+
+
+
+
+
 @Data
 @Builder
 @NoArgsConstructor

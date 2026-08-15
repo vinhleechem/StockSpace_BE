@@ -17,15 +17,15 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
-/**
- * Completes pgvector DDL after Hibernate has created a fresh schema.
- *
- * <p>The production migration runs before the application and therefore cannot
- * alter {@code system_knowledge} when Hibernate has not created it yet. This
- * runner closes that fresh-database gap. A session-level PostgreSQL advisory
- * lock serializes startup across replicas, while every DDL statement remains
- * additive and safe to retry after a partial startup.</p>
- */
+
+
+
+
+
+
+
+
+
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
 @DependsOn("entityManagerFactory")

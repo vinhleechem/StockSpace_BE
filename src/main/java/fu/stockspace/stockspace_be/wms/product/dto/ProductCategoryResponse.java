@@ -12,7 +12,7 @@ import java.util.UUID;
 @Builder
 public class ProductCategoryResponse {
     private UUID id;
-    private UUID tenantId; // null if system category
+    private UUID tenantId;
     private String name;
     private Map<String, Object> defaultAttributes;
 }

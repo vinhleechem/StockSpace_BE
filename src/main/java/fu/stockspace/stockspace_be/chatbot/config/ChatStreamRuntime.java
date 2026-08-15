@@ -18,9 +18,9 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/**
- * Bounded execution resources used only by long-lived chatbot streams.
- */
+
+
+
 @Component
 public class ChatStreamRuntime {
 

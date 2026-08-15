@@ -136,8 +136,8 @@ class GuestChatRateLimitFilterTest {
         MockHttpServletResponse secondResponse = new MockHttpServletResponse();
         filter.doFilter(secondRequest, secondResponse, asyncChain);
 
-        // Containers may notify both timeout/error and completion. The stale
-        // callback from request one must not release request two's slot.
+
+
         firstContext.complete();
 
         MockHttpServletRequest concurrentRequest =

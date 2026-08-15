@@ -13,10 +13,10 @@ import org.springframework.stereotype.Component;
 
 import java.util.*;
 
-/**
- * Tool: getAssignedWarehouseStock
- * Xem danh sách hàng tồn kho trong các kho được phân công của Nhân viên kho (Staff).
- */
+
+
+
+
 @Slf4j
 @Component
 @RequiredArgsConstructor

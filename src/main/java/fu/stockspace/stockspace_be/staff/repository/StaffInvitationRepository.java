@@ -11,19 +11,19 @@ import java.util.UUID;
 @Repository
 public interface StaffInvitationRepository extends JpaRepository<StaffInvitation, UUID> {
 
-    /**
-     * Tìm lời mời theo token — dùng khi Staff click link xác nhận.
-     */
+
+
+
     Optional<StaffInvitation> findByToken(String token);
 
-    /**
-     * Kiểm tra đã tồn tại lời mời PENDING cho email + tenant chưa.
-     * Tránh gửi nhiều lời mời trùng.
-     */
+
+
+
+
     boolean existsByEmailAndTenantIdAndStatus(String email, UUID tenantId, InvitationStatus status);
 
-    /**
-     * Đếm số lượng lời mời theo Tenant và Status (VD: PENDING).
-     */
+
+
+
     long countByTenantIdAndStatus(UUID tenantId, InvitationStatus status);
 }

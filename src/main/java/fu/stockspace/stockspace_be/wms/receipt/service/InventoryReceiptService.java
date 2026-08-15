@@ -149,7 +149,7 @@ public class InventoryReceiptService {
             throw new BadRequestException(ErrorCode.RECEIPT_ALREADY_PROCESSED);
         }
 
-        // Check active subscription and warehouse ownership for the receipt tenant.
+
         UUID creatorTenantId = resolveTenantId(receipt.getCreatedBy());
         UUID approverTenantId = resolveTenantId(approver);
         if (!creatorTenantId.equals(approverTenantId)) {
@@ -291,9 +291,9 @@ public class InventoryReceiptService {
         });
     }
 
-    /**
-     * Tenant/Staff endpoint variant with server-side warehouse authorization.
-     */
+
+
+
     @Transactional(readOnly = true)
     public PagedResponse<InventoryReceiptResponse> getReceiptsByWarehouse(
             UUID userId, UUID warehouseId, DocumentType type, Pageable pageable) {
@@ -313,9 +313,9 @@ public class InventoryReceiptService {
         return mapToResponse(receipt, items);
     }
 
-    /**
-     * Tenant/Staff endpoint variant with server-side warehouse authorization.
-     */
+
+
+
     @Transactional(readOnly = true)
     public InventoryReceiptResponse getReceiptDetail(UUID userId, UUID receiptId) {
         User user = userRepository.findById(userId)
@@ -358,12 +358,12 @@ public class InventoryReceiptService {
                 .build();
     }
 
-    // ========== MODULE 7 / Dev B: Adjustment Receipt + Transaction Audit Trail ==========
 
-    /**
-     * Tạo phiếu nhập/xuất điều chỉnh tự động từ kết quả kiểm kê.
-     * Internal — chỉ được gọi bởi InventoryAuditService.approveAudit().
-     */
+
+
+
+
+
     @Transactional
     public InventoryReceipt createAdjustmentReceipt(
             UUID userId, UUID auditId, UUID warehouseId,
@@ -374,7 +374,7 @@ public class InventoryReceiptService {
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
 
-        // Tạo phiếu điều chỉnh — tự động duyệt ngay, referenceId = auditId
+
         InventoryReceipt receipt = InventoryReceipt.builder()
                 .warehouse(warehouse)
                 .createdBy(creator)
@@ -385,7 +385,7 @@ public class InventoryReceiptService {
                 .build();
         receipt = receiptRepository.save(receipt);
 
-        // Lấy StockBatch
+
         StockBatch batch = stockBatchRepository.findById(batchId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STOCK_BATCH_NOT_FOUND));
         ProductSku sku = productSkuRepository.findByIdAndIsDeletedFalse(batch.getSkuId())
@@ -401,12 +401,12 @@ public class InventoryReceiptService {
                 .build();
         receiptItemRepository.save(item);
 
-        // Cập nhật StockBatch.quantity
+
         int delta = (type == DocumentType.INBOUND) ? quantity : -quantity;
         batch.setQuantity(batch.getQuantity() + delta);
         stockBatchRepository.save(batch);
 
-        // Ghi InventoryTransaction
+
         InventoryTransaction transaction = InventoryTransaction.builder()
                 .receipt(receipt)
                 .batch(batch)
@@ -419,9 +419,9 @@ public class InventoryReceiptService {
         return receipt;
     }
 
-    /**
-     * Ghi nhật ký giao dịch kho (internal helper).
-     */
+
+
+
     @Transactional
     public void recordTransaction(UUID receiptId, UUID batchId, int qty) {
         InventoryReceipt receipt = receiptRepository.findById(receiptId)
@@ -446,8 +446,8 @@ public class InventoryReceiptService {
         }
 
         StringBuilder csv = new StringBuilder();
-        csv.append("sep=,\n"); // Force Excel to parse columns using comma
-        csv.append("\uFEFF"); // UTF-8 BOM for Excel Unicode display
+        csv.append("sep=,\n");
+        csv.append("\uFEFF");
         csv.append("STT,Mã Phiếu,Loại Phiếu,Kho Bãi,Trạng Thái,Mã SKU,Tên Sản Phẩm,Đơn Vị Tính,Số Lượng,Người Tạo,Thời Gian Tạo\n");
 
         java.time.format.DateTimeFormatter dateFormatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -480,9 +480,9 @@ public class InventoryReceiptService {
         return csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
 
-    /**
-     * Tenant/Staff endpoint variant with server-side warehouse authorization.
-     */
+
+
+
     @Transactional(readOnly = true)
     public byte[] exportReceiptsToCsv(UUID userId, UUID warehouseId, DocumentType type) {
         User user = userRepository.findById(userId)
@@ -507,9 +507,9 @@ public class InventoryReceiptService {
     }
 
 
-    /**
-     * Xem lịch sử biến động số lượng của một lô hàng (Module 7 endpoint).
-     */
+
+
+
 
     @Transactional(readOnly = true)
     public org.springframework.data.domain.Page<InventoryTransactionResponse> getTransactionsByBatch(
@@ -530,9 +530,9 @@ public class InventoryReceiptService {
                 });
     }
 
-    /**
-     * Tenant/Staff endpoint variant with server-side warehouse authorization.
-     */
+
+
+
     @Transactional(readOnly = true)
     public org.springframework.data.domain.Page<InventoryTransactionResponse> getTransactionsByBatch(
             UUID userId, UUID batchId, org.springframework.data.domain.Pageable pageable) {

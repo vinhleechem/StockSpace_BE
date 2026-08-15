@@ -264,12 +264,12 @@ class SubscriptionServiceTest {
                 eq(tenantId), eq(SubscriptionStatus.ACTIVE), any(LocalDate.class)))
                 .thenReturn(Optional.of(activeSub));
 
-        // Case Upgrade
+
         SubscriptionPreviewResponse previewUpgrade = subscriptionService.previewSubscriptionChange(tenantId, packageProId);
         assertEquals("UPGRADE", previewUpgrade.getTransactionType());
         assertTrue(previewUpgrade.isCanProceed());
 
-        // Case Renewal
+
         SubscriptionPreviewResponse previewRenewal = subscriptionService.previewSubscriptionChange(tenantId, packageBasicId);
         assertEquals("RENEWAL", previewRenewal.getTransactionType());
         assertTrue(previewRenewal.isCanProceed());

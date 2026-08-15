@@ -10,11 +10,11 @@ import lombok.experimental.SuperBuilder;
 import java.util.UUID;
 
 
-/**
- * Entity WarehouseLayout — bản đồ layout kho, có thể là layout mặc định của Owner
- * hoặc layout tuỳ chỉnh của Tenant sau khi thuê.
- * Map với bảng: warehouse_layouts
- */
+
+
+
+
+
 @Entity
 @Table(name = "warehouse_layouts")
 @Getter
@@ -33,7 +33,7 @@ public class WarehouseLayout extends BaseEntity {
     @JoinColumn(name = "warehouse_id", nullable = false)
     private Warehouse warehouse;
 
-    /** null = layout mặc định của Owner; có giá trị = layout riêng của Tenant */
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tenant_id")
     private User tenant;
@@ -54,7 +54,7 @@ public class WarehouseLayout extends BaseEntity {
     @Builder.Default
     private Integer height = 100;
 
-    /** Mảng vị trí ô lưới (JSON String), ví dụ: ["1:0","2:1","3:1",...]. 1 = đen/khóa, 0 = trắng/dùng được */
+
     @Column(name = "positions", columnDefinition = "TEXT")
     private String positions;
 }

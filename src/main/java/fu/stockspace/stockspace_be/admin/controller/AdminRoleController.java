@@ -14,9 +14,9 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-/**
- * Controller xử lý các API quản lý Vai trò (Roles) và gán vai trò cho User của Admin.
- */
+
+
+
 @Tag(name = "Admin Role Management", description = "Các API quản lý Vai trò và gán quyền của Admin")
 @RestController
 @RequestMapping("/api/admin")
@@ -26,12 +26,12 @@ public class AdminRoleController {
 
     private final RoleManagementService roleManagementService;
 
-    // ==================== Role Core CRUD ====================
 
-    /**
-     * GET /api/admin/roles
-     * Xem danh sách tất cả các vai trò.
-     */
+
+
+
+
+
     @GetMapping("/roles")
     @Operation(summary = "Xem danh sách tất cả các vai trò (Roles) hiện có")
     public ResponseEntity<ApiResponse<List<RoleResponse>>> getAllRoles() {
@@ -39,10 +39,10 @@ public class AdminRoleController {
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách vai trò thành công", roles));
     }
 
-    /**
-     * POST /api/admin/roles
-     * Tạo vai trò mới.
-     */
+
+
+
+
     @PostMapping("/roles")
     @Operation(summary = "Tạo mới một vai trò (Role)")
     public ResponseEntity<ApiResponse<RoleResponse>> createRole(
@@ -53,10 +53,10 @@ public class AdminRoleController {
                 .body(ApiResponse.success("Tạo vai trò thành công", role));
     }
 
-    /**
-     * PUT /api/admin/roles/{id}
-     * Sửa đổi thông tin vai trò.
-     */
+
+
+
+
     @PutMapping("/roles/{id}")
     @Operation(summary = "Chỉnh sửa thông tin vai trò (Role)")
     public ResponseEntity<ApiResponse<RoleResponse>> updateRole(
@@ -67,10 +67,10 @@ public class AdminRoleController {
         return ResponseEntity.ok(ApiResponse.success("Cập nhật vai trò thành công", role));
     }
 
-    /**
-     * DELETE /api/admin/roles/{id}
-     * Xóa vai trò.
-     */
+
+
+
+
     @DeleteMapping("/roles/{id}")
     @Operation(summary = "Xóa một vai trò (Role) khỏi hệ thống")
     public ResponseEntity<ApiResponse<Void>> deleteRole(
@@ -80,12 +80,12 @@ public class AdminRoleController {
         return ResponseEntity.ok(ApiResponse.success("Xóa vai trò thành công", null));
     }
 
-    // ==================== Role-Permission Mapping ====================
 
-    /**
-     * POST /api/admin/roles/{id}/permissions
-     * Gán thêm một Permission vào Role.
-     */
+
+
+
+
+
     @PostMapping("/roles/{id}/permissions")
     @Operation(summary = "Gán thêm một quyền hạn (Permission) vào vai trò (Role)")
     public ResponseEntity<ApiResponse<RoleResponse>> assignPermissionToRole(
@@ -96,10 +96,10 @@ public class AdminRoleController {
         return ResponseEntity.ok(ApiResponse.success("Gán quyền cho vai trò thành công", role));
     }
 
-    /**
-     * DELETE /api/admin/roles/{id}/permissions/{permId}
-     * Gỡ bỏ Permission khỏi Role.
-     */
+
+
+
+
     @DeleteMapping("/roles/{id}/permissions/{permId}")
     @Operation(summary = "Gỡ bỏ quyền hạn (Permission) khỏi vai trò (Role)")
     public ResponseEntity<ApiResponse<RoleResponse>> removePermissionFromRole(
@@ -110,12 +110,12 @@ public class AdminRoleController {
         return ResponseEntity.ok(ApiResponse.success("Gỡ quyền khỏi vai trò thành công", role));
     }
 
-    // ==================== User-Role Mapping ====================
 
-    /**
-     * POST /api/admin/users/{userId}/roles
-     * Gán vai trò (Role) cho User.
-     */
+
+
+
+
+
     @PostMapping("/users/{userId}/roles")
     @Operation(summary = "Gán thêm vai trò (Role) cho người dùng (User)")
     public ResponseEntity<ApiResponse<Void>> assignRoleToUser(
@@ -126,10 +126,10 @@ public class AdminRoleController {
         return ResponseEntity.ok(ApiResponse.success("Gán vai trò cho người dùng thành công", null));
     }
 
-    /**
-     * DELETE /api/admin/users/{userId}/roles/{roleId}
-     * Xóa vai trò (Role) khỏi User.
-     */
+
+
+
+
     @DeleteMapping("/users/{userId}/roles/{roleId}")
     @Operation(summary = "Xóa vai trò (Role) khỏi người dùng (User)")
     public ResponseEntity<ApiResponse<Void>> removeRoleFromUser(

@@ -1,24 +1,7 @@
-# =============================================================================
-# PRODUCTION — Chạy trên VPS
-# Lệnh:
-#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
-#
-# Hoặc dùng script:
-#   bash deploy.sh deploy
-#
-# Khác với dev:
-#   - Nginx làm reverse proxy nội bộ (port 80 → app:8080)
-#   - HTTPS phải được terminate ở load balancer/CDN tin cậy, hoặc tự bật block
-#     TLS trong nginx/nginx.conf sau khi cấp certificate.
-#   - Port 8080 và 5432 KHÔNG expose ra ngoài
-#   - restart: unless-stopped (auto-restart khi VPS reboot)
-#   - JVM heap lớn hơn (-Xmx768m)
-# =============================================================================
 
 services:
   postgres:
     restart: unless-stopped
-    # ⛔ Không expose port 5432 ra ngoài — chỉ internal network
 
   app:
     restart: unless-stopped
@@ -39,9 +22,7 @@ services:
     networks:
       - stockspace-net
     restart: unless-stopped
-    # ⛔ Không expose port 8080 — Nginx sẽ proxy vào
 
-  # ─── Nginx Reverse Proxy ───────────────────────────────────────────────────
   nginx:
     image: nginx:alpine
     container_name: stockspace-nginx

@@ -3,7 +3,7 @@ package fu.stockspace.stockspace_be.auth.dto;
 import jakarta.validation.constraints.*;
 import lombok.Data;
 
-/** Request body cho POST /api/auth/reset-password */
+
 @Data
 public class ResetPasswordRequest {
 

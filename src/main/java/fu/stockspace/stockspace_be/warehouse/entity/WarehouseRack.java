@@ -8,10 +8,10 @@ import java.math.BigDecimal;
 
 import java.util.UUID;
 
-/**
- * Entity WarehouseRack — kệ hàng trong một Zone.
- * Map với bảng: warehouse_racks
- */
+
+
+
+
 @Entity
 @Table(name = "warehouse_racks")
 @Getter

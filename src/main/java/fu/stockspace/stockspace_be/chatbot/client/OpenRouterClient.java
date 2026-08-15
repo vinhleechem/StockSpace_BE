@@ -36,13 +36,13 @@ import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/**
- * OpenRouter client using the OpenAI-compatible Chat Completions protocol.
- *
- * <p>The caller owns the conversation transcript. Every tool continuation must
- * contain the assistant tool-call message, its tool result, and the same tool
- * declarations so multi-step workflows remain valid.</p>
- */
+
+
+
+
+
+
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -123,9 +123,9 @@ public class OpenRouterClient {
         requestSlots = new Semaphore(Math.max(1, maxConcurrentRequests), true);
     }
 
-    /**
-     * Starts a chat request from persisted history.
-     */
+
+
+
     public AiResponse chatWithTools(List<Map<String, Object>> history,
                                     String systemPrompt,
                                     String userMessage,
@@ -141,16 +141,16 @@ public class OpenRouterClient {
         return complete(messages, tools);
     }
 
-    /**
-     * Completes an already-built OpenAI-compatible transcript.
-     */
+
+
+
     public AiResponse complete(List<Map<String, Object>> messages, List<ChatTool> tools) {
         return complete(messages, tools, requestTimeout);
     }
 
-    /**
-     * Completes a transcript while respecting a caller-level remaining budget.
-     */
+
+
+
     public AiResponse complete(List<Map<String, Object>> messages,
                                List<ChatTool> tools,
                                Duration remainingBudget) {
@@ -163,14 +163,14 @@ public class OpenRouterClient {
         );
     }
 
-    /**
-     * Streams one OpenAI-compatible completion while still returning the
-     * assembled response required by the agent loop and persistence layer.
-     *
-     * <p>Only user-visible assistant text is sent to {@code onTextDelta}.
-     * Standard and compatibility tool calls are accumulated server-side and
-     * are never exposed to the downstream client.</p>
-     */
+
+
+
+
+
+
+
+
     public AiResponse completeStreaming(List<Map<String, Object>> messages,
                                         List<ChatTool> tools,
                                         Duration remainingBudget,
@@ -191,10 +191,10 @@ public class OpenRouterClient {
         );
     }
 
-    /**
-     * Backward-compatible helper for a single continuation.
-     * New agent loops should append messages themselves and call {@link #complete}.
-     */
+
+
+
+
     public AiResponse sendToolResult(List<Map<String, Object>> conversation,
                                      FunctionCall functionCall,
                                      String toolResult) {
@@ -252,7 +252,7 @@ public class OpenRouterClient {
         if (tools != null && !tools.isEmpty()) {
             body.put("tools", buildToolsPayload(tools));
             body.put("tool_choice", "auto");
-            // This implementation intentionally executes one tool at a time.
+
             body.put("parallel_tool_calls", false);
         }
         return body;
@@ -573,11 +573,11 @@ public class OpenRouterClient {
         }
     }
 
-    /**
-     * Compatibility fallback for models which return a complete XML tool call
-     * instead of the standardized {@code tool_calls} field. Partial text or a
-     * quoted tag is never executed.
-     */
+
+
+
+
+
     @SuppressWarnings("unchecked")
     private FunctionCall parseXmlToolCall(String text) {
         if (text == null || text.length() > MAX_XML_TOOL_CALL_LENGTH) {
@@ -604,7 +604,7 @@ public class OpenRouterClient {
                     );
                 }
             } catch (JsonProcessingException ignored) {
-                // Try the tag-shaped compatibility format below.
+
             }
         }
 
@@ -676,9 +676,9 @@ public class OpenRouterClient {
         return Map.of("role", apiRole, "content", text == null ? "" : text);
     }
 
-    // -------------------------------------------------------------------------
-    // Utility helpers
-    // -------------------------------------------------------------------------
+
+
+
 
     private long deadlineAfter(Duration budget) {
         Duration effective = budget == null || budget.isNegative() || budget.isZero()
@@ -696,15 +696,15 @@ public class OpenRouterClient {
         return cancelled != null && cancelled.getAsBoolean();
     }
 
-    // -------------------------------------------------------------------------
-    // StreamConsumerException — unchecked wrapper used inside Reactor lambdas
-    // -------------------------------------------------------------------------
 
-    /**
-     * Wraps a {@link ChatProviderException} so it can be thrown from inside a
-     * Reactor {@code doOnNext} callback (which only allows unchecked exceptions)
-     * and then unwrapped in the surrounding blocking catch block.
-     */
+
+
+
+
+
+
+
+
     static final class StreamConsumerException extends RuntimeException {
 
         private final ChatProviderException cause;
@@ -719,38 +719,38 @@ public class OpenRouterClient {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // StreamAccumulator — assembles an AiResponse from OpenAI-format SSE frames
-    // -------------------------------------------------------------------------
 
-    /**
-     * Stateful accumulator that processes one {@code data:} payload at a time
-     * from an OpenAI-compatible streaming response.
-     *
-     * <p>Text deltas are forwarded to {@code onTextDelta} immediately so the
-     * SSE coordinator can push them to the browser without waiting for the full
-     * response. Tool call fragments are buffered and assembled into a single
-     * {@link FunctionCall} on {@link #finish()}.</p>
-     *
-     * <p>Limits ({@link #MAX_STREAM_TEXT_LENGTH},
-     * {@link #MAX_STREAM_TOOL_ARGUMENTS_LENGTH}, etc.) are enforced to prevent
-     * runaway allocations from a misbehaving provider.</p>
-     */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     private final class StreamAccumulator {
 
         private final Consumer<String> onTextDelta;
 
-        // Text accumulation
+
         private final StringBuilder textBuffer = new StringBuilder();
         private int totalTextLength = 0;
 
-        // Tool-call accumulation (one call at a time per OpenAI spec)
+
         private String toolCallId;
         private String toolCallName;
         private final StringBuilder toolArgBuffer = new StringBuilder();
         private boolean hasToolCall = false;
 
-        // Safety counters
+
         private int eventCount = 0;
         private int totalPayloadBytes = 0;
 
@@ -759,10 +759,10 @@ public class OpenRouterClient {
             } : onTextDelta;
         }
 
-        /**
-         * Processes a single raw SSE data string.
-         * Called from {@code doOnNext} — must not throw checked exceptions.
-         */
+
+
+
+
         @SuppressWarnings("unchecked")
         void accept(String data) {
             if (data == null || data.isBlank()) {
@@ -785,11 +785,11 @@ public class OpenRouterClient {
             try {
                 root = objectMapper.readTree(data);
             } catch (Exception ignored) {
-                // Malformed JSON chunk — skip silently; provider may send keep-alive comments.
+
                 return;
             }
 
-            // Provider-level error embedded in a streaming chunk
+
             if (root.has("error")) {
                 JsonNode errorNode = root.get("error");
                 int code = errorNode.path("code").asInt(0);
@@ -811,7 +811,7 @@ public class OpenRouterClient {
                 return;
             }
 
-            // --- Text delta ---
+
             JsonNode contentNode = delta.path("content");
             if (contentNode.isTextual()) {
                 String chunk = contentNode.asText();
@@ -828,13 +828,13 @@ public class OpenRouterClient {
                 }
             }
 
-            // --- Tool-call delta ---
+
             JsonNode toolCallsNode = delta.path("tool_calls");
             if (toolCallsNode.isArray() && !toolCallsNode.isEmpty()) {
                 JsonNode tc = toolCallsNode.get(0);
                 hasToolCall = true;
 
-                // id and name arrive only in the first chunk
+
                 JsonNode idNode = tc.path("id");
                 if (idNode.isTextual() && !idNode.asText().isBlank()) {
                     String rawId = idNode.asText().trim();
@@ -869,10 +869,10 @@ public class OpenRouterClient {
             }
         }
 
-        /**
-         * Returns the assembled {@link AiResponse}.
-         * Must be called after the stream has been fully consumed.
-         */
+
+
+
+
         AiResponse finish() {
             if (hasToolCall && toolCallName != null
                     && TOOL_NAME.matcher(toolCallName).matches()) {
@@ -885,10 +885,10 @@ public class OpenRouterClient {
 
             String text = textBuffer.toString().trim();
             if (text.isEmpty()) {
-                // Some providers omit content when finish_reason=stop with empty reply.
+
                 throw new ChatProviderException(ErrorCode.CHAT_PROVIDER_INVALID_RESPONSE);
             }
-            // XML tool-call fallback — same logic as non-streaming path
+
             FunctionCall xmlCall = parseXmlToolCall(text);
             if (xmlCall != null) {
                 return new AiResponse(null, xmlCall);

@@ -18,10 +18,10 @@ public class StaffWorkHistoryResponse {
     private String email;
     private String phone;
 
-    /** Lịch sử các công ty (Tenant) đã/đang công tác */
+
     private List<TenantTenureResponse> tenantTenures;
 
-    /** Lịch sử các phân công kho qua các thời kỳ */
+
     private List<StaffAssignmentResponse> warehouseAssignments;
 
     @Getter

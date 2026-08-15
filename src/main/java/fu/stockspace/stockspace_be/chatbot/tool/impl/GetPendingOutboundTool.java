@@ -15,10 +15,10 @@ import org.springframework.stereotype.Component;
 
 import java.util.*;
 
-/**
- * Tool: getPendingOutboundOrders
- * Xem danh sách các phiếu xuất kho (OUTBOUND) đang ở trạng thái PENDING chờ xử lý.
- */
+
+
+
+
 @Slf4j
 @Component
 @RequiredArgsConstructor

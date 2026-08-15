@@ -6,9 +6,9 @@ import lombok.Getter;
 import java.time.LocalDateTime;
 
 
-/**
- * DTO trả về thông tin DisputeTicket.
- */
+
+
+
 import java.util.UUID;
 
 @Getter
@@ -21,14 +21,14 @@ public class DisputeResponse {
     private String evidenceImages;
     private String adminNote;
 
-    // Contract info
+
     private UUID contractId;
 
-    // Raised by
+
     private UUID raisedById;
     private String raisedByName;
 
-    // Handled by
+
     private UUID handledById;
     private String handledByName;
 

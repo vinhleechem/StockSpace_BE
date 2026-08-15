@@ -7,10 +7,10 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 import java.util.UUID;
 
-/**
- * Entity Notification — lưu lịch sử thông báo gửi tới người dùng.
- * Map với bảng: notifications
- */
+
+
+
+
 @Entity
 @Table(name = "notifications", indexes = {
         @Index(name = "idx_notifications_user_id", columnList = "user_id")
@@ -38,7 +38,7 @@ public class Notification extends BaseEntity {
     private String message;
 
     @Column(name = "type", nullable = false, length = 50)
-    private String type; // SYSTEM, RENTAL, PAYMENT, WMS
+    private String type;
 
     @Column(name = "is_read", nullable = false)
     @Builder.Default

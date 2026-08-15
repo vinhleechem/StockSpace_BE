@@ -6,10 +6,10 @@ import lombok.experimental.SuperBuilder;
 
 import java.util.UUID;
 
-/**
- * Entity SystemPolicy — chính sách hệ thống chứa cam kết ràng buộc pháp lý.
- * Map với bảng: system_policies
- */
+
+
+
+
 @Entity
 @Table(name = "system_policies")
 @Getter

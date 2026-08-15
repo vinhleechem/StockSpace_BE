@@ -5,12 +5,12 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * Versioned payloads emitted by the chatbot SSE endpoints.
- *
- * <p>The event name is carried by the SSE frame itself. Payloads deliberately
- * contain no provider, prompt, RAG source or tool implementation details.</p>
- */
+
+
+
+
+
+
 public final class ChatStreamEvents {
 
     public static final int VERSION = 1;

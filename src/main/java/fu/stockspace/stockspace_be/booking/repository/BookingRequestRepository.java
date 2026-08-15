@@ -15,25 +15,25 @@ import java.util.UUID;
 
 public interface BookingRequestRepository extends JpaRepository<BookingRequest, UUID> {
 
-    // ==================== Tenant ====================
+
 
     Page<BookingRequest> findByTenantId(UUID tenantId, Pageable pageable);
 
     Optional<BookingRequest> findByIdAndTenantId(UUID id, UUID tenantId);
 
-    /**
-     * Kiểm tra Tenant đã có booking PENDING cho kho này chưa (tránh spam).
-     */
+
+
+
     boolean existsByTenantIdAndWarehouseIdAndStatus(UUID tenantId, UUID warehouseId, ApprovalStatus status);
 
     @Query("SELECT COUNT(b) > 0 FROM BookingRequest b WHERE b.warehouse.id = :warehouseId AND b.status IN :statuses")
     boolean existsByWarehouseIdAndStatusIn(@Param("warehouseId") UUID warehouseId, @Param("statuses") java.util.List<ApprovalStatus> statuses);
 
-    // ==================== Owner ====================
 
-    /**
-     * Lấy danh sách booking request đến kho của Owner.
-     */
+
+
+
+
     @Query("""
             SELECT b FROM BookingRequest b
             WHERE b.warehouse.owner.id = :ownerId
@@ -49,7 +49,7 @@ public interface BookingRequestRepository extends JpaRepository<BookingRequest, 
     Optional<BookingRequest> findByIdAndOwnerId(@Param("bookingId") UUID bookingId,
                                                 @Param("ownerId") UUID ownerId);
 
-    // ==================== Admin ====================
+
 
     Page<BookingRequest> findByStatus(ApprovalStatus status, Pageable pageable);
 }

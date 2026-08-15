@@ -8,9 +8,9 @@ import lombok.Setter;
 import java.util.List;
 
 
-/**
- * DTO khi một bên mở Dispute với hợp đồng.
- */
+
+
+
 @Getter
 @Setter
 public class CreateDisputeRequest {
@@ -21,6 +21,6 @@ public class CreateDisputeRequest {
     @NotBlank(message = "Lý do tranh chấp không được để trống")
     private String reason;
 
-    /** Danh sách URL ảnh bằng chứng (tuỳ chọn) */
+
     private List<String> evidenceImages;
 }

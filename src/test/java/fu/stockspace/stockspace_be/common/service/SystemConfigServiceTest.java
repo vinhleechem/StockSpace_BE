@@ -78,7 +78,7 @@ class SystemConfigServiceTest {
 
         int value = configService.getIntValue(SystemConfigKey.DEPOSIT_PERCENTAGE.getKey(), 20);
 
-        assertEquals(10, value); // Default is 10
+        assertEquals(10, value);
     }
 
     @Test
@@ -110,7 +110,7 @@ class SystemConfigServiceTest {
         assertNotNull(responses);
         assertEquals(SystemConfigKey.values().length, responses.size());
 
-        // Find deposit config in responses
+
         SystemConfigResponse depositResponse = responses.stream()
                 .filter(r -> r.getConfigKey().equals(SystemConfigKey.DEPOSIT_PERCENTAGE.getKey()))
                 .findFirst().orElse(null);
@@ -119,7 +119,7 @@ class SystemConfigServiceTest {
         assertEquals("15", depositResponse.getConfigValue());
         assertEquals("Custom deposit description", depositResponse.getDescription());
 
-        // Find inspection fee config in responses
+
         SystemConfigResponse feeResponse = responses.stream()
                 .filter(r -> r.getConfigKey().equals(SystemConfigKey.INSPECTION_FEE.getKey()))
                 .findFirst().orElse(null);

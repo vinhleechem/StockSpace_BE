@@ -10,13 +10,13 @@ import lombok.experimental.SuperBuilder;
 import java.util.UUID;
 
 
-/**
- * Entity DisputeTicket — tranh chấp được mở bởi một bên (Owner hoặc Tenant).
- * Map với bảng: dispute_tickets
- *
- * Khi dispute được tạo → RentalContract.status = DISPUTED.
- * Admin giải quyết → status = RESOLVED, Admin ghi note.
- */
+
+
+
+
+
+
+
 @Entity
 @Table(name = "dispute_tickets")
 @Getter
@@ -31,7 +31,7 @@ public class DisputeTicket extends BaseEntity {
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
-    /** 1-1 với RentalContract */
+
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "contract_id", unique = true, nullable = false)
     private RentalContract contract;
@@ -47,7 +47,7 @@ public class DisputeTicket extends BaseEntity {
     @Column(name = "reason", nullable = false, columnDefinition = "TEXT")
     private String reason;
 
-    /** JSON array URL ảnh bằng chứng */
+
     @Column(name = "evidence_images", columnDefinition = "TEXT")
     private String evidenceImages;
 
@@ -55,7 +55,7 @@ public class DisputeTicket extends BaseEntity {
     @Builder.Default
     private String status = "OPEN";
 
-    /** Ghi chú của Admin khi giải quyết */
+
     @Column(name = "admin_note", columnDefinition = "TEXT")
     private String adminNote;
 }

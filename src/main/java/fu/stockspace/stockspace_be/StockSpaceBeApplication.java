@@ -15,7 +15,7 @@ public class StockSpaceBeApplication {
 
     @PostConstruct
     public void init() {
-        // Set JVM timezone to Ho Chi Minh (GMT+7)
+
         TimeZone.setDefault(TimeZone.getTimeZone("Asia/Ho_Chi_Minh"));
     }
 

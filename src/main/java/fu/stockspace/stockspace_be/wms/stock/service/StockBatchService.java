@@ -50,10 +50,10 @@ public class StockBatchService {
     private final RentalContractRepository contractRepository;
     private final StaffWarehouseAssignmentRepository assignmentRepository;
 
-    /**
-     * Lấy danh sách toàn bộ tồn kho trong 1 kho (phân trang).
-     * Tenant phải có subscription active.
-     */
+
+
+
+
     @Transactional(readOnly = true)
     public PagedResponse<StockBatchResponse> getStockByWarehouse(UUID tenantId, UUID warehouseId, Pageable pageable) {
         if (!subscriptionService.hasActiveSubscription(tenantId)) {
@@ -70,10 +70,10 @@ public class StockBatchService {
         return PagedResponse.fromPage(page, this::mapToResponse);
     }
 
-    /**
-     * Tenant/Staff endpoint variant. A non-null staffId means the caller must
-     * have an ACTIVE assignment to the requested warehouse.
-     */
+
+
+
+
     @Transactional(readOnly = true)
     public PagedResponse<StockBatchResponse> getStockByWarehouse(
             UUID tenantId, UUID warehouseId, UUID staffId, Pageable pageable) {
@@ -81,11 +81,11 @@ public class StockBatchService {
         return getStockByWarehouse(tenantId, warehouseId, pageable);
     }
 
-    /**
-     * Returns one product-level row per visible SKU for the selected warehouse.
-     * Unlike getStockSummaryBySku(...), this method never aggregates across
-     * multiple warehouses.
-     */
+
+
+
+
+
     @Transactional(readOnly = true)
     public PagedResponse<WarehouseStockOverviewResponse> getStockOverviewByWarehouse(
             UUID tenantId, UUID warehouseId, Pageable pageable) {
@@ -114,10 +114,10 @@ public class StockBatchService {
                 .build());
     }
 
-    /**
-     * Staff variant. A non-null staffId must have an active assignment to the
-     * selected warehouse; Tenant access is checked by the base method.
-     */
+
+
+
+
     @Transactional(readOnly = true)
     public PagedResponse<WarehouseStockOverviewResponse> getStockOverviewByWarehouse(
             UUID tenantId, UUID warehouseId, UUID staffId, Pageable pageable) {
@@ -125,10 +125,10 @@ public class StockBatchService {
         return getStockOverviewByWarehouse(tenantId, warehouseId, pageable);
     }
 
-    /**
-     * Tóm tắt tồn kho của riêng Tenant trong một kho đang có hợp đồng ACTIVE.
-     * Truy vấn aggregate đã lọc theo chủ sở hữu SKU để không trộn dữ liệu Tenant khác.
-     */
+
+
+
+
     @Transactional(readOnly = true)
     public WarehouseStockSummary getStockSummaryByWarehouse(UUID tenantId, UUID warehouseId) {
         if (!subscriptionService.hasActiveSubscription(tenantId)) {
@@ -151,18 +151,18 @@ public class StockBatchService {
         );
     }
 
-    /**
-     * Tổng hợp tồn kho theo SKU — tổng số lượng + danh sách vị trí phân tán.
-     */
+
+
+
     @Transactional(readOnly = true)
     public StockSummaryResponse getStockSummaryBySku(UUID tenantId, UUID skuId) {
         return getStockSummaryBySku(tenantId, skuId, null);
     }
 
-    /**
-     * Tenant/Staff endpoint variant. Staff only receives locations from
-     * warehouses assigned to them; Tenant receives the tenant-wide summary.
-     */
+
+
+
+
     @Transactional(readOnly = true)
     public StockSummaryResponse getStockSummaryBySku(UUID tenantId, UUID skuId, UUID staffId) {
         if (!subscriptionService.hasActiveSubscription(tenantId)) {
@@ -228,9 +228,9 @@ public class StockBatchService {
     ) {
     }
 
-    /**
-     * Điều chỉnh số lượng lô hàng (internal — được gọi từ InventoryReceiptService).
-     */
+
+
+
     @Transactional
     public void adjustQuantity(UUID batchId, int delta) {
         StockBatch batch = stockBatchRepository.findByIdAndIsDeletedFalse(batchId)
@@ -244,9 +244,9 @@ public class StockBatchService {
         log.info("WMS Stock: Adjusted batch {} quantity by {} → new qty={}", batchId, delta, newQty);
     }
 
-    /**
-     * Tìm lô hàng theo vị trí hoặc tạo mới nếu chưa tồn tại (internal).
-     */
+
+
+
     @Transactional
     public StockBatch findOrCreateBatch(UUID skuId, UUID warehouseId, UUID rackId, UUID binId) {
         return stockBatchRepository
@@ -274,7 +274,7 @@ public class StockBatchService {
                 });
     }
 
-    // ==================== Mapper ====================
+
 
     public StockBatchResponse mapToResponse(StockBatch b) {
         ProductSku sku = productSkuRepository.findByIdAndIsDeletedFalse(b.getSkuId()).orElse(null);
@@ -300,9 +300,9 @@ public class StockBatchService {
                 .build();
     }
 
-    /**
-     * Admin xem tồn kho theo warehouse — không cần kiểm tra subscription.
-     */
+
+
+
     @Transactional(readOnly = true)
     public PagedResponse<StockBatchResponse> getAdminStockByWarehouse(UUID warehouseId, Pageable pageable) {
         Page<StockBatch> page = stockBatchRepository.findByWarehouseIdAndIsDeletedFalse(warehouseId, pageable);

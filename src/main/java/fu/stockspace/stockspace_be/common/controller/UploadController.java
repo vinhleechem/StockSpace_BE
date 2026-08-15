@@ -14,9 +14,9 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.util.List;
 
-/**
- * Controller xử lý các yêu cầu upload tài nguyên hình ảnh.
- */
+
+
+
 @Tag(name = "Upload — Media Upload Controller", description = "Các API phục vụ cho việc upload hình ảnh lên Cloudinary")
 @RestController
 @RequestMapping("/api/upload")
@@ -25,10 +25,10 @@ public class UploadController {
 
     private final CloudinaryService cloudinaryService;
 
-    /**
-     * POST /api/upload/image
-     * Upload single image.
-     */
+
+
+
+
     @PostMapping(value = "/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("@rbac.hasPermission('MEDIA_UPLOAD')")
     @Operation(summary = "Upload một hình ảnh (Yêu cầu đăng nhập)")
@@ -47,10 +47,10 @@ public class UploadController {
         }
     }
 
-    /**
-     * POST /api/upload/images
-     * Upload multiple images.
-     */
+
+
+
+
     @PostMapping(value = "/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("@rbac.hasPermission('MEDIA_UPLOAD')")
     @Operation(summary = "Upload nhiều hình ảnh cùng lúc (Yêu cầu đăng nhập)")

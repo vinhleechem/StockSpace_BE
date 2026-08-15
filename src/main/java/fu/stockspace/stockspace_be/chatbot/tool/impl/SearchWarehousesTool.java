@@ -15,11 +15,11 @@ import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * Tool: searchWarehouses
- * Tìm kiếm kho công khai theo từ khóa và bộ lọc giá/diện tích.
- * Trả về tối đa 5 kho phù hợp nhất.
- */
+
+
+
+
+
 @Slf4j
 @Component
 @RequiredArgsConstructor

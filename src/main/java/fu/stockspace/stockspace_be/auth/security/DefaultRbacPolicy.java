@@ -9,7 +9,7 @@ import java.util.EnumSet;
 import java.util.Map;
 import java.util.Set;
 
-/** Default grants for a newly initialized StockSpace installation. */
+
 public final class DefaultRbacPolicy {
 
     private DefaultRbacPolicy() {

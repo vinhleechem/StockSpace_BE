@@ -43,13 +43,13 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/**
- * Coordinates chat persistence, role-scoped tools and the OpenRouter agent loop.
- *
- * <p>Provider calls deliberately happen outside database transactions. The
- * store opens short transactions only to prepare context and append a complete
- * user/assistant turn.</p>
- */
+
+
+
+
+
+
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -144,11 +144,11 @@ public class ChatbotService {
         );
     }
 
-    /**
-     * Starts a real provider-backed SSE response for an authenticated user.
-     * Session validation and rate-limit acquisition happen before the emitter
-     * is returned, so those failures retain their normal HTTP status.
-     */
+
+
+
+
+
     public SseEmitter streamMessage(UUID userId,
                                     String roleName,
                                     SendMessageRequest request) {
@@ -175,10 +175,10 @@ public class ChatbotService {
         }
     }
 
-    /**
-     * Starts a real provider-backed SSE response for a guest. The raw bearer
-     * token is sent only in the first session event and remains hashed at rest.
-     */
+
+
+
+
     public SseEmitter streamGuestMessage(String sessionToken,
                                          SendMessageRequest request) {
         String message = normalizeMessage(request.message());
@@ -395,7 +395,7 @@ public class ChatbotService {
             String toolResult;
             long startedAt = System.nanoTime();
             if (tool == null) {
-                // Fail closed: never fall back to the global registry.
+
                 log.warn("[AgenticLoop] Rejected non-allowlisted tool name={}",
                         safeToolName(functionCall.name()));
                 toolResult = TOOL_NOT_ALLOWED;
@@ -790,7 +790,7 @@ public class ChatbotService {
                         isRetryable(errorCode)
                 ));
             } catch (IOException ignored) {
-                // The client is already gone; never surface provider internals.
+
             }
         }
 

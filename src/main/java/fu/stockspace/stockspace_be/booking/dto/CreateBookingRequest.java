@@ -8,9 +8,9 @@ import lombok.Setter;
 import java.math.BigDecimal;
 
 
-/**
- * DTO khi Tenant gửi yêu cầu thuê kho.
- */
+
+
+
 @Getter
 @Setter
 public class CreateBookingRequest {

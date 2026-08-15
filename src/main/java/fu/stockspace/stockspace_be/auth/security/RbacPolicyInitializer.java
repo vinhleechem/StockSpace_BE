@@ -20,7 +20,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-/** Seeds the versioned RBAC policy without overwriting administrator changes. */
+
 @Component
 @Order(2)
 @RequiredArgsConstructor
