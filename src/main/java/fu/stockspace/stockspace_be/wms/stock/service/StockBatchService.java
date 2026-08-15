@@ -21,6 +21,7 @@ import fu.stockspace.stockspace_be.wms.product.repository.ProductSkuRepository;
 import fu.stockspace.stockspace_be.wms.stock.dto.StockBatchResponse;
 import fu.stockspace.stockspace_be.wms.stock.dto.StockLocationDto;
 import fu.stockspace.stockspace_be.wms.stock.dto.StockSummaryResponse;
+import fu.stockspace.stockspace_be.wms.stock.dto.WarehouseStockOverviewResponse;
 import fu.stockspace.stockspace_be.wms.stock.entity.StockBatch;
 import fu.stockspace.stockspace_be.wms.stock.repository.StockBatchRepository;
 import lombok.RequiredArgsConstructor;
@@ -78,6 +79,50 @@ public class StockBatchService {
             UUID tenantId, UUID warehouseId, UUID staffId, Pageable pageable) {
         requireActiveWarehouseAccess(tenantId, warehouseId, staffId);
         return getStockByWarehouse(tenantId, warehouseId, pageable);
+    }
+
+    /**
+     * Returns one product-level row per visible SKU for the selected warehouse.
+     * Unlike getStockSummaryBySku(...), this method never aggregates across
+     * multiple warehouses.
+     */
+    @Transactional(readOnly = true)
+    public PagedResponse<WarehouseStockOverviewResponse> getStockOverviewByWarehouse(
+            UUID tenantId, UUID warehouseId, Pageable pageable) {
+        if (!subscriptionService.hasActiveSubscription(tenantId)) {
+            throw new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED);
+        }
+
+        Warehouse warehouse = warehouseRepository.findById(warehouseId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
+        requireActiveWarehouseContract(tenantId, warehouseId);
+
+        Page<ProductSkuRepository.WarehouseStockOverviewProjection> page =
+                productSkuRepository.findWarehouseStockOverview(tenantId, warehouseId, pageable);
+
+        return PagedResponse.fromPage(page, row -> WarehouseStockOverviewResponse.builder()
+                .skuId(row.getSkuId())
+                .skuCode(row.getSkuCode())
+                .skuName(row.getSkuName())
+                .categoryId(row.getCategoryId())
+                .categoryName(row.getCategoryName())
+                .uomSymbol(row.getUomSymbol())
+                .uomName(row.getUomName())
+                .warehouseId(warehouse.getId())
+                .warehouseName(warehouse.getName())
+                .totalQuantity(row.getTotalQuantity())
+                .build());
+    }
+
+    /**
+     * Staff variant. A non-null staffId must have an active assignment to the
+     * selected warehouse; Tenant access is checked by the base method.
+     */
+    @Transactional(readOnly = true)
+    public PagedResponse<WarehouseStockOverviewResponse> getStockOverviewByWarehouse(
+            UUID tenantId, UUID warehouseId, UUID staffId, Pageable pageable) {
+        requireActiveWarehouseAccess(tenantId, warehouseId, staffId);
+        return getStockOverviewByWarehouse(tenantId, warehouseId, pageable);
     }
 
     /**
