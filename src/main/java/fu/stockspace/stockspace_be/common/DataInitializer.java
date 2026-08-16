@@ -209,6 +209,7 @@ public class DataInitializer implements CommandLineRunner {
                                         .features("{\"wms\": true, \"max_staff\": 2, \"max_products\": 100}")
                                         .price(new BigDecimal("200000.00"))
                                         .durationDays(30)
+                                        .maxStaff(2)
                                         .isActive(true)
                                         .build());
                         packageRepository.save(ServicePackage.builder()
@@ -216,6 +217,7 @@ public class DataInitializer implements CommandLineRunner {
                                         .features("{\"wms\": true, \"max_staff\": 10, \"max_products\": 1000}")
                                         .price(new BigDecimal("500000.00"))
                                         .durationDays(30)
+                                        .maxStaff(10)
                                         .isActive(true)
                                         .build());
                         log.info("Seeded default service packages successfully");
