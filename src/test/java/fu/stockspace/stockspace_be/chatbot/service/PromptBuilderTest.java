@@ -24,6 +24,8 @@ class PromptBuilderTest {
         assertTrue(prompt.contains("các tham số rỗng"));
         assertFalse(prompt.contains("cứ list ra"));
         assertFalse(prompt.contains("deposit_percentage"));
+        assertTrue(prompt.contains("getServicePackages"));
+        assertTrue(prompt.contains("getMyActiveSubscription"));
     }
 
     @Test

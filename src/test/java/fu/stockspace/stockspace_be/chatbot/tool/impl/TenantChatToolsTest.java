@@ -5,6 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatRequestContext;
 import fu.stockspace.stockspace_be.contract.dto.RentalContractResponse;
 import fu.stockspace.stockspace_be.contract.service.ContractService;
+import fu.stockspace.stockspace_be.subscription.dto.ServicePackageResponse;
+import fu.stockspace.stockspace_be.subscription.dto.SubscriptionResponse;
+import fu.stockspace.stockspace_be.subscription.entity.SubscriptionStatus;
+import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
 import fu.stockspace.stockspace_be.wallet.dto.WalletResponse;
 import fu.stockspace.stockspace_be.wallet.service.WalletService;
 import fu.stockspace.stockspace_be.wms.stock.service.StockBatchService;
@@ -39,6 +43,9 @@ class TenantChatToolsTest {
 
     @Mock
     private WalletService walletService;
+
+    @Mock
+    private SubscriptionService subscriptionService;
 
     @Mock
     private StockBatchService stockBatchService;
@@ -171,6 +178,45 @@ class TenantChatToolsTest {
 
         assertTrue(result.has("error"));
         verifyNoInteractions(walletService);
+    }
+
+    @Test
+    void getMyActiveSubscriptionReturnsPackageDetailsWithoutInternalIds() throws Exception {
+        SubscriptionResponse subscription = SubscriptionResponse.builder()
+                .id(UUID.randomUUID())
+                .tenantId(userId)
+                .servicePackage(ServicePackageResponse.builder()
+                        .id(UUID.randomUUID())
+                        .name("Cơ bản")
+                        .features("Quản lý 2 kho")
+                        .price(new BigDecimal("199000"))
+                        .durationDays(30)
+                        .maxStaff(2)
+                        .build())
+                .startDate(LocalDate.of(2026, 8, 1))
+                .endDate(LocalDate.of(2026, 8, 31))
+                .status(SubscriptionStatus.ACTIVE)
+                .build();
+        when(subscriptionService.getMyActiveSubscription(userId)).thenReturn(subscription);
+
+        JsonNode result = objectMapper.readTree(
+                new GetMyActiveSubscriptionTool(objectMapper, subscriptionService)
+                        .execute(Map.of(), userId));
+
+        assertEquals("Cơ bản", result.at("/servicePackage/name").asText());
+        assertEquals(2, result.at("/servicePackage/maxStaff").asInt());
+        assertFalse(result.toString().contains("tenantId"));
+        assertFalse(result.toString().contains("\"id\""));
+        verify(subscriptionService).getMyActiveSubscription(userId);
+    }
+
+    @Test
+    void getMyActiveSubscriptionRejectsGuestBeforeCallingService() throws Exception {
+        JsonNode result = objectMapper.readTree(
+                new GetMyActiveSubscriptionTool(objectMapper, subscriptionService).execute(Map.of(), null));
+
+        assertTrue(result.has("error"));
+        verifyNoInteractions(subscriptionService);
     }
 
     @Test

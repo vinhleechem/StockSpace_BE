@@ -15,6 +15,7 @@ import fu.stockspace.stockspace_be.chatbot.tool.ChatToolRegistry;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatRequestContext;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ChatProviderException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -63,6 +64,8 @@ public class ChatbotService {
     private static final String MAX_ITERATIONS_REPLY =
             "Xin lỗi, tôi chưa thể hoàn thành yêu cầu này. Vui lòng diễn đạt ngắn gọn hơn hoặc thử lại sau.";
 
+    private static final String TENANT_ROLE = "ROLE_TENANT";
+
     private final ChatConversationStore conversationStore;
     private final OpenRouterClient openRouterClient;
     private final ChatToolRegistry toolRegistry;
@@ -86,6 +89,7 @@ public class ChatbotService {
     public ChatResponse processMessage(UUID userId,
                                        String roleName,
                                        SendMessageRequest request) {
+        requireSupportedAuthenticatedRole(roleName);
         return authenticatedRateLimiter.execute(
                 userId,
                 () -> processAuthenticatedMessage(userId, roleName, request)
@@ -157,6 +161,7 @@ public class ChatbotService {
     public SseEmitter streamMessage(UUID userId,
                                     String roleName,
                                     SendMessageRequest request) {
+        requireSupportedAuthenticatedRole(roleName);
         Permit permit = authenticatedRateLimiter.acquire(userId);
         try {
             String message = normalizeMessage(request.message());
@@ -222,6 +227,13 @@ public class ChatbotService {
 
     public List<ChatMessageResponse> getGuestHistory(String sessionToken) {
         return conversationStore.getGuestHistory(sessionToken);
+    }
+
+    /** Guest chat is handled separately; authenticated chat is intentionally tenant-only. */
+    public void requireSupportedAuthenticatedRole(String roleName) {
+        if (roleName == null || !TENANT_ROLE.equalsIgnoreCase(roleName.trim())) {
+            throw new ForbiddenException("Chatbot hiện chỉ hỗ trợ khách và người thuê kho");
+        }
     }
 
     private SseEmitter startStream(UUID userId,

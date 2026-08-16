@@ -18,23 +18,13 @@ class ChatToolRegistryTest {
             "searchWarehouses",
             "getWarehouseDetail",
             "searchSystemPolicy",
+            "getServicePackages",
             "askLoginPrompt",
             "getMyContracts",
             "getContractDetail",
             "getMyStock",
             "getMyWallet",
-            "getMyWarehouses",
-            "getWarehouseBookings",
-            "getRevenueSummary",
-            "getOccupancyRate",
-            "getCurrentWarehouseStaff",
-            "getAssignedWarehouseStock",
-            "getPendingInboundOrders",
-            "getPendingOutboundOrders",
-            "getPlatformSummary",
-            "getMonthlyRevenue",
-            "getMyAssignedInspections",
-            "getInspectionDetail"
+            "getMyActiveSubscription"
     );
 
     @Test
@@ -52,21 +42,13 @@ class ChatToolRegistryTest {
                 "getMyContracts",
                 "getContractDetail",
                 "getMyStock",
-                "getMyWallet"
+                "getMyWallet",
+                "getMyActiveSubscription"
         )));
+        assertTrue(guest.contains("getServicePackages"));
         assertFalse(tenant.contains("askLoginPrompt"));
-        assertTrue(owner.containsAll(List.of(
-                "getMyWarehouses",
-                "getWarehouseBookings",
-                "getRevenueSummary",
-                "getOccupancyRate",
-                "getCurrentWarehouseStaff"
-        )));
-        assertTrue(staff.containsAll(List.of(
-                "getAssignedWarehouseStock",
-                "getPendingInboundOrders",
-                "getPendingOutboundOrders"
-        )));
+        assertTrue(owner.isEmpty());
+        assertTrue(staff.isEmpty());
     }
 
 
