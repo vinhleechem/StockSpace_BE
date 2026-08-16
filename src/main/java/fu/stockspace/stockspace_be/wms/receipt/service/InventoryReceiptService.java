@@ -136,6 +136,20 @@ public class InventoryReceiptService {
             validateInboundCapacity(capacityItems, false);
         }
 
+        try {
+            String typeStr = receipt.getType() == DocumentType.INBOUND ? "nhập kho" : "xuất kho";
+            if (isStaff(creator)) {
+                notificationService.push(
+                        tenantId,
+                        "Yêu cầu duyệt phiếu " + typeStr,
+                        "Nhân viên " + creator.getFullName() + " đã tạo phiếu " + typeStr + " mới tại kho " + warehouse.getName() + " và đang chờ bạn phê duyệt.",
+                        "RECEIPT"
+                );
+            }
+        } catch (Exception e) {
+            log.warn("Failed to push create notification for receipt {}: {}", receipt.getId(), e.getMessage());
+        }
+
         log.info("WMS Receipt: Created receipt {} of type {} for warehouse {}", receipt.getId(), receipt.getType(), warehouse.getId());
         return mapToResponse(receipt, savedItems);
     }
@@ -234,6 +248,18 @@ public class InventoryReceiptService {
 
         receipt.setStatus(ApprovalStatus.APPROVED);
         receipt = receiptRepository.save(receipt);
+
+        try {
+            String typeStr = receipt.getType() == DocumentType.INBOUND ? "nhập kho" : "xuất kho";
+            notificationService.push(
+                    receipt.getCreatedBy().getId(),
+                    "Phiếu " + typeStr + " đã được phê duyệt",
+                    "Phiếu " + typeStr + " tại kho " + receipt.getWarehouse().getName() + " đã được phê duyệt thành công. Hàng hóa trong kho đã được cập nhật.",
+                    "RECEIPT"
+            );
+        } catch (Exception e) {
+            log.warn("Failed to push approve notification for receipt {}: {}", receipt.getId(), e.getMessage());
+        }
 
         log.info("WMS Receipt: Approved receipt {} of type {} by user {}", receipt.getId(), receipt.getType(), approverId);
         return mapToResponse(receipt, items);
