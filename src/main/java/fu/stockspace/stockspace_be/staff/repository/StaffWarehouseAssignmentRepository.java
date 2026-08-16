@@ -60,6 +60,18 @@ public interface StaffWarehouseAssignmentRepository extends JpaRepository<StaffW
             @Param("warehouseId") UUID warehouseId,
             @Param("status") AssignmentStatus status);
 
+    @Query("""
+            SELECT a FROM StaffWarehouseAssignment a
+            JOIN FETCH a.staff
+            WHERE a.warehouse.id = :warehouseId
+              AND a.status = fu.stockspace.stockspace_be.staff.entity.AssignmentStatus.ACTIVE
+              AND a.isActive = true
+              AND a.isDeleted = false
+            ORDER BY a.startDate ASC
+            """)
+    List<StaffWarehouseAssignment> findActiveByWarehouseId(
+            @Param("warehouseId") UUID warehouseId);
+
 
 
 

@@ -7,6 +7,7 @@ import fu.stockspace.stockspace_be.chatbot.dto.ChatResponse;
 import fu.stockspace.stockspace_be.chatbot.dto.SendMessageRequest;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatTool;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatToolRegistry;
+import fu.stockspace.stockspace_be.chatbot.tool.ChatRequestContext;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ChatProviderException;
 import org.junit.jupiter.api.BeforeEach;
@@ -52,6 +53,9 @@ class ChatbotServiceTest {
     @Mock
     private PromptBuilder promptBuilder;
 
+    @Mock
+    private ActiveWarehouseContextResolver activeWarehouseContextResolver;
+
     private OpenRouterClient openRouterClient;
     private ChatStreamRuntime chatStreamRuntime;
     private ChatbotService service;
@@ -68,6 +72,7 @@ class ChatbotServiceTest {
                 openRouterClient,
                 toolRegistry,
                 promptBuilder,
+                activeWarehouseContextResolver,
                 new AuthenticatedChatRateLimiter(),
                 chatStreamRuntime
         );
@@ -106,7 +111,12 @@ class ChatbotServiceTest {
         when(conversationStore.prepareUserSession(userId, null))
                 .thenReturn(new PreparedChatSession(sessionId, null, List.of()));
         when(toolRegistry.getToolsForRole("ROLE_TENANT")).thenReturn(allowedTools);
-        when(promptBuilder.buildSystemPrompt("ROLE_TENANT", allowedTools))
+        ChatRequestContext resolvedContext = new ChatRequestContext(
+                userId, "ROLE_TENANT", null);
+        when(activeWarehouseContextResolver.resolve(userId, "ROLE_TENANT", null))
+                .thenReturn(resolvedContext);
+        when(promptBuilder.buildSystemPrompt(
+                eq("ROLE_TENANT"), eq(allowedTools), eq(resolvedContext)))
                 .thenReturn("system prompt");
         when(conversationStore.appendUserTurn(
                 eq(userId), eq(sessionId), eq("xóa kho"), eq("Tôi không thể làm việc đó.")))
@@ -127,9 +137,9 @@ class ChatbotServiceTest {
         );
 
         assertEquals("Tôi không thể làm việc đó.", result.botReply());
-        verify(allowedTool, never()).execute(
+        verify(allowedTool, never()).executeWithContext(
                 org.mockito.ArgumentMatchers.anyMap(),
-                org.mockito.ArgumentMatchers.any()
+                org.mockito.ArgumentMatchers.any(ChatRequestContext.class)
         );
 
         @SuppressWarnings("unchecked")
@@ -158,6 +168,54 @@ class ChatbotServiceTest {
     }
 
     @Test
+    void passesActiveWarehouseContextToAllowedToolWithoutGivingItToModelArgs() {
+        UUID userId = UUID.randomUUID();
+        UUID warehouseId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        ChatTool allowedTool = namedTool("getMyStock");
+        List<ChatTool> allowedTools = List.of(allowedTool);
+        OpenRouterClient.FunctionCall stockCall = new OpenRouterClient.FunctionCall(
+                "call_stock", "getMyStock", Map.of());
+
+        when(conversationStore.prepareUserSession(userId, null))
+                .thenReturn(new PreparedChatSession(sessionId, null, List.of()));
+        when(toolRegistry.getToolsForRole("ROLE_TENANT")).thenReturn(allowedTools);
+        ChatRequestContext resolvedContext = new ChatRequestContext(
+                userId, "ROLE_TENANT", warehouseId, "Kho A");
+        when(activeWarehouseContextResolver.resolve(userId, "ROLE_TENANT", warehouseId))
+                .thenReturn(resolvedContext);
+        when(promptBuilder.buildSystemPrompt(
+                eq("ROLE_TENANT"), eq(allowedTools), eq(resolvedContext)))
+                .thenReturn("system prompt");
+        when(conversationStore.appendUserTurn(
+                eq(userId), eq(sessionId), eq("Xem tồn kho kho hiện tại"), eq("Kho đang có 10 sản phẩm.")))
+                .thenReturn(LocalDateTime.of(2026, 8, 16, 9, 0));
+        when(allowedTool.executeWithContext(
+                org.mockito.ArgumentMatchers.anyMap(),
+                org.mockito.ArgumentMatchers.any(ChatRequestContext.class)))
+                .thenReturn("{\"warehouseName\":\"Kho A\",\"productCount\":10}");
+        doReturn(
+                new OpenRouterClient.AiResponse(null, stockCall),
+                new OpenRouterClient.AiResponse("Kho đang có 10 sản phẩm.", null)
+        ).when(openRouterClient).complete(
+                anyList(), eq(allowedTools), org.mockito.ArgumentMatchers.any(Duration.class));
+
+        service.processMessage(
+                userId,
+                "ROLE_TENANT",
+                new SendMessageRequest(null, "Xem tồn kho kho hiện tại", warehouseId)
+        );
+
+        ArgumentCaptor<ChatRequestContext> contextCaptor =
+                ArgumentCaptor.forClass(ChatRequestContext.class);
+        verify(allowedTool).executeWithContext(
+                eq(Map.of()), contextCaptor.capture());
+        assertEquals(userId, contextCaptor.getValue().userId());
+        assertEquals("ROLE_TENANT", contextCaptor.getValue().roleName());
+        assertEquals(warehouseId, contextCaptor.getValue().activeWarehouseId());
+    }
+
+    @Test
     void guestStreamPersistsExactlyTheVisibleCompletedReply() {
         configureStreamRuntime();
         UUID sessionId = UUID.randomUUID();
@@ -167,7 +225,8 @@ class ChatbotServiceTest {
         when(conversationStore.prepareGuestSession(null))
                 .thenReturn(new PreparedChatSession(sessionId, token, List.of()));
         when(toolRegistry.getToolsForRole("GUEST")).thenReturn(noTools);
-        when(promptBuilder.buildSystemPrompt("GUEST", noTools))
+        when(promptBuilder.buildSystemPrompt(
+                eq("GUEST"), eq(noTools), any(ChatRequestContext.class)))
                 .thenReturn("system prompt");
         when(conversationStore.appendGuestTurn(
                 token, sessionId, "Xin chào", "Chào bạn"))
@@ -208,7 +267,8 @@ class ChatbotServiceTest {
         when(conversationStore.prepareGuestSession(null))
                 .thenReturn(new PreparedChatSession(sessionId, token, List.of()));
         when(toolRegistry.getToolsForRole("GUEST")).thenReturn(noTools);
-        when(promptBuilder.buildSystemPrompt("GUEST", noTools))
+        when(promptBuilder.buildSystemPrompt(
+                eq("GUEST"), eq(noTools), any(ChatRequestContext.class)))
                 .thenReturn("system prompt");
         org.mockito.Mockito.doAnswer(invocation -> {
             @SuppressWarnings("unchecked")

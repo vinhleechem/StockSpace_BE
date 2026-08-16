@@ -1,6 +1,10 @@
 package fu.stockspace.stockspace_be.chatbot.service;
 
+import fu.stockspace.stockspace_be.chatbot.tool.ChatRequestContext;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -37,5 +41,17 @@ class PromptBuilderTest {
             assertFalse(prompt.contains("PENDING"));
             assertFalse(prompt.contains("ACTIVE"));
         }
+    }
+
+    @Test
+    void includesVerifiedWarehouseNamePerRequestInsteadOfHardCodingOne() {
+        String prompt = promptBuilder.buildSystemPrompt(
+                "ROLE_OWNER",
+                List.of(),
+                new ChatRequestContext(
+                        UUID.randomUUID(), "ROLE_OWNER", UUID.randomUUID(), "Kho Bình Tân"));
+
+        assertTrue(prompt.contains("Kho Bình Tân"));
+        assertTrue(prompt.contains("Ngữ cảnh kho đã xác minh"));
     }
 }

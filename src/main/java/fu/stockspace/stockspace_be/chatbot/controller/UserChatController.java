@@ -41,7 +41,7 @@ public class UserChatController {
 
     private final ChatbotService chatbotService;
 
-    @Operation(summary = "Gửi tin nhắn tới chatbot", description = "Auto-detect role từ JWT để cấp đúng tools cho AI")
+    @Operation(summary = "Gửi tin nhắn tới chatbot", description = "Auto-detect role từ JWT để cấp đúng tools cho AI. Frontend có thể gửi activeWarehouseId của kho đang mở; giá trị này chỉ là context và luôn được backend kiểm tra quyền trước khi sử dụng.")
     @PostMapping("/send")
     public ResponseEntity<ApiResponse<ChatResponse>> sendMessage(
             @Valid @RequestBody SendMessageRequest request) {

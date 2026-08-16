@@ -27,6 +27,7 @@ class ChatToolRegistryTest {
             "getWarehouseBookings",
             "getRevenueSummary",
             "getOccupancyRate",
+            "getCurrentWarehouseStaff",
             "getAssignedWarehouseStock",
             "getPendingInboundOrders",
             "getPendingOutboundOrders",
@@ -58,7 +59,8 @@ class ChatToolRegistryTest {
                 "getMyWarehouses",
                 "getWarehouseBookings",
                 "getRevenueSummary",
-                "getOccupancyRate"
+                "getOccupancyRate",
+                "getCurrentWarehouseStaff"
         )));
         assertTrue(staff.containsAll(List.of(
                 "getAssignedWarehouseStock",
