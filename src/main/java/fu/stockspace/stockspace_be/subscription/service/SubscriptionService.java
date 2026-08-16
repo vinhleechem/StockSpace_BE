@@ -44,7 +44,7 @@ public class SubscriptionService {
     public SubscriptionResponse purchasePackage(UUID tenantId, PurchasePackageRequest request) {
         ServicePackage servicePackage = packageRepository.findById(request.getPackageId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.PACKAGE_NOT_FOUND));
-        if (!servicePackage.isActive()) {
+        if (!servicePackage.isActive() || servicePackage.isDeleted()) {
             throw new BadRequestException("Gói dịch vụ này hiện đã ngừng cung cấp");
         }
 
@@ -68,6 +68,7 @@ public class SubscriptionService {
                 activeSub.setEndDate(newEndDate);
 
                 activeSub.setSnapshotMaxStaff(servicePackage.getMaxStaff());
+                activeSub.setSnapshotDurationDays(servicePackage.getDurationDays());
                 activeSub.setSnapshotPrice(servicePackage.getPrice());
                 activeSub.setSnapshotFeatures(servicePackage.getFeatures());
                 activeSub.setSnapshotPackageName(servicePackage.getName());
@@ -84,7 +85,7 @@ public class SubscriptionService {
                 boolean isLowerPrice = servicePackage.getPrice() != null && currentPrice != null ? servicePackage.getPrice().compareTo(currentPrice) < 0 : false;
                 boolean isLowerStaff = (servicePackage.getMaxStaff() != null ? servicePackage.getMaxStaff() : 0) < currentMaxStaff;
 
-                if (isLowerPrice && isLowerStaff) {
+                if (isLowerPrice || isLowerStaff) {
                     throw new BadRequestException("Không thể hạ xuống gói dịch vụ thấp hơn khi gói hiện tại vẫn đang còn hạn. Vui lòng hạ gói sau khi gói hiện tại kết thúc.");
                 }
 
@@ -110,6 +111,7 @@ public class SubscriptionService {
                         .endDate(endDate)
                         .status(SubscriptionStatus.ACTIVE)
                         .snapshotMaxStaff(servicePackage.getMaxStaff())
+                        .snapshotDurationDays(servicePackage.getDurationDays())
                         .snapshotPrice(servicePackage.getPrice())
                         .snapshotFeatures(servicePackage.getFeatures())
                         .snapshotPackageName(servicePackage.getName())
@@ -128,6 +130,7 @@ public class SubscriptionService {
                     .endDate(endDate)
                     .status(SubscriptionStatus.ACTIVE)
                     .snapshotMaxStaff(servicePackage.getMaxStaff())
+                    .snapshotDurationDays(servicePackage.getDurationDays())
                     .snapshotPrice(servicePackage.getPrice())
                     .snapshotFeatures(servicePackage.getFeatures())
                     .snapshotPackageName(servicePackage.getName())
@@ -206,6 +209,9 @@ public class SubscriptionService {
 
         ServicePackage newPackage = packageRepository.findById(newPackageId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.PACKAGE_NOT_FOUND));
+        if (!newPackage.isActive() || newPackage.isDeleted()) {
+            throw new BadRequestException("Gói dịch vụ này hiện đã ngừng cung cấp");
+        }
 
         Optional<Subscription> activeOpt = subscriptionRepository
                 .findFirstByTenantIdAndStatusAndEndDateGreaterThanEqualOrderByEndDateDesc(
@@ -259,7 +265,7 @@ public class SubscriptionService {
         boolean isLowerPrice = newPrice.compareTo(currentPrice) < 0;
         boolean isLowerStaff = newMaxStaff < currentMaxStaff;
 
-        if (isLowerPrice && isLowerStaff) {
+        if (isLowerPrice || isLowerStaff) {
             return fu.stockspace.stockspace_be.subscription.dto.SubscriptionPreviewResponse.builder()
                     .currentPackageId(currentPackageId)
                     .currentPackageName(currentPackageName)
@@ -305,11 +311,35 @@ public class SubscriptionService {
         return SubscriptionResponse.builder()
                 .id(s.getId())
                 .tenantId(s.getTenant() != null ? s.getTenant().getId() : null)
-                .servicePackage(packageService.mapToResponse(s.getServicePackage()))
+                .servicePackage(mapSubscriptionPackage(s))
                 .startDate(s.getStartDate())
                 .endDate(s.getEndDate())
                 .status(s.getStatus())
                 .build();
+    }
+
+    private fu.stockspace.stockspace_be.subscription.dto.ServicePackageResponse mapSubscriptionPackage(
+            Subscription subscription) {
+        fu.stockspace.stockspace_be.subscription.dto.ServicePackageResponse response =
+                packageService.mapToResponse(subscription.getServicePackage());
+        if (response == null) return null;
+
+        if (subscription.getSnapshotPackageName() != null) {
+            response.setName(subscription.getSnapshotPackageName());
+        }
+        if (subscription.getSnapshotFeatures() != null) {
+            response.setFeatures(subscription.getSnapshotFeatures());
+        }
+        if (subscription.getSnapshotPrice() != null) {
+            response.setPrice(subscription.getSnapshotPrice());
+        }
+        if (subscription.getSnapshotMaxStaff() != null) {
+            response.setMaxStaff(subscription.getSnapshotMaxStaff());
+        }
+        if (subscription.getSnapshotDurationDays() != null) {
+            response.setDurationDays(subscription.getSnapshotDurationDays());
+        }
+        return response;
     }
 
 }

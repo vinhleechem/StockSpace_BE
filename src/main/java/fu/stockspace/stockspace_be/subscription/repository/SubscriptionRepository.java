@@ -8,9 +8,14 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.List;
 @Repository
 public interface SubscriptionRepository extends JpaRepository<Subscription, UUID> {
     Optional<Subscription> findFirstByTenantIdAndStatusAndEndDateGreaterThanEqualOrderByEndDateDesc(
             UUID tenantId, SubscriptionStatus status, LocalDate date);
+
+    List<Subscription> findByStatusAndEndDateBeforeAndIsActiveTrueAndIsDeletedFalse(
+            SubscriptionStatus status, LocalDate date);
+
     Page<Subscription> findByTenantId(UUID tenantId, Pageable pageable);
 }

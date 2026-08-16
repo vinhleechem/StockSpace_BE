@@ -174,6 +174,75 @@ class WarehouseLayoutServiceTest {
     }
 
     @Test
+    void testCloneLayout_RestoresDeletedCloneFromCurrentDefault() {
+        UUID tenantId = UUID.randomUUID();
+        User tenantUser = User.builder().id(tenantId).email("tenant@test.com").build();
+        UUID tenantLayoutId = UUID.randomUUID();
+
+        WarehouseLayout deletedTenantLayout = WarehouseLayout.builder()
+                .id(tenantLayoutId)
+                .warehouse(warehouse)
+                .tenant(tenantUser)
+                .isDefault(false)
+                .isActive(false)
+                .isDeleted(true)
+                .width(new BigDecimal("10"))
+                .length(new BigDecimal("10"))
+                .height(new BigDecimal("5"))
+                .build();
+
+        WarehouseRack oldRack = WarehouseRack.builder()
+                .id(UUID.randomUUID())
+                .layout(deletedTenantLayout)
+                .name("Old Rack")
+                .build();
+        WarehouseBin oldBin = WarehouseBin.builder()
+                .id(UUID.randomUUID())
+                .rack(oldRack)
+                .name("Old Bin")
+                .build();
+
+        WarehouseRack defaultRack = WarehouseRack.builder()
+                .id(UUID.randomUUID())
+                .layout(defaultLayout)
+                .name("Current Rack")
+                .coordinateX(BigDecimal.ZERO)
+                .coordinateY(BigDecimal.ZERO)
+                .width(new BigDecimal("20"))
+                .length(new BigDecimal("10"))
+                .height(new BigDecimal("5"))
+                .build();
+
+        when(layoutRepository.findByWarehouseIdAndTenantId(warehouseId, tenantId))
+                .thenReturn(Optional.of(deletedTenantLayout));
+        when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId))
+                .thenReturn(Optional.of(defaultLayout));
+        when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenantUser));
+        when(binRepository.findAllByRackLayoutId(tenantLayoutId)).thenReturn(List.of(oldBin));
+        when(rackRepository.findAllByLayoutId(tenantLayoutId)).thenReturn(List.of(oldRack));
+        when(rackRepository.findAllByLayoutId(defaultLayout.getId())).thenReturn(List.of(defaultRack));
+        when(binRepository.findAllByRackLayoutId(defaultLayout.getId())).thenReturn(Collections.emptyList());
+        when(layoutRepository.save(any(WarehouseLayout.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(rackRepository.save(any(WarehouseRack.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        layoutService.cloneLayout(warehouseId, tenantId);
+
+        assertTrue(deletedTenantLayout.isActive());
+        assertFalse(deletedTenantLayout.isDeleted());
+        assertEquals(defaultLayout.getWidth(), deletedTenantLayout.getWidth());
+        assertEquals(defaultLayout.getLength(), deletedTenantLayout.getLength());
+        assertEquals(defaultLayout.getHeight(), deletedTenantLayout.getHeight());
+        assertFalse(oldRack.isActive());
+        assertTrue(oldRack.isDeleted());
+        assertFalse(oldBin.isActive());
+        assertTrue(oldBin.isDeleted());
+        verify(layoutRepository).save(deletedTenantLayout);
+        verify(rackRepository).saveAll(List.of(oldRack));
+        verify(binRepository).saveAll(List.of(oldBin));
+        verify(rackRepository).save(any(WarehouseRack.class));
+    }
+
+    @Test
     void testSaveLayoutBulk_CoordinateOutOfBounds_ThrowsException() {
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
         when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)).thenReturn(Optional.of(defaultLayout));
