@@ -4,6 +4,7 @@ import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -36,6 +37,7 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
 
 
 
+    @EntityGraph(attributePaths = "type")
     @Query("""
             SELECT w FROM Warehouse w
             WHERE w.id = :id
@@ -49,6 +51,7 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
 
 
 
+    @EntityGraph(attributePaths = "type")
     @Query("""
             SELECT w FROM Warehouse w
             WHERE w.isActive = true

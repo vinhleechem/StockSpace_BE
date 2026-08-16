@@ -91,8 +91,7 @@ public class SearchWarehousesTool implements ChatTool {
         } catch (IllegalArgumentException e) {
             return "{\"error\":\"" + e.getMessage() + "\"}";
         } catch (Exception e) {
-            log.warn("[SearchWarehousesTool] Search failed (cause={})",
-                    e.getClass().getSimpleName());
+            log.warn("[SearchWarehousesTool] Search failed", e);
             return "{\"error\":\"Không thể tìm kiếm kho lúc này.\"}";
         }
     }
