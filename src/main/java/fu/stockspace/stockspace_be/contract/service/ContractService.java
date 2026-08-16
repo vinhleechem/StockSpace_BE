@@ -122,8 +122,8 @@ public class ContractService {
     public RentalContractResponse confirmHandover(UUID userId, UUID contractId) {
         RentalContract contract = contractRepository.findById(contractId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
-        if (contract.getStatus() == ContractStatus.COMPLETED) {
-            throw new BadRequestException(ErrorCode.CONTRACT_ALREADY_CONFIRMED);
+        if (contract.getStatus() != ContractStatus.PENDING_HANDOVER) {
+            throw new BadRequestException("Chỉ được xác nhận bàn giao khi hợp đồng đang ở trạng thái chờ bàn giao");
         }
         UUID tenantId = contract.getBooking().getTenant().getId();
         UUID ownerId = contract.getBooking().getWarehouse().getOwner().getId();

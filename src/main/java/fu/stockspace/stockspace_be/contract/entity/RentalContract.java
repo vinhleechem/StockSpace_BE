@@ -72,4 +72,8 @@ public class RentalContract extends BaseEntity {
 
     @Column(name = "cancel_evidence", columnDefinition = "TEXT")
     private String cancelEvidence;
+
+    @Column(name = "expiry_reminder_sent", nullable = false)
+    @Builder.Default
+    private boolean expiryReminderSent = false;
 }

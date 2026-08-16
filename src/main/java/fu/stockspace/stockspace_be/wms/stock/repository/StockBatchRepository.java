@@ -31,6 +31,8 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
 
     Page<StockBatch> findByWarehouseIdAndIsDeletedFalse(UUID warehouseId, Pageable pageable);
 
+    List<StockBatch> findAllByWarehouseIdAndIsDeletedFalse(UUID warehouseId);
+
     @Query("""
             SELECT b FROM StockBatch b
             JOIN ProductSku s ON s.id = b.skuId

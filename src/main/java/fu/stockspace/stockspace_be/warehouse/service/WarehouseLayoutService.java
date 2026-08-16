@@ -71,6 +71,9 @@ public class WarehouseLayoutService {
             }
 
             layout = layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId).orElse(null);
+            if (layout != null && (layout.isDeleted() || !layout.isActive())) {
+                layout = null;
+            }
             if (layout == null) {
 
                 layout = layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId).orElse(null);
@@ -95,7 +98,7 @@ public class WarehouseLayoutService {
         log.info("Cloning layout of warehouse {} to tenant {}", warehouseId, tenantId);
 
         Optional<WarehouseLayout> existing = layoutRepository.findByWarehouseIdAndTenantId(warehouseId, tenantId);
-        if (existing.isPresent()) {
+        if (existing.isPresent() && !existing.get().isDeleted() && existing.get().isActive()) {
             log.info("Tenant {} already has a layout clone for warehouse {}", tenantId, warehouseId);
             return;
         }
@@ -110,15 +113,44 @@ public class WarehouseLayoutService {
         User tenantUser = userRepository.findById(tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
 
-        WarehouseLayout tenantLayout = WarehouseLayout.builder()
-                .warehouse(defaultLayout.getWarehouse())
-                .tenant(tenantUser)
-                .isDefault(false)
-                .width(defaultLayout.getWidth())
-                .length(defaultLayout.getLength())
-                .height(defaultLayout.getHeight())
-                .positions(defaultLayout.getPositions())
-                .build();
+        WarehouseLayout tenantLayout;
+        if (existing.isPresent()) {
+            tenantLayout = existing.get();
+            tenantLayout.setActive(true);
+            tenantLayout.setDeleted(false);
+            tenantLayout.setWidth(defaultLayout.getWidth());
+            tenantLayout.setLength(defaultLayout.getLength());
+            tenantLayout.setHeight(defaultLayout.getHeight());
+            tenantLayout.setPositions(defaultLayout.getPositions());
+
+            List<WarehouseBin> oldBins = binRepository.findAllByRackLayoutId(tenantLayout.getId());
+            oldBins.forEach(bin -> {
+                bin.setActive(false);
+                bin.setDeleted(true);
+            });
+            if (!oldBins.isEmpty()) {
+                binRepository.saveAll(oldBins);
+            }
+
+            List<WarehouseRack> oldRacks = rackRepository.findAllByLayoutId(tenantLayout.getId());
+            oldRacks.forEach(rack -> {
+                rack.setActive(false);
+                rack.setDeleted(true);
+            });
+            if (!oldRacks.isEmpty()) {
+                rackRepository.saveAll(oldRacks);
+            }
+        } else {
+            tenantLayout = WarehouseLayout.builder()
+                    .warehouse(defaultLayout.getWarehouse())
+                    .tenant(tenantUser)
+                    .isDefault(false)
+                    .width(defaultLayout.getWidth())
+                    .length(defaultLayout.getLength())
+                    .height(defaultLayout.getHeight())
+                    .positions(defaultLayout.getPositions())
+                    .build();
+        }
         tenantLayout = layoutRepository.save(tenantLayout);
 
 
@@ -167,6 +199,35 @@ public class WarehouseLayoutService {
         log.info("Layout cloning completed successfully.");
     }
 
+    @Transactional
+    public void archiveTenantLayout(UUID warehouseId, UUID tenantId) {
+        layoutRepository.findByWarehouseIdAndTenantId(warehouseId, tenantId).ifPresent(layout -> {
+            List<WarehouseBin> bins = binRepository.findAllByRackLayoutId(layout.getId());
+            bins.forEach(bin -> {
+                bin.setActive(false);
+                bin.setDeleted(true);
+            });
+            if (!bins.isEmpty()) {
+                binRepository.saveAll(bins);
+            }
+
+            List<WarehouseRack> racks = rackRepository.findAllByLayoutId(layout.getId());
+            racks.forEach(rack -> {
+                rack.setActive(false);
+                rack.setDeleted(true);
+            });
+            if (!racks.isEmpty()) {
+                rackRepository.saveAll(racks);
+            }
+
+            layout.setActive(false);
+            layout.setDeleted(true);
+            layoutRepository.save(layout);
+            log.info("Archived tenant layout {} for tenant {} and warehouse {}",
+                    layout.getId(), tenantId, warehouseId);
+        });
+    }
+
 
 
 
@@ -213,6 +274,9 @@ public class WarehouseLayoutService {
             }
 
             layout = layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId).orElse(null);
+            if (layout != null && (layout.isDeleted() || !layout.isActive())) {
+                layout = null;
+            }
             if (layout == null) {
                 cloneLayout(warehouseId, userId);
                 layout = layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId)

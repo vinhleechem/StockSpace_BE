@@ -10,6 +10,8 @@ import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
+
 
 
 
@@ -187,6 +189,57 @@ public class EmailService {
         } catch (Exception e) {
             log.error("Failed to send staff invitation email to {}: {}", toEmail, e.getMessage());
         }
+    }
+
+    @Async
+    public void sendContractExpiryReminderEmail(
+            String toEmail, String fullName, String warehouseName, LocalDate endDate) {
+        if (toEmail == null || toEmail.isBlank()) {
+            return;
+        }
+
+        try {
+            String subject = "[StockSpace] Your warehouse rental contract is nearing expiration";
+            String content = buildContractExpiryReminderEmailContent(fullName, warehouseName, endDate);
+            sendHtmlEmail(toEmail, subject, content);
+            log.info("Contract expiry reminder email sent to: {} (warehouse: {})", toEmail, warehouseName);
+        } catch (Exception e) {
+            log.error("Failed to send contract expiry reminder email to {}: {}", toEmail, e.getMessage());
+        }
+    }
+
+    private String buildContractExpiryReminderEmailContent(
+            String fullName, String warehouseName, LocalDate endDate) {
+        return """
+                <!DOCTYPE html>
+                <html lang="en">
+                <head><meta charset="UTF-8"></head>
+                <body style="font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px;">
+                  <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; padding: 40px;">
+                    <h1 style="color: #2563EB;">StockSpace</h1>
+                    <h2 style="color: #1F2937;">Warehouse contract expiry reminder</h2>
+                    <p style="color: #374151; line-height: 1.6;">Hello %s,</p>
+                    <p style="color: #374151; line-height: 1.6;">
+                      The rental contract for <strong>%s</strong> is scheduled to expire on
+                      <strong>%s</strong>.
+                    </p>
+                    <p style="color: #374151; line-height: 1.6;">
+                      Please review your warehouse plan and complete any required inventory actions before the expiry date.
+                    </p>
+                    <div style="text-align: center; margin: 30px 0;">
+                      <a href="%s" style="background-color: #2563EB; color: white; padding: 12px 30px; border-radius: 6px; text-decoration: none; font-weight: bold;">
+                        Open StockSpace
+                      </a>
+                    </div>
+                  </div>
+                </body>
+                </html>
+                """.formatted(
+                fullName != null ? fullName : "there",
+                warehouseName != null ? warehouseName : "your warehouse",
+                endDate,
+                frontendUrl
+        );
     }
 
     private String buildStaffInvitationEmailContent(String staffName, String tenantName, String email, String token) {
