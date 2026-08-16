@@ -40,7 +40,13 @@ public class ChatToolRegistry {
     );
     private static final List<String> OWNER_TOOL_NAMES = merge(
             PUBLIC_TOOL_NAMES,
-            List.of("getMyWarehouses", "getWarehouseBookings", "getRevenueSummary", "getOccupancyRate")
+            List.of(
+                    "getMyWarehouses",
+                    "getWarehouseBookings",
+                    "getRevenueSummary",
+                    "getOccupancyRate",
+                    "getCurrentWarehouseStaff"
+            )
     );
     private static final List<String> STAFF_TOOL_NAMES = merge(
             PUBLIC_TOOL_NAMES,

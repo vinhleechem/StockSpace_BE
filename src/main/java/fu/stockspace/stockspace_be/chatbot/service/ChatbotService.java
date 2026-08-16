@@ -12,6 +12,7 @@ import fu.stockspace.stockspace_be.chatbot.dto.ChatStreamEvents;
 import fu.stockspace.stockspace_be.chatbot.dto.SendMessageRequest;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatTool;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatToolRegistry;
+import fu.stockspace.stockspace_be.chatbot.tool.ChatRequestContext;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ChatProviderException;
 import lombok.RequiredArgsConstructor;
@@ -66,6 +67,7 @@ public class ChatbotService {
     private final OpenRouterClient openRouterClient;
     private final ChatToolRegistry toolRegistry;
     private final PromptBuilder promptBuilder;
+    private final ActiveWarehouseContextResolver activeWarehouseContextResolver;
     private final AuthenticatedChatRateLimiter authenticatedRateLimiter;
     private final ChatStreamRuntime chatStreamRuntime;
 
@@ -93,18 +95,20 @@ public class ChatbotService {
     private ChatResponse processAuthenticatedMessage(UUID userId,
                                                      String roleName,
                                                      SendMessageRequest request) {
+        ChatRequestContext context = activeWarehouseContextResolver.resolve(
+                userId, roleName, request.activeWarehouseId());
         String message = normalizeMessage(request.message());
         PreparedChatSession prepared =
                 conversationStore.prepareUserSession(userId, request.sessionId());
         List<ChatTool> tools = toolRegistry.getToolsForRole(roleName);
-        String systemPrompt = promptBuilder.buildSystemPrompt(roleName, tools);
+        String systemPrompt = promptBuilder.buildSystemPrompt(roleName, tools, context);
 
         String reply = runAgenticLoop(
                 prepared.history(),
                 systemPrompt,
                 message,
                 tools,
-                userId
+                context
         );
         LocalDateTime timestamp = conversationStore.appendUserTurn(
                 userId,
@@ -117,18 +121,19 @@ public class ChatbotService {
 
     public ChatResponse processGuestMessage(String sessionToken,
                                             SendMessageRequest request) {
+        ChatRequestContext context = ChatRequestContext.guest();
         String message = normalizeMessage(request.message());
         PreparedChatSession prepared =
                 conversationStore.prepareGuestSession(sessionToken);
         List<ChatTool> tools = toolRegistry.getToolsForRole("GUEST");
-        String systemPrompt = promptBuilder.buildSystemPrompt("GUEST", tools);
+        String systemPrompt = promptBuilder.buildSystemPrompt("GUEST", tools, context);
 
         String reply = runAgenticLoop(
                 prepared.history(),
                 systemPrompt,
                 message,
                 tools,
-                null
+                context
         );
         LocalDateTime timestamp = conversationStore.appendGuestTurn(
                 prepared.guestToken(),
@@ -158,10 +163,13 @@ public class ChatbotService {
             PreparedChatSession prepared =
                     conversationStore.prepareUserSession(userId, request.sessionId());
             List<ChatTool> tools = toolRegistry.getToolsForRole(roleName);
-            String systemPrompt = promptBuilder.buildSystemPrompt(roleName, tools);
+            ChatRequestContext context = activeWarehouseContextResolver.resolve(
+                    userId, roleName, request.activeWarehouseId());
+            String systemPrompt = promptBuilder.buildSystemPrompt(roleName, tools, context);
 
             return startStream(
                     userId,
+                    context,
                     prepared,
                     message,
                     systemPrompt,
@@ -185,10 +193,12 @@ public class ChatbotService {
         PreparedChatSession prepared =
                 conversationStore.prepareGuestSession(sessionToken);
         List<ChatTool> tools = toolRegistry.getToolsForRole("GUEST");
-        String systemPrompt = promptBuilder.buildSystemPrompt("GUEST", tools);
+        String systemPrompt = promptBuilder.buildSystemPrompt(
+                "GUEST", tools, ChatRequestContext.guest());
 
         return startStream(
                 null,
+                ChatRequestContext.guest(),
                 prepared,
                 message,
                 systemPrompt,
@@ -215,6 +225,7 @@ public class ChatbotService {
     }
 
     private SseEmitter startStream(UUID userId,
+                                   ChatRequestContext context,
                                    PreparedChatSession prepared,
                                    String message,
                                    String systemPrompt,
@@ -230,6 +241,7 @@ public class ChatbotService {
                 emitter,
                 UUID.randomUUID(),
                 userId,
+                context,
                 prepared,
                 message,
                 systemPrompt,
@@ -255,7 +267,7 @@ public class ChatbotService {
                                            String systemPrompt,
                                            String userMessage,
                                            List<ChatTool> allowedTools,
-                                           UUID userId,
+                                           ChatRequestContext context,
                                            Consumer<String> deltaConsumer,
                                            Consumer<String> statusConsumer,
                                            BooleanSupplier cancelled) {
@@ -302,7 +314,7 @@ public class ChatbotService {
                     Map<String, Object> args = functionCall.args() == null
                             ? Map.of()
                             : new LinkedHashMap<>(functionCall.args());
-                    toolResult = capToolResult(tool.execute(args, userId));
+                    toolResult = capToolResult(tool.executeWithContext(args, context));
                     log.info("[AgenticLoop] Tool completed name={} durationMs={}",
                             tool.getName(),
                             Duration.ofNanos(System.nanoTime() - startedAt).toMillis());
@@ -365,7 +377,7 @@ public class ChatbotService {
                                   String systemPrompt,
                                   String userMessage,
                                   List<ChatTool> allowedTools,
-                                  UUID userId) {
+                                  ChatRequestContext context) {
         List<Map<String, Object>> conversation = new ArrayList<>();
         conversation.add(Map.of("role", "system", "content", systemPrompt));
         conversation.addAll(history);
@@ -404,7 +416,7 @@ public class ChatbotService {
                     Map<String, Object> args = functionCall.args() == null
                             ? Map.of()
                             : new LinkedHashMap<>(functionCall.args());
-                    toolResult = capToolResult(tool.execute(args, userId));
+                    toolResult = capToolResult(tool.executeWithContext(args, context));
                     log.info("[AgenticLoop] Tool completed name={} durationMs={}",
                             tool.getName(),
                             Duration.ofNanos(System.nanoTime() - startedAt).toMillis());
@@ -493,6 +505,7 @@ public class ChatbotService {
         private final SseEmitter emitter;
         private final UUID requestId;
         private final UUID userId;
+        private final ChatRequestContext context;
         private final PreparedChatSession prepared;
         private final String userMessage;
         private final String systemPrompt;
@@ -512,6 +525,7 @@ public class ChatbotService {
         private StreamCoordinator(SseEmitter emitter,
                                   UUID requestId,
                                   UUID userId,
+                                  ChatRequestContext context,
                                   PreparedChatSession prepared,
                                   String userMessage,
                                   String systemPrompt,
@@ -521,6 +535,7 @@ public class ChatbotService {
             this.emitter = emitter;
             this.requestId = requestId;
             this.userId = userId;
+            this.context = context;
             this.prepared = prepared;
             this.userMessage = userMessage;
             this.systemPrompt = systemPrompt;
@@ -553,7 +568,7 @@ public class ChatbotService {
                         systemPrompt,
                         userMessage,
                         tools,
-                        userId,
+                        context,
                         this::sendDelta,
                         this::sendStatus,
                         this::isCancelled

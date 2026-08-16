@@ -3,6 +3,7 @@ package fu.stockspace.stockspace_be.chatbot.tool.impl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fu.stockspace.stockspace_be.booking.entity.ApprovalStatus;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatTool;
+import fu.stockspace.stockspace_be.chatbot.tool.ChatRequestContext;
 import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 
 import fu.stockspace.stockspace_be.wms.receipt.dto.InventoryReceiptResponse;
@@ -34,36 +35,35 @@ public class GetPendingInboundTool implements ChatTool {
 
     @Override
     public String getDescription() {
-        return "Xem danh sách các phiếu nhập kho (INBOUND) đang chờ duyệt / kiểm đếm (PENDING).";
+        return "Xem danh sách các phiếu nhập kho (INBOUND) đang chờ duyệt / kiểm đếm (PENDING) của kho đang được chọn.";
     }
 
     @Override
     public Map<String, Object> getParameterSchema() {
-        return Map.of(
-                "type", "object",
-                "properties", Map.of(
-                        "warehouseId", Map.of(
-                                "type", "string",
-                                "description", "Mã UUID của kho bãi (tùy chọn)"
-                        )
-                )
-        );
+        return Map.of("type", "object", "properties", Map.of());
     }
 
     @Override
     public String execute(Map<String, Object> params, UUID userId) {
+        return readPendingInbound(userId, warehouseIdFromParams(params));
+    }
+
+    @Override
+    public String executeWithContext(Map<String, Object> params, ChatRequestContext context) {
+        return readPendingInbound(
+                context == null ? null : context.userId(),
+                context == null ? null : context.activeWarehouseId());
+    }
+
+    private String readPendingInbound(UUID userId, UUID warehouseId) {
         if (userId == null) {
             return "{\"error\":\"Bạn cần đăng nhập để xem danh sách phiếu nhập kho.\"}";
         }
+        if (warehouseId == null) {
+            return "{\"error\":\"Chưa có kho được chọn. Vui lòng chọn kho trên giao diện rồi thử lại.\"}";
+        }
 
         try {
-            UUID warehouseId = null;
-            if (params != null && params.containsKey("warehouseId") && params.get("warehouseId") != null) {
-                try {
-                    warehouseId = UUID.fromString(params.get("warehouseId").toString());
-                } catch (IllegalArgumentException ignored) {}
-            }
-
             PagedResponse<InventoryReceiptResponse> paged = receiptService.getReceiptsByWarehouse(
                     userId, warehouseId, DocumentType.INBOUND, PageRequest.of(0, 50));
             List<Map<String, Object>> pendingItems = new ArrayList<>();
@@ -71,8 +71,7 @@ public class GetPendingInboundTool implements ChatTool {
 
                 if (item.getStatus() == ApprovalStatus.PENDING) {
                     Map<String, Object> m = new LinkedHashMap<>();
-                    m.put("receiptId", item.getId());
-                    m.put("warehouseId", item.getWarehouseId());
+                    m.put("warehouseName", item.getWarehouseName());
                     m.put("type", item.getType());
                     m.put("status", item.getStatus());
                     m.put("items", item.getItems());
@@ -85,6 +84,18 @@ public class GetPendingInboundTool implements ChatTool {
         } catch (Exception e) {
             log.warn("[GetPendingInboundTool] Read failed (cause={})", e.getClass().getSimpleName());
             return "{\"error\":\"Không thể lấy danh sách phiếu nhập kho lúc này.\"}";
+        }
+    }
+
+    private UUID warehouseIdFromParams(Map<String, Object> params) {
+        Object rawWarehouseId = params == null ? null : params.get("warehouseId");
+        if (rawWarehouseId == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(rawWarehouseId.toString().trim());
+        } catch (IllegalArgumentException ignored) {
+            return null;
         }
     }
 }

@@ -2,6 +2,7 @@ package fu.stockspace.stockspace_be.chatbot.tool.impl;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import fu.stockspace.stockspace_be.chatbot.tool.ChatRequestContext;
 import fu.stockspace.stockspace_be.contract.dto.RentalContractResponse;
 import fu.stockspace.stockspace_be.contract.service.ContractService;
 import fu.stockspace.stockspace_be.wallet.dto.WalletResponse;
@@ -181,12 +182,14 @@ class TenantChatToolsTest {
 
         JsonNode result = objectMapper.readTree(
                 new GetMyStockTool(objectMapper, stockBatchService)
-                        .execute(Map.of("warehouseId", warehouseId.toString()), userId));
+                        .executeWithContext(Map.of(), new ChatRequestContext(
+                                userId, "ROLE_TENANT", warehouseId)));
 
-        assertEquals(warehouseId.toString(), result.get("warehouseId").asText());
+        assertEquals("Kho C", result.get("warehouseName").asText());
         assertEquals(4, result.get("productCount").asLong());
         assertEquals(9, result.get("batchCount").asLong());
         assertEquals(350, result.get("totalQuantity").asLong());
+        assertFalse(result.has("warehouseId"));
         verify(stockBatchService).getStockSummaryByWarehouse(userId, warehouseId);
     }
 

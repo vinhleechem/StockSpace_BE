@@ -6,6 +6,7 @@ import fu.stockspace.stockspace_be.booking.dto.BookingResponse;
 import fu.stockspace.stockspace_be.booking.repository.BookingRequestRepository;
 import fu.stockspace.stockspace_be.booking.service.BookingService;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatTool;
+import fu.stockspace.stockspace_be.chatbot.tool.ChatRequestContext;
 import fu.stockspace.stockspace_be.chatbot.tool.impl.*;
 import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 
@@ -132,7 +133,8 @@ class DevBToolsTest {
                 PagedResponse.<fu.stockspace.stockspace_be.wms.receipt.dto.InventoryReceiptResponse>builder().content(Collections.emptyList()).build();
         when(receiptService.getReceiptsByWarehouse(any(), any(), any(), any())).thenReturn(paged);
 
-        String json = tool.execute(Collections.emptyMap(), userId);
+        String json = tool.executeWithContext(Collections.emptyMap(), new ChatRequestContext(
+                userId, "ROLE_STAFF", UUID.randomUUID()));
         assertNotNull(json);
     }
 
