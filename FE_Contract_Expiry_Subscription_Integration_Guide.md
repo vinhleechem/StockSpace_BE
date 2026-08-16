@@ -4,6 +4,10 @@ Tài liệu này dùng cho FE và thành viên phụ trách cấu hình email sa
 
 - `c140b71 fix(subscription): enforce normalized staff limits`
 - `c60ced4 feat(contract): automate rental expiry handling`
+- `26f32ce fix(subscription): remove unsupported package quotas`
+- `972e734 fix(subscription): hide inactive packages from public flows`
+- `4d0e984 feat(subscription): expire overdue subscriptions`
+- `23667b0 fix(subscription): preserve package duration snapshot`
 
 Phạm vi hiện tại là xử lý cơ bản khi hợp đồng hết hạn. Chưa triển khai gia hạn hoặc hủy hợp đồng sau khi hợp đồng đã chuyển sang `ACTIVE`.
 
@@ -19,7 +23,7 @@ Backend đã chuẩn hóa giới hạn nhân viên bằng field riêng:
 }
 ```
 
-`features.max_staff` trong chuỗi JSON không còn là nguồn chính cho giới hạn staff. Khi tạo hoặc chỉnh sửa package, Admin phải gửi `maxStaff` ở top-level request.
+`features.max_staff` và `features.max_products` không còn được sử dụng làm quota. Khi tạo hoặc chỉnh sửa package, Admin phải gửi `maxStaff` ở top-level request.
 
 Các field package được lưu gồm:
 
@@ -31,7 +35,9 @@ Các field package được lưu gồm:
 
 Khi Tenant mua package, backend lưu snapshot của tên, giá, features và maxStaff tại thời điểm mua. Vì vậy việc Admin chỉnh sửa package sau đó không làm thay đổi trực tiếp quyền lợi của subscription đã mua.
 
-Lưu ý: `features` hiện được lưu dưới dạng chuỗi JSON và được trả về/snapshot, nhưng backend chưa có một bộ kiểm tra tự động cho mọi feature flag bên trong JSON. Hiện tại giới hạn `maxStaff` và việc Tenant có subscription còn hiệu lực được kiểm tra rõ trong các luồng liên quan. Không nên giả định rằng thêm một key mới vào `features` sẽ tự động bật một nghiệp vụ mới.
+Lưu ý: `features` chỉ là metadata mô tả quyền lợi để hiển thị. Backend chưa có bộ kiểm tra tự động cho các feature flag bên trong JSON. Hiện tại giới hạn `maxStaff` và việc Tenant có subscription còn hiệu lực được kiểm tra rõ trong các luồng liên quan. Không nên giả định rằng thêm một key mới vào `features` sẽ tự động bật hoặc giới hạn một nghiệp vụ mới.
+
+`max_products` đã được loại bỏ khỏi package metadata vì hệ thống không giới hạn số lượng SKU theo package. `max_staff` cũng không nên lặp lại trong `features` vì đã có field `maxStaff` riêng.
 
 ### 1.2 Không cho downgrade trong thời gian package còn hiệu lực
 
@@ -51,7 +57,20 @@ Các transaction type hiện có:
 | `UPGRADE` | Package mới không thấp hơn về giá và giới hạn staff | Cho phép nâng cấp |
 | `DOWNGRADE_BLOCKED` | Package mới thấp hơn về giá hoặc giới hạn staff | Không cho submit purchase |
 
-### 1.3 Reminder trước khi hợp đồng hết hạn
+### 1.3 Public package và package inactive
+
+Public API chỉ trả các package có `isActive = true` và chưa bị soft-delete:
+
+```http
+GET /api/packages
+GET /api/packages/{id}
+```
+
+Package đã bị Admin ngừng cung cấp sẽ không xuất hiện ở hai API này. Backend cũng kiểm tra lại trạng thái package trong preview và purchase; FE không được chỉ dựa vào danh sách package đã load trước đó.
+
+Package nội bộ như posting fee vẫn cần được loại khỏi trang subscription bằng metadata `features.type = "POSTING_FEE"`; package này không phải gói subscription dành cho Tenant.
+
+### 1.4 Reminder trước khi hợp đồng hết hạn
 
 Scheduler backend chạy mỗi ngày lúc `00:00` theo timezone của server.
 
@@ -67,7 +86,7 @@ Reminder gồm:
 
 Mỗi contract chỉ gửi reminder một lần thông qua field `expiryReminderSent`.
 
-### 1.4 Xử lý khi hợp đồng hết hạn
+### 1.5 Xử lý khi hợp đồng hết hạn
 
 Khi contract `ACTIVE` đã quá `endDate`, scheduler sẽ:
 
@@ -82,7 +101,7 @@ Khi contract `ACTIVE` đã quá `endDate`, scheduler sẽ:
 
 Dữ liệu không bị xóa vật lý khỏi database. Các API đọc dữ liệu hiện tại sẽ không còn trả stock batch đã soft-delete.
 
-### 1.5 Khi Tenant thuê lại warehouse
+### 1.6 Khi Tenant thuê lại warehouse
 
 Khi contract mới được tạo và backend gọi lại quy trình clone layout:
 
@@ -101,9 +120,10 @@ Khi hiển thị package cho Tenant:
 
 - Dùng `maxStaff` ở top-level response;
 - Không tự lấy `features.max_staff` để thay thế `maxStaff`;
-- Hiển thị đúng `price`, `durationDays`, `features` từ response.
+- Hiển thị đúng `price`, `durationDays`, `features` từ response;
+- Dùng `maxStaff` để hiển thị giới hạn staff, không đọc lại `max_staff` từ `features`.
 
-Backend sẽ từ chối purchase package đã bị Admin ngừng cung cấp. Tuy nhiên response package hiện chưa expose rõ field `isActive`, vì vậy FE không nên tự khẳng định mọi package trong danh sách public đều còn mua được; nếu purchase trả lỗi package inactive thì hiển thị thông báo và refresh danh sách package.
+FE không được render nguyên chuỗi JSON `features`. Nên parse JSON nếu hợp lệ và chuyển thành các dòng/chip dễ đọc, ví dụ `wms: true` thành `WMS access`. Không hiển thị các key nội bộ như `max_staff` hoặc `max_products`. Nếu Admin nhập mô tả text thông thường thay vì JSON, hiển thị như một mô tả đơn giản.
 
 Trước khi mua hoặc đổi package:
 
@@ -122,6 +142,8 @@ Nếu response có:
 
 FE cần disable nút xác nhận và hiển thị `message` từ backend.
 
+Nếu preview hoặc purchase trả lỗi package inactive, FE cần đóng/disable flow mua và refresh lại danh sách package.
+
 Khi `canProceed: true`, FE có thể gọi:
 
 ```http
@@ -130,7 +152,18 @@ POST /api/tenant/subscriptions
 
 Backend vẫn kiểm tra lại downgrade ở bước purchase.
 
-### 2.2 Khi contract hết hạn
+### 2.2 Khi subscription hết hạn
+
+Backend có scheduler chạy mỗi ngày lúc `00:05` theo timezone server. Các subscription ACTIVE có `endDate` đã qua sẽ được chuyển thành:
+
+- `status: "EXPIRED"`;
+- `isActive: false`.
+
+FE không cần tự cập nhật database. Khi `/api/tenant/subscriptions/active` trả `404`/`SUBSCRIPTION_NOT_FOUND`, hiển thị trạng thái không có subscription active và hướng Tenant đến trang package.
+
+`durationDays` trong subscription response là snapshot tại thời điểm mua/gia hạn/nâng cấp, không bị thay đổi nếu Admin sửa duration của package về sau.
+
+### 2.3 Khi contract hết hạn
 
 Không cần thêm API mới cho phạm vi này. FE cần bảo đảm:
 
@@ -143,7 +176,7 @@ Không cần thêm API mới cho phạm vi này. FE cần bảo đảm:
 
 FE không cần tự xóa SKU, category hoặc history. Các dữ liệu này vẫn được backend giữ lại.
 
-### 2.3 Layout
+### 2.4 Layout
 
 FE không cần tự xử lý việc archive hoặc clone lại layout. FE chỉ cần:
 
@@ -154,7 +187,7 @@ FE không cần tự xử lý việc archive hoặc clone lại layout. FE chỉ
 
 ## 3. Người phụ trách email cần làm gì
 
-Backend đã implement phần gửi email và scheduler. Người phụ trách email không cần viết thêm code, nhưng cần kiểm tra cấu hình môi trường deploy.
+Backend đã implement phần gửi email và các scheduler. Người phụ trách email không cần viết thêm code, nhưng cần kiểm tra cấu hình môi trường deploy.
 
 ### 3.1 Required environment variables
 
@@ -192,10 +225,14 @@ Chạy các migration trong thư mục `ops/migrations` trước hoặc trong b�
 
 - `20260816_fix_service_package_staff_limits.sql`
 - `20260816_contract_expiry_cleanup.sql`
+- `20260816_cleanup_package_feature_metadata.sql`
+- `20260816_subscription_package_snapshot_duration.sql`
 
 Migration đầu tiên bổ sung/backfill `service_packages.max_staff` và sửa snapshot staff limit của subscription cũ.
 
 Migration thứ hai bổ sung `rental_contracts.expiry_reminder_sent` để tránh gửi reminder lặp lại.
+
+Migration thứ ba dọn các key quota cũ `max_staff` và `max_products` khỏi JSON metadata hợp lệ. Migration thứ tư bổ sung và backfill `subscriptions.snapshot_duration_days`.
 
 ## 5. Phạm vi chưa thực hiện
 
@@ -206,5 +243,11 @@ Các nội dung sau chưa nằm trong phạm vi hiện tại:
 - Quy trình hoàn/trừ tiền cọc khi hủy sớm;
 - Luồng handover hoặc settlement phức tạp;
 - Tự động xóa vật lý dữ liệu.
+
+FE không nên hiển thị hoặc bật các nút sau khi backend chưa có API tương ứng:
+
+- `Cancel Subscription`;
+- `Upgrade Plan` nếu chưa nối vào preview/purchase flow;
+- Các thao tác gia hạn/hủy contract ACTIVE.
 
 Không nên tự thêm các nút hoặc gọi API cho các luồng trên nếu backend chưa cung cấp nghiệp vụ tương ứng.
