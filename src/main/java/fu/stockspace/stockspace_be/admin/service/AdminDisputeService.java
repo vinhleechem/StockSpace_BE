@@ -31,7 +31,7 @@ public class AdminDisputeService {
         String queryStatus = (status == null || status.trim().isEmpty()) ? null : status.trim().toUpperCase();
 
         return disputeRepository.findAllByStatusOptional(queryStatus, pageable)
-                .map(this::mapToResponse);
+                .map(disputeService::mapToResponse);
     }
 
 
@@ -41,21 +41,5 @@ public class AdminDisputeService {
     public DisputeResponse resolveDispute(java.util.UUID disputeId, java.util.UUID adminId, ResolveDisputeRequest request) {
         log.info("Admin {} resolving dispute {} with decision {}", adminId, disputeId, request.getDepositResolution());
         return disputeService.resolveDispute(disputeId, adminId, request.getAdminNote(), request.getDepositResolution());
-    }
-
-    private DisputeResponse mapToResponse(DisputeTicket t) {
-        return DisputeResponse.builder()
-                .id(t.getId())
-                .status(t.getStatus())
-                .reason(t.getReason())
-                .evidenceImages(t.getEvidenceImages())
-                .adminNote(t.getAdminNote())
-                .contractId(t.getContract() != null ? t.getContract().getId() : null)
-                .raisedById(t.getRaisedBy() != null ? t.getRaisedBy().getId() : null)
-                .raisedByName(t.getRaisedBy() != null ? t.getRaisedBy().getFullName() : null)
-                .handledById(t.getHandledBy() != null ? t.getHandledBy().getId() : null)
-                .handledByName(t.getHandledBy() != null ? t.getHandledBy().getFullName() : null)
-                .createdAt(t.getCreatedAt())
-                .build();
     }
 }
