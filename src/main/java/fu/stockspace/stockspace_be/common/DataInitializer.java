@@ -206,16 +206,18 @@ public class DataInitializer implements CommandLineRunner {
                 if (packageRepository.count() == 0) {
                         packageRepository.save(ServicePackage.builder()
                                         .name("Gói Cơ Bản (Basic)")
-                                        .features("{\"wms\": true, \"max_staff\": 2, \"max_products\": 100}")
+                                        .features("{\"wms\": true}")
                                         .price(new BigDecimal("200000.00"))
                                         .durationDays(30)
+                                        .maxStaff(2)
                                         .isActive(true)
                                         .build());
                         packageRepository.save(ServicePackage.builder()
                                         .name("Gói Nâng Cao (Advanced)")
-                                        .features("{\"wms\": true, \"max_staff\": 10, \"max_products\": 1000}")
+                                        .features("{\"wms\": true}")
                                         .price(new BigDecimal("500000.00"))
                                         .durationDays(30)
+                                        .maxStaff(10)
                                         .isActive(true)
                                         .build());
                         log.info("Seeded default service packages successfully");

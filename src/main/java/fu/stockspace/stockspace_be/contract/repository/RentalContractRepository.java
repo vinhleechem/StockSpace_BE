@@ -36,6 +36,29 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
     java.util.List<RentalContract> findByStatusAndSubmittedAtBefore(@Param("status") fu.stockspace.stockspace_be.contract.entity.ContractStatus status, @Param("dateTime") java.time.LocalDateTime dateTime);
 
     @Query("""
+            SELECT c FROM RentalContract c
+            WHERE c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
+              AND c.isActive = true
+              AND c.isDeleted = false
+              AND c.endDate >= :fromDate
+              AND c.endDate <= :toDate
+              AND c.expiryReminderSent = false
+            """)
+    java.util.List<RentalContract> findActiveContractsEndingBetween(
+            @Param("fromDate") java.time.LocalDate fromDate,
+            @Param("toDate") java.time.LocalDate toDate);
+
+    @Query("""
+            SELECT c FROM RentalContract c
+            WHERE c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
+              AND c.isActive = true
+              AND c.isDeleted = false
+              AND c.endDate < :today
+            """)
+    java.util.List<RentalContract> findActiveContractsEndingBefore(
+            @Param("today") java.time.LocalDate today);
+
+    @Query("""
             SELECT COUNT(c) > 0 FROM RentalContract c
             WHERE c.booking.tenant.id = :tenantId
               AND c.booking.warehouse.id = :warehouseId

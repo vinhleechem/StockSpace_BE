@@ -128,6 +128,7 @@ class SubscriptionServiceTest {
         assertNotNull(response);
         assertEquals(packageBasicId, response.getServicePackage().getId());
         assertEquals(SubscriptionStatus.ACTIVE, response.getStatus());
+        assertEquals(packageBasic.getDurationDays(), response.getServicePackage().getDurationDays());
 
         verify(walletService, times(1)).deductBalance(
                 eq(tenantId), eq(packageBasic.getPrice()), eq(TransactionType.PACKAGE_PAYMENT),
@@ -244,6 +245,36 @@ class SubscriptionServiceTest {
     }
 
     @Test
+    @DisplayName("6. Háº¡ cáº¥p gÃ³i bá»‹ cháº·n náº¿u chá»‰ tháº¥p hÆ¡n vá» giÃ¡")
+    void purchasePackage_DowngradeBlocked_WhenOnlyPriceIsLower() {
+        PurchasePackageRequest request = new PurchasePackageRequest(packageBasicId);
+        packageBasic.setMaxStaff(packagePro.getMaxStaff());
+
+        Subscription activeSub = Subscription.builder()
+                .id(UUID.randomUUID())
+                .tenant(tenantUser)
+                .servicePackage(packagePro)
+                .startDate(LocalDate.now().minusDays(5))
+                .endDate(LocalDate.now().plusDays(25))
+                .status(SubscriptionStatus.ACTIVE)
+                .snapshotMaxStaff(packagePro.getMaxStaff())
+                .snapshotPrice(packagePro.getPrice())
+                .snapshotPackageName(packagePro.getName())
+                .build();
+
+        when(packageRepository.findById(packageBasicId)).thenReturn(Optional.of(packageBasic));
+        when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenantUser));
+        when(subscriptionRepository.findFirstByTenantIdAndStatusAndEndDateGreaterThanEqualOrderByEndDateDesc(
+                eq(tenantId), eq(SubscriptionStatus.ACTIVE), any(LocalDate.class)))
+                .thenReturn(Optional.of(activeSub));
+
+        assertThrows(BadRequestException.class, () ->
+                subscriptionService.purchasePackage(tenantId, request));
+
+        verify(walletService, never()).deductBalance(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
     @DisplayName("5. Preview chuyển đổi gói - Trả về kết quả chính xác")
     void previewSubscriptionChange_Scenarios() {
         Subscription activeSub = Subscription.builder()
@@ -273,5 +304,17 @@ class SubscriptionServiceTest {
         SubscriptionPreviewResponse previewRenewal = subscriptionService.previewSubscriptionChange(tenantId, packageBasicId);
         assertEquals("RENEWAL", previewRenewal.getTransactionType());
         assertTrue(previewRenewal.isCanProceed());
+    }
+
+    @Test
+    @DisplayName("7. Preview package inactive bị từ chối trước khi chuyển đổi")
+    void previewSubscriptionChange_InactivePackage_Blocked() {
+        packagePro.setActive(false);
+        when(packageRepository.findById(packageProId)).thenReturn(Optional.of(packagePro));
+
+        assertThrows(BadRequestException.class,
+                () -> subscriptionService.previewSubscriptionChange(tenantId, packageProId));
+
+        verifyNoInteractions(subscriptionRepository);
     }
 }
