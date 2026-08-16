@@ -1,5 +1,7 @@
 package fu.stockspace.stockspace_be.contract.service;
+
 import java.util.UUID;
+import fu.stockspace.stockspace_be.auth.entity.RoleType;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
@@ -26,13 +28,6 @@ import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-
-
-
-
-
-
-
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -45,14 +40,6 @@ public class DisputeService {
     private final WarehouseService warehouseService;
     private final WalletService walletService;
     private final NotificationService notificationService;
-
-
-
-
-
-
-
-
 
     @Transactional
     public DisputeResponse raiseDispute(UUID userId, CreateDisputeRequest request) {
@@ -92,16 +79,26 @@ public class DisputeService {
 
         contractService.setDisputed(contract.getId());
 
-
         try {
             UUID notifyUserId = userId.equals(tenantId) ? ownerId : tenantId;
             String warehouseName = contract.getBooking().getWarehouse().getName();
+
+            // 1. Thông báo cho bên đối phương
             notificationService.push(
                     notifyUserId,
                     "Có tranh chấp mới cần xử lý",
                     "Một tranh chấp mới đã được mở cho hợp đồng kho " + warehouseName + ". Vui lòng kiểm tra.",
                     "DISPUTE"
             );
+
+            // 2. Thông báo cho Admin hệ thống
+            userRepository.findFirstByRoles_Name(RoleType.ROLE_ADMIN.name())
+                    .ifPresent(admin -> notificationService.push(
+                            admin.getId(),
+                            "Tranh chấp hợp đồng mới",
+                            "Một tranh chấp mới đã được mở cho hợp đồng kho '" + warehouseName + "'. Vui lòng kiểm tra và phân xử.",
+                            "DISPUTE"
+                    ));
         } catch (Exception e) {
             log.warn("Failed to push dispute notification: {}", e.getMessage());
         }
@@ -110,19 +107,12 @@ public class DisputeService {
         return mapToResponse(ticket);
     }
 
-
-
-
     @Transactional(readOnly = true)
     public Page<DisputeResponse> getMyDisputes(UUID userId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         return disputeRepository.findByInvolvedUserId(userId, pageable)
                 .map(this::mapToResponse);
     }
-
-
-
-
 
     @Transactional
     public DisputeResponse resolveDispute(UUID disputeId, UUID adminId, String adminNote, String depositResolution) {
@@ -137,32 +127,27 @@ public class DisputeService {
 
         RentalContract contract = ticket.getContract();
         BookingRequest booking = contract.getBooking();
+        String warehouseName = booking.getWarehouse().getName();
+        UUID tenantId = booking.getTenant().getId();
+        UUID ownerId = booking.getWarehouse().getOwner().getId();
 
         if ("REFUND_TO_TENANT".equalsIgnoreCase(depositResolution)) {
-
-
-
-
             walletService.refundBalance(
-                booking.getTenant().getId(),
+                tenantId,
                 booking.getDepositAmount(),
                 TransactionType.DEPOSIT_REFUND,
-                "Hoàn đặt cọc phân xử tranh chấp: " + booking.getWarehouse().getName(),
+                "Hoàn đặt cọc phân xử tranh chấp: " + warehouseName,
                 booking.getId(),
                 null
             );
 
             log.info("Deposit resolved to be refunded to Tenant for contract {}", contract.getId());
         } else if ("FORFEIT_TO_OWNER".equalsIgnoreCase(depositResolution)) {
-
-
-
-
             walletService.refundBalance(
-                booking.getWarehouse().getOwner().getId(),
+                ownerId,
                 booking.getDepositAmount(),
                 TransactionType.DEPOSIT_REFUND,
-                "Nhận tiền cọc phạt cọc tranh chấp: " + booking.getWarehouse().getName(),
+                "Nhận tiền cọc phạt cọc tranh chấp: " + warehouseName,
                 booking.getId(),
                 null
             );
@@ -174,10 +159,25 @@ public class DisputeService {
         contractRepository.save(contract);
         warehouseService.markAsAvailable(booking.getWarehouse().getId());
 
-
         booking.setStatus(ApprovalStatus.CANCELLED);
         booking.setRejectReason("Hợp đồng bị hủy do tranh chấp được giải quyết bởi Admin");
         bookingRepository.save(booking);
+
+        try {
+            String noteText = adminNote != null ? " Ghi chú: " + adminNote : "";
+            String resTenantMsg = "REFUND_TO_TENANT".equalsIgnoreCase(depositResolution)
+                    ? "Tranh chấp hợp đồng kho '" + warehouseName + "' đã được giải quyết. Tiền cọc đã được hoàn trả vào ví của bạn." + noteText
+                    : "Tranh chấp hợp đồng kho '" + warehouseName + "' đã được giải quyết. Tiền cọc đã được khấu trừ chuyển cho Chủ kho." + noteText;
+
+            String resOwnerMsg = "FORFEIT_TO_OWNER".equalsIgnoreCase(depositResolution)
+                    ? "Tranh chấp hợp đồng kho '" + warehouseName + "' đã được giải quyết. Bạn đã được nhận tiền cọc bồi thường vào ví." + noteText
+                    : "Tranh chấp hợp đồng kho '" + warehouseName + "' đã được giải quyết. Tiền cọc đã được hoàn trả cho Khách thuê." + noteText;
+
+            notificationService.push(tenantId, "Kết quả giải quyết tranh chấp", resTenantMsg, "DISPUTE");
+            notificationService.push(ownerId, "Kết quả giải quyết tranh chấp", resOwnerMsg, "DISPUTE");
+        } catch (Exception e) {
+            log.warn("Failed to push dispute resolution notifications: {}", e.getMessage());
+        }
 
         log.info("Admin {} resolved dispute {} with depositResolution {}", adminId, disputeId, depositResolution);
         return mapToResponse(ticket);
