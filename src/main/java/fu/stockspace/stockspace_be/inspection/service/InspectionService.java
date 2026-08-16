@@ -7,6 +7,7 @@ import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.inspection.dto.InspectionReportResponse;
 import fu.stockspace.stockspace_be.inspection.dto.SubmitInspectionRequest;
@@ -65,9 +66,16 @@ public class InspectionService {
         Warehouse warehouse = warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId)
                 .orElseThrow(() -> new ForbiddenException(ErrorCode.WAREHOUSE_NOT_OWNED));
 
-
         if (warehouse.getStatus() == WarehouseStatus.RENTED) {
             throw new BadRequestException(ErrorCode.INSPECTION_CANNOT_BE_REQUESTED_WHEN_RENTED);
+        }
+
+        if (warehouse.getStatus() != WarehouseStatus.AVAILABLE) {
+            throw new BadRequestException(ErrorCode.INSPECTION_WAREHOUSE_NOT_AVAILABLE);
+        }
+
+        if (warehouse.isVerified()) {
+            throw new ResourceConflictException(ErrorCode.WAREHOUSE_ALREADY_VERIFIED);
         }
 
 
