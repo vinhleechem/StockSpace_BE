@@ -6,10 +6,10 @@ import fu.stockspace.stockspace_be.auth.entity.RoleType;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
-
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
+import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository;
 import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
@@ -55,7 +55,7 @@ class InventoryAuditServiceTest {
     @Mock private NotificationService notificationService;
     @Mock private SubscriptionService subscriptionService;
     @Mock private TenantMemberRepository tenantMemberRepository;
-
+    @Mock private RentalContractRepository rentalContractRepository;
 
     @InjectMocks
     private InventoryAuditService inventoryAuditService;
@@ -150,8 +150,6 @@ class InventoryAuditServiceTest {
                 .build();
     }
 
-
-
     @Test
     void testCreateAudit_Success_SnapshotsCurrentStock() {
         when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
@@ -200,8 +198,6 @@ class InventoryAuditServiceTest {
                 .warehouseId(warehouseId)
                 .build();
 
-        when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
-
         ForbiddenException ex = assertThrows(ForbiddenException.class,
                 () -> inventoryAuditService.createAudit(userId, request));
 
@@ -244,11 +240,8 @@ class InventoryAuditServiceTest {
         assertTrue(response.getItems().isEmpty());
     }
 
-
-
     @Test
     void testSubmitAudit_Success_CalculatesDiscrepancy() {
-
         when(auditRepository.findById(auditId)).thenReturn(Optional.of(pendingAudit));
 
         InventoryAuditItem mutableItem = InventoryAuditItem.builder()
@@ -286,7 +279,6 @@ class InventoryAuditServiceTest {
 
         assertNotNull(response);
         assertEquals(AuditStatus.SUBMITTED, response.getStatus());
-
         assertEquals(85, mutableItem.getActualQuantity());
         assertEquals(-15, mutableItem.getDiscrepancy());
     }
@@ -320,9 +312,7 @@ class InventoryAuditServiceTest {
 
     @Test
     void testSubmitAudit_WrongStatus_ThrowsBadRequest() {
-
         when(auditRepository.findById(auditId)).thenReturn(Optional.of(submittedAudit));
-
 
         SubmitAuditRequest request = SubmitAuditRequest.builder()
                 .items(List.of())
@@ -333,8 +323,6 @@ class InventoryAuditServiceTest {
 
         assertEquals(ErrorCode.AUDIT_INVALID_STATUS.getMessage(), ex.getMessage());
     }
-
-
 
     @Test
     void testApproveAudit_StaffApprover_ThrowsForbidden() {
@@ -367,7 +355,6 @@ class InventoryAuditServiceTest {
         when(auditRepository.findById(auditId)).thenReturn(Optional.of(submittedAudit));
         when(userRepository.findById(approverId)).thenReturn(Optional.of(approverUser));
 
-
         InventoryAuditItem itemWithDeficit = InventoryAuditItem.builder()
                 .id(UUID.randomUUID())
                 .audit(submittedAudit)
@@ -393,7 +380,6 @@ class InventoryAuditServiceTest {
         assertNotNull(response);
         assertEquals(AuditStatus.APPROVED, response.getStatus());
 
-
         verify(inventoryReceiptService, times(1)).createAdjustmentReceipt(
                 eq(approverId),
                 eq(auditId),
@@ -402,7 +388,6 @@ class InventoryAuditServiceTest {
                 eq(batchId),
                 eq(15)
         );
-
 
         verify(notificationService, times(1)).push(
                 eq(userId),
@@ -416,7 +401,6 @@ class InventoryAuditServiceTest {
     void testApproveAudit_WithSurplus_CreatesInboundReceipt() {
         when(auditRepository.findById(auditId)).thenReturn(Optional.of(submittedAudit));
         when(userRepository.findById(approverId)).thenReturn(Optional.of(approverUser));
-
 
         InventoryAuditItem surplusItem = InventoryAuditItem.builder()
                 .id(UUID.randomUUID())
@@ -455,7 +439,6 @@ class InventoryAuditServiceTest {
         when(auditRepository.findById(auditId)).thenReturn(Optional.of(submittedAudit));
         when(userRepository.findById(approverId)).thenReturn(Optional.of(approverUser));
 
-
         InventoryAuditItem exactItem = InventoryAuditItem.builder()
                 .id(UUID.randomUUID())
                 .audit(submittedAudit)
@@ -477,7 +460,6 @@ class InventoryAuditServiceTest {
         when(productSkuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(productSku));
 
         inventoryAuditService.approveAudit(approverId, auditId);
-
 
         verify(inventoryReceiptService, never()).createAdjustmentReceipt(any(), any(), any(), any(), any(), anyInt());
     }
@@ -506,16 +488,13 @@ class InventoryAuditServiceTest {
                 .quantity(50)
                 .build();
 
-
         InventoryAuditItem item1 = InventoryAuditItem.builder()
                 .id(UUID.randomUUID()).audit(submittedAudit).batch(stockBatch)
                 .expectedQuantity(100).actualQuantity(95).discrepancy(-5).build();
 
-
         InventoryAuditItem item2 = InventoryAuditItem.builder()
                 .id(UUID.randomUUID()).audit(submittedAudit).batch(stockBatch2)
                 .expectedQuantity(50).actualQuantity(58).discrepancy(8).build();
-
 
         InventoryAuditItem item3 = InventoryAuditItem.builder()
                 .id(UUID.randomUUID()).audit(submittedAudit).batch(stockBatch)
@@ -531,7 +510,6 @@ class InventoryAuditServiceTest {
 
         inventoryAuditService.approveAudit(approverId, auditId);
 
-
         verify(inventoryReceiptService, times(1)).createAdjustmentReceipt(
                 any(), any(), any(), eq(DocumentType.OUTBOUND), eq(batchId), eq(5));
         verify(inventoryReceiptService, times(1)).createAdjustmentReceipt(
@@ -539,8 +517,6 @@ class InventoryAuditServiceTest {
         verify(inventoryReceiptService, times(2)).createAdjustmentReceipt(
                 any(), any(), any(), any(), any(), anyInt());
     }
-
-
 
     @Test
     void testRejectAudit_StaffApprover_ThrowsForbidden() {
@@ -582,7 +558,6 @@ class InventoryAuditServiceTest {
         assertNotNull(response);
         assertEquals(AuditStatus.REJECTED, response.getStatus());
 
-
         verify(notificationService, times(1)).push(
                 eq(userId),
                 anyString(),
@@ -590,13 +565,11 @@ class InventoryAuditServiceTest {
                 eq("AUDIT")
         );
 
-
         verify(inventoryReceiptService, never()).createAdjustmentReceipt(any(), any(), any(), any(), any(), anyInt());
     }
 
     @Test
     void testRejectAudit_PendingStatus_Success() {
-
         when(auditRepository.findById(auditId)).thenReturn(Optional.of(pendingAudit));
         when(userRepository.findById(approverId)).thenReturn(Optional.of(approverUser));
 
@@ -629,8 +602,6 @@ class InventoryAuditServiceTest {
 
         assertEquals(ErrorCode.AUDIT_ALREADY_PROCESSED.getMessage(), ex.getMessage());
     }
-
-
 
     @Test
     void testGetMyAudits_Success_Paginated() {
@@ -666,8 +637,6 @@ class InventoryAuditServiceTest {
         assertTrue(response.getContent().isEmpty());
     }
 
-
-
     @Test
     void testGetAuditDetail_Success_Requester() {
         when(auditRepository.findById(auditId)).thenReturn(Optional.of(pendingAudit));
@@ -677,7 +646,6 @@ class InventoryAuditServiceTest {
                 .expectedQuantity(100).build();
         when(auditItemRepository.findByAuditId(auditId)).thenReturn(List.of(item));
         when(productSkuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(productSku));
-
 
         InventoryAuditResponse response = inventoryAuditService.getAuditDetail(userId, auditId);
 
@@ -692,7 +660,6 @@ class InventoryAuditServiceTest {
         UUID strangerUserId = UUID.randomUUID();
         when(auditRepository.findById(auditId)).thenReturn(Optional.of(pendingAudit));
 
-
         ForbiddenException ex = assertThrows(ForbiddenException.class,
                 () -> inventoryAuditService.getAuditDetail(strangerUserId, auditId));
 
@@ -706,8 +673,6 @@ class InventoryAuditServiceTest {
         assertThrows(ResourceNotFoundException.class,
                 () -> inventoryAuditService.getAuditDetail(userId, auditId));
     }
-
-
 
     @Test
     void testGetAllAudits_Admin_Success() {
@@ -745,4 +710,3 @@ class InventoryAuditServiceTest {
         assertTrue(response.getContent().isEmpty());
     }
 }
-

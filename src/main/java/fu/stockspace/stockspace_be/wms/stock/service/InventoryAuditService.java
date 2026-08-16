@@ -1,14 +1,14 @@
 package fu.stockspace.stockspace_be.wms.stock.service;
 
-import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.entity.RoleType;
+import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
-
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
+import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository;
 import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
@@ -53,13 +53,7 @@ public class InventoryAuditService {
     private final NotificationService notificationService;
     private final SubscriptionService subscriptionService;
     private final TenantMemberRepository tenantMemberRepository;
-
-
-
-
-
-
-
+    private final RentalContractRepository rentalContractRepository;
 
     @Transactional
     public InventoryAuditResponse createAudit(UUID userId, CreateInventoryAuditRequest request) {
@@ -78,7 +72,6 @@ public class InventoryAuditService {
                 .build();
         audit = auditRepository.save(audit);
 
-
         List<StockBatch> batches = stockBatchRepository.findByWarehouseIdAndIsDeletedFalse(
                 warehouse.getId(), Pageable.unpaged()).getContent();
 
@@ -91,17 +84,13 @@ public class InventoryAuditService {
                         .actualQuantity(null)
                         .discrepancy(null)
                         .build())
-                .collect(Collectors.toList());
+                        .collect(Collectors.toList());
         auditItemRepository.saveAll(items);
 
         log.info("InventoryAudit: Created audit {} for warehouse {} ({} batch lines snapshotted)",
                 audit.getId(), warehouse.getId(), items.size());
         return mapToResponse(audit, items);
     }
-
-
-
-
 
     @Transactional
     public InventoryAuditResponse submitAudit(UUID userId, UUID auditId, SubmitAuditRequest request) {
@@ -128,16 +117,10 @@ public class InventoryAuditService {
         audit.setStatus(AuditStatus.SUBMITTED);
         audit = auditRepository.save(audit);
 
-
         List<InventoryAuditItem> updatedItems = auditItemRepository.findByAuditId(auditId);
         log.info("InventoryAudit: Audit {} submitted by user {}", auditId, userId);
         return mapToResponse(audit, updatedItems);
     }
-
-
-
-
-
 
     @Transactional
     public InventoryAuditResponse approveAudit(UUID approverId, UUID auditId) {
@@ -161,7 +144,6 @@ public class InventoryAuditService {
             int absDiscrepancy = Math.abs(item.getDiscrepancy());
             DocumentType type = item.getDiscrepancy() > 0 ? DocumentType.INBOUND : DocumentType.OUTBOUND;
 
-
             inventoryReceiptService.createAdjustmentReceipt(
                     approverId, auditId, warehouseId,
                     type, item.getBatch().getId(), absDiscrepancy
@@ -171,7 +153,6 @@ public class InventoryAuditService {
         audit.setApprovedBy(approver);
         audit.setStatus(AuditStatus.APPROVED);
         audit = auditRepository.save(audit);
-
 
         String warehouseName = audit.getWarehouse().getName();
         notificationService.push(
@@ -184,9 +165,6 @@ public class InventoryAuditService {
         log.info("InventoryAudit: Audit {} approved by user {}", auditId, approverId);
         return mapToResponse(audit, items);
     }
-
-
-
 
     @Transactional
     public InventoryAuditResponse rejectAudit(UUID approverId, UUID auditId, String reason) {
@@ -210,7 +188,6 @@ public class InventoryAuditService {
         }
         audit = auditRepository.save(audit);
 
-
         String warehouseName = audit.getWarehouse().getName();
         notificationService.push(
                 audit.getRequestedBy().getId(),
@@ -224,20 +201,38 @@ public class InventoryAuditService {
         return mapToResponse(audit, items);
     }
 
-
-
-
     @Transactional(readOnly = true)
     public PagedResponse<InventoryAuditResponse> getMyAudits(UUID userId, Pageable pageable) {
-        Page<InventoryAudit> page = auditRepository.findByRequestedByIdAndIsDeletedFalse(userId, pageable);
+        return getMyAudits(userId, null, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public PagedResponse<InventoryAuditResponse> getMyAudits(UUID userId, UUID warehouseId, Pageable pageable) {
+        UUID tenantId = tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(userId)
+                .map(member -> member.getTenant().getId())
+                .orElse(userId);
+
+        List<UUID> rentedWarehouseIds = rentalContractRepository != null
+                ? rentalContractRepository.findActiveRentedWarehousesByTenantId(tenantId)
+                        .stream()
+                        .map(Warehouse::getId)
+                        .collect(Collectors.toList())
+                : List.of();
+
+        Page<InventoryAudit> page;
+        if (warehouseId != null) {
+            page = auditRepository.findByWarehouseIdAndIsDeletedFalse(warehouseId, pageable);
+        } else if (!rentedWarehouseIds.isEmpty()) {
+            page = auditRepository.findAuditsForTenant(null, rentedWarehouseIds, userId, pageable);
+        } else {
+            page = auditRepository.findByRequestedByIdAndIsDeletedFalse(userId, pageable);
+        }
+
         return PagedResponse.fromPage(page, audit -> {
             List<InventoryAuditItem> items = auditItemRepository.findByAuditId(audit.getId());
             return mapToResponse(audit, items);
         });
     }
-
-
-
 
     @Transactional(readOnly = true)
     public InventoryAuditResponse getAuditDetail(UUID userId, UUID auditId) {
@@ -245,11 +240,6 @@ public class InventoryAuditService {
         List<InventoryAuditItem> items = auditItemRepository.findByAuditId(auditId);
         return mapToResponse(audit, items);
     }
-
-
-
-
-
 
     @Transactional(readOnly = true)
     public PagedResponse<InventoryAuditResponse> getAllAudits(Pageable pageable) {
@@ -260,15 +250,24 @@ public class InventoryAuditService {
         });
     }
 
-
-
     private InventoryAudit getAuditForUser(UUID auditId, UUID userId) {
         InventoryAudit audit = auditRepository.findById(auditId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.AUDIT_NOT_FOUND));
 
         boolean isRequester = audit.getRequestedBy().getId().equals(userId);
         boolean isApprover = audit.getApprovedBy() != null && audit.getApprovedBy().getId().equals(userId);
-        if (!isRequester && !isApprover) {
+        if (isRequester || isApprover) {
+            return audit;
+        }
+
+        UUID tenantId = tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(userId)
+                .map(member -> member.getTenant().getId())
+                .orElse(userId);
+
+        boolean isTenantOfWarehouse = rentalContractRepository != null
+                && rentalContractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(tenantId, audit.getWarehouse().getId());
+
+        if (!isTenantOfWarehouse) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
         return audit;
@@ -284,9 +283,6 @@ public class InventoryAuditService {
             throw new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED);
         }
     }
-
-
-
 
     private void ensureApproverIsTenant(User approver) {
         boolean isTenant = approver.getRoles() != null && approver.getRoles().stream()
