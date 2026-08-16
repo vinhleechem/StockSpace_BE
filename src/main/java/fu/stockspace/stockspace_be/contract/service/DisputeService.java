@@ -184,13 +184,42 @@ public class DisputeService {
     }
 
     private DisputeResponse mapToResponse(DisputeTicket t) {
+        RentalContract contract = t.getContract();
+        BookingRequest booking = contract != null ? contract.getBooking() : null;
+        var warehouse = booking != null ? booking.getWarehouse() : null;
+        var tenant = booking != null ? booking.getTenant() : null;
+        var owner = warehouse != null ? warehouse.getOwner() : null;
+
         return DisputeResponse.builder()
                 .id(t.getId())
                 .status(t.getStatus())
                 .reason(t.getReason())
                 .evidenceImages(t.getEvidenceImages())
                 .adminNote(t.getAdminNote())
-                .contractId(t.getContract() != null ? t.getContract().getId() : null)
+                .contractId(contract != null ? contract.getId() : null)
+                // Kho bãi
+                .warehouseId(warehouse != null ? warehouse.getId() : null)
+                .warehouseName(warehouse != null ? warehouse.getName() : null)
+                .warehouseAddress(warehouse != null ? warehouse.getAddress() : null)
+                // Tiền cọc & Thời hạn
+                .depositAmount(booking != null ? booking.getDepositAmount() : null)
+                .startDate(contract != null ? contract.getStartDate() : null)
+                .endDate(contract != null ? contract.getEndDate() : null)
+                .paperContractImages(contract != null ? contract.getPaperContractImages() : null)
+                // Thông tin Tenant
+                .tenantId(tenant != null ? tenant.getId() : null)
+                .tenantName(tenant != null ? tenant.getFullName() : null)
+                .tenantEmail(tenant != null ? tenant.getEmail() : null)
+                .tenantPhone(tenant != null ? tenant.getPhone() : null)
+                // Thông tin Owner
+                .ownerId(owner != null ? owner.getId() : null)
+                .ownerName(owner != null ? owner.getFullName() : null)
+                .ownerEmail(owner != null ? owner.getEmail() : null)
+                .ownerPhone(owner != null ? owner.getPhone() : null)
+                // Thông tin hủy ban đầu
+                .cancelReason(contract != null ? contract.getCancelReason() : null)
+                .cancelEvidence(contract != null ? contract.getCancelEvidence() : null)
+                // Người tạo & Người xử lý
                 .raisedById(t.getRaisedBy() != null ? t.getRaisedBy().getId() : null)
                 .raisedByName(t.getRaisedBy() != null ? t.getRaisedBy().getFullName() : null)
                 .handledById(t.getHandledBy() != null ? t.getHandledBy().getId() : null)
