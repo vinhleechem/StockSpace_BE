@@ -34,6 +34,9 @@ public interface StaffWarehouseAssignmentRepository extends JpaRepository<StaffW
 
     List<StaffWarehouseAssignment> findByTenantIdAndStatus(UUID tenantId, AssignmentStatus status);
 
+    List<StaffWarehouseAssignment> findByTenantIdAndWarehouseIdAndStatus(
+            UUID tenantId, UUID warehouseId, AssignmentStatus status);
+
 
 
 

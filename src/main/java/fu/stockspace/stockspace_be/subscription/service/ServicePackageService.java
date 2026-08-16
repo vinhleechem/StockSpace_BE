@@ -20,13 +20,13 @@ public class ServicePackageService {
     private final ServicePackageRepository packageRepository;
     @Transactional(readOnly = true)
     public List<ServicePackageResponse> getAllPackages() {
-        return packageRepository.findAll().stream()
+        return packageRepository.findAllByIsActiveTrueAndIsDeletedFalse().stream()
                 .map(this::mapToResponse)
                 .toList();
     }
     @Transactional(readOnly = true)
     public ServicePackageResponse getPackageById(java.util.UUID id) {
-        ServicePackage servicePackage = packageRepository.findById(id)
+        ServicePackage servicePackage = packageRepository.findByIdAndIsActiveTrueAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.PACKAGE_NOT_FOUND));
         return mapToResponse(servicePackage);
     }
@@ -91,7 +91,7 @@ public class ServicePackageService {
                 .features(p.getFeatures())
                 .price(p.getPrice())
                 .durationDays(p.getDurationDays())
-                .maxStaff(p.getMaxStaff())
+                .maxStaff(p.getMaxStaff() != null ? p.getMaxStaff() : 0)
                 .build();
     }
 

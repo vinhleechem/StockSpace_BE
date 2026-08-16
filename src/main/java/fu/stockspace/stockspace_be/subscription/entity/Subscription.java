@@ -45,6 +45,10 @@ public class Subscription extends BaseEntity {
     private Integer snapshotMaxStaff;
 
 
+    @Column(name = "snapshot_duration_days")
+    private Integer snapshotDurationDays;
+
+
     @Column(name = "snapshot_price", precision = 15, scale = 2)
     private java.math.BigDecimal snapshotPrice;
 
@@ -55,4 +59,4 @@ public class Subscription extends BaseEntity {
 
     @Column(name = "snapshot_package_name", length = 150)
     private String snapshotPackageName;
-}
+}
