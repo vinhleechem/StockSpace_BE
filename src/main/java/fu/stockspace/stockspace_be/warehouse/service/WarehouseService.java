@@ -1,5 +1,6 @@
 package fu.stockspace.stockspace_be.warehouse.service;
 
+import fu.stockspace.stockspace_be.auth.entity.RoleType;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
@@ -165,6 +166,20 @@ public class WarehouseService {
 
         if (request.getImageUrls() != null && !request.getImageUrls().isEmpty()) {
             attachImages(warehouse, request.getImageUrls());
+        }
+
+        try {
+            final String whName = warehouse.getName();
+            final String ownerName = owner.getFullName() != null ? owner.getFullName() : owner.getEmail();
+            userRepository.findFirstByRoles_Name(RoleType.ROLE_ADMIN.name())
+                    .ifPresent(admin -> notificationService.push(
+                            admin.getId(),
+                            "Yêu cầu duyệt bài đăng kho mới",
+                            "Chủ kho '" + ownerName + "' vừa đăng kho bãi mới '" + whName + "'. Vui lòng kiểm tra và phê duyệt.",
+                            "WAREHOUSE"
+                    ));
+        } catch (Exception e) {
+            log.warn("Failed to push new warehouse notification to admin: {}", e.getMessage());
         }
 
         log.info("Warehouse created: {} (ID: {})", warehouse.getName(), warehouse.getId());
