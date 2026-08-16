@@ -29,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -212,6 +213,9 @@ public class ContractService {
         }
         if (request.getStartDate().isAfter(request.getEndDate())) {
             throw new BadRequestException("Ngày bắt đầu phải trước ngày kết thúc");
+        }
+        if (ChronoUnit.DAYS.between(request.getStartDate(), request.getEndDate()) < 7) {
+            throw new BadRequestException("Thời gian thuê kho tối thiểu là 7 ngày");
         }
         contract.setStartDate(request.getStartDate());
         contract.setEndDate(request.getEndDate());

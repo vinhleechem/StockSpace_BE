@@ -70,6 +70,7 @@ public enum ErrorCode {
     INSPECTION_NOT_FOUND("Yêu cầu kiểm định không tồn tại", HttpStatus.NOT_FOUND),
     INSPECTION_ALREADY_SUBMITTED("Kiểm định đã được nộp hoặc đang xử lý", HttpStatus.BAD_REQUEST),
     INSPECTION_CANNOT_BE_REQUESTED_WHEN_RENTED("Không thể gửi yêu cầu kiểm định khi kho đang trong trạng thái cho thuê", HttpStatus.BAD_REQUEST),
+    INSPECTION_WAREHOUSE_NOT_AVAILABLE("Chỉ có thể gửi yêu cầu kiểm định khi kho đã được phê duyệt và đang hoạt động", HttpStatus.BAD_REQUEST),
 
 
     WALLET_NOT_FOUND("Ví điện tử không tồn tại", HttpStatus.NOT_FOUND),
