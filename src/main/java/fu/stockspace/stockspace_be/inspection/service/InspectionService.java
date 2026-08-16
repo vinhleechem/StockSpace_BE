@@ -2,6 +2,7 @@ package fu.stockspace.stockspace_be.inspection.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import fu.stockspace.stockspace_be.auth.entity.RoleType;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
@@ -106,6 +107,20 @@ public class InspectionService {
 
         report = inspectionRepository.save(report);
         log.info("Owner {} requested inspection for warehouse {} with fee {}", ownerId, warehouseId, fee);
+
+        try {
+            final String whName = warehouse.getName();
+            userRepository.findFirstByRoles_Name(RoleType.ROLE_ADMIN.name())
+                    .ifPresent(admin -> notificationService.push(
+                            admin.getId(),
+                            "Yêu cầu kiểm định kho mới",
+                            "Chủ kho vừa gửi yêu cầu kiểm định cho kho '" + whName + "'. Vui lòng phân công thanh tra viên.",
+                            "INSPECTION"
+                    ));
+        } catch (Exception e) {
+            log.warn("Failed to push inspection request notification to admin: {}", e.getMessage());
+        }
+
         return mapToResponse(report);
     }
 

@@ -1,5 +1,6 @@
 package fu.stockspace.stockspace_be.contract.service;
 import java.util.UUID;
+import fu.stockspace.stockspace_be.auth.entity.RoleType;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.auth.util.TenantContextUtil;
@@ -407,6 +408,30 @@ public class ContractService {
             disputeRepository.save(ticket);
             contract.setStatus(ContractStatus.DISPUTED);
             log.info("Tenant disagreed to cancel. Contract {} status changed to DISPUTED", contractId);
+
+            try {
+                String warehouseName = contract.getBooking().getWarehouse().getName();
+                UUID ownerId = contract.getBooking().getWarehouse().getOwner().getId();
+
+                // 1. Thông báo cho Owner rằng Tenant không đồng ý hủy và đã mở tranh chấp
+                notificationService.push(
+                        ownerId,
+                        "Khách thuê từ chối yêu cầu hủy",
+                        "Khách thuê không đồng ý yêu cầu hủy hợp đồng kho '" + warehouseName + "'. Vụ việc đã được chuyển thành tranh chấp để Ban quản trị phân xử.",
+                        "DISPUTE"
+                );
+
+                // 2. Thông báo cho Admin hệ thống
+                userRepository.findFirstByRoles_Name(RoleType.ROLE_ADMIN.name())
+                        .ifPresent(admin -> notificationService.push(
+                                admin.getId(),
+                                "Tranh chấp hợp đồng mới",
+                                "Có một tranh chấp mới phát sinh từ việc từ chối hủy hợp đồng kho '" + warehouseName + "'. Vui lòng kiểm tra và phân xử.",
+                                "DISPUTE"
+                        ));
+            } catch (Exception e) {
+                log.warn("Failed to push dispute notification: {}", e.getMessage());
+            }
         }
         contract = contractRepository.save(contract);
         return mapToResponse(contract);
