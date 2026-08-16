@@ -183,7 +183,7 @@ public class DisputeService {
         return mapToResponse(ticket);
     }
 
-    private DisputeResponse mapToResponse(DisputeTicket t) {
+    public DisputeResponse mapToResponse(DisputeTicket t) {
         RentalContract contract = t.getContract();
         BookingRequest booking = contract != null ? contract.getBooking() : null;
         var warehouse = booking != null ? booking.getWarehouse() : null;
