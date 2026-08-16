@@ -2,6 +2,7 @@ package fu.stockspace.stockspace_be.warehouse.controller;
 
 import fu.stockspace.stockspace_be.common.dto.ApiResponse;
 import fu.stockspace.stockspace_be.common.dto.PagedResponse;
+import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.warehouse.dto.*;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseService;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseTypeService;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 
@@ -32,6 +34,14 @@ import java.util.UUID;
 @RequestMapping("/api/warehouses")
 @RequiredArgsConstructor
 public class PublicWarehouseController {
+
+    private static final int MAX_SEARCH_PAGE = 10_000;
+    private static final int MAX_SEARCH_SIZE = 50;
+    private static final int MAX_KEYWORD_LENGTH = 100;
+    private static final BigDecimal MAX_FILTER_AMOUNT = new BigDecimal("9999999999999.99");
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
+            "createdAt", "updatedAt", "name", "pricePerMonth", "capacity"
+    );
 
     private final WarehouseService warehouseService;
     private final WarehouseTypeService warehouseTypeService;
@@ -64,6 +74,8 @@ public class PublicWarehouseController {
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir
     ) {
+        validateSearchParameters(keyword, minPrice, maxPrice, minCapacity, page, size, sortBy, sortDir);
+
         WarehouseSearchRequest request = new WarehouseSearchRequest();
         request.setKeyword(keyword);
         request.setMinPrice(minPrice);
@@ -79,6 +91,49 @@ public class PublicWarehouseController {
 
 
 
+
+    private void validateSearchParameters(
+            String keyword,
+            BigDecimal minPrice,
+            BigDecimal maxPrice,
+            BigDecimal minCapacity,
+            int page,
+            int size,
+            String sortBy,
+            String sortDir
+    ) {
+        if (page < 0 || page > MAX_SEARCH_PAGE) {
+            throw new BadRequestException("Page must be between 0 and " + MAX_SEARCH_PAGE);
+        }
+        if (size < 1 || size > MAX_SEARCH_SIZE) {
+            throw new BadRequestException("Size must be between 1 and " + MAX_SEARCH_SIZE);
+        }
+        if (keyword != null && keyword.length() > MAX_KEYWORD_LENGTH) {
+            throw new BadRequestException("Keyword must not exceed " + MAX_KEYWORD_LENGTH + " characters");
+        }
+        validateFilterAmount("minPrice", minPrice);
+        validateFilterAmount("maxPrice", maxPrice);
+        validateFilterAmount("minCapacity", minCapacity);
+        if (minPrice != null && maxPrice != null && minPrice.compareTo(maxPrice) > 0) {
+            throw new BadRequestException("minPrice must not be greater than maxPrice");
+        }
+        if (!ALLOWED_SORT_FIELDS.contains(sortBy)) {
+            throw new BadRequestException("Unsupported sortBy value");
+        }
+        if (!"asc".equalsIgnoreCase(sortDir) && !"desc".equalsIgnoreCase(sortDir)) {
+            throw new BadRequestException("sortDir must be asc or desc");
+        }
+    }
+
+    private void validateFilterAmount(String field, BigDecimal value) {
+        if (value == null) {
+            return;
+        }
+        if (value.signum() < 0 || value.compareTo(MAX_FILTER_AMOUNT) > 0 || value.scale() > 2) {
+            throw new BadRequestException(field + " must be between 0 and "
+                    + MAX_FILTER_AMOUNT.toPlainString() + " with at most 2 decimal places");
+        }
+    }
 
     @GetMapping("/{id}")
     @Operation(summary = "Xem chi tiết kho bãi")
