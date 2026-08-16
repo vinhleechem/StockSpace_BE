@@ -304,4 +304,16 @@ class SubscriptionServiceTest {
         assertEquals("RENEWAL", previewRenewal.getTransactionType());
         assertTrue(previewRenewal.isCanProceed());
     }
+
+    @Test
+    @DisplayName("7. Preview package inactive bị từ chối trước khi chuyển đổi")
+    void previewSubscriptionChange_InactivePackage_Blocked() {
+        packagePro.setActive(false);
+        when(packageRepository.findById(packageProId)).thenReturn(Optional.of(packagePro));
+
+        assertThrows(BadRequestException.class,
+                () -> subscriptionService.previewSubscriptionChange(tenantId, packageProId));
+
+        verifyNoInteractions(subscriptionRepository);
+    }
 }

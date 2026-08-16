@@ -44,7 +44,7 @@ public class SubscriptionService {
     public SubscriptionResponse purchasePackage(UUID tenantId, PurchasePackageRequest request) {
         ServicePackage servicePackage = packageRepository.findById(request.getPackageId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.PACKAGE_NOT_FOUND));
-        if (!servicePackage.isActive()) {
+        if (!servicePackage.isActive() || servicePackage.isDeleted()) {
             throw new BadRequestException("Gói dịch vụ này hiện đã ngừng cung cấp");
         }
 
@@ -206,6 +206,9 @@ public class SubscriptionService {
 
         ServicePackage newPackage = packageRepository.findById(newPackageId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.PACKAGE_NOT_FOUND));
+        if (!newPackage.isActive() || newPackage.isDeleted()) {
+            throw new BadRequestException("Gói dịch vụ này hiện đã ngừng cung cấp");
+        }
 
         Optional<Subscription> activeOpt = subscriptionRepository
                 .findFirstByTenantIdAndStatusAndEndDateGreaterThanEqualOrderByEndDateDesc(
