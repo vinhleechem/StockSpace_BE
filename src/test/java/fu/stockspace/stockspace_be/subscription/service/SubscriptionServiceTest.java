@@ -128,6 +128,7 @@ class SubscriptionServiceTest {
         assertNotNull(response);
         assertEquals(packageBasicId, response.getServicePackage().getId());
         assertEquals(SubscriptionStatus.ACTIVE, response.getStatus());
+        assertEquals(packageBasic.getDurationDays(), response.getServicePackage().getDurationDays());
 
         verify(walletService, times(1)).deductBalance(
                 eq(tenantId), eq(packageBasic.getPrice()), eq(TransactionType.PACKAGE_PAYMENT),
