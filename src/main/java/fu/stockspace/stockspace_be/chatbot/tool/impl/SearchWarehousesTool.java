@@ -15,11 +15,6 @@ import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.Collectors;
 
-
-
-
-
-
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -33,10 +28,9 @@ public class SearchWarehousesTool implements ChatTool {
 
     @Override
     public String getDescription() {
-        return "Tìm tối đa 5 kho đang sẵn sàng cho thuê theo từ khóa trong tên hoặc địa chỉ, khoảng giá thuê " +
-               "và diện tích tối thiểu. Khi ý định là tìm hoặc xem kho nhưng chưa nêu tiêu chí, phải gọi tool " +
-               "này với các tham số rỗng để lấy danh sách mặc định. " +
-               "Kết quả được lọc theo dữ liệu có cấu trúc, không phải tìm kiếm ngữ nghĩa.";
+        return "Tìm các kho đang sẵn sàng cho thuê theo từ khóa (tên, địa chỉ, loại kho, hoặc công năng/loại hàng hóa lưu trữ trong mô tả kho), khoảng giá và diện tích. " +
+               "Khi người dùng tìm kiếm kho, hỏi gợi ý kho, hoặc hỏi về kho phù hợp với loại hàng hóa/vật liệu/công năng cụ thể, hãy trích xuất từ khóa và gọi tool này. " +
+               "Nếu người dùng chưa nêu tiêu chí, gọi tool với tham số rỗng để lấy danh sách kho sẵn có.";
     }
 
     @Override
@@ -44,7 +38,7 @@ public class SearchWarehousesTool implements ChatTool {
         return Map.of(
                 "type", "object",
                 "properties", Map.of(
-                        "keyword", Map.of("type", "string", "description", "Từ khóa khớp với tên kho hoặc địa chỉ"),
+                        "keyword", Map.of("type", "string", "description", "Từ khóa tìm kiếm (tên kho, địa chỉ, loại kho hoặc công năng/loại hàng hóa lưu trữ như vật liệu xây dựng, nông sản, kho mát, kho lạnh, linh kiện...)"),
                         "minPrice", Map.of("type", "number", "description", "Giá thuê tối thiểu (VNĐ/tháng), không âm"),
                         "maxPrice", Map.of("type", "number", "description", "Giá thuê tối đa (VNĐ/tháng), không âm"),
                         "minArea",  Map.of("type", "number", "description", "Diện tích tối thiểu (m²), không âm")
@@ -58,7 +52,6 @@ public class SearchWarehousesTool implements ChatTool {
         try {
             Map<String, Object> safeParams = params == null ? Map.of() : params;
             String keyword = getStringParam(safeParams, "keyword");
-            String keywordLike = keyword != null ? "%" + keyword.toLowerCase(Locale.ROOT) + "%" : null;
 
             BigDecimal minPrice = getNonNegativeDecimalParam(safeParams, "minPrice");
             BigDecimal maxPrice = getNonNegativeDecimalParam(safeParams, "maxPrice");
@@ -67,6 +60,9 @@ public class SearchWarehousesTool implements ChatTool {
                 return "{\"error\":\"Giá thuê tối thiểu không được lớn hơn giá thuê tối đa\"}";
             }
 
+            String keywordLike = keyword != null ? "%" + keyword.toLowerCase(Locale.ROOT) + "%" : null;
+
+            // Tầng 1: Tìm kiếm theo từ khóa chính xác trên tên, địa chỉ, mô tả, loại kho
             var results = warehouseRepository.searchPublic(
                     keywordLike,
                     WarehouseStatus.AVAILABLE,
@@ -76,6 +72,52 @@ public class SearchWarehousesTool implements ChatTool {
                     PageRequest.of(0, 5)
             );
 
+            // Thử bỏ tiền tố "kho " nếu chưa ra kết quả (ví dụ "kho vật liệu" -> "vật liệu")
+            if (results.isEmpty() && keyword != null && keyword.toLowerCase(Locale.ROOT).startsWith("kho ")) {
+                String strippedKeyword = keyword.substring(4).trim();
+                if (!strippedKeyword.isBlank()) {
+                    results = warehouseRepository.searchPublic(
+                            "%" + strippedKeyword.toLowerCase(Locale.ROOT) + "%",
+                            WarehouseStatus.AVAILABLE,
+                            minPrice,
+                            maxPrice,
+                            minArea,
+                            PageRequest.of(0, 5)
+                    );
+                }
+            }
+
+            // Tầng 2: LLM Semantic Reasoning Fallback
+            // Nếu từ khóa cụ thể không khớp chính xác trong DB (ví dụ khách dùng từ đồng nghĩa, từ địa phương, hoặc câu hỏi gián tiếp),
+            // lấy danh sách toàn bộ các kho đang mở (AVAILABLE) để AI tự đọc hiểu mô tả và suy luận kho phù hợp nhất.
+            if (results.isEmpty() && keyword != null && !keyword.isBlank()) {
+                var fallbackResults = warehouseRepository.searchPublic(
+                        null,
+                        WarehouseStatus.AVAILABLE,
+                        minPrice,
+                        maxPrice,
+                        minArea,
+                        PageRequest.of(0, 8)
+                );
+
+                if (!fallbackResults.isEmpty()) {
+                    List<Map<String, Object>> fallbackWarehouses = fallbackResults.getContent().stream()
+                            .map(this::toMap)
+                            .collect(Collectors.toList());
+
+                    Map<String, Object> fallbackResult = new HashMap<>();
+                    fallbackResult.put("total", fallbackResults.getTotalElements());
+                    fallbackResult.put("warehouses", fallbackWarehouses);
+                    fallbackResult.put("matchedByExactKeyword", false);
+                    fallbackResult.put("instructionForAI",
+                            "Không tìm thấy kho khớp chính xác cụm từ '" + keyword + "'. " +
+                            "Dưới đây là danh sách các kho đang mở cho thuê kèm mô tả chi tiết, đặc điểm và loại kho. " +
+                            "Hãy đọc kỹ mô tả (description), loại kho (type) và thông số từng kho để phân tích xem kho nào thích hợp nhất với nhu cầu của người dùng và tư vấn, giải thích lý do cụ thể."
+                    );
+                    return objectMapper.writeValueAsString(fallbackResult);
+                }
+            }
+
             List<Map<String, Object>> warehouses = results.getContent().stream()
                     .map(this::toMap)
                     .collect(Collectors.toList());
@@ -84,7 +126,7 @@ public class SearchWarehousesTool implements ChatTool {
             result.put("total", results.getTotalElements());
             result.put("warehouses", warehouses);
             if (warehouses.isEmpty()) {
-                result.put("message", "Không tìm thấy kho phù hợp với bộ lọc này.");
+                result.put("message", "Hiện tại hệ thống không tìm thấy kho nào sẵn sàng cho thuê phù hợp với bộ lọc.");
             }
             return objectMapper.writeValueAsString(result);
 

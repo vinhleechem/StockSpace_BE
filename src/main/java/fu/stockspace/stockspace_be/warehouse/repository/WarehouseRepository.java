@@ -11,14 +11,6 @@ import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.util.Optional;
-
-
-
-
-
-
-
-
 import java.util.UUID;
 
 public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
@@ -35,8 +27,6 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
     @Query("SELECT COUNT(w) FROM Warehouse w WHERE w.isDeleted = false")
     long count();
 
-
-
     @EntityGraph(attributePaths = "type")
     @Query("""
             SELECT w FROM Warehouse w
@@ -47,10 +37,6 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
             """)
     Optional<Warehouse> findPublicAvailableById(@Param("id") UUID id);
 
-
-
-
-
     @EntityGraph(attributePaths = "type")
     @Query("""
             SELECT w FROM Warehouse w
@@ -58,7 +44,9 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
               AND w.isDeleted = false
               AND ((:status IS NULL AND w.status = fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus.AVAILABLE) OR (:status IS NOT NULL AND w.status = :status))
               AND (:keyword IS NULL OR LOWER(w.name) LIKE :keyword
-                   OR LOWER(w.address) LIKE :keyword)
+                   OR LOWER(w.address) LIKE :keyword
+                   OR LOWER(w.description) LIKE :keyword
+                   OR LOWER(w.type.name) LIKE :keyword)
               AND (:minPrice IS NULL OR w.pricePerMonth >= :minPrice)
               AND (:maxPrice IS NULL OR w.pricePerMonth <= :maxPrice)
               AND (:minCapacity IS NULL OR w.capacity >= :minCapacity)
@@ -72,13 +60,13 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
             Pageable pageable
     );
 
-
-
     @Query("""
             SELECT w FROM Warehouse w
             WHERE w.isDeleted = false
               AND (:keyword IS NULL OR LOWER(w.name) LIKE :keyword
-                   OR LOWER(w.address) LIKE :keyword)
+                   OR LOWER(w.address) LIKE :keyword
+                   OR LOWER(w.description) LIKE :keyword
+                   OR LOWER(w.type.name) LIKE :keyword)
               AND (:status IS NULL OR w.status = :status)
               AND (:isVerified IS NULL OR w.isVerified = :isVerified)
             """)
@@ -89,15 +77,11 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
             Pageable pageable
     );
 
-
-
     @Query("SELECT w FROM Warehouse w WHERE w.owner.id = ?1 AND w.isDeleted = false")
     Page<Warehouse> findByOwnerId(UUID ownerId, Pageable pageable);
 
     @Query("SELECT w FROM Warehouse w WHERE w.id = ?1 AND w.owner.id = ?2 AND w.isDeleted = false")
     Optional<Warehouse> findByIdAndOwnerId(UUID id, UUID ownerId);
-
-
 
     @Query("SELECT COUNT(w) > 0 FROM Warehouse w WHERE w.id = ?1 AND w.owner.id = ?2 AND w.isDeleted = false")
     boolean existsByIdAndOwnerId(UUID id, UUID ownerId);
