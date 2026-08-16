@@ -10,6 +10,7 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenExceptio
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
+import fu.stockspace.stockspace_be.staff.entity.TenantMember;
 import fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository;
 import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
@@ -84,8 +85,41 @@ public class InventoryAuditService {
                         .actualQuantity(null)
                         .discrepancy(null)
                         .build())
-                        .collect(Collectors.toList());
+                .collect(Collectors.toList());
         auditItemRepository.saveAll(items);
+
+        try {
+            final String whName = warehouse.getName();
+            UUID tenantId = tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(userId)
+                    .map(member -> member.getTenant().getId())
+                    .orElse(userId);
+
+            if (userId.equals(tenantId)) {
+                // Tenant tạo phiếu -> thông báo cho các Staff
+                List<TenantMember> staffList = tenantMemberRepository.findActiveStaffsOrderByJoinedAtAsc(tenantId);
+                for (TenantMember staff : staffList) {
+                    if (staff.getUser() != null) {
+                        notificationService.push(
+                                staff.getUser().getId(),
+                                "Lệnh kiểm kê kho mới",
+                                "Có phiếu kiểm kê mới cho kho '" + whName + "'. Vui lòng tiến hành kiểm đếm hàng hóa.",
+                                "AUDIT"
+                        );
+                    }
+                }
+            } else {
+                // Staff tạo phiếu -> thông báo cho Tenant
+                String creatorName = requestedBy.getFullName() != null ? requestedBy.getFullName() : requestedBy.getEmail();
+                notificationService.push(
+                        tenantId,
+                        "Phiếu kiểm kê kho mới",
+                        "Nhân viên '" + creatorName + "' vừa tạo phiếu kiểm kê cho kho '" + whName + "'.",
+                        "AUDIT"
+                );
+            }
+        } catch (Exception e) {
+            log.warn("Failed to push create audit notification: {}", e.getMessage());
+        }
 
         log.info("InventoryAudit: Created audit {} for warehouse {} ({} batch lines snapshotted)",
                 audit.getId(), warehouse.getId(), items.size());
@@ -117,6 +151,22 @@ public class InventoryAuditService {
         audit.setStatus(AuditStatus.SUBMITTED);
         audit = auditRepository.save(audit);
 
+        try {
+            final String whName = audit.getWarehouse().getName();
+            UUID tenantId = tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(userId)
+                    .map(member -> member.getTenant().getId())
+                    .orElse(userId);
+
+            notificationService.push(
+                    tenantId,
+                    "Kết quả kiểm kê đã được nộp",
+                    "Kết quả kiểm đếm cho kho '" + whName + "' đã được nộp. Vui lòng kiểm tra đối soát và phê duyệt.",
+                    "AUDIT"
+            );
+        } catch (Exception e) {
+            log.warn("Failed to push submit audit notification: {}", e.getMessage());
+        }
+
         List<InventoryAuditItem> updatedItems = auditItemRepository.findByAuditId(auditId);
         log.info("InventoryAudit: Audit {} submitted by user {}", auditId, userId);
         return mapToResponse(audit, updatedItems);
@@ -139,15 +189,15 @@ public class InventoryAuditService {
         UUID warehouseId = audit.getWarehouse().getId();
 
         for (InventoryAuditItem item : items) {
-            if (item.getDiscrepancy() == null || item.getDiscrepancy() == 0) continue;
+            if (item.getDiscrepancy() == null || item.getDiscrepancy() == 0)
+                continue;
 
             int absDiscrepancy = Math.abs(item.getDiscrepancy());
             DocumentType type = item.getDiscrepancy() > 0 ? DocumentType.INBOUND : DocumentType.OUTBOUND;
 
             inventoryReceiptService.createAdjustmentReceipt(
                     approverId, auditId, warehouseId,
-                    type, item.getBatch().getId(), absDiscrepancy
-            );
+                    type, item.getBatch().getId(), absDiscrepancy);
         }
 
         audit.setApprovedBy(approver);
@@ -159,8 +209,7 @@ public class InventoryAuditService {
                 audit.getRequestedBy().getId(),
                 "Phiếu kiểm kê đã được duyệt",
                 "Phiếu kiểm kê kho " + warehouseName + " đã được duyệt. Tồn kho đã được điều chỉnh tự động.",
-                "AUDIT"
-        );
+                "AUDIT");
 
         log.info("InventoryAudit: Audit {} approved by user {}", auditId, approverId);
         return mapToResponse(audit, items);
@@ -192,9 +241,9 @@ public class InventoryAuditService {
         notificationService.push(
                 audit.getRequestedBy().getId(),
                 "Phiếu kiểm kê bị từ chối",
-                "Phiếu kiểm kê kho " + warehouseName + " bị từ chối. Lý do: " + (reason != null ? reason : "Không có lý do cụ thể"),
-                "AUDIT"
-        );
+                "Phiếu kiểm kê kho " + warehouseName + " bị từ chối. Lý do: "
+                        + (reason != null ? reason : "Không có lý do cụ thể"),
+                "AUDIT");
 
         log.info("InventoryAudit: Audit {} rejected by user {} (reason: {})", auditId, approverId, reason);
         List<InventoryAuditItem> items = auditItemRepository.findByAuditId(auditId);
@@ -265,7 +314,8 @@ public class InventoryAuditService {
                 .orElse(userId);
 
         boolean isTenantOfWarehouse = rentalContractRepository != null
-                && rentalContractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(tenantId, audit.getWarehouse().getId());
+                && rentalContractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(tenantId,
+                        audit.getWarehouse().getId());
 
         if (!isTenantOfWarehouse) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
@@ -289,8 +339,7 @@ public class InventoryAuditService {
                 .anyMatch(role -> RoleType.ROLE_TENANT.name().equals(role.getName()));
         if (!isTenant) {
             throw new ForbiddenException(
-                    "Chỉ Doanh nghiệp (Tenant) có quyền duyệt hoặc từ chối phiếu kiểm kê."
-            );
+                    "Chỉ Doanh nghiệp (Tenant) có quyền duyệt hoặc từ chối phiếu kiểm kê.");
         }
     }
 
