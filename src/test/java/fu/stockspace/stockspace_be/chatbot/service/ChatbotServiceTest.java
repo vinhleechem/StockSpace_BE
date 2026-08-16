@@ -10,6 +10,7 @@ import fu.stockspace.stockspace_be.chatbot.tool.ChatToolRegistry;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatRequestContext;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ChatProviderException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,6 +31,7 @@ import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -39,6 +41,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -165,6 +168,21 @@ class ChatbotServiceTest {
                 "xóa kho",
                 "Tôi không thể làm việc đó."
         );
+    }
+
+    @Test
+    void rejectsNonTenantBeforeCreatingSessionOrCallingAi() {
+        UUID userId = UUID.randomUUID();
+
+        ForbiddenException exception = assertThrows(ForbiddenException.class,
+                () -> service.processMessage(
+                        userId,
+                        "ROLE_OWNER",
+                        new SendMessageRequest(null, "Xem kho của tôi")
+                ));
+
+        assertEquals("Chatbot hiện chỉ hỗ trợ khách và người thuê kho", exception.getMessage());
+        verifyNoInteractions(conversationStore, toolRegistry, activeWarehouseContextResolver);
     }
 
     @Test

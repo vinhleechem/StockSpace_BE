@@ -40,6 +40,15 @@ public class PromptBuilder {
             hãy yêu cầu người dùng chọn kho bằng tên hoặc địa chỉ trên giao diện.
             """;
 
+    private static final String FOLLOW_UP_INSTRUCTION = """
+            Luôn hiểu các câu hỏi ngắn là câu hỏi nối tiếp trong lịch sử gần nhất. Không gọi lại tool không liên quan
+            chỉ vì từ khóa xuất hiện trong câu trả lời trước. Với câu hỏi về gói dịch vụ, gói cơ bản, bảng giá hoặc
+            quyền lợi, phải dùng getServicePackages. Với câu hỏi về gói của chính người thuê, gói đang dùng hoặc hạn
+            gói, phải dùng getMyActiveSubscription. Hợp đồng thuê kho và gói dịch vụ là hai loại dữ liệu khác nhau;
+            không kết luận không có thông tin gói chỉ vì kết quả hợp đồng không chứa gói. Nếu sau khi tra cứu vẫn còn
+            mơ hồ, nói rõ hai khả năng và hỏi một câu làm rõ ngắn gọn.
+            """;
+
     public String buildSystemPrompt(String roleName) {
         return buildSystemPrompt(roleName, List.of());
     }
@@ -59,6 +68,8 @@ public class PromptBuilder {
                 : allowedTools.stream().map(ChatTool::getName).sorted().toList();
 
         return BASE_INSTRUCTION
+                + "\n"
+                + FOLLOW_UP_INSTRUCTION
                 + "\n"
                 + roleInstruction(normalizedRole)
                 + "\n"
