@@ -1,6 +1,7 @@
 package fu.stockspace.stockspace_be.auth.dto;
 
 import fu.stockspace.stockspace_be.auth.entity.RoleType;
+import fu.stockspace.stockspace_be.common.validation.PhoneValidationPatterns;
 import jakarta.validation.constraints.*;
 import lombok.Data;
 
@@ -25,7 +26,7 @@ public class RegisterRequest {
     @Size(max = 150, message = "Full name must not exceed 150 characters")
     private String fullName;
 
-    @Pattern(regexp = "^(\\+84|0)[0-9]{9,10}$", message = "Invalid Vietnamese phone number")
+    @Pattern(regexp = PhoneValidationPatterns.VIETNAMESE_MOBILE, message = "Invalid Vietnamese mobile number")
     private String phone;
 
 
