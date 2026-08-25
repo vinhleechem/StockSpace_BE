@@ -21,6 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.ArrayList;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -139,7 +140,9 @@ class WarehouseServiceTest {
     void authenticatedContactRequestReturnsOwnerPhoneForVerifiedActiveWarehouse() {
         warehouse.setStatus(WarehouseStatus.AVAILABLE);
         warehouse.setVerified(true);
-        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        warehouse.setPublishedAt(LocalDateTime.now().minusDays(1));
+        warehouse.setVisibleUntil(LocalDateTime.now().plusDays(10));
+        when(warehouseRepository.findPublicAvailableById(warehouseId)).thenReturn(Optional.of(warehouse));
 
         WarehouseOwnerContactResponse response = warehouseService.getOwnerContact(warehouseId);
 
@@ -153,7 +156,7 @@ class WarehouseServiceTest {
     void contactRequestRejectsInactiveWarehouse() {
         warehouse.setStatus(WarehouseStatus.INACTIVE);
         warehouse.setVerified(true);
-        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(warehouseRepository.findPublicAvailableById(warehouseId)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class,
                 () -> warehouseService.getOwnerContact(warehouseId));
@@ -163,7 +166,7 @@ class WarehouseServiceTest {
     void contactRequestRejectsUnverifiedWarehouse() {
         warehouse.setStatus(WarehouseStatus.AVAILABLE);
         warehouse.setVerified(false);
-        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(warehouseRepository.findPublicAvailableById(warehouseId)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class,
                 () -> warehouseService.getOwnerContact(warehouseId));
@@ -174,7 +177,7 @@ class WarehouseServiceTest {
         warehouse.setStatus(WarehouseStatus.AVAILABLE);
         warehouse.setVerified(true);
         warehouse.setActive(false);
-        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(warehouseRepository.findPublicAvailableById(warehouseId)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class,
                 () -> warehouseService.getOwnerContact(warehouseId));
@@ -188,7 +191,7 @@ class WarehouseServiceTest {
 
     @Test
     void contactRequestRejectsMissingWarehouse() {
-        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.empty());
+        when(warehouseRepository.findPublicAvailableById(warehouseId)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class,
                 () -> warehouseService.getOwnerContact(warehouseId));
@@ -198,10 +201,12 @@ class WarehouseServiceTest {
     void publicWarehouseResponseDoesNotExposeOwnerPhone() throws Exception {
         warehouse.setStatus(WarehouseStatus.AVAILABLE);
         warehouse.setVerified(true);
-        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        warehouse.setPublishedAt(LocalDateTime.now().minusDays(1));
+        warehouse.setVisibleUntil(LocalDateTime.now().plusDays(10));
+        when(warehouseRepository.findPublicAvailableById(warehouseId)).thenReturn(Optional.of(warehouse));
 
         WarehouseResponse response = warehouseService.getWarehouseDetail(warehouseId);
-        String json = new ObjectMapper().writeValueAsString(response);
+        String json = new ObjectMapper().findAndRegisterModules().writeValueAsString(response);
 
         assertFalse(json.contains("ownerPhone"));
         assertFalse(json.contains("0987654321"));

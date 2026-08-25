@@ -225,16 +225,6 @@ public class DataInitializer implements CommandLineRunner {
         }
 
         private void seedSystemConfig() {
-
-                ServicePackage postingFeePkg = packageRepository.findByName("Phí Đăng Bài Kho Bãi")
-                                .orElseGet(() -> packageRepository.save(ServicePackage.builder()
-                                                .name("Phí Đăng Bài Kho Bãi")
-                                                .features("{\"type\":\"POSTING_FEE\"}")
-                                                .price(new BigDecimal("50000.00"))
-                                                .durationDays(0)
-                                                .isActive(true)
-                                                .build()));
-
                 if (systemConfigRepository.count() == 0) {
                         systemConfigRepository.save(SystemConfig.builder()
                                         .configKey("deposit_percentage")
@@ -245,11 +235,6 @@ public class DataInitializer implements CommandLineRunner {
                                         .configKey("contract_expiry_days")
                                         .configValue("7")
                                         .description("Số ngày tối đa để Tenant xác nhận ký hợp đồng online sau khi Owner submit")
-                                        .build());
-                        systemConfigRepository.save(SystemConfig.builder()
-                                        .configKey("warehouse_publish_package_id")
-                                        .configValue(postingFeePkg.getId().toString())
-                                        .description("ID của gói dịch vụ Phí Đăng Bài Kho Bãi trong hệ thống")
                                         .build());
                         log.info("Seeded default system configurations successfully");
                 }

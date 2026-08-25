@@ -4,6 +4,7 @@ import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.warehouse.dto.*;
 import fu.stockspace.stockspace_be.warehouse.entity.*;
@@ -116,6 +117,15 @@ class WarehouseLayoutServiceTest {
         assertEquals(4, response.getRacks().get(0).getBins().get(0).getOccupiedPositions().size());
         assertTrue(response.getRacks().get(0).getBins().get(0).getOccupiedPositions().contains("0:0"));
         assertTrue(response.getRacks().get(0).getBins().get(0).getOccupiedPositions().contains("1:1"));
+    }
+
+    @Test
+    void testGetLayoutTree_PublicRequiresVisibleWarehouse() {
+        when(warehouseRepository.findPublicAvailableById(warehouseId)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class,
+                () -> layoutService.getLayoutTree(warehouseId, null, "PUBLIC"));
+        verify(layoutRepository, never()).findByWarehouseIdAndIsDefaultTrue(warehouseId);
     }
 
     @Test

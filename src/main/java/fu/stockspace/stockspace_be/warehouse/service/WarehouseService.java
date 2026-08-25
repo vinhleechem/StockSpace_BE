@@ -21,11 +21,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import fu.stockspace.stockspace_be.wallet.service.WalletService;
-import fu.stockspace.stockspace_be.wallet.entity.TransactionType;
-import fu.stockspace.stockspace_be.common.service.SystemConfigService;
-import fu.stockspace.stockspace_be.subscription.entity.ServicePackage;
-import fu.stockspace.stockspace_be.subscription.repository.ServicePackageRepository;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
 
 import fu.stockspace.stockspace_be.auth.util.SecurityUtil;
@@ -57,9 +52,6 @@ public class WarehouseService {
     private final WarehouseImageRepository warehouseImageRepository;
     private final UserRepository userRepository;
     private final SystemPolicyRepository systemPolicyRepository;
-    private final WalletService walletService;
-    private final SystemConfigService systemConfigService;
-    private final ServicePackageRepository servicePackageRepository;
     private final NotificationService notificationService;
     private final RentalContractRepository rentalContractRepository;
     private final StaffWarehouseAssignmentRepository staffWarehouseAssignmentRepository;
@@ -130,42 +122,6 @@ public class WarehouseService {
                 .isVerified(false)
                 .policy(policy)
                 .build();
-
-
-        java.math.BigDecimal publishFee = null;
-        String feeStr = systemConfigService.getValue("warehouse_publish_fee", null);
-        if (feeStr != null && !feeStr.trim().isEmpty()) {
-            try {
-                publishFee = new java.math.BigDecimal(feeStr.trim());
-            } catch (NumberFormatException ignored) {}
-        }
-
-
-        if (publishFee == null) {
-            String pkgIdStr = systemConfigService.getValue("warehouse_publish_package_id", null);
-            if (pkgIdStr != null) {
-                try {
-                    UUID pkgId = UUID.fromString(pkgIdStr.trim());
-                    ServicePackage publishPkg = servicePackageRepository.findById(pkgId).orElse(null);
-                    if (publishPkg != null) {
-                        publishFee = publishPkg.getPrice();
-                    }
-                } catch (IllegalArgumentException ignored) {}
-            }
-        }
-
-        if (publishFee != null && publishFee.compareTo(java.math.BigDecimal.ZERO) > 0) {
-            walletService.deductBalance(
-                    ownerId,
-                    publishFee,
-                    TransactionType.COMMISSION,
-                    "Trừ phí đăng bài kho bãi: " + request.getName(),
-                    null,
-                    null
-            );
-            log.info("Deducted posting fee of {} from owner {} for warehouse {}", publishFee, ownerId, request.getName());
-        }
-
 
         warehouse = warehouseRepository.save(warehouse);
 
@@ -360,20 +316,15 @@ public class WarehouseService {
 
     @Transactional(readOnly = true)
     public WarehouseResponse getWarehouseDetail(UUID warehouseId) {
-        Warehouse warehouse = warehouseRepository.findById(warehouseId)
+        Warehouse warehouse = warehouseRepository.findPublicAvailableById(warehouseId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
-
-        if (warehouse.getStatus() == WarehouseStatus.PENDING_APPROVAL) {
-            throw new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND);
-        }
 
         return mapToResponse(warehouse);
     }
 
     @Transactional(readOnly = true)
     public WarehouseOwnerContactResponse getOwnerContact(UUID warehouseId) {
-        Warehouse warehouse = warehouseRepository.findById(warehouseId)
-                .filter(this::isContactableWarehouse)
+        Warehouse warehouse = warehouseRepository.findPublicAvailableById(warehouseId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
 
         User owner = warehouse.getOwner();
@@ -387,15 +338,6 @@ public class WarehouseService {
                 .ownerName(owner.getFullName())
                 .phone(owner.getPhone())
                 .build();
-    }
-
-    private boolean isContactableWarehouse(Warehouse warehouse) {
-        return warehouse != null
-                && warehouse.isActive()
-                && !warehouse.isDeleted()
-                && warehouse.isVerified()
-                && warehouse.getStatus() != null
-                && warehouse.getStatus() != WarehouseStatus.INACTIVE;
     }
 
 
@@ -641,6 +583,8 @@ public class WarehouseService {
                 .imageUrls(urls)
                 .policyId(w.getPolicy() != null ? w.getPolicy().getId() : null)
                 .policyVersion(w.getPolicy() != null ? w.getPolicy().getVersion() : null)
+                .publishedAt(w.getPublishedAt())
+                .visibleUntil(w.getVisibleUntil())
                 .createdAt(w.getCreatedAt())
                 .updatedAt(w.getUpdatedAt())
                 .build();

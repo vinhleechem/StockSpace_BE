@@ -39,7 +39,11 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
             WHERE w.id = :id
               AND w.isActive = true
               AND w.isDeleted = false
+              AND w.isVerified = true
               AND w.status = fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus.AVAILABLE
+              AND w.publishedAt IS NOT NULL
+              AND w.visibleUntil IS NOT NULL
+              AND w.visibleUntil > CURRENT_TIMESTAMP
             """)
     Optional<Warehouse> findPublicAvailableById(@Param("id") UUID id);
 
@@ -48,7 +52,11 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
             SELECT w FROM Warehouse w
             WHERE w.isActive = true
               AND w.isDeleted = false
+              AND w.isVerified = true
               AND ((:status IS NULL AND w.status = fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus.AVAILABLE) OR (:status IS NOT NULL AND w.status = :status))
+              AND w.publishedAt IS NOT NULL
+              AND w.visibleUntil IS NOT NULL
+              AND w.visibleUntil > CURRENT_TIMESTAMP
               AND (:keyword IS NULL OR LOWER(w.name) LIKE :keyword
                    OR LOWER(w.address) LIKE :keyword
                    OR LOWER(w.description) LIKE :keyword

@@ -7,7 +7,6 @@ import fu.stockspace.stockspace_be.common.entity.SystemConfigKey;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.common.repository.SystemConfigRepository;
-import fu.stockspace.stockspace_be.subscription.repository.ServicePackageRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,8 +25,6 @@ import static org.mockito.Mockito.*;
 class SystemConfigServiceTest {
 
     @Mock private SystemConfigRepository configRepository;
-    @Mock private ServicePackageRepository packageRepository;
-
     @InjectMocks
     private SystemConfigService configService;
 
@@ -99,11 +96,6 @@ class SystemConfigServiceTest {
                 .thenReturn(Optional.empty());
         when(configRepository.findByConfigKey(SystemConfigKey.CONTRACT_EXPIRY_DAYS.getKey()))
                 .thenReturn(Optional.empty());
-        when(configRepository.findByConfigKey(SystemConfigKey.WAREHOUSE_PUBLISH_FEE.getKey()))
-                .thenReturn(Optional.empty());
-        when(configRepository.findByConfigKey(SystemConfigKey.WAREHOUSE_PUBLISH_PACKAGE_ID.getKey()))
-                .thenReturn(Optional.empty());
-
         List<SystemConfigResponse> responses = configService.getAllConfigs();
 
 
@@ -193,47 +185,6 @@ class SystemConfigServiceTest {
     }
 
     @Test
-    void testUpdateConfig_Success_PackageId() {
-        UUID validId = UUID.randomUUID();
-        when(configRepository.findByConfigKey(SystemConfigKey.WAREHOUSE_PUBLISH_PACKAGE_ID.getKey()))
-                .thenReturn(Optional.empty());
-        when(packageRepository.existsById(validId)).thenReturn(true);
-        when(configRepository.save(any(SystemConfig.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        UpdateSystemConfigRequest request = UpdateSystemConfigRequest.builder()
-                .configValue(validId.toString())
-                .build();
-
-        SystemConfigResponse response = configService.updateConfig(SystemConfigKey.WAREHOUSE_PUBLISH_PACKAGE_ID.getKey(), request);
-
-        assertNotNull(response);
-        assertEquals(validId.toString(), response.getConfigValue());
-    }
-
-    @Test
-    void testUpdateConfig_PackageId_NotFound() {
-        UUID nonExistentId = UUID.randomUUID();
-        when(packageRepository.existsById(nonExistentId)).thenReturn(false);
-
-        UpdateSystemConfigRequest request = UpdateSystemConfigRequest.builder()
-                .configValue(nonExistentId.toString())
-                .build();
-
-        assertThrows(BadRequestException.class, () ->
-                configService.updateConfig(SystemConfigKey.WAREHOUSE_PUBLISH_PACKAGE_ID.getKey(), request));
-    }
-
-    @Test
-    void testUpdateConfig_PackageId_InvalidUUIDFormat() {
-        UpdateSystemConfigRequest request = UpdateSystemConfigRequest.builder()
-                .configValue("invalid-uuid-string")
-                .build();
-
-        assertThrows(BadRequestException.class, () ->
-                configService.updateConfig(SystemConfigKey.WAREHOUSE_PUBLISH_PACKAGE_ID.getKey(), request));
-    }
-
-    @Test
     void testUpdateConfig_ConfigNotFound() {
         UpdateSystemConfigRequest request = UpdateSystemConfigRequest.builder()
                 .configValue("any")
@@ -251,17 +202,10 @@ class SystemConfigServiceTest {
                 .thenReturn(Optional.of(feeConfig));
         when(configRepository.findByConfigKey(SystemConfigKey.CONTRACT_EXPIRY_DAYS.getKey()))
                 .thenReturn(Optional.empty());
-        when(configRepository.findByConfigKey(SystemConfigKey.WAREHOUSE_PUBLISH_FEE.getKey()))
-                .thenReturn(Optional.empty());
-
         List<SystemConfigResponse> responses = configService.getPublicConfigs();
 
         assertNotNull(responses);
-        assertEquals(4, responses.size());
-
-        boolean hasPackageId = responses.stream()
-                .anyMatch(r -> r.getConfigKey().equals(SystemConfigKey.WAREHOUSE_PUBLISH_PACKAGE_ID.getKey()));
-        assertFalse(hasPackageId);
+        assertEquals(3, responses.size());
     }
 
 
@@ -277,8 +221,8 @@ class SystemConfigServiceTest {
     }
 
     @Test
-    void testGetPublicConfigByKey_Failure_PrivateConfig() {
+    void testGetPublicConfigByKey_Failure_RemovedLegacyConfig() {
         assertThrows(ResourceNotFoundException.class, () ->
-                configService.getPublicConfigByKey(SystemConfigKey.WAREHOUSE_PUBLISH_PACKAGE_ID.getKey()));
+                configService.getPublicConfigByKey("warehouse_publish_package_id"));
     }
 }

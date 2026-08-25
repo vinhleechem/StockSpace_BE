@@ -36,6 +36,8 @@ public class WarehouseResponse {
     private List<String> imageUrls;
     private UUID policyId;
     private String policyVersion;
+    private LocalDateTime publishedAt;
+    private LocalDateTime visibleUntil;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

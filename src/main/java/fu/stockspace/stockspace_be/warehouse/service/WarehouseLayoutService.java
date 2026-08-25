@@ -79,7 +79,9 @@ public class WarehouseLayoutService {
                 layout = layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId).orElse(null);
             }
         } else {
-
+            if (warehouseRepository.findPublicAvailableById(warehouseId).isEmpty()) {
+                throw new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND);
+            }
             layout = layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId).orElse(null);
         }
 
