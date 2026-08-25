@@ -33,6 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -142,6 +143,35 @@ class ListingOrderServiceTest {
         assertEquals(currentVisibleUntil, response.getPeriodStart());
         assertEquals(currentVisibleUntil.plusDays(15), response.getPeriodEnd());
         assertEquals(publishedAt, warehouse.getPublishedAt());
+    }
+
+    @Test
+    void sequentialRenewalsExtendFromTheLatestLockedPublicationPeriod() {
+        Transaction transaction = Transaction.builder().id(UUID.randomUUID()).build();
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(listingPackageRepository.findById(packageId)).thenReturn(Optional.of(listingPackage));
+        when(listingOrderRepository.save(any(ListingOrder.class))).thenAnswer(invocation -> {
+            ListingOrder order = invocation.getArgument(0);
+            order.setId(UUID.randomUUID());
+            return order;
+        });
+        when(walletService.deductBalance(
+                eq(ownerId), eq(listingPackage.getPrice()), eq(TransactionType.LISTING_FEE),
+                any(String.class), eq(null), eq(null)
+        )).thenReturn(transaction);
+
+        var firstOrder = listingOrderService.purchaseOrRenew(
+                ownerId, warehouseId, new PurchaseListingPackageRequest(packageId));
+        var firstPeriodEnd = firstOrder.getPeriodEnd();
+
+        var secondOrder = listingOrderService.purchaseOrRenew(
+                ownerId, warehouseId, new PurchaseListingPackageRequest(packageId));
+
+        assertEquals(firstPeriodEnd, secondOrder.getPeriodStart());
+        assertEquals(firstPeriodEnd.plusDays(10), secondOrder.getPeriodEnd());
+        assertEquals(secondOrder.getPeriodEnd(), warehouse.getVisibleUntil());
+        verify(warehouseRepository, times(2)).findByIdForUpdate(warehouseId);
+        verify(warehouseRepository, never()).findById(warehouseId);
     }
 
     @Test
