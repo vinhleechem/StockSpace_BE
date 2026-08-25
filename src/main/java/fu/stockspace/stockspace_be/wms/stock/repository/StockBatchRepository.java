@@ -76,13 +76,13 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
               AND b.isDeleted = false
               AND EXISTS (
                   SELECT c.id FROM RentalContract c
-                  WHERE c.booking.tenant.id = :tenantId
-                    AND c.booking.warehouse.id = b.warehouse.id
+                  WHERE c.tenant.id = :tenantId
+                    AND c.warehouse.id = b.warehouse.id
                     AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
                     AND c.isActive = true
                     AND c.isDeleted = false
-                    AND c.booking.isActive = true
-                    AND c.booking.isDeleted = false
+                    AND c.startDate <= CURRENT_DATE
+                    AND c.endDate >= CURRENT_DATE
               )
             """)
     List<StockBatch> findBySkuIdInActiveTenantWarehouses(
@@ -97,13 +97,13 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
               AND b.isDeleted = false
               AND EXISTS (
                   SELECT c.id FROM RentalContract c
-                  WHERE c.booking.tenant.id = :tenantId
-                    AND c.booking.warehouse.id = b.warehouse.id
+                  WHERE c.tenant.id = :tenantId
+                    AND c.warehouse.id = b.warehouse.id
                     AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
                     AND c.isActive = true
                     AND c.isDeleted = false
-                    AND c.booking.isActive = true
-                    AND c.booking.isDeleted = false
+                    AND c.startDate <= CURRENT_DATE
+                    AND c.endDate >= CURRENT_DATE
               )
               AND EXISTS (
                   SELECT a.id FROM StaffWarehouseAssignment a

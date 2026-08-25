@@ -5,6 +5,9 @@ import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
+import fu.stockspace.stockspace_be.common.exception.ErrorCode;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
+import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.wms.product.dto.CreateSkuRequest;
 import fu.stockspace.stockspace_be.wms.product.dto.ProductSkuResponse;
 
@@ -52,6 +55,9 @@ class ProductSkuServiceTest {
     @Mock
     private UnitOfMeasureRepository uomRepository;
 
+    @Mock
+    private TenantWarehouseAccessService accessService;
+
     @InjectMocks
     private ProductSkuService skuService;
 
@@ -64,6 +70,17 @@ class ProductSkuServiceTest {
                 .code("PCS")
                 .name("Cái")
                 .build();
+    }
+
+    @Test
+    void createSkuRequiresActiveSubscriptionInService() {
+        UUID tenantId = UUID.randomUUID();
+        doThrow(new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED))
+                .when(accessService).requireActiveSubscription(tenantId);
+
+        assertThrows(ForbiddenException.class,
+                () -> skuService.createSku(tenantId, CreateSkuRequest.builder().build()));
+        verifyNoInteractions(userRepository);
     }
 
     @Test

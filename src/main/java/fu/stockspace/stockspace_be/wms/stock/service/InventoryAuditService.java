@@ -8,11 +8,12 @@ import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
-import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
+import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import fu.stockspace.stockspace_be.staff.entity.TenantMember;
+import fu.stockspace.stockspace_be.staff.entity.AssignmentStatus;
+import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
 import fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository;
-import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
 import fu.stockspace.stockspace_be.wms.product.entity.ProductSku;
@@ -52,18 +53,18 @@ public class InventoryAuditService {
     private final ProductSkuRepository productSkuRepository;
     private final InventoryReceiptService inventoryReceiptService;
     private final NotificationService notificationService;
-    private final SubscriptionService subscriptionService;
     private final TenantMemberRepository tenantMemberRepository;
-    private final RentalContractRepository rentalContractRepository;
+    private final StaffWarehouseAssignmentRepository assignmentRepository;
+    private final TenantWarehouseAccessService accessService;
 
     @Transactional
     public InventoryAuditResponse createAudit(UUID userId, CreateInventoryAuditRequest request) {
-        checkSubscription(userId);
-
         User requestedBy = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
         Warehouse warehouse = warehouseRepository.findById(request.getWarehouseId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
+        UUID tenantId = resolveTenantId(userId);
+        requireWarehouseMutationAccess(requestedBy, tenantId, warehouse.getId());
 
         InventoryAudit audit = InventoryAudit.builder()
                 .warehouse(warehouse)
@@ -90,10 +91,6 @@ public class InventoryAuditService {
 
         try {
             final String whName = warehouse.getName();
-            UUID tenantId = tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(userId)
-                    .map(member -> member.getTenant().getId())
-                    .orElse(userId);
-
             if (userId.equals(tenantId)) {
                 // Tenant tạo phiếu -> thông báo cho các Staff
                 List<TenantMember> staffList = tenantMemberRepository.findActiveStaffsOrderByJoinedAtAsc(tenantId);
@@ -129,6 +126,9 @@ public class InventoryAuditService {
     @Transactional
     public InventoryAuditResponse submitAudit(UUID userId, UUID auditId, SubmitAuditRequest request) {
         InventoryAudit audit = getAuditForUser(auditId, userId);
+        User actor = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+        requireWarehouseMutationAccess(actor, resolveTenantId(userId), audit.getWarehouse().getId());
 
         if (audit.getStatus() != AuditStatus.PENDING) {
             throw new BadRequestException(ErrorCode.AUDIT_INVALID_STATUS);
@@ -184,6 +184,7 @@ public class InventoryAuditService {
         User approver = userRepository.findById(approverId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
         ensureApproverIsTenant(approver);
+        requireWarehouseMutationAccess(approver, resolveTenantId(approverId), audit.getWarehouse().getId());
 
         List<InventoryAuditItem> items = auditItemRepository.findByAuditId(auditId);
         UUID warehouseId = audit.getWarehouse().getId();
@@ -227,6 +228,7 @@ public class InventoryAuditService {
         User approver = userRepository.findById(approverId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
         ensureApproverIsTenant(approver);
+        requireWarehouseMutationAccess(approver, resolveTenantId(approverId), audit.getWarehouse().getId());
 
         audit.setApprovedBy(approver);
         audit.setStatus(AuditStatus.REJECTED);
@@ -257,24 +259,24 @@ public class InventoryAuditService {
 
     @Transactional(readOnly = true)
     public PagedResponse<InventoryAuditResponse> getMyAudits(UUID userId, UUID warehouseId, Pageable pageable) {
-        UUID tenantId = tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(userId)
-                .map(member -> member.getTenant().getId())
-                .orElse(userId);
-
-        List<UUID> rentedWarehouseIds = rentalContractRepository != null
-                ? rentalContractRepository.findActiveRentedWarehousesByTenantId(tenantId)
-                        .stream()
-                        .map(Warehouse::getId)
-                        .collect(Collectors.toList())
-                : List.of();
+        User actor = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+        UUID tenantId = resolveTenantId(userId);
+        List<UUID> accessibleWarehouseIds = accessService.findActiveContractWarehouses(tenantId)
+                .stream()
+                .map(Warehouse::getId)
+                .filter(id -> !isStaff(actor) || assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
+                        userId, tenantId, id, AssignmentStatus.ACTIVE))
+                .toList();
 
         Page<InventoryAudit> page;
         if (warehouseId != null) {
+            requireWarehouseObservationAccess(actor, tenantId, warehouseId);
             page = auditRepository.findByWarehouseIdAndIsDeletedFalse(warehouseId, pageable);
-        } else if (!rentedWarehouseIds.isEmpty()) {
-            page = auditRepository.findAuditsForTenant(null, rentedWarehouseIds, userId, pageable);
+        } else if (!accessibleWarehouseIds.isEmpty()) {
+            page = auditRepository.findAuditsForTenant(null, accessibleWarehouseIds, userId, pageable);
         } else {
-            page = auditRepository.findByRequestedByIdAndIsDeletedFalse(userId, pageable);
+            page = Page.empty(pageable);
         }
 
         return PagedResponse.fromPage(page, audit -> {
@@ -302,36 +304,34 @@ public class InventoryAuditService {
     private InventoryAudit getAuditForUser(UUID auditId, UUID userId) {
         InventoryAudit audit = auditRepository.findById(auditId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.AUDIT_NOT_FOUND));
-
-        boolean isRequester = audit.getRequestedBy().getId().equals(userId);
-        boolean isApprover = audit.getApprovedBy() != null && audit.getApprovedBy().getId().equals(userId);
-        if (isRequester || isApprover) {
-            return audit;
-        }
-
-        UUID tenantId = tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(userId)
-                .map(member -> member.getTenant().getId())
-                .orElse(userId);
-
-        boolean isTenantOfWarehouse = rentalContractRepository != null
-                && rentalContractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(tenantId,
-                        audit.getWarehouse().getId());
-
-        if (!isTenantOfWarehouse) {
-            throw new ForbiddenException(ErrorCode.FORBIDDEN);
-        }
+        User actor = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+        requireWarehouseObservationAccess(actor, resolveTenantId(userId), audit.getWarehouse().getId());
         return audit;
     }
 
-    private void checkSubscription(UUID userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
-        UUID tenantId = tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(userId)
+    private UUID resolveTenantId(UUID userId) {
+        return tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(userId)
                 .map(member -> member.getTenant().getId())
                 .orElse(userId);
-        if (!subscriptionService.hasActiveSubscription(tenantId)) {
-            throw new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED);
+    }
+
+    private void requireWarehouseObservationAccess(User actor, UUID tenantId, UUID warehouseId) {
+        accessService.requireActiveContract(tenantId, warehouseId);
+        if (isStaff(actor) && !assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
+                actor.getId(), tenantId, warehouseId, AssignmentStatus.ACTIVE)) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
+    }
+
+    private void requireWarehouseMutationAccess(User actor, UUID tenantId, UUID warehouseId) {
+        requireWarehouseObservationAccess(actor, tenantId, warehouseId);
+        accessService.requireActiveSubscription(tenantId);
+    }
+
+    private boolean isStaff(User user) {
+        return user.getRoles() != null && user.getRoles().stream()
+                .anyMatch(role -> RoleType.ROLE_STAFF.name().equals(role.getName()));
     }
 
     private void ensureApproverIsTenant(User approver) {

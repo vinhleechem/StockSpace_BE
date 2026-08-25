@@ -6,6 +6,7 @@ import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
+import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.wms.product.dto.CreateSkuRequest;
 import fu.stockspace.stockspace_be.wms.product.dto.ProductSkuResponse;
 import fu.stockspace.stockspace_be.wms.product.dto.UpdateSkuRequest;
@@ -37,6 +38,7 @@ public class ProductSkuService {
     private final StockBatchRepository stockBatchRepository;
     private final UserRepository userRepository;
     private final UnitOfMeasureRepository uomRepository;
+    private final TenantWarehouseAccessService accessService;
 
     public PagedResponse<ProductSkuResponse> getMySKUs(UUID tenantId, Pageable pageable) {
         Page<ProductSku> page = skuRepository.findAllActiveByTenantOrSystem(tenantId, pageable);
@@ -57,6 +59,7 @@ public class ProductSkuService {
 
     @Transactional
     public ProductSkuResponse createSku(UUID tenantId, CreateSkuRequest request) {
+        accessService.requireActiveSubscription(tenantId);
         User tenant = userRepository.findById(tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
 
@@ -103,6 +106,7 @@ public class ProductSkuService {
 
     @Transactional
     public ProductSkuResponse updateSku(UUID tenantId, UUID skuId, UpdateSkuRequest request) {
+        accessService.requireActiveSubscription(tenantId);
         ProductSku sku = skuRepository.findByIdAndIsDeletedFalse(skuId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.SKU_NOT_FOUND));
 
@@ -155,6 +159,7 @@ public class ProductSkuService {
 
     @Transactional
     public void deleteSku(UUID tenantId, UUID skuId) {
+        accessService.requireActiveSubscription(tenantId);
         ProductSku sku = skuRepository.findByIdAndIsDeletedFalse(skuId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.SKU_NOT_FOUND));
 

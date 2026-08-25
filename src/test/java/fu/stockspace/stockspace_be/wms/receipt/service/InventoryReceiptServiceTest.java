@@ -5,7 +5,8 @@ import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.booking.entity.ApprovalStatus;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
-import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
+import fu.stockspace.stockspace_be.common.exception.ErrorCode;
+import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseBin;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseLayout;
@@ -52,9 +53,8 @@ class InventoryReceiptServiceTest {
     @Mock private ProductSkuRepository productSkuRepository;
     @Mock private WarehouseRackRepository rackRepository;
     @Mock private WarehouseBinRepository binRepository;
-    @Mock private SubscriptionService subscriptionService;
     @Mock private fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository tenantMemberRepository;
-    @Mock private fu.stockspace.stockspace_be.contract.repository.RentalContractRepository rentalContractRepository;
+    @Mock private TenantWarehouseAccessService accessService;
     @Mock private fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository assignmentRepository;
     @Mock private fu.stockspace.stockspace_be.notification.service.NotificationService notificationService;
 
@@ -89,14 +89,12 @@ class InventoryReceiptServiceTest {
         binId = UUID.randomUUID();
         bin = WarehouseBin.builder().id(binId).rack(rack).name("Bin 1").build();
 
-        lenient().when(rentalContractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(any(), any())).thenReturn(true);
         lenient().when(assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(any(), any(), any(), any())).thenReturn(true);
     }
 
     @Test
     void testCreateReceipt_Success() {
         when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
-        when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
         when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, userId))
                 .thenReturn(Optional.of(productSku));
@@ -155,7 +153,6 @@ class InventoryReceiptServiceTest {
                 .build();
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
-        when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
         when(receiptRepository.save(any(InventoryReceipt.class))).thenAnswer(i -> i.getArgument(0));
         when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, userId))
@@ -205,7 +202,6 @@ class InventoryReceiptServiceTest {
         productSku.setUnitVolumeM3(java.math.BigDecimal.valueOf(0.1));
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
-        when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
         when(receiptRepository.save(any(InventoryReceipt.class))).thenAnswer(i -> i.getArgument(0));
         when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, userId))
@@ -242,7 +238,6 @@ class InventoryReceiptServiceTest {
         productSku.setUnitVolumeM3(java.math.BigDecimal.valueOf(0.1));
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
-        when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
         when(receiptRepository.save(any(InventoryReceipt.class))).thenAnswer(i -> i.getArgument(0));
         when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, userId))
@@ -268,7 +263,9 @@ class InventoryReceiptServiceTest {
     @Test
     void testCreateReceipt_SubscriptionRequired() {
         when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
-        when(subscriptionService.hasActiveSubscription(userId)).thenReturn(false);
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        doThrow(new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED))
+                .when(accessService).requireActiveSubscription(userId);
 
         CreateInventoryReceiptRequest request = CreateInventoryReceiptRequest.builder()
                 .warehouseId(warehouseId)
@@ -281,7 +278,6 @@ class InventoryReceiptServiceTest {
     @Test
     void testCreateReceipt_InvalidCoordinates_RackNotInWarehouse() {
         when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
-        when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
         when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, userId))
                 .thenReturn(Optional.of(productSku));
@@ -310,7 +306,6 @@ class InventoryReceiptServiceTest {
     @Test
     void testCreateReceipt_RejectsSkuOwnedByAnotherTenant() {
         when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
-        when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
         when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, userId))
                 .thenReturn(Optional.empty());
@@ -350,7 +345,6 @@ class InventoryReceiptServiceTest {
         when(userRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(staffId))
                 .thenReturn(Optional.of(membership));
-        when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
         when(assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
                 staffId, userId, warehouseId,
@@ -392,7 +386,6 @@ class InventoryReceiptServiceTest {
                 .status(ApprovalStatus.PENDING)
                 .build();
         when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
-        when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
 
         InventoryReceiptItem item = InventoryReceiptItem.builder()
                 .id(UUID.randomUUID())
@@ -431,7 +424,6 @@ class InventoryReceiptServiceTest {
                 .status(ApprovalStatus.PENDING)
                 .build();
         when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
-        when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
 
         InventoryReceiptItem item = InventoryReceiptItem.builder()
                 .id(UUID.randomUUID())
@@ -479,7 +471,6 @@ class InventoryReceiptServiceTest {
                 .status(ApprovalStatus.PENDING)
                 .build();
         when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
-        when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
 
         InventoryReceiptItem item = InventoryReceiptItem.builder()
                 .id(UUID.randomUUID())
@@ -527,7 +518,6 @@ class InventoryReceiptServiceTest {
                 .status(ApprovalStatus.PENDING)
                 .build();
         when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
-        when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
 
         InventoryReceiptItem item = InventoryReceiptItem.builder()
                 .id(UUID.randomUUID())
@@ -567,7 +557,6 @@ class InventoryReceiptServiceTest {
                 .status(ApprovalStatus.PENDING)
                 .build();
         when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
-        when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
         when(receiptRepository.save(any(InventoryReceipt.class))).thenAnswer(i -> i.getArgument(0));
         when(receiptItemRepository.findByReceiptId(receipt.getId())).thenReturn(List.of());
 

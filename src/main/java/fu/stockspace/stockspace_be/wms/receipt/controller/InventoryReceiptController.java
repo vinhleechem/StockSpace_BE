@@ -2,11 +2,7 @@ package fu.stockspace.stockspace_be.wms.receipt.controller;
 
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.util.SecurityUtil;
-import fu.stockspace.stockspace_be.auth.util.TenantContextUtil;
 import fu.stockspace.stockspace_be.common.dto.ApiResponse;
-import fu.stockspace.stockspace_be.common.exception.ErrorCode;
-import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
-import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
 import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.wms.receipt.dto.CreateInventoryReceiptRequest;
 import fu.stockspace.stockspace_be.wms.receipt.dto.InventoryReceiptResponse;
@@ -32,14 +28,6 @@ import java.util.UUID;
 public class InventoryReceiptController {
 
     private final InventoryReceiptService receiptService;
-    private final SubscriptionService subscriptionService;
-
-    private void checkSubscription() {
-        UUID tenantId = TenantContextUtil.getCurrentTenantId();
-        if (!subscriptionService.hasActiveSubscription(tenantId)) {
-            throw new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED);
-        }
-    }
 
     @PostMapping
     @PreAuthorize("@rbac.hasAnyPermission('INBOUND_CREATE', 'OUTBOUND_CREATE')")
@@ -47,7 +35,6 @@ public class InventoryReceiptController {
     public ResponseEntity<ApiResponse<InventoryReceiptResponse>> createReceipt(
             @Valid @RequestBody CreateInventoryReceiptRequest request
     ) {
-        checkSubscription();
         UUID userId = SecurityUtil.getCurrentUserId();
         InventoryReceiptResponse response = receiptService.createReceipt(userId, request);
         return ResponseEntity.ok(ApiResponse.success("Tạo phiếu nhập/xuất kho thành công", response));
@@ -57,7 +44,6 @@ public class InventoryReceiptController {
     @PreAuthorize("@rbac.hasPermission('INVENTORY_UPDATE')")
     @Operation(summary = "Duyệt phiếu nhập/xuất kho (cộng/trừ kho và ghi nhật ký giao dịch)")
     public ResponseEntity<ApiResponse<InventoryReceiptResponse>> approveReceipt(@PathVariable UUID id) {
-        checkSubscription();
         UUID userId = SecurityUtil.getCurrentUserId();
         InventoryReceiptResponse response = receiptService.approveReceipt(userId, id);
         return ResponseEntity.ok(ApiResponse.success("Duyệt phiếu thành công, kho hàng đã cập nhật", response));
@@ -70,7 +56,6 @@ public class InventoryReceiptController {
             @PathVariable UUID id,
             @Valid @RequestBody(required = false) RejectReceiptRequest request
     ) {
-        checkSubscription();
         UUID userId = SecurityUtil.getCurrentUserId();
         String reason = request != null ? request.getReason() : null;
         InventoryReceiptResponse response = receiptService.rejectReceipt(userId, id, reason);
@@ -86,7 +71,6 @@ public class InventoryReceiptController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
-        checkSubscription();
         Pageable pageable = PageRequest.of(page, size);
         UUID userId = SecurityUtil.getCurrentUserId();
         PagedResponse<InventoryReceiptResponse> response = receiptService.getReceiptsByWarehouse(userId, warehouseId, type, pageable);
@@ -98,7 +82,6 @@ public class InventoryReceiptController {
     @PreAuthorize("@rbac.hasPermission('INVENTORY_READ')")
     @Operation(summary = "Xem chi tiết phiếu nhập/xuất kho")
     public ResponseEntity<ApiResponse<InventoryReceiptResponse>> getReceiptDetail(@PathVariable UUID id) {
-        checkSubscription();
         UUID userId = SecurityUtil.getCurrentUserId();
         InventoryReceiptResponse response = receiptService.getReceiptDetail(userId, id);
         return ResponseEntity.ok(ApiResponse.success("Lấy chi tiết phiếu thành công", response));
@@ -111,7 +94,6 @@ public class InventoryReceiptController {
             @RequestParam UUID warehouseId,
             @RequestParam(required = false) DocumentType type
     ) {
-        checkSubscription();
         UUID userId = SecurityUtil.getCurrentUserId();
         byte[] csvData = receiptService.exportReceiptsToCsv(userId, warehouseId, type);
         String filename = "inventory_receipts_" + (type != null ? type.name().toLowerCase() : "all") + ".csv";
