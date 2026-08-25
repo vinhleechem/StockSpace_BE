@@ -26,10 +26,6 @@ public enum PermissionCode {
     WAREHOUSE_LAYOUT_TENANT_MANAGE("Manage layouts for rented warehouses"),
     WAREHOUSE_REVIEW("Review warehouse listings"),
 
-    RENTAL_REQUEST_CREATE("Create rental requests"),
-    RENTAL_REQUEST_READ("View own rental requests"),
-    RENTAL_REQUEST_PROCESS("Process rental requests for own warehouses"),
-
     CONTRACT_READ("View own rental contracts"),
     CONTRACT_HANDOVER_CONFIRM("Confirm handover on own contracts"),
     CONTRACT_OWNER_MANAGE("Submit or cancel own owner-side contracts"),

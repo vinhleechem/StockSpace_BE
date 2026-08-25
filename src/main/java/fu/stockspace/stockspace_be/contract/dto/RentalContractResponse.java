@@ -25,8 +25,6 @@ public class RentalContractResponse {
     @Deprecated
     private String paperContractImages;
 
-    private UUID bookingId;
-    private BigDecimal depositAmount;
     private UUID tenantId;
     private String tenantName;
     private String tenantEmail;

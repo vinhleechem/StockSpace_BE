@@ -5,7 +5,6 @@ import java.util.Optional;
 
 @Getter
 public enum SystemConfigKey {
-    DEPOSIT_PERCENTAGE("deposit_percentage", "10", "Tỷ lệ phần trăm cọc thuê kho (ví dụ: 10 đại diện cho 10%)", true),
     CONTRACT_EXPIRY_DAYS("contract_expiry_days", "7", "Số ngày tối đa để Tenant xác nhận ký hợp đồng online sau khi Owner submit", true),
     INSPECTION_FEE("inspection_fee", "40000", "Phí gửi yêu cầu kiểm định kho bãi", true);
 

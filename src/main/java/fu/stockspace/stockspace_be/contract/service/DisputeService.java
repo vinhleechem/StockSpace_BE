@@ -8,9 +8,6 @@ import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
-import fu.stockspace.stockspace_be.booking.entity.BookingRequest;
-import fu.stockspace.stockspace_be.booking.entity.ApprovalStatus;
-import fu.stockspace.stockspace_be.booking.repository.BookingRequestRepository;
 import fu.stockspace.stockspace_be.contract.dto.CreateDisputeRequest;
 import fu.stockspace.stockspace_be.contract.dto.DisputeResponse;
 import fu.stockspace.stockspace_be.contract.entity.ContractStatus;
@@ -19,8 +16,6 @@ import fu.stockspace.stockspace_be.contract.entity.RentalContract;
 import fu.stockspace.stockspace_be.contract.repository.DisputeTicketRepository;
 import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseService;
-import fu.stockspace.stockspace_be.wallet.service.WalletService;
-import fu.stockspace.stockspace_be.wallet.entity.TransactionType;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,11 +29,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class DisputeService {
     private final DisputeTicketRepository disputeRepository;
     private final RentalContractRepository contractRepository;
-    private final BookingRequestRepository bookingRepository;
     private final ContractService contractService;
     private final UserRepository userRepository;
     private final WarehouseService warehouseService;
-    private final WalletService walletService;
     private final NotificationService notificationService;
 
     @Transactional
@@ -57,8 +50,8 @@ public class DisputeService {
             throw new ResourceConflictException(ErrorCode.DISPUTE_ALREADY_OPEN);
         }
 
-        UUID tenantId = contract.getBooking().getTenant().getId();
-        UUID ownerId = contract.getBooking().getWarehouse().getOwner().getId();
+        UUID tenantId = contract.getTenant().getId();
+        UUID ownerId = contract.getOwner().getId();
         if (!userId.equals(tenantId) && !userId.equals(ownerId)) {
             throw new BadRequestException(ErrorCode.FORBIDDEN);
         }
@@ -81,7 +74,7 @@ public class DisputeService {
 
         try {
             UUID notifyUserId = userId.equals(tenantId) ? ownerId : tenantId;
-            String warehouseName = contract.getBooking().getWarehouse().getName();
+            String warehouseName = contract.getWarehouse().getName();
 
             // 1. Thông báo cho bên đối phương
             notificationService.push(
@@ -126,42 +119,13 @@ public class DisputeService {
         ticket = disputeRepository.save(ticket);
 
         RentalContract contract = ticket.getContract();
-        BookingRequest booking = contract.getBooking();
-        String warehouseName = booking.getWarehouse().getName();
-        UUID tenantId = booking.getTenant().getId();
-        UUID ownerId = booking.getWarehouse().getOwner().getId();
-
-        if ("REFUND_TO_TENANT".equalsIgnoreCase(depositResolution)) {
-            walletService.refundBalance(
-                tenantId,
-                booking.getDepositAmount(),
-                TransactionType.DEPOSIT_REFUND,
-                "Hoàn đặt cọc phân xử tranh chấp: " + warehouseName,
-                booking.getId(),
-                null
-            );
-
-            log.info("Deposit resolved to be refunded to Tenant for contract {}", contract.getId());
-        } else if ("FORFEIT_TO_OWNER".equalsIgnoreCase(depositResolution)) {
-            walletService.refundBalance(
-                ownerId,
-                booking.getDepositAmount(),
-                TransactionType.DEPOSIT_REFUND,
-                "Nhận tiền cọc phạt cọc tranh chấp: " + warehouseName,
-                booking.getId(),
-                null
-            );
-
-            log.info("Deposit resolved to be forfeited to Owner for contract {}", contract.getId());
-        }
+        String warehouseName = contract.getWarehouse().getName();
+        UUID tenantId = contract.getTenant().getId();
+        UUID ownerId = contract.getOwner().getId();
 
         contract.setStatus(ContractStatus.CANCELLED);
         contractRepository.save(contract);
-        warehouseService.markAsAvailable(booking.getWarehouse().getId());
-
-        booking.setStatus(ApprovalStatus.CANCELLED);
-        booking.setRejectReason("Hợp đồng bị hủy do tranh chấp được giải quyết bởi Admin");
-        bookingRepository.save(booking);
+        warehouseService.markAsAvailable(contract.getWarehouse().getId());
 
         try {
             String noteText = adminNote != null ? " Ghi chú: " + adminNote : "";
@@ -185,10 +149,9 @@ public class DisputeService {
 
     public DisputeResponse mapToResponse(DisputeTicket t) {
         RentalContract contract = t.getContract();
-        BookingRequest booking = contract != null ? contract.getBooking() : null;
-        var warehouse = booking != null ? booking.getWarehouse() : null;
-        var tenant = booking != null ? booking.getTenant() : null;
-        var owner = warehouse != null ? warehouse.getOwner() : null;
+        var warehouse = contract != null ? contract.getWarehouse() : null;
+        var tenant = contract != null ? contract.getTenant() : null;
+        var owner = contract != null ? contract.getOwner() : null;
 
         return DisputeResponse.builder()
                 .id(t.getId())
@@ -201,8 +164,7 @@ public class DisputeService {
                 .warehouseId(warehouse != null ? warehouse.getId() : null)
                 .warehouseName(warehouse != null ? warehouse.getName() : null)
                 .warehouseAddress(warehouse != null ? warehouse.getAddress() : null)
-                // Tiền cọc & Thời hạn
-                .depositAmount(booking != null ? booking.getDepositAmount() : null)
+                // Thời hạn
                 .startDate(contract != null ? contract.getStartDate() : null)
                 .endDate(contract != null ? contract.getEndDate() : null)
                 .paperContractFiles(contract != null ? contract.getPaperContractImages() : null)

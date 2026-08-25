@@ -117,7 +117,6 @@ class ContractDraftServiceTest {
         assertEquals(new BigDecimal("200"), response.getLeasedAreaM2());
         assertEquals(ownerId, response.getOwnerId());
         assertEquals(tenantId, response.getTenantId());
-        assertNull(response.getBookingId());
         verify(contractRepository, never()).save(any(RentalContract.class));
         verify(warehouseLayoutService, never()).prepareTenantLayoutForDraft(
                 any(), any(), any(), any(), any(), anyBoolean());
@@ -177,7 +176,6 @@ class ContractDraftServiceTest {
 
         assertEquals(ContractStatus.DRAFT.name(), response.getStatus());
         assertEquals("Paper contract signed outside the platform", response.getOwnerNote());
-        assertNull(response.getBookingId());
         org.mockito.ArgumentCaptor<RentalContract> captor = org.mockito.ArgumentCaptor.forClass(RentalContract.class);
         verify(contractRepository).save(captor.capture());
         RentalContract saved = captor.getValue();

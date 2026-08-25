@@ -61,10 +61,6 @@ public class DataInitializer implements CommandLineRunner {
                 Permission whCreate = getOrCreatePermission("WAREHOUSE_CREATE", "Tạo mới kho bãi");
                 Permission whUpdate = getOrCreatePermission("WAREHOUSE_UPDATE", "Cập nhật kho bãi");
                 Permission whDelete = getOrCreatePermission("WAREHOUSE_DELETE", "Xóa kho bãi");
-                Permission rentalCreate = getOrCreatePermission("RENTAL_REQUEST_CREATE", "Tạo yêu cầu thuê kho");
-                Permission rentalRead = getOrCreatePermission("RENTAL_REQUEST_READ", "Xem yêu cầu thuê kho");
-                Permission rentalProcess = getOrCreatePermission("RENTAL_REQUEST_PROCESS",
-                                "Duyệt/từ chối yêu cầu thuê");
                 Permission inspectRead = getOrCreatePermission("INSPECTION_READ", "Xem báo cáo thanh tra");
                 Permission inspectCreate = getOrCreatePermission("INSPECTION_CREATE", "Tạo báo cáo thanh tra");
                 Permission inspectApprove = getOrCreatePermission("INSPECTION_APPROVE", "Phê duyệt thanh tra");
@@ -80,11 +76,10 @@ public class DataInitializer implements CommandLineRunner {
                 Set<Permission> adminPermissions = new HashSet<>(permissionRepository.findAll());
                 getOrCreateRole(RoleType.ROLE_ADMIN.name(), "Administrator với đầy đủ quyền hạn", adminPermissions);
 
-                Set<Permission> ownerPermissions = Set.of(whRead, whCreate, whUpdate, whDelete, rentalRead,
-                                rentalProcess, inspectRead);
+                Set<Permission> ownerPermissions = Set.of(whRead, whCreate, whUpdate, whDelete, inspectRead);
                 getOrCreateRole(RoleType.ROLE_OWNER.name(), "Chủ kho bãi (Warehouse Owner)", ownerPermissions);
 
-                Set<Permission> tenantPermissions = Set.of(whRead, rentalCreate, rentalRead, invRead, invCreate,
+                Set<Permission> tenantPermissions = Set.of(whRead, invRead, invCreate,
                                 invUpdate, invDelete, inboundCreate, outboundCreate, staffManage, pkgPurchase);
                 getOrCreateRole(RoleType.ROLE_TENANT.name(), "Người thuê kho (Tenant)", tenantPermissions);
 
@@ -186,14 +181,14 @@ public class DataInitializer implements CommandLineRunner {
                                                         "   - Cam kết chuẩn bị kho sạch sẽ, đúng theo thỏa thuận để bàn giao cho người thuê.\n"
                                                         +
                                                         "2. Đối với Người thuê (Tenant):\n" +
-                                                        "   - Cam kết thanh toán đặt cọc 10% đúng hạn để xác nhận thỏa thuận thuê kho.\n"
+                                                        "   - Cam kết xem kỹ điều khoản và bố trí kho trước khi xác nhận hợp đồng.\n"
                                                         +
                                                         "   - Cam kết sử dụng kho bãi đúng mục đích thỏa thuận, tuân thủ các quy định phòng cháy chữa cháy và pháp luật.\n"
                                                         +
-                                                        "3. Điều khoản Tranh chấp (Dispute):\n" +
-                                                        "   - Mọi tranh chấp liên quan đến tiền đặt cọc sẽ được chuyển cho Inspector/Admin phân xử dựa trên bằng chứng do hai bên cung cấp.\n"
+                                                        "3. Phạm vi nền tảng:\n" +
+                                                        "   - StockSpace hỗ trợ tạo, xác nhận và lưu trạng thái hợp đồng; tiền thuê được các bên thanh toán ngoài nền tảng.\n"
                                                         +
-                                                        "   - Quyết định của Ban quản lý hệ thống StockSpace là quyết định cuối cùng và có tính ràng buộc cao nhất.")
+                                                        "   - Các điều khoản riêng phải được hai bên kiểm tra trong hợp đồng và chứng từ liên quan.")
                                         .isActive(true)
                                         .isDeleted(false)
                                         .build();
@@ -226,11 +221,6 @@ public class DataInitializer implements CommandLineRunner {
 
         private void seedSystemConfig() {
                 if (systemConfigRepository.count() == 0) {
-                        systemConfigRepository.save(SystemConfig.builder()
-                                        .configKey("deposit_percentage")
-                                        .configValue("10")
-                                        .description("Tỷ lệ phần trăm đặt cọc thuê kho (ví dụ: 10 đại diện cho 10%)")
-                                        .build());
                         systemConfigRepository.save(SystemConfig.builder()
                                         .configKey("contract_expiry_days")
                                         .configValue("7")
@@ -270,50 +260,25 @@ public class DataInitializer implements CommandLineRunner {
         private void seedSystemKnowledge() {
                 List<KnowledgeSeed> seeds = List.of(
                                 new KnowledgeSeed(
-                                                "kb.deposit.current",
-                                                KnowledgeCategory.POLICY,
-                                                "Quy định đặt cọc thuê kho",
-                                                "Khoản đặt cọc mặc định bằng 10% giá thuê theo tháng tại thời điểm tạo yêu cầu đặt kho. "
-                                                                +
-                                                                "Tỷ lệ thực tế có thể được StockSpace điều chỉnh; số tiền hiển thị trên yêu cầu "
-                                                                +
-                                                                "là căn cứ áp dụng cho giao dịch cụ thể. " +
-                                                                "Hệ thống trừ khoản cọc khỏi ví người thuê khi gửi yêu cầu. Nếu yêu cầu còn đang chờ xử lý "
-                                                                +
-                                                                "và người thuê hủy, hoặc chủ kho từ chối, hệ thống hoàn lại toàn bộ khoản cọc."),
-                                new KnowledgeSeed(
-                                                "kb.cancellation.current",
-                                                KnowledgeCategory.CANCELLATION,
-                                                "Chính sách Hủy hợp đồng thuê kho",
-                                                "Người thuê chỉ có thể tự hủy yêu cầu đặt kho khi yêu cầu còn đang chờ xử lý và khi đó được hoàn lại khoản cọc. "
-                                                                +
-                                                                "Trong giai đoạn thương lượng hợp đồng, chủ kho có thể gửi đề nghị hủy để người thuê phản hồi. "
-                                                                +
-                                                                "Nếu người thuê đồng ý, hợp đồng bị hủy và cọc được hoàn; nếu không đồng ý, vụ việc chuyển "
-                                                                +
-                                                                "sang tranh chấp. Khoản cọc trong tranh chấp chỉ được xử lý theo kết quả phân xử dựa trên bằng chứng."),
-                                new KnowledgeSeed(
                                                 "kb.damage-dispute.current",
                                                 KnowledgeCategory.INSURANCE,
                                                 "Bảo hiểm & Đền bù hàng hóa hư hỏng",
                                                 "StockSpace không tự động cấp hợp đồng bảo hiểm hoặc cam kết một mức bồi thường cố định. "
                                                                 +
-                                                                "Khi có hư hỏng hoặc thất thoát, các bên cần lưu bằng chứng và dùng quy trình tranh chấp; "
-                                                                +
-                                                                "Bộ phận kiểm định hoặc quản trị viên xử lý khoản cọc theo hồ sơ được cung cấp. Điều kiện bảo hiểm riêng, "
+                                                                "Khi có hư hỏng hoặc thất thoát, các bên cần lưu bằng chứng và xử lý theo thỏa thuận pháp lý của mình. Điều kiện bảo hiểm riêng, "
                                                                 +
                                                                 "nếu có, phải được kiểm tra trong hợp đồng và chứng từ của kho."),
                                 new KnowledgeSeed(
                                                 "kb.rental-process.current",
                                                 KnowledgeCategory.RENTAL_PROCESS,
                                                 "Quy trình Thuê kho bãi trên StockSpace",
-                                                "Bước 1: Người thuê chọn kho đang cho thuê và gửi yêu cầu đặt kho; khoản cọc được trừ theo số tiền hiển thị. "
+                                                "Bước 1: Người thuê xem bài đăng kho và liên hệ trực tiếp với chủ kho. "
                                                                 +
-                                                                "Bước 2: Chủ kho chấp nhận hoặc từ chối yêu cầu; nếu chấp nhận, hệ thống tạo hợp đồng để hai bên "
+                                                                "Bước 2: Chủ kho tạo bản nháp hợp đồng, nhập điều khoản thuê và chuẩn bị bố trí kho cho người thuê. "
                                                                 +
-                                                                "thương lượng. Bước 3: Chủ kho cập nhật thông tin hợp đồng và chứng từ, sau đó người thuê xác nhận "
+                                                                "Bước 3: Chủ kho gửi hợp đồng; người thuê có thể yêu cầu chỉnh sửa, từ chối hoặc xác nhận. "
                                                                 +
-                                                                "trong thời hạn StockSpace thông báo. Bước 4: Hợp đồng có hiệu lực và hai bên thực hiện bàn giao."),
+                                                                "Bước 4: Sau khi xác nhận, hợp đồng có hiệu lực. Tiền thuê được thanh toán ngoài StockSpace."),
                                 new KnowledgeSeed(
                                                 "kb.wallet-vnpay.current",
                                                 KnowledgeCategory.FAQ,
