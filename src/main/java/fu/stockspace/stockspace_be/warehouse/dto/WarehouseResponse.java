@@ -32,7 +32,6 @@ public class WarehouseResponse {
     private String typeName;
     private UUID ownerId;
     private String ownerName;
-    private String ownerPhone;
     private String coverImageUrl;
     private List<String> imageUrls;
     private UUID policyId;

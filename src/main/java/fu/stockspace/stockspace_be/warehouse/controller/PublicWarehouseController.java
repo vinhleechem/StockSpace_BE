@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -156,6 +157,15 @@ public class PublicWarehouseController {
     public ResponseEntity<ApiResponse<WarehouseResponse>> getDetail(@PathVariable UUID id) {
         WarehouseResponse response = warehouseService.getWarehouseDetail(id);
         return ResponseEntity.ok(ApiResponse.success("Lấy thông tin kho thành công", response));
+    }
+
+    @GetMapping("/{id}/owner-contact")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Get the warehouse owner contact for an authenticated user")
+    public ResponseEntity<ApiResponse<WarehouseOwnerContactResponse>> getOwnerContact(
+            @PathVariable UUID id) {
+        WarehouseOwnerContactResponse response = warehouseService.getOwnerContact(id);
+        return ResponseEntity.ok(ApiResponse.success("Owner contact loaded", response));
     }
 
 

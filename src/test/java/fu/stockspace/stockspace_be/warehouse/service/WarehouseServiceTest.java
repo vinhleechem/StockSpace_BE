@@ -1,9 +1,12 @@
 package fu.stockspace.stockspace_be.warehouse.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.warehouse.dto.WarehouseResponse;
+import fu.stockspace.stockspace_be.warehouse.dto.WarehouseOwnerContactResponse;
 import fu.stockspace.stockspace_be.warehouse.dto.UpdateWarehouseRequest;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.RentalPricingType;
@@ -130,5 +133,77 @@ class WarehouseServiceTest {
         assertThrows(BadRequestException.class,
                 () -> warehouseService.updateWarehouse(ownerId, warehouseId, request));
         verify(warehouseRepository, never()).save(any(Warehouse.class));
+    }
+
+    @Test
+    void authenticatedContactRequestReturnsOwnerPhoneForVerifiedActiveWarehouse() {
+        warehouse.setStatus(WarehouseStatus.AVAILABLE);
+        warehouse.setVerified(true);
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+
+        WarehouseOwnerContactResponse response = warehouseService.getOwnerContact(warehouseId);
+
+        assertEquals(warehouseId, response.getWarehouseId());
+        assertEquals(ownerId, response.getOwnerId());
+        assertEquals("Owner Test", response.getOwnerName());
+        assertEquals("0987654321", response.getPhone());
+    }
+
+    @Test
+    void contactRequestRejectsInactiveWarehouse() {
+        warehouse.setStatus(WarehouseStatus.INACTIVE);
+        warehouse.setVerified(true);
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+
+        assertThrows(ResourceNotFoundException.class,
+                () -> warehouseService.getOwnerContact(warehouseId));
+    }
+
+    @Test
+    void contactRequestRejectsUnverifiedWarehouse() {
+        warehouse.setStatus(WarehouseStatus.AVAILABLE);
+        warehouse.setVerified(false);
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+
+        assertThrows(ResourceNotFoundException.class,
+                () -> warehouseService.getOwnerContact(warehouseId));
+    }
+
+    @Test
+    void contactRequestRejectsInactiveOrDeletedWarehouseRecord() {
+        warehouse.setStatus(WarehouseStatus.AVAILABLE);
+        warehouse.setVerified(true);
+        warehouse.setActive(false);
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+
+        assertThrows(ResourceNotFoundException.class,
+                () -> warehouseService.getOwnerContact(warehouseId));
+
+        warehouse.setActive(true);
+        warehouse.setDeleted(true);
+
+        assertThrows(ResourceNotFoundException.class,
+                () -> warehouseService.getOwnerContact(warehouseId));
+    }
+
+    @Test
+    void contactRequestRejectsMissingWarehouse() {
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class,
+                () -> warehouseService.getOwnerContact(warehouseId));
+    }
+
+    @Test
+    void publicWarehouseResponseDoesNotExposeOwnerPhone() throws Exception {
+        warehouse.setStatus(WarehouseStatus.AVAILABLE);
+        warehouse.setVerified(true);
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+
+        WarehouseResponse response = warehouseService.getWarehouseDetail(warehouseId);
+        String json = new ObjectMapper().writeValueAsString(response);
+
+        assertFalse(json.contains("ownerPhone"));
+        assertFalse(json.contains("0987654321"));
     }
 }

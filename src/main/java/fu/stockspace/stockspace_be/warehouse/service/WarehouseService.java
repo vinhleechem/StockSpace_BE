@@ -370,6 +370,34 @@ public class WarehouseService {
         return mapToResponse(warehouse);
     }
 
+    @Transactional(readOnly = true)
+    public WarehouseOwnerContactResponse getOwnerContact(UUID warehouseId) {
+        Warehouse warehouse = warehouseRepository.findById(warehouseId)
+                .filter(this::isContactableWarehouse)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
+
+        User owner = warehouse.getOwner();
+        if (owner == null) {
+            throw new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND);
+        }
+
+        return WarehouseOwnerContactResponse.builder()
+                .warehouseId(warehouse.getId())
+                .ownerId(owner.getId())
+                .ownerName(owner.getFullName())
+                .phone(owner.getPhone())
+                .build();
+    }
+
+    private boolean isContactableWarehouse(Warehouse warehouse) {
+        return warehouse != null
+                && warehouse.isActive()
+                && !warehouse.isDeleted()
+                && warehouse.isVerified()
+                && warehouse.getStatus() != null
+                && warehouse.getStatus() != WarehouseStatus.INACTIVE;
+    }
+
 
 
 
@@ -609,7 +637,6 @@ public class WarehouseService {
                 .typeName(w.getType() != null ? w.getType().getName() : null)
                 .ownerId(w.getOwner() != null ? w.getOwner().getId() : null)
                 .ownerName(w.getOwner() != null ? w.getOwner().getFullName() : null)
-                .ownerPhone(w.getOwner() != null ? w.getOwner().getPhone() : null)
                 .coverImageUrl(cover)
                 .imageUrls(urls)
                 .policyId(w.getPolicy() != null ? w.getPolicy().getId() : null)
