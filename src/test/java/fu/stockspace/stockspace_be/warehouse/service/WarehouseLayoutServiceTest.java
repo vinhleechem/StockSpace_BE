@@ -373,5 +373,69 @@ class WarehouseLayoutServiceTest {
 
         assertTrue(ex.getMessage().contains("Không thể chỉnh sửa sơ đồ layout kho trong thời gian kho đang được cho thuê"));
     }
+
+    @Test
+    void testSaveContractLayoutUsesTheExistingTenantLayoutAndSharedGeometryValidation() {
+        WarehouseLayout tenantLayout = WarehouseLayout.builder()
+                .id(UUID.randomUUID())
+                .warehouse(warehouse)
+                .tenant(owner)
+                .isDefault(false)
+                .width(new BigDecimal("100"))
+                .length(new BigDecimal("100"))
+                .height(new BigDecimal("10"))
+                .build();
+        when(layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId))
+                .thenReturn(Optional.of(tenantLayout));
+        when(rackRepository.findAllByLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
+        when(binRepository.findAllByRackLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
+
+        RackSaveRequest rack = RackSaveRequest.builder()
+                .name("Contract Rack")
+                .code("CONTRACT_RACK")
+                .coordinateX(new BigDecimal("60"))
+                .coordinateY(new BigDecimal("0"))
+                .width(new BigDecimal("50"))
+                .length(new BigDecimal("10"))
+                .height(new BigDecimal("5"))
+                .build();
+        BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
+                .width(new BigDecimal("100"))
+                .length(new BigDecimal("100"))
+                .height(new BigDecimal("10"))
+                .racks(List.of(rack))
+                .build();
+
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> layoutService.saveContractLayout(warehouseId, userId, request));
+
+        assertTrue(ex.getMessage().contains("parent bounds"));
+        verify(layoutRepository, never()).save(any(WarehouseLayout.class));
+    }
+
+    @Test
+    void testStableLayoutSnapshotSortsRacksBinsAndPositions() {
+        WarehouseBinResponse binB = WarehouseBinResponse.builder()
+                .id(UUID.randomUUID()).code("BIN-B").occupiedPositions(List.of("2:0", "1:0")).build();
+        WarehouseBinResponse binA = WarehouseBinResponse.builder()
+                .id(UUID.randomUUID()).code("BIN-A").occupiedPositions(List.of("1:0", "0:0")).build();
+        RackResponse rackB = RackResponse.builder().id(UUID.randomUUID()).code("RACK-B")
+                .bins(List.of(binB)).build();
+        RackResponse rackA = RackResponse.builder().id(UUID.randomUUID()).code("RACK-A")
+                .bins(List.of(binA)).build();
+        WarehouseLayoutResponse source = WarehouseLayoutResponse.builder()
+                .warehouseId(warehouseId)
+                .racks(List.of(rackB, rackA))
+                .positions(List.of("2:0", "0:0", "1:0"))
+                .build();
+
+        WarehouseLayoutResponse stable = layoutService.stabilizeLayoutSnapshot(source);
+
+        assertEquals(List.of("RACK-A", "RACK-B"),
+                stable.getRacks().stream().map(RackResponse::getCode).toList());
+        assertEquals(List.of("BIN-A"), stable.getRacks().get(0).getBins().stream()
+                .map(WarehouseBinResponse::getCode).toList());
+        assertEquals(List.of("0:0", "1:0", "2:0"), stable.getPositions());
+    }
 }
 

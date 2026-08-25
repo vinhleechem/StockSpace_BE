@@ -397,6 +397,12 @@ public class WarehouseLayoutService {
         }
 
 
+        return saveLayoutContents(layout, request, isTenantRole);
+    }
+
+    private WarehouseLayoutResponse saveLayoutContents(WarehouseLayout layout,
+                                                         BulkLayoutSaveRequest request,
+                                                         boolean isTenantRole) {
         List<WarehouseRack> dbRacks = rackRepository.findAllByLayoutId(layout.getId());
         List<WarehouseBin> dbBins = binRepository.findAllByRackLayoutId(layout.getId());
 
@@ -568,6 +574,28 @@ public class WarehouseLayoutService {
         return mapToLayoutResponse(layout);
     }
 
+    /**
+     * Saves the tenant layout belonging to a contract proposal. The caller
+     * must authorize the contract owner before reaching this method.
+     */
+    @Transactional
+    public WarehouseLayoutResponse saveContractLayout(UUID warehouseId,
+                                                       UUID tenantId,
+                                                       BulkLayoutSaveRequest request) {
+        WarehouseLayout layout = layoutRepository.findByWarehouseIdAndTenantId(warehouseId, tenantId)
+                .filter(tenantLayout -> tenantLayout.isActive() && !tenantLayout.isDeleted())
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.LAYOUT_NOT_FOUND));
+        return saveLayoutContents(layout, request, false);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<WarehouseLayoutResponse> findActiveTenantLayoutForContract(UUID warehouseId,
+                                                                                 UUID tenantId) {
+        return layoutRepository.findByWarehouseIdAndTenantId(warehouseId, tenantId)
+                .filter(layout -> layout.isActive() && !layout.isDeleted())
+                .map(this::mapToLayoutResponse);
+    }
+
 
 
 
@@ -655,6 +683,87 @@ public class WarehouseLayoutService {
                 .racks(rackResponses)
                 .positions(deserializePositions(layout.getPositions()))
                 .build();
+    }
+
+    /**
+     * Produces a deterministic copy before a layout tree is stored in a
+     * contract snapshot. Repository iteration order must not change the
+     * serialized snapshot for the same logical layout.
+     */
+    public WarehouseLayoutResponse stabilizeLayoutSnapshot(WarehouseLayoutResponse source) {
+        if (source == null) {
+            return null;
+        }
+
+        List<RackResponse> racks = source.getRacks() == null
+                ? List.of()
+                : source.getRacks().stream()
+                .sorted(Comparator.comparing((RackResponse rack) -> stableLayoutKey(rack.getCode(), rack.getId())))
+                .map(rack -> RackResponse.builder()
+                        .id(rack.getId())
+                        .layoutId(rack.getLayoutId())
+                        .name(rack.getName())
+                        .code(rack.getCode())
+                        .maxWeight(rack.getMaxWeight())
+                        .maxVolume(rack.getMaxVolume())
+                        .coordinateX(rack.getCoordinateX())
+                        .coordinateY(rack.getCoordinateY())
+                        .positionZ(rack.getPositionZ())
+                        .rotation(rack.getRotation())
+                        .width(rack.getWidth())
+                        .length(rack.getLength())
+                        .height(rack.getHeight())
+                        .occupiedPositions(sortedValues(rack.getOccupiedPositions()))
+                        .bins(rack.getBins() == null
+                                ? List.of()
+                                : rack.getBins().stream()
+                                .sorted(Comparator.comparing((WarehouseBinResponse bin) ->
+                                        stableLayoutKey(bin.getCode(), bin.getId())))
+                                .map(bin -> WarehouseBinResponse.builder()
+                                        .id(bin.getId())
+                                        .rackId(bin.getRackId())
+                                        .name(bin.getName())
+                                        .code(bin.getCode())
+                                        .maxWeight(bin.getMaxWeight())
+                                        .maxVolume(bin.getMaxVolume())
+                                        .shelfLevel(bin.getShelfLevel())
+                                        .coordinateX(bin.getCoordinateX())
+                                        .coordinateY(bin.getCoordinateY())
+                                        .positionZ(bin.getPositionZ())
+                                        .width(bin.getWidth())
+                                        .length(bin.getLength())
+                                        .height(bin.getHeight())
+                                        .isOccupied(bin.isOccupied())
+                                        .occupiedPositions(sortedValues(bin.getOccupiedPositions()))
+                                        .build())
+                                .toList())
+                        .build())
+                .toList();
+
+        return WarehouseLayoutResponse.builder()
+                .id(source.getId())
+                .warehouseId(source.getWarehouseId())
+                .tenantId(source.getTenantId())
+                .isDefault(source.isDefault())
+                .width(source.getWidth())
+                .length(source.getLength())
+                .height(source.getHeight())
+                .totalRacks(source.getTotalRacks())
+                .totalBins(source.getTotalBins())
+                .occupiedBins(source.getOccupiedBins())
+                .emptyBins(source.getEmptyBins())
+                .racks(racks)
+                .positions(sortedValues(source.getPositions()))
+                .build();
+    }
+
+    private String stableLayoutKey(String code, UUID id) {
+        return (code == null ? "" : code.trim().toLowerCase(Locale.ROOT))
+                + "|" + (id == null ? "" : id.toString());
+    }
+
+    private List<String> sortedValues(List<String> values) {
+        return values == null ? List.of() : values.stream().sorted().toList();
     }
 
 

@@ -8,6 +8,8 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.UnauthorizedExcep
 import fu.stockspace.stockspace_be.contract.dto.CreateRentalContractRequest;
 import fu.stockspace.stockspace_be.contract.dto.RentalContractResponse;
 import fu.stockspace.stockspace_be.contract.service.ContractService;
+import fu.stockspace.stockspace_be.warehouse.dto.BulkLayoutSaveRequest;
+import fu.stockspace.stockspace_be.warehouse.dto.WarehouseLayoutResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -16,8 +18,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -57,6 +61,27 @@ public class OwnerContractController {
     public ResponseEntity<ApiResponse<Void>> deleteDraft(@PathVariable UUID contractId) {
         contractService.deleteOwnerDraft(getCurrentUserId(), contractId);
         return ResponseEntity.ok(ApiResponse.success("Rental contract draft deleted", null));
+    }
+
+    @GetMapping("/{contractId}/layout")
+    @PreAuthorize("@rbac.hasPermission('CONTRACT_OWNER_MANAGE')")
+    @Operation(summary = "View the layout proposal of an owned contract")
+    public ResponseEntity<ApiResponse<WarehouseLayoutResponse>> getContractLayout(
+            @PathVariable UUID contractId) {
+        WarehouseLayoutResponse response = contractService
+                .getOwnerContractLayout(getCurrentUserId(), contractId);
+        return ResponseEntity.ok(ApiResponse.success("Contract layout loaded", response));
+    }
+
+    @PutMapping("/{contractId}/layout")
+    @PreAuthorize("@rbac.hasPermission('CONTRACT_OWNER_MANAGE')")
+    @Operation(summary = "Update the layout proposal of an owned contract")
+    public ResponseEntity<ApiResponse<WarehouseLayoutResponse>> updateContractLayout(
+            @PathVariable UUID contractId,
+            @Valid @RequestBody BulkLayoutSaveRequest request) {
+        WarehouseLayoutResponse response = contractService
+                .updateOwnerContractLayout(getCurrentUserId(), contractId, request);
+        return ResponseEntity.ok(ApiResponse.success("Contract layout updated", response));
     }
 
     private UUID getCurrentUserId() {

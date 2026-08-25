@@ -20,6 +20,7 @@ import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseService;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseLayoutService;
 import fu.stockspace.stockspace_be.warehouse.dto.WarehouseLayoutResponse;
+import fu.stockspace.stockspace_be.warehouse.dto.BulkLayoutSaveRequest;
 import fu.stockspace.stockspace_be.warehouse.entity.RentalPricingType;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
@@ -38,6 +39,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 
@@ -137,11 +139,140 @@ public class ContractService {
                 terms.pricingType() == RentalPricingType.FIXED_MONTHLY);
 
         RentalContract draft = buildDraftContract(terms, request);
-        draft.setLayoutSnapshot(serializeJson(layout, "Layout snapshot must be valid JSON"));
+        draft.setLayoutSnapshot(serializeLayoutSnapshot(layout));
         draft = contractRepository.save(draft);
         log.info("Owner {} created direct rental contract draft {} for tenant {} and warehouse {}",
                 ownerId, draft.getId(), terms.tenant().getId(), terms.warehouse().getId());
         return mapToResponse(draft);
+    }
+
+    @Transactional(readOnly = true)
+    public WarehouseLayoutResponse getOwnerContractLayout(UUID ownerId, UUID contractId) {
+        RentalContract contract = findContractForLayout(contractId);
+        requireContractOwner(contract, ownerId);
+        return getCurrentOrSnapshotLayout(contract);
+    }
+
+    @Transactional
+    public WarehouseLayoutResponse updateOwnerContractLayout(UUID ownerId,
+                                                             UUID contractId,
+                                                             BulkLayoutSaveRequest request) {
+        RentalContract contract = findContractForLayout(contractId);
+        requireContractOwner(contract, ownerId);
+        if (contract.getStatus() != ContractStatus.DRAFT
+                && contract.getStatus() != ContractStatus.CHANGES_REQUESTED) {
+            throw new BadRequestException("Contract layout can only be edited in DRAFT or CHANGES_REQUESTED");
+        }
+        validateContractLayoutDimensions(contract, request);
+
+        Warehouse warehouse = contract.getEffectiveWarehouse();
+        User tenant = contract.getEffectiveTenant();
+        if (warehouse == null || tenant == null) {
+            throw new BadRequestException("Contract relations are incomplete");
+        }
+
+        WarehouseLayoutResponse savedLayout = warehouseLayoutService.saveContractLayout(
+                warehouse.getId(), tenant.getId(), request);
+        contract.setLayoutSnapshot(serializeLayoutSnapshot(savedLayout));
+        contractRepository.save(contract);
+        return savedLayout;
+    }
+
+    @Transactional(readOnly = true)
+    public WarehouseLayoutResponse getTenantContractLayout(UUID tenantId, UUID contractId) {
+        RentalContract contract = findContractForLayout(contractId);
+        User tenant = contract.getEffectiveTenant();
+        if (tenant == null || !tenantId.equals(tenant.getId())) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        }
+        if (!isTenantLayoutReadable(contract.getStatus())) {
+            throw new BadRequestException("Contract layout is not available in the current contract state");
+        }
+        return getCurrentOrSnapshotLayout(contract);
+    }
+
+    private RentalContract findContractForLayout(UUID contractId) {
+        RentalContract contract = contractRepository.findById(contractId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
+        if (!contract.isActive() || contract.isDeleted()) {
+            throw new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND);
+        }
+        return contract;
+    }
+
+    private void requireContractOwner(RentalContract contract, UUID ownerId) {
+        User owner = contract.getEffectiveOwner();
+        if (owner == null || !ownerId.equals(owner.getId())) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        }
+    }
+
+    private WarehouseLayoutResponse getCurrentOrSnapshotLayout(RentalContract contract) {
+        Warehouse warehouse = contract.getEffectiveWarehouse();
+        User tenant = contract.getEffectiveTenant();
+        if (warehouse == null || tenant == null) {
+            throw new BadRequestException("Contract relations are incomplete");
+        }
+
+        boolean preferSnapshot = contract.getStatus() == ContractStatus.REJECTED
+                || contract.getStatus() == ContractStatus.EXPIRED
+                || (contract.getStatus() != ContractStatus.ACTIVE
+                && contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(
+                tenant.getId(), warehouse.getId()));
+        if (preferSnapshot && hasLayoutSnapshot(contract)) {
+            return readLayoutSnapshot(contract.getLayoutSnapshot());
+        }
+
+        Optional<WarehouseLayoutResponse> currentLayout = warehouseLayoutService
+                .findActiveTenantLayoutForContract(warehouse.getId(), tenant.getId());
+        if (currentLayout.isPresent()) {
+            return currentLayout.get();
+        }
+        if (!hasLayoutSnapshot(contract)) {
+            throw new ResourceNotFoundException(ErrorCode.LAYOUT_NOT_FOUND);
+        }
+        return readLayoutSnapshot(contract.getLayoutSnapshot());
+    }
+
+    private boolean hasLayoutSnapshot(RentalContract contract) {
+        return contract.getLayoutSnapshot() != null && !contract.getLayoutSnapshot().isBlank();
+    }
+
+    private WarehouseLayoutResponse readLayoutSnapshot(String snapshot) {
+        try {
+            return objectMapper.readValue(snapshot, WarehouseLayoutResponse.class);
+        } catch (JsonProcessingException e) {
+            throw new BadRequestException("Contract layout snapshot is invalid");
+        }
+    }
+
+    private void validateContractLayoutDimensions(RentalContract contract,
+                                                   BulkLayoutSaveRequest request) {
+        if (request == null || request.getWidth() == null || request.getLength() == null
+                || request.getHeight() == null) {
+            throw new BadRequestException("Contract layout dimensions are required");
+        }
+        if (contract.getLeasedWidth() == null || contract.getLeasedLength() == null
+                || contract.getLeasedHeight() == null
+                || request.getWidth().compareTo(contract.getLeasedWidth()) != 0
+                || request.getLength().compareTo(contract.getLeasedLength()) != 0
+                || request.getHeight().compareTo(contract.getLeasedHeight()) != 0) {
+            throw new BadRequestException("Contract layout dimensions cannot be changed");
+        }
+    }
+
+    private boolean isTenantLayoutReadable(ContractStatus status) {
+        return status == ContractStatus.PENDING_TENANT_CONFIRM
+                || status == ContractStatus.CHANGES_REQUESTED
+                || status == ContractStatus.ACTIVE
+                || status == ContractStatus.REJECTED
+                || status == ContractStatus.EXPIRED;
+    }
+
+    private String serializeLayoutSnapshot(WarehouseLayoutResponse layout) {
+        return serializeJson(
+                warehouseLayoutService.stabilizeLayoutSnapshot(layout),
+                "Layout snapshot must be valid JSON");
     }
 
     @Transactional
