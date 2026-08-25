@@ -1,0 +1,19 @@
+package fu.stockspace.stockspace_be.contract.dto;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+import lombok.Getter;
+import lombok.Setter;
+
+/**
+ * Reason supplied by a tenant when a submitted contract needs changes or is
+ * rejected.
+ */
+@Getter
+@Setter
+public class TenantContractDecisionRequest {
+
+    @NotBlank(message = "Reason is required")
+    @Size(max = 2000, message = "Reason must not exceed 2000 characters")
+    private String reason;
+}

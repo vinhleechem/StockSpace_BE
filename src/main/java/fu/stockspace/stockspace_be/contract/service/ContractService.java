@@ -359,6 +359,150 @@ public class ContractService {
         }
     }
 
+    /**
+     * Confirms a direct contract submitted by its owner. This lifecycle is
+     * deliberately independent from the legacy Booking and wallet/deposit
+     * flow: tenant confirmation only activates the contract and does not
+     * change the warehouse listing status.
+     */
+    @Transactional
+    public RentalContractResponse confirmDirectContract(UUID tenantId, UUID contractId) {
+        RentalContract contract = findDirectContractForTenantReview(tenantId, contractId);
+        requirePendingTenantConfirmation(contract);
+
+        Warehouse lockedWarehouse = warehouseService.lockWarehouseForContractSubmit(
+                contract.getWarehouse().getId());
+        validateContractDates(contract.getStartDate(), contract.getEndDate());
+        if (contractRepository.existsDirectDateOverlapForSubmit(
+                contract.getId(), tenantId, lockedWarehouse.getId(),
+                contract.getStartDate(), contract.getEndDate())) {
+            throw new BadRequestException(
+                    "The tenant already has an overlapping contract for this warehouse");
+        }
+
+        contract.setTenantConfirmed(true);
+        contract.setConfirmedAt(LocalDateTime.now());
+        contract.setStatus(ContractStatus.ACTIVE);
+        contract = contractRepository.save(contract);
+
+        notifyOwnerOfTenantDecision(
+                contract,
+                "Rental contract confirmed",
+                "The tenant confirmed the rental contract for warehouse "
+                        + lockedWarehouse.getName() + ".");
+        return mapToResponse(contract, tenantId);
+    }
+
+    /**
+     * Moves a submitted direct contract back to the owner for correction.
+     * Tenant review does not mutate the submitted terms or layout; the owner
+     * edit/resubmit flow owns those mutations.
+     */
+    @Transactional
+    public RentalContractResponse requestDirectContractChanges(
+            UUID tenantId,
+            UUID contractId,
+            TenantContractDecisionRequest request) {
+        RentalContract contract = findDirectContractForTenantReview(tenantId, contractId);
+        requirePendingTenantConfirmation(contract);
+        String reason = normalizeRequiredDecisionReason(request);
+
+        contract.setChangeRequestReason(reason);
+        contract.setRejectionReason(null);
+        contract.setTenantConfirmed(false);
+        contract.setConfirmedAt(null);
+        contract.setStatus(ContractStatus.CHANGES_REQUESTED);
+        contract = contractRepository.save(contract);
+
+        notifyOwnerOfTenantDecision(
+                contract,
+                "Rental contract changes requested",
+                "The tenant requested changes to the rental contract for warehouse "
+                        + contract.getWarehouse().getName() + ". Reason: " + reason);
+        return mapToResponse(contract, tenantId);
+    }
+
+    /**
+     * Rejects a submitted direct contract while preserving it as read-only
+     * history. The tenant layout proposal is archived only when the tenant
+     * has no other active contract using the same warehouse.
+     */
+    @Transactional
+    public RentalContractResponse rejectDirectContract(
+            UUID tenantId,
+            UUID contractId,
+            TenantContractDecisionRequest request) {
+        RentalContract contract = findDirectContractForTenantReview(tenantId, contractId);
+        requirePendingTenantConfirmation(contract);
+        String reason = normalizeRequiredDecisionReason(request);
+
+        contract.setRejectionReason(reason);
+        contract.setChangeRequestReason(null);
+        contract.setTenantConfirmed(false);
+        contract.setConfirmedAt(null);
+        contract.setStatus(ContractStatus.REJECTED);
+        contract = contractRepository.save(contract);
+
+        if (!contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(
+                tenantId, contract.getWarehouse().getId())) {
+            warehouseLayoutService.archiveTenantLayout(
+                    contract.getWarehouse().getId(), tenantId);
+        }
+
+        notifyOwnerOfTenantDecision(
+                contract,
+                "Rental contract rejected",
+                "The tenant rejected the rental contract for warehouse "
+                        + contract.getWarehouse().getName() + ". Reason: " + reason);
+        return mapToResponse(contract, tenantId);
+    }
+
+    private RentalContract findDirectContractForTenantReview(UUID tenantId, UUID contractId) {
+        RentalContract contract = contractRepository.findById(contractId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
+        if (!contract.isActive() || contract.isDeleted()) {
+            throw new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND);
+        }
+        if (contract.getOwner() == null || contract.getTenant() == null
+                || contract.getWarehouse() == null) {
+            throw new BadRequestException("This operation requires a direct rental contract");
+        }
+        if (!tenantId.equals(contract.getTenant().getId())) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        }
+        return contract;
+    }
+
+    private void requirePendingTenantConfirmation(RentalContract contract) {
+        if (contract.getStatus() != ContractStatus.PENDING_TENANT_CONFIRM) {
+            throw new BadRequestException(
+                    "Contract must be in PENDING_TENANT_CONFIRM status for this action");
+        }
+    }
+
+    private String normalizeRequiredDecisionReason(TenantContractDecisionRequest request) {
+        if (request == null || request.getReason() == null || request.getReason().isBlank()) {
+            throw new BadRequestException("Reason is required");
+        }
+        String reason = request.getReason().trim();
+        if (reason.length() > 2000) {
+            throw new BadRequestException("Reason must not exceed 2000 characters");
+        }
+        return reason;
+    }
+
+    private void notifyOwnerOfTenantDecision(RentalContract contract,
+                                             String title,
+                                             String message) {
+        try {
+            notificationService.push(
+                    contract.getOwner().getId(), title, message, "CONTRACT");
+        } catch (Exception e) {
+            log.warn("Failed to push direct contract decision notification for {}: {}",
+                    contract.getId(), e.getMessage());
+        }
+    }
+
     @Transactional(readOnly = true)
     public WarehouseLayoutResponse getOwnerContractLayout(UUID ownerId, UUID contractId) {
         RentalContract contract = findContractForLayout(contractId);
