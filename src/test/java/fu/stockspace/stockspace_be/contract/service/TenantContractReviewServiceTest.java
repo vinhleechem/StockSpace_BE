@@ -114,7 +114,6 @@ class TenantContractReviewServiceTest {
         assertNotNull(contract.getConfirmedAt());
         assertEquals(Boolean.FALSE, response.isCanManageWms());
         verify(warehouseService).lockWarehouseForContractSubmit(warehouseId);
-        verify(warehouseService, never()).markAsRented(any());
         verifyNoInteractions(walletService, bookingRepository);
         verify(warehouseLayoutService, never()).cloneLayout(any(), any());
     }

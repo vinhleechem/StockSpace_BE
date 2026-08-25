@@ -53,7 +53,7 @@ public enum ErrorCode {
     WAREHOUSE_TYPE_NOT_FOUND("Loại kho không tồn tại trong hệ thống", HttpStatus.NOT_FOUND),
     WAREHOUSE_TYPE_ALREADY_EXISTS("Loại kho đã tồn tại trong hệ thống", HttpStatus.CONFLICT),
     WAREHOUSE_TYPE_IN_USE("Loại kho đang được sử dụng bởi một hoặc nhiều kho bãi, không thể xóa", HttpStatus.BAD_REQUEST),
-    WAREHOUSE_CANNOT_DELETE_RENTED("Không thể xoá kho đang có Tenant thuê", HttpStatus.BAD_REQUEST),
+    WAREHOUSE_HAS_ACTIVE_CONTRACTS("Không thể xoá kho đang có hợp đồng thuê hiệu lực", HttpStatus.BAD_REQUEST),
     WAREHOUSE_INVALID_STATUS_TRANSITION("Không thể chuyển sang trạng thái này", HttpStatus.BAD_REQUEST),
     WAREHOUSE_IMAGE_LIMIT_EXCEEDED("Số lượng ảnh vượt quá giới hạn tối đa (10 ảnh)", HttpStatus.BAD_REQUEST),
 
@@ -68,7 +68,6 @@ public enum ErrorCode {
 
     INSPECTION_NOT_FOUND("Yêu cầu kiểm định không tồn tại", HttpStatus.NOT_FOUND),
     INSPECTION_ALREADY_SUBMITTED("Kiểm định đã được nộp hoặc đang xử lý", HttpStatus.BAD_REQUEST),
-    INSPECTION_CANNOT_BE_REQUESTED_WHEN_RENTED("Không thể gửi yêu cầu kiểm định khi kho đang trong trạng thái cho thuê", HttpStatus.BAD_REQUEST),
     INSPECTION_WAREHOUSE_NOT_AVAILABLE("Chỉ có thể gửi yêu cầu kiểm định khi kho đã được phê duyệt và đang hoạt động", HttpStatus.BAD_REQUEST),
 
 

@@ -75,11 +75,11 @@ class WarehouseServiceTest {
     }
 
     @Test
-    void getActiveRentedWarehousesUsesCurrentDirectContractAccess() {
+    void getActiveContractWarehousesUsesCurrentDirectContractAccess() {
         when(tenantWarehouseAccessService.findActiveContractWarehouses(ownerId))
                 .thenReturn(List.of(warehouse));
 
-        List<WarehouseResponse> responses = warehouseService.getActiveRentedWarehouses(ownerId);
+        List<WarehouseResponse> responses = warehouseService.getActiveContractWarehouses(ownerId);
 
         assertEquals(1, responses.size());
         assertEquals(warehouseId, responses.get(0).getId());
@@ -296,5 +296,32 @@ class WarehouseServiceTest {
         assertEquals("DRAFT", response.getPublicationStatus());
         assertTrue(response.isCanPublish());
         assertFalse(response.isCanRenew());
+    }
+
+    @Test
+    void deleteWarehouseIsBlockedByAnActiveContractInsteadOfListingStatus() {
+        warehouse.setStatus(WarehouseStatus.AVAILABLE);
+        when(warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId))
+                .thenReturn(Optional.of(warehouse));
+        when(warehouseRepository.hasCurrentActiveContract(warehouseId)).thenReturn(true);
+
+        BadRequestException exception = assertThrows(
+                BadRequestException.class,
+                () -> warehouseService.deleteWarehouse(ownerId, warehouseId));
+
+        assertEquals("Không thể xoá kho đang có hợp đồng thuê hiệu lực", exception.getMessage());
+        verify(warehouseRepository, never()).save(any(Warehouse.class));
+    }
+
+    @Test
+    void deleteWarehouseSucceedsWhenNoActiveContractExists() {
+        when(warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId))
+                .thenReturn(Optional.of(warehouse));
+        when(warehouseRepository.hasCurrentActiveContract(warehouseId)).thenReturn(false);
+
+        warehouseService.deleteWarehouse(ownerId, warehouseId);
+
+        assertTrue(warehouse.isDeleted());
+        verify(warehouseRepository).save(warehouse);
     }
 }

@@ -36,7 +36,6 @@ final class ChatToolLocalization {
 
         return switch (status) {
             case AVAILABLE -> "Sẵn sàng cho thuê";
-            case RENTED -> "Đang được thuê";
             case PENDING_APPROVAL -> "Chờ duyệt";
             case INACTIVE -> "Tạm ngừng cho thuê";
         };

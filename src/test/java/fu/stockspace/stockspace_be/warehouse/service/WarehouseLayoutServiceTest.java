@@ -398,8 +398,8 @@ class WarehouseLayoutServiceTest {
     }
 
     @Test
-    void testSaveLayoutBulk_OwnerCanModifyLayoutWhenRented() {
-        warehouse.setStatus(WarehouseStatus.RENTED);
+    void testSaveLayoutBulk_OwnerCanModifyDefaultLayoutIndependentlyFromTenancy() {
+        warehouse.setStatus(WarehouseStatus.AVAILABLE);
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
         when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)).thenReturn(Optional.of(defaultLayout));
         when(rackRepository.findAllByLayoutId(defaultLayout.getId())).thenReturn(Collections.emptyList());

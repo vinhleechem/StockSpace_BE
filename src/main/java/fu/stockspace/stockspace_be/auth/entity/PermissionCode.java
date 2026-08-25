@@ -23,7 +23,7 @@ public enum PermissionCode {
     WAREHOUSE_UPDATE("Update own warehouse listings"),
     WAREHOUSE_DELETE("Delete own warehouse listings"),
     WAREHOUSE_LAYOUT_OWNER_MANAGE("Manage layouts of own warehouses"),
-    WAREHOUSE_LAYOUT_TENANT_MANAGE("Manage layouts for rented warehouses"),
+    WAREHOUSE_LAYOUT_TENANT_MANAGE("Manage layouts for warehouses covered by active contracts"),
     WAREHOUSE_REVIEW("Review warehouse listings"),
 
     CONTRACT_READ("View own rental contracts"),

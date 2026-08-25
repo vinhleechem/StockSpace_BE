@@ -102,4 +102,15 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
 
     @Query("SELECT COUNT(w) > 0 FROM Warehouse w WHERE w.type.id = ?1 AND w.isDeleted = false")
     boolean existsByTypeId(java.util.UUID typeId);
+
+    @Query("""
+            SELECT COUNT(c) > 0 FROM RentalContract c
+            WHERE c.warehouse.id = :warehouseId
+              AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
+              AND c.isActive = true
+              AND c.isDeleted = false
+              AND c.startDate <= CURRENT_DATE
+              AND c.endDate >= CURRENT_DATE
+            """)
+    boolean hasCurrentActiveContract(@Param("warehouseId") UUID warehouseId);
 }

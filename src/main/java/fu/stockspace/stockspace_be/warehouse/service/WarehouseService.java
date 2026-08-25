@@ -61,7 +61,7 @@ public class WarehouseService {
     private final StaffWarehouseAssignmentRepository staffWarehouseAssignmentRepository;
 
     @Transactional(readOnly = true)
-    public List<WarehouseResponse> getActiveRentedWarehouses(UUID tenantId) {
+    public List<WarehouseResponse> getActiveContractWarehouses(UUID tenantId) {
         List<Warehouse> warehouses = tenantWarehouseAccessService.findActiveContractWarehouses(tenantId);
 
 
@@ -209,8 +209,8 @@ public class WarehouseService {
     public void deleteWarehouse(UUID ownerId, UUID warehouseId) {
         Warehouse warehouse = getOwnedWarehouse(ownerId, warehouseId);
 
-        if (warehouse.getStatus() == WarehouseStatus.RENTED) {
-            throw new BadRequestException(ErrorCode.WAREHOUSE_CANNOT_DELETE_RENTED);
+        if (warehouseRepository.hasCurrentActiveContract(warehouseId)) {
+            throw new BadRequestException(ErrorCode.WAREHOUSE_HAS_ACTIVE_CONTRACTS);
         }
 
         warehouse.setDeleted(true);
@@ -224,7 +224,7 @@ public class WarehouseService {
 
     @Transactional
     public WarehouseResponse updateStatus(UUID ownerId, UUID warehouseId, WarehouseStatus newStatus) {
-        if (newStatus == WarehouseStatus.RENTED || newStatus == WarehouseStatus.PENDING_APPROVAL) {
+        if (newStatus == WarehouseStatus.PENDING_APPROVAL) {
             throw new BadRequestException(ErrorCode.WAREHOUSE_INVALID_STATUS_TRANSITION);
         }
 
@@ -446,32 +446,6 @@ public class WarehouseService {
     }
 
 
-
-
-
-    @Transactional
-    public void markAsAvailable(UUID warehouseId) {
-        Warehouse warehouse = warehouseRepository.findById(warehouseId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
-
-        warehouse.setStatus(WarehouseStatus.AVAILABLE);
-        warehouseRepository.save(warehouse);
-        log.info("Warehouse {} marked as AVAILABLE", warehouseId);
-    }
-
-
-
-
-
-    @Transactional
-    public void markAsRented(UUID warehouseId) {
-        Warehouse warehouse = warehouseRepository.findById(warehouseId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
-
-        warehouse.setStatus(WarehouseStatus.RENTED);
-        warehouseRepository.save(warehouse);
-        log.info("Warehouse {} marked as RENTED", warehouseId);
-    }
 
 
 
