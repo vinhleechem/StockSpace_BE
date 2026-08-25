@@ -506,6 +506,11 @@ public class WarehouseService {
                 .orElseThrow(() -> new ForbiddenException(ErrorCode.WAREHOUSE_NOT_OWNED));
     }
 
+    @Transactional(readOnly = true)
+    public Warehouse getOwnedWarehouseForContract(UUID ownerId, UUID warehouseId) {
+        return getOwnedWarehouse(ownerId, warehouseId);
+    }
+
     private RentalPricingType resolvePricingType(RentalPricingType requestedType) {
         return requestedType != null ? requestedType : RentalPricingType.FIXED_MONTHLY;
     }

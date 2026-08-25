@@ -43,6 +43,7 @@ public class RentalContractResponse {
     private BigDecimal leasedLength;
     private BigDecimal leasedHeight;
     private BigDecimal leasedAreaM2;
+    private String ownerNote;
     private String layoutSnapshot;
     private String changeRequestReason;
     private String rejectionReason;

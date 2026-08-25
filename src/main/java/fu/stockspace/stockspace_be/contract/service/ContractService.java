@@ -19,6 +19,10 @@ import fu.stockspace.stockspace_be.contract.repository.DisputeTicketRepository;
 import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseService;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseLayoutService;
+import fu.stockspace.stockspace_be.warehouse.dto.WarehouseLayoutResponse;
+import fu.stockspace.stockspace_be.warehouse.entity.RentalPricingType;
+import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
+import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
 import fu.stockspace.stockspace_be.wallet.service.WalletService;
 import fu.stockspace.stockspace_be.wallet.entity.TransactionType;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
@@ -47,6 +51,8 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class ContractService {
+    private static final long MIN_RENTAL_DURATION_DAYS = 7;
+
     private final RentalContractRepository contractRepository;
     private final BookingRequestRepository bookingRepository;
     private final WarehouseService warehouseService;
@@ -110,6 +116,214 @@ public class ContractService {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
         return mapToResponse(contract);
+    }
+
+    @Transactional(readOnly = true)
+    public RentalContractResponse previewOwnerDraft(UUID ownerId, CreateRentalContractRequest request) {
+        DraftTerms terms = resolveDraftTerms(ownerId, request);
+        RentalContract draft = buildDraftContract(terms, request);
+        return mapToResponse(draft);
+    }
+
+    @Transactional
+    public RentalContractResponse createOwnerDraft(UUID ownerId, CreateRentalContractRequest request) {
+        DraftTerms terms = resolveDraftTerms(ownerId, request);
+        WarehouseLayoutResponse layout = warehouseLayoutService.prepareTenantLayoutForDraft(
+                terms.warehouse().getId(),
+                terms.tenant().getId(),
+                terms.leasedWidth(),
+                terms.leasedLength(),
+                terms.leasedHeight(),
+                terms.pricingType() == RentalPricingType.FIXED_MONTHLY);
+
+        RentalContract draft = buildDraftContract(terms, request);
+        draft.setLayoutSnapshot(serializeJson(layout, "Layout snapshot must be valid JSON"));
+        draft = contractRepository.save(draft);
+        log.info("Owner {} created direct rental contract draft {} for tenant {} and warehouse {}",
+                ownerId, draft.getId(), terms.tenant().getId(), terms.warehouse().getId());
+        return mapToResponse(draft);
+    }
+
+    @Transactional
+    public void deleteOwnerDraft(UUID ownerId, UUID contractId) {
+        RentalContract contract = contractRepository.findById(contractId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
+        if (contract.getStatus() != ContractStatus.DRAFT) {
+            throw new BadRequestException("Only DRAFT contracts can be deleted");
+        }
+        User owner = contract.getEffectiveOwner();
+        if (owner == null || !ownerId.equals(owner.getId())) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        }
+
+        contract.setActive(false);
+        contract.setDeleted(true);
+        contractRepository.save(contract);
+
+        Warehouse warehouse = contract.getEffectiveWarehouse();
+        User tenant = contract.getEffectiveTenant();
+        if (warehouse != null && tenant != null
+                && !contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(
+                tenant.getId(), warehouse.getId())) {
+            warehouseLayoutService.archiveTenantLayout(warehouse.getId(), tenant.getId());
+        }
+    }
+
+    private DraftTerms resolveDraftTerms(UUID ownerId, CreateRentalContractRequest request) {
+        if (request == null) {
+            throw new BadRequestException("Contract request is required");
+        }
+        if (request.getWarehouseId() == null) {
+            throw new BadRequestException("Warehouse is required");
+        }
+        if (request.getStartDate() == null || request.getEndDate() == null) {
+            throw new BadRequestException("Start date and end date are required");
+        }
+        if (request.getStartDate().isAfter(request.getEndDate())) {
+            throw new BadRequestException("Start date must not be after end date");
+        }
+        if (ChronoUnit.DAYS.between(request.getStartDate(), request.getEndDate()) < MIN_RENTAL_DURATION_DAYS) {
+            throw new BadRequestException("Rental duration must be at least 7 days");
+        }
+        if (request.getEndDate().isBefore(LocalDate.now())) {
+            throw new BadRequestException("Contract end date must not be in the past");
+        }
+
+        Warehouse warehouse = warehouseService.getOwnedWarehouseForContract(ownerId, request.getWarehouseId());
+        if (!warehouse.isActive() || warehouse.isDeleted()
+                || !warehouse.isVerified()
+                || warehouse.getStatus() == WarehouseStatus.INACTIVE) {
+            throw new BadRequestException("Warehouse must be verified and active");
+        }
+
+        User tenant = userRepository.findActiveByEmailAndRole(
+                        request.getTenantEmail().trim(), RoleType.ROLE_TENANT.name())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorCode.USER_NOT_FOUND,
+                        "Active tenant account was not found for the supplied email"));
+
+        RentalPricingType pricingType = warehouse.getRentalPricingType() != null
+                ? warehouse.getRentalPricingType()
+                : RentalPricingType.FIXED_MONTHLY;
+        WarehouseLayoutResponse defaultLayout = warehouseLayoutService
+                .getDefaultLayoutForContract(warehouse.getId());
+        validateLeasedDimensions(request, defaultLayout, pricingType);
+        BigDecimal rentalPrice = warehouse.getRentalPrice() != null
+                ? warehouse.getRentalPrice()
+                : warehouse.getPricePerMonth();
+        BigDecimal area = request.getLeasedWidth().multiply(request.getLeasedLength());
+        BigDecimal finalMonthlyRent;
+        BigDecimal rentalPriceSnapshot;
+
+        if (pricingType == RentalPricingType.NEGOTIATED) {
+            if (request.getNegotiatedMonthlyRent() == null
+                    || request.getNegotiatedMonthlyRent().signum() <= 0) {
+                throw new BadRequestException(
+                        "Negotiated monthly rent is required and must be greater than 0");
+            }
+            rentalPriceSnapshot = null;
+            finalMonthlyRent = request.getNegotiatedMonthlyRent();
+        } else {
+            if (request.getNegotiatedMonthlyRent() != null) {
+                throw new BadRequestException(
+                        "Negotiated monthly rent is allowed only for NEGOTIATED pricing");
+            }
+            if (rentalPrice == null || rentalPrice.signum() <= 0) {
+                throw new BadRequestException("Warehouse rental price must be greater than 0");
+            }
+            rentalPriceSnapshot = rentalPrice;
+            finalMonthlyRent = pricingType == RentalPricingType.FIXED_MONTHLY
+                    ? rentalPrice
+                    : rentalPrice.multiply(area);
+        }
+
+        return new DraftTerms(
+                tenant,
+                warehouse,
+                pricingType,
+                rentalPriceSnapshot,
+                finalMonthlyRent,
+                request.getLeasedWidth(),
+                request.getLeasedLength(),
+                request.getLeasedHeight(),
+                area);
+    }
+
+    private void validateLeasedDimensions(CreateRentalContractRequest request,
+                                           WarehouseLayoutResponse defaultLayout,
+                                           RentalPricingType pricingType) {
+        BigDecimal width = request.getLeasedWidth();
+        BigDecimal length = request.getLeasedLength();
+        BigDecimal height = request.getLeasedHeight();
+        if (width == null || length == null || height == null
+                || width.signum() <= 0 || length.signum() <= 0 || height.signum() <= 0) {
+            throw new BadRequestException("Leased dimensions must be greater than 0");
+        }
+        if (defaultLayout.getWidth() == null || defaultLayout.getLength() == null
+                || defaultLayout.getHeight() == null) {
+            throw new BadRequestException("Warehouse default layout dimensions are incomplete");
+        }
+        if (width.compareTo(defaultLayout.getWidth()) > 0
+                || length.compareTo(defaultLayout.getLength()) > 0
+                || height.compareTo(defaultLayout.getHeight()) > 0) {
+            throw new BadRequestException("Leased dimensions cannot exceed the warehouse default layout");
+        }
+
+        if (pricingType == RentalPricingType.FIXED_MONTHLY
+                && (defaultLayout.getWidth().compareTo(width) != 0
+                || defaultLayout.getLength().compareTo(length) != 0
+                || defaultLayout.getHeight().compareTo(height) != 0)) {
+            throw new BadRequestException(
+                    "FIXED_MONTHLY contracts must use the complete default layout dimensions");
+        }
+    }
+
+    private RentalContract buildDraftContract(DraftTerms terms, CreateRentalContractRequest request) {
+        RentalContract draft = RentalContract.builder()
+                .owner(terms.warehouse().getOwner())
+                .tenant(terms.tenant())
+                .warehouse(terms.warehouse())
+                .status(ContractStatus.DRAFT)
+                .startDate(request.getStartDate())
+                .endDate(request.getEndDate())
+                .pricingType(terms.pricingType())
+                .rentalPriceSnapshot(terms.rentalPriceSnapshot())
+                .finalMonthlyRent(terms.finalMonthlyRent())
+                .leasedWidth(terms.leasedWidth())
+                .leasedLength(terms.leasedLength())
+                .leasedHeight(terms.leasedHeight())
+                .leasedAreaM2(terms.leasedAreaM2())
+                .ownerNote(normalizeOptionalText(request.getOwnerNote()))
+                .build();
+        if (request.getPaperContractFiles() != null) {
+            draft.setPaperContractFiles(serializeJson(
+                    request.getPaperContractFiles(), "Paper contract files must be valid JSON"));
+        }
+        return draft;
+    }
+
+    private String normalizeOptionalText(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private String serializeJson(Object value, String errorMessage) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JsonProcessingException e) {
+            throw new BadRequestException(errorMessage);
+        }
+    }
+
+    private record DraftTerms(
+            User tenant,
+            Warehouse warehouse,
+            RentalPricingType pricingType,
+            BigDecimal rentalPriceSnapshot,
+            BigDecimal finalMonthlyRent,
+            BigDecimal leasedWidth,
+            BigDecimal leasedLength,
+            BigDecimal leasedHeight,
+            BigDecimal leasedAreaM2) {
     }
 
 
@@ -206,6 +420,7 @@ public class ContractService {
                 .leasedLength(c.getLeasedLength())
                 .leasedHeight(c.getLeasedHeight())
                 .leasedAreaM2(c.getLeasedAreaM2())
+                .ownerNote(c.getOwnerNote())
                 .layoutSnapshot(c.getLayoutSnapshot())
                 .changeRequestReason(c.getChangeRequestReason())
                 .rejectionReason(c.getRejectionReason())

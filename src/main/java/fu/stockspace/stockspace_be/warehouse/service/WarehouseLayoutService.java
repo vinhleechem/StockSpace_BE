@@ -199,6 +199,112 @@ public class WarehouseLayoutService {
         log.info("Layout cloning completed successfully.");
     }
 
+    @Transactional(readOnly = true)
+    public WarehouseLayoutResponse getDefaultLayoutForContract(UUID warehouseId) {
+        WarehouseLayout layout = layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)
+                .filter(defaultLayout -> defaultLayout.isActive() && !defaultLayout.isDeleted())
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.LAYOUT_NOT_FOUND));
+        return mapToLayoutResponse(layout);
+    }
+
+    @Transactional
+    public WarehouseLayoutResponse prepareTenantLayoutForDraft(UUID warehouseId,
+                                                                UUID tenantId,
+                                                                BigDecimal width,
+                                                                BigDecimal length,
+                                                                BigDecimal height,
+                                                                boolean cloneDefaultContents) {
+        Warehouse warehouse = warehouseRepository.findById(warehouseId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
+        WarehouseLayoutResponse defaultLayout = getDefaultLayoutForContract(warehouseId);
+        WarehouseLayout existing = layoutRepository.findByWarehouseIdAndTenantId(warehouseId, tenantId)
+                .orElse(null);
+        boolean hasActiveContract = contractRepository
+                .existsByTenantIdAndWarehouseIdAndStatusActive(tenantId, warehouseId);
+
+        // Do not overwrite the operational layout of an already active contract.
+        // A3 does not lock overlap yet; the draft only keeps an independent snapshot.
+        if (existing != null && existing.isActive() && !existing.isDeleted() && hasActiveContract) {
+            return cloneDefaultContents
+                    ? asTenantSnapshot(defaultLayout, tenantId)
+                    : emptyTenantSnapshot(warehouseId, tenantId, width, length, height);
+        }
+
+        if (cloneDefaultContents) {
+            if (existing != null && existing.isActive() && !existing.isDeleted()) {
+                archiveTenantLayout(warehouseId, tenantId);
+            }
+            cloneLayout(warehouseId, tenantId);
+            WarehouseLayout tenantLayout = layoutRepository.findByWarehouseIdAndTenantId(warehouseId, tenantId)
+                    .filter(layout -> layout.isActive() && !layout.isDeleted())
+                    .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.LAYOUT_NOT_FOUND));
+            return mapToLayoutResponse(tenantLayout);
+        }
+
+        if (existing != null && existing.isActive() && !existing.isDeleted()) {
+            archiveTenantLayout(warehouseId, tenantId);
+            existing = layoutRepository.findByWarehouseIdAndTenantId(warehouseId, tenantId).orElse(existing);
+        }
+
+        WarehouseLayout tenantLayout = existing != null
+                ? existing
+                : WarehouseLayout.builder()
+                .warehouse(warehouse)
+                .tenant(userRepository.findById(tenantId)
+                        .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND)))
+                .isDefault(false)
+                .build();
+        tenantLayout.setActive(true);
+        tenantLayout.setDeleted(false);
+        tenantLayout.setDefault(false);
+        tenantLayout.setWidth(width);
+        tenantLayout.setLength(length);
+        tenantLayout.setHeight(height);
+        tenantLayout.setPositions(null);
+        tenantLayout = layoutRepository.save(tenantLayout);
+        return mapToLayoutResponse(tenantLayout);
+    }
+
+    private WarehouseLayoutResponse emptyTenantSnapshot(UUID warehouseId,
+                                                         UUID tenantId,
+                                                         BigDecimal width,
+                                                         BigDecimal length,
+                                                         BigDecimal height) {
+        return WarehouseLayoutResponse.builder()
+                .id(null)
+                .warehouseId(warehouseId)
+                .tenantId(tenantId)
+                .isDefault(false)
+                .width(width)
+                .length(length)
+                .height(height)
+                .totalRacks(0)
+                .totalBins(0)
+                .occupiedBins(0)
+                .emptyBins(0)
+                .racks(List.of())
+                .positions(List.of())
+                .build();
+    }
+
+    private WarehouseLayoutResponse asTenantSnapshot(WarehouseLayoutResponse source, UUID tenantId) {
+        return WarehouseLayoutResponse.builder()
+                .id(null)
+                .warehouseId(source.getWarehouseId())
+                .tenantId(tenantId)
+                .isDefault(false)
+                .width(source.getWidth())
+                .length(source.getLength())
+                .height(source.getHeight())
+                .totalRacks(source.getTotalRacks())
+                .totalBins(source.getTotalBins())
+                .occupiedBins(source.getOccupiedBins())
+                .emptyBins(source.getEmptyBins())
+                .racks(source.getRacks())
+                .positions(source.getPositions())
+                .build();
+    }
+
     @Transactional
     public void archiveTenantLayout(UUID warehouseId, UUID tenantId) {
         layoutRepository.findByWarehouseIdAndTenantId(warehouseId, tenantId).ifPresent(layout -> {

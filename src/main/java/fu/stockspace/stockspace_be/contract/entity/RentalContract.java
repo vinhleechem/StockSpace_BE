@@ -74,6 +74,9 @@ public class RentalContract extends BaseEntity {
     @Column(name = "leased_area_m2", precision = 15, scale = 6)
     private java.math.BigDecimal leasedAreaM2;
 
+    @Column(name = "owner_note", columnDefinition = "TEXT")
+    private String ownerNote;
+
 
     @Column(name = "tenant_confirmed", nullable = false)
     @Builder.Default
