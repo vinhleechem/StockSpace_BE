@@ -20,10 +20,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
+
+import org.springframework.data.domain.PageImpl;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -210,5 +213,72 @@ class WarehouseServiceTest {
 
         assertFalse(json.contains("ownerPhone"));
         assertFalse(json.contains("0987654321"));
+    }
+
+    @Test
+    void publicWarehouseDetailRejectsExpiredPublication() {
+        warehouse.setStatus(WarehouseStatus.AVAILABLE);
+        warehouse.setVerified(true);
+        warehouse.setPublishedAt(LocalDateTime.now().minusDays(20));
+        warehouse.setVisibleUntil(LocalDateTime.now().minusDays(1));
+        when(warehouseRepository.findPublicAvailableById(warehouseId)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class,
+                () -> warehouseService.getWarehouseDetail(warehouseId));
+    }
+
+    @Test
+    void ownerWarehouseResponseIncludesPublicationStatusAndActionFlags() {
+        warehouse.setStatus(WarehouseStatus.AVAILABLE);
+        warehouse.setVerified(true);
+        warehouse.setPublishedAt(LocalDateTime.now().minusDays(1));
+        warehouse.setVisibleUntil(LocalDateTime.now().plusDays(10));
+        when(warehouseRepository.findByOwnerId(eq(ownerId), any()))
+                .thenReturn(new PageImpl<>(List.of(warehouse)));
+
+        WarehouseResponse response = warehouseService
+                .getMyWarehouses(ownerId, 0, 10, "createdAt", "desc")
+                .getContent()
+                .get(0);
+
+        assertEquals("PUBLISHED", response.getPublicationStatus());
+        assertFalse(response.isCanPublish());
+        assertTrue(response.isCanRenew());
+    }
+
+    @Test
+    void expiredWarehouseCanBeRenewedButCannotBeInitiallyPublished() {
+        warehouse.setStatus(WarehouseStatus.AVAILABLE);
+        warehouse.setVerified(true);
+        warehouse.setPublishedAt(LocalDateTime.now().minusDays(20));
+        warehouse.setVisibleUntil(LocalDateTime.now().minusDays(1));
+        when(warehouseRepository.findByOwnerId(eq(ownerId), any()))
+                .thenReturn(new PageImpl<>(List.of(warehouse)));
+
+        WarehouseResponse response = warehouseService
+                .getMyWarehouses(ownerId, 0, 10, "createdAt", "desc")
+                .getContent()
+                .get(0);
+
+        assertEquals("EXPIRED", response.getPublicationStatus());
+        assertFalse(response.isCanPublish());
+        assertTrue(response.isCanRenew());
+    }
+
+    @Test
+    void unpublishedWarehouseCanBePublishedButCannotBeRenewed() {
+        warehouse.setStatus(WarehouseStatus.AVAILABLE);
+        warehouse.setVerified(true);
+        when(warehouseRepository.findByOwnerId(eq(ownerId), any()))
+                .thenReturn(new PageImpl<>(List.of(warehouse)));
+
+        WarehouseResponse response = warehouseService
+                .getMyWarehouses(ownerId, 0, 10, "createdAt", "desc")
+                .getContent()
+                .get(0);
+
+        assertEquals("DRAFT", response.getPublicationStatus());
+        assertTrue(response.isCanPublish());
+        assertFalse(response.isCanRenew());
     }
 }

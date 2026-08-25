@@ -38,6 +38,9 @@ public class WarehouseResponse {
     private String policyVersion;
     private LocalDateTime publishedAt;
     private LocalDateTime visibleUntil;
+    private String publicationStatus;
+    private boolean canPublish;
+    private boolean canRenew;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

@@ -29,6 +29,7 @@ import fu.stockspace.stockspace_be.staff.entity.AssignmentStatus;
 import fu.stockspace.stockspace_be.staff.entity.StaffWarehouseAssignment;
 import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
 
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -46,6 +47,9 @@ import java.util.stream.Collectors;
 public class WarehouseService {
 
     private static final int MAX_IMAGES_PER_WAREHOUSE = 10;
+    private static final String PUBLICATION_DRAFT = "DRAFT";
+    private static final String PUBLICATION_PUBLISHED = "PUBLISHED";
+    private static final String PUBLICATION_EXPIRED = "EXPIRED";
 
     private final WarehouseRepository warehouseRepository;
     private final WarehouseTypeRepository warehouseTypeRepository;
@@ -562,6 +566,11 @@ public class WarehouseService {
                 ? w.getRentalPrice()
                 : w.getPricePerMonth();
         RentalPricingType pricingType = effectivePricingType(w);
+        String publicationStatus = resolvePublicationStatus(w);
+        boolean publishableWarehouse = w.isActive()
+                && !w.isDeleted()
+                && w.isVerified()
+                && w.getStatus() == WarehouseStatus.AVAILABLE;
 
         return WarehouseResponse.builder()
                 .id(w.getId())
@@ -585,9 +594,23 @@ public class WarehouseService {
                 .policyVersion(w.getPolicy() != null ? w.getPolicy().getVersion() : null)
                 .publishedAt(w.getPublishedAt())
                 .visibleUntil(w.getVisibleUntil())
+                .publicationStatus(publicationStatus)
+                .canPublish(publishableWarehouse && PUBLICATION_DRAFT.equals(publicationStatus))
+                .canRenew(publishableWarehouse
+                        && (PUBLICATION_PUBLISHED.equals(publicationStatus)
+                        || PUBLICATION_EXPIRED.equals(publicationStatus)))
                 .createdAt(w.getCreatedAt())
                 .updatedAt(w.getUpdatedAt())
                 .build();
+    }
+
+    private String resolvePublicationStatus(Warehouse warehouse) {
+        if (warehouse.getPublishedAt() == null || warehouse.getVisibleUntil() == null) {
+            return PUBLICATION_DRAFT;
+        }
+        return warehouse.getVisibleUntil().isBefore(LocalDateTime.now())
+                ? PUBLICATION_EXPIRED
+                : PUBLICATION_PUBLISHED;
     }
 
     private PagedResponse<WarehouseResponse> toPagedResponse(Page<Warehouse> page) {

@@ -43,7 +43,7 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
               AND w.status = fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus.AVAILABLE
               AND w.publishedAt IS NOT NULL
               AND w.visibleUntil IS NOT NULL
-              AND w.visibleUntil > CURRENT_TIMESTAMP
+              AND w.visibleUntil >= CURRENT_TIMESTAMP
             """)
     Optional<Warehouse> findPublicAvailableById(@Param("id") UUID id);
 
@@ -56,7 +56,7 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
               AND ((:status IS NULL AND w.status = fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus.AVAILABLE) OR (:status IS NOT NULL AND w.status = :status))
               AND w.publishedAt IS NOT NULL
               AND w.visibleUntil IS NOT NULL
-              AND w.visibleUntil > CURRENT_TIMESTAMP
+              AND w.visibleUntil >= CURRENT_TIMESTAMP
               AND (:keyword IS NULL OR LOWER(w.name) LIKE :keyword
                    OR LOWER(w.address) LIKE :keyword
                    OR LOWER(w.description) LIKE :keyword
