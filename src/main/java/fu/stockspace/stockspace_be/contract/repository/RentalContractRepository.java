@@ -8,8 +8,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
-
-
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 public interface RentalContractRepository extends JpaRepository<RentalContract, UUID> {
@@ -19,7 +19,11 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
 
     @Query("""
             SELECT c FROM RentalContract c
-            WHERE c.booking.tenant.id = :tenantId
+            LEFT JOIN c.tenant directTenant
+            LEFT JOIN c.booking legacyBooking
+            LEFT JOIN legacyBooking.tenant legacyTenant
+            WHERE directTenant.id = :tenantId
+               OR legacyTenant.id = :tenantId
             ORDER BY c.createdAt DESC
             """)
     Page<RentalContract> findByTenantId(@Param("tenantId") UUID tenantId, Pageable pageable);
@@ -27,7 +31,12 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
 
     @Query("""
             SELECT c FROM RentalContract c
-            WHERE c.booking.warehouse.owner.id = :ownerId
+            LEFT JOIN c.owner directOwner
+            LEFT JOIN c.booking legacyBooking
+            LEFT JOIN legacyBooking.warehouse legacyWarehouse
+            LEFT JOIN legacyWarehouse.owner legacyOwner
+            WHERE directOwner.id = :ownerId
+               OR legacyOwner.id = :ownerId
             ORDER BY c.createdAt DESC
             """)
     Page<RentalContract> findByOwnerId(@Param("ownerId") UUID ownerId, Pageable pageable);
@@ -60,25 +69,51 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
 
     @Query("""
             SELECT COUNT(c) > 0 FROM RentalContract c
-            WHERE c.booking.tenant.id = :tenantId
-              AND c.booking.warehouse.id = :warehouseId
+            LEFT JOIN c.tenant directTenant
+            LEFT JOIN c.warehouse directWarehouse
+            LEFT JOIN c.booking legacyBooking
+            LEFT JOIN legacyBooking.tenant legacyTenant
+            LEFT JOIN legacyBooking.warehouse legacyWarehouse
+            WHERE (directTenant.id = :tenantId OR legacyTenant.id = :tenantId)
+              AND (directWarehouse.id = :warehouseId OR legacyWarehouse.id = :warehouseId)
               AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
               AND c.isActive = true
               AND c.isDeleted = false
-              AND c.booking.isActive = true
-              AND c.booking.isDeleted = false
+              AND (legacyBooking IS NULL OR (legacyBooking.isActive = true AND legacyBooking.isDeleted = false))
             """)
     boolean existsByTenantIdAndWarehouseIdAndStatusActive(@Param("tenantId") UUID tenantId, @Param("warehouseId") UUID warehouseId);
 
     @Query("""
-            SELECT DISTINCT c.booking.warehouse FROM RentalContract c
-            WHERE c.booking.tenant.id = :tenantId
+            SELECT DISTINCT w FROM RentalContract c
+            JOIN c.warehouse w
+            WHERE c.tenant.id = :tenantId
               AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
               AND c.isActive = true
               AND c.isDeleted = false
-              AND c.booking.isActive = true
-              AND c.booking.isDeleted = false
             """)
-    java.util.List<fu.stockspace.stockspace_be.warehouse.entity.Warehouse> findActiveRentedWarehousesByTenantId(@Param("tenantId") UUID tenantId);
+    List<fu.stockspace.stockspace_be.warehouse.entity.Warehouse> findActiveDirectWarehousesByTenantId(@Param("tenantId") UUID tenantId);
+
+    @Query("""
+            SELECT DISTINCT legacyBooking.warehouse FROM RentalContract c
+            JOIN c.booking legacyBooking
+            WHERE legacyBooking.tenant.id = :tenantId
+              AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
+              AND c.isActive = true
+              AND c.isDeleted = false
+              AND legacyBooking.isActive = true
+              AND legacyBooking.isDeleted = false
+            """)
+    List<fu.stockspace.stockspace_be.warehouse.entity.Warehouse> findActiveLegacyWarehousesByTenantId(@Param("tenantId") UUID tenantId);
+
+    default List<fu.stockspace.stockspace_be.warehouse.entity.Warehouse> findActiveRentedWarehousesByTenantId(UUID tenantId) {
+        List<fu.stockspace.stockspace_be.warehouse.entity.Warehouse> warehouses =
+                new ArrayList<>(findActiveDirectWarehousesByTenantId(tenantId));
+        findActiveLegacyWarehousesByTenantId(tenantId).forEach(legacyWarehouse -> {
+            if (warehouses.stream().noneMatch(warehouse -> warehouse.getId().equals(legacyWarehouse.getId()))) {
+                warehouses.add(legacyWarehouse);
+            }
+        });
+        return warehouses;
+    }
 }
 

@@ -205,6 +205,7 @@ public class DisputeService {
                 .depositAmount(booking != null ? booking.getDepositAmount() : null)
                 .startDate(contract != null ? contract.getStartDate() : null)
                 .endDate(contract != null ? contract.getEndDate() : null)
+                .paperContractFiles(contract != null ? contract.getPaperContractImages() : null)
                 .paperContractImages(contract != null ? contract.getPaperContractImages() : null)
                 // Thông tin Tenant
                 .tenantId(tenant != null ? tenant.getId() : null)

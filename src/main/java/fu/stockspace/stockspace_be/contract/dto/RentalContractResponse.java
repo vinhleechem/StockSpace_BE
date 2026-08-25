@@ -1,16 +1,12 @@
 package fu.stockspace.stockspace_be.contract.dto;
 
+import fu.stockspace.stockspace_be.warehouse.entity.RentalPricingType;
 import lombok.Builder;
 import lombok.Getter;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-
-
-
-
-
 import java.util.UUID;
 
 @Getter
@@ -23,30 +19,37 @@ public class RentalContractResponse {
     private boolean ownerConfirmed;
     private LocalDate startDate;
     private LocalDate endDate;
-    private String paperContractImages;
+    private String paperContractFiles;
 
+    /** @deprecated Use paperContractFiles. */
+    @Deprecated
+    private String paperContractImages;
 
     private UUID bookingId;
     private BigDecimal depositAmount;
-
-
     private UUID tenantId;
     private String tenantName;
     private String tenantEmail;
-
-
     private UUID warehouseId;
     private String warehouseName;
     private String warehouseAddress;
-
-
     private UUID ownerId;
     private String ownerName;
 
+    private RentalPricingType pricingType;
+    private BigDecimal rentalPriceSnapshot;
+    private BigDecimal finalMonthlyRent;
+    private BigDecimal leasedWidth;
+    private BigDecimal leasedLength;
+    private BigDecimal leasedHeight;
+    private BigDecimal leasedAreaM2;
+    private String layoutSnapshot;
+    private String changeRequestReason;
+    private String rejectionReason;
+    private LocalDateTime confirmedAt;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-
-
     private LocalDateTime submittedAt;
     private String cancelReason;
     private String cancelEvidence;

@@ -22,6 +22,8 @@ import fu.stockspace.stockspace_be.warehouse.service.WarehouseLayoutService;
 import fu.stockspace.stockspace_be.wallet.service.WalletService;
 import fu.stockspace.stockspace_be.wallet.entity.TransactionType;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
@@ -53,6 +55,7 @@ public class ContractService {
     private final WalletService walletService;
     private final WarehouseLayoutService warehouseLayoutService;
     private final NotificationService notificationService;
+    private final ObjectMapper objectMapper;
 
 
 
@@ -101,8 +104,8 @@ public class ContractService {
     public RentalContractResponse getContractById(UUID contractId, UUID userId) {
         RentalContract contract = contractRepository.findById(contractId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
-        UUID tenantId = contract.getBooking().getTenant().getId();
-        UUID ownerId = contract.getBooking().getWarehouse().getOwner().getId();
+        UUID tenantId = contract.getEffectiveTenant() != null ? contract.getEffectiveTenant().getId() : null;
+        UUID ownerId = contract.getEffectiveOwner() != null ? contract.getEffectiveOwner().getId() : null;
         if (!userId.equals(tenantId) && !userId.equals(ownerId)) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
@@ -168,9 +171,15 @@ public class ContractService {
 
     public RentalContractResponse mapToResponse(RentalContract c) {
         BookingRequest b = c.getBooking();
-        var tenant = b.getTenant();
-        var warehouse = b.getWarehouse();
-        var owner = warehouse != null ? warehouse.getOwner() : null;
+        var tenant = c.getEffectiveTenant();
+        var warehouse = c.getEffectiveWarehouse();
+        var owner = c.getEffectiveOwner();
+        if (owner == null && warehouse != null) {
+            owner = warehouse.getOwner();
+        }
+        String paperContractFiles = c.getPaperContractFiles() != null
+                ? c.getPaperContractFiles()
+                : c.getPaperContractImages();
         return RentalContractResponse.builder()
                 .id(c.getId())
                 .status(c.getStatus().name())
@@ -178,9 +187,10 @@ public class ContractService {
                 .ownerConfirmed(c.isOwnerConfirmed())
                 .startDate(c.getStartDate())
                 .endDate(c.getEndDate())
-                .paperContractImages(c.getPaperContractImages())
-                .bookingId(b.getId())
-                .depositAmount(b.getDepositAmount())
+                .paperContractFiles(paperContractFiles)
+                .paperContractImages(paperContractFiles)
+                .bookingId(b != null ? b.getId() : null)
+                .depositAmount(b != null ? b.getDepositAmount() : null)
                 .tenantId(tenant != null ? tenant.getId() : null)
                 .tenantName(tenant != null ? tenant.getFullName() : null)
                 .tenantEmail(tenant != null ? tenant.getEmail() : null)
@@ -189,6 +199,17 @@ public class ContractService {
                 .warehouseAddress(warehouse != null ? warehouse.getAddress() : null)
                 .ownerId(owner != null ? owner.getId() : null)
                 .ownerName(owner != null ? owner.getFullName() : null)
+                .pricingType(c.getPricingType())
+                .rentalPriceSnapshot(c.getRentalPriceSnapshot())
+                .finalMonthlyRent(c.getFinalMonthlyRent())
+                .leasedWidth(c.getLeasedWidth())
+                .leasedLength(c.getLeasedLength())
+                .leasedHeight(c.getLeasedHeight())
+                .leasedAreaM2(c.getLeasedAreaM2())
+                .layoutSnapshot(c.getLayoutSnapshot())
+                .changeRequestReason(c.getChangeRequestReason())
+                .rejectionReason(c.getRejectionReason())
+                .confirmedAt(c.getConfirmedAt())
                 .createdAt(c.getCreatedAt())
                 .updatedAt(c.getUpdatedAt())
                 .submittedAt(c.getSubmittedAt())
@@ -220,7 +241,11 @@ public class ContractService {
         }
         contract.setStartDate(request.getStartDate());
         contract.setEndDate(request.getEndDate());
-        contract.setPaperContractImages(request.getPaperContractImages().toString());
+        try {
+            contract.setPaperContractFiles(objectMapper.writeValueAsString(request.getPaperContractFiles()));
+        } catch (JsonProcessingException e) {
+            throw new BadRequestException("Paper contract files must be valid JSON");
+        }
         contract.setStatus(ContractStatus.PENDING_TENANT_CONFIRM);
         contract.setSubmittedAt(LocalDateTime.now());
         contract = contractRepository.save(contract);

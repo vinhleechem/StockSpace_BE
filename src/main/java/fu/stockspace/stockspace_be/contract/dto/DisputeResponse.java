@@ -29,6 +29,10 @@ public class DisputeResponse {
     private BigDecimal depositAmount;
     private LocalDate startDate;
     private LocalDate endDate;
+    private String paperContractFiles;
+
+    /** @deprecated Use paperContractFiles. */
+    @Deprecated
     private String paperContractImages;
 
     // Thông tin Tenant
