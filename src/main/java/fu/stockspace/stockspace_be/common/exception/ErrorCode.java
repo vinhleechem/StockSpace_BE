@@ -58,9 +58,6 @@ public enum ErrorCode {
     WAREHOUSE_IMAGE_LIMIT_EXCEEDED("Số lượng ảnh vượt quá giới hạn tối đa (10 ảnh)", HttpStatus.BAD_REQUEST),
 
 
-    BOOKING_NOT_FOUND("Yêu cầu thuê kho không tồn tại", HttpStatus.NOT_FOUND),
-    BOOKING_ALREADY_PROCESSED("Yêu cầu thuê kho đã được xử lý (Approved/Rejected)", HttpStatus.BAD_REQUEST),
-    BOOKING_DUPLICATE_PENDING("Bạn đã có một yêu cầu thuê kho đang chờ duyệt cho kho này", HttpStatus.CONFLICT),
 
 
     CONTRACT_NOT_FOUND("Hợp đồng thuê kho không tồn tại", HttpStatus.NOT_FOUND),

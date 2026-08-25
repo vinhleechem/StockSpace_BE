@@ -33,8 +33,7 @@ public class OwnerStatsService {
             monthlyList.add(new MonthlyRevenueDto(m, BigDecimal.ZERO));
         }
 
-        // Rental payments are settled outside StockSpace. Historical security
-        // deposits must never be presented as owner revenue.
+        // Rental payments are settled outside StockSpace and are not platform revenue.
         return RevenueStatsResponse.builder()
                 .year(targetYear)
                 .totalRevenue(BigDecimal.ZERO)

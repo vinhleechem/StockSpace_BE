@@ -41,7 +41,7 @@ public class PublicWarehouseController {
     private static final int MAX_KEYWORD_LENGTH = 100;
     private static final BigDecimal MAX_FILTER_AMOUNT = new BigDecimal("9999999999999.99");
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
-            "createdAt", "updatedAt", "name", "pricePerMonth", "rentalPrice", "capacity"
+            "createdAt", "updatedAt", "name", "rentalPrice", "capacity"
     );
 
     private final WarehouseService warehouseService;

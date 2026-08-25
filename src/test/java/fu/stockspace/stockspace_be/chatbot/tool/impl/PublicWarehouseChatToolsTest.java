@@ -70,7 +70,6 @@ class PublicWarehouseChatToolsTest {
         assertEquals("FIXED_MONTHLY", result.get("rentalPricingType").asText());
         assertEquals("Sẵn sàng cho thuê", result.get("status").asText());
         assertFalse(result.toString().contains("AVAILABLE"));
-        assertFalse(result.has("pricePerMonth"));
         assertFalse(result.toString().contains("ownerPhone"));
         verify(warehouseRepository).findPublicAvailableById(warehouseId);
         verify(warehouseRepository, never()).findById(warehouseId);

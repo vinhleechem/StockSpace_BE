@@ -2,7 +2,6 @@ package fu.stockspace.stockspace_be.contract.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fu.stockspace.stockspace_be.auth.entity.User;
-import fu.stockspace.stockspace_be.booking.repository.BookingRequestRepository;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.contract.dto.RentalContractResponse;
@@ -44,7 +43,6 @@ import static org.mockito.Mockito.when;
 class TenantContractReviewServiceTest {
 
     @Mock private RentalContractRepository contractRepository;
-    @Mock private BookingRequestRepository bookingRepository;
     @Mock private WarehouseService warehouseService;
     @Mock private fu.stockspace.stockspace_be.auth.repository.UserRepository userRepository;
     @Mock private WalletService walletService;
@@ -99,7 +97,7 @@ class TenantContractReviewServiceTest {
     }
 
     @Test
-    void tenantCanConfirmDirectContractWithoutBookingOrWalletInteraction() {
+    void tenantCanConfirmDirectContractWithoutWalletInteraction() {
         stubContractLookup();
         when(contractRepository.save(contract)).thenReturn(contract);
         when(warehouseService.lockWarehouseForContractSubmit(warehouseId)).thenReturn(warehouse);
@@ -114,7 +112,7 @@ class TenantContractReviewServiceTest {
         assertNotNull(contract.getConfirmedAt());
         assertEquals(Boolean.FALSE, response.isCanManageWms());
         verify(warehouseService).lockWarehouseForContractSubmit(warehouseId);
-        verifyNoInteractions(walletService, bookingRepository);
+        verifyNoInteractions(walletService);
         verify(warehouseLayoutService, never()).cloneLayout(any(), any());
     }
 
@@ -128,10 +126,9 @@ class TenantContractReviewServiceTest {
 
         assertEquals(ContractStatus.CHANGES_REQUESTED, contract.getStatus());
         assertEquals("Please correct the leased area", contract.getChangeRequestReason());
-        assertFalse(contract.isTenantConfirmed());
         verify(notificationService).push(
                 eq(ownerId), eq("Rental contract changes requested"), any(), eq("CONTRACT_CHANGES_REQUESTED"));
-        verifyNoInteractions(walletService, bookingRepository);
+        verifyNoInteractions(walletService);
     }
 
     @Test
@@ -146,7 +143,7 @@ class TenantContractReviewServiceTest {
         assertEquals(ContractStatus.REJECTED, contract.getStatus());
         assertEquals("Terms are incorrect", contract.getRejectionReason());
         verify(warehouseLayoutService).archiveTenantLayout(warehouseId, tenantId);
-        verifyNoInteractions(walletService, bookingRepository);
+        verifyNoInteractions(walletService);
     }
 
     @Test

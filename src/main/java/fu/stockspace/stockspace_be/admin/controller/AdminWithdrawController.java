@@ -1,5 +1,5 @@
 package fu.stockspace.stockspace_be.admin.controller;
-import fu.stockspace.stockspace_be.booking.entity.ApprovalStatus;
+import fu.stockspace.stockspace_be.common.entity.ApprovalStatus;
 import fu.stockspace.stockspace_be.common.dto.ApiResponse;
 import fu.stockspace.stockspace_be.wallet.dto.WithdrawResponse;
 import fu.stockspace.stockspace_be.wallet.service.WithdrawService;

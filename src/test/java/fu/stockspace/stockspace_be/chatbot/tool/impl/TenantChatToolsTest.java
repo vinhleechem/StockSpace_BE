@@ -78,7 +78,6 @@ class TenantChatToolsTest {
                 .tenantEmail("tenant@example.com")
                 .ownerId(UUID.randomUUID())
                 .ownerName("Owner Secret")
-                .paperContractImages("[\"private.jpg\"]")
                 .build();
         when(contractService.getMyContractsAsTenant(userId, 0, 20))
                 .thenReturn(new PageImpl<>(List.of(contract), PageRequest.of(0, 20), 1));
@@ -94,8 +93,6 @@ class TenantChatToolsTest {
         assertFalse(result.toString().contains("tenantEmail"));
         assertFalse(result.toString().contains("tenantName"));
         assertFalse(result.toString().contains("ownerName"));
-        assertFalse(result.toString().contains("paperContractImages"));
-        assertFalse(result.toString().contains("cancelEvidence"));
         assertFalse(result.toString().contains("deposit"));
         assertEquals("16000000", result.at("/contracts/0/finalMonthlyRent").asText());
         verify(contractService).getMyContractsAsTenant(userId, 0, 20);
@@ -139,8 +136,6 @@ class TenantChatToolsTest {
         assertEquals("Đang có hiệu lực", result.get("status").asText());
         assertEquals("80", result.get("leasedAreaM2").asText());
         assertEquals("16000000", result.get("finalMonthlyRent").asText());
-        assertFalse(result.has("tenantConfirmed"));
-        assertFalse(result.has("ownerConfirmed"));
         assertFalse(result.toString().contains("ACTIVE"));
         assertFalse(result.toString().contains("tenantEmail"));
         assertFalse(result.toString().contains("tenantName"));

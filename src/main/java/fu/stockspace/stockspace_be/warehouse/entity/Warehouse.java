@@ -73,31 +73,6 @@ public class Warehouse extends BaseEntity {
     @Column(name = "rental_price", precision = 15, scale = 2)
     private BigDecimal rentalPrice;
 
-    /**
-     * Transitional source compatibility for code that still uses the old
-     * field name. This field is not persisted; the migration keeps the old
-     * database column while rental_price becomes the canonical value.
-     */
-    @Transient
-    @Deprecated
-    private BigDecimal pricePerMonth;
-
-    @Deprecated
-    public BigDecimal getPricePerMonth() {
-        return rentalPrice != null ? rentalPrice : pricePerMonth;
-    }
-
-    @Deprecated
-    public void setPricePerMonth(BigDecimal pricePerMonth) {
-        this.pricePerMonth = pricePerMonth;
-        if (this.rentalPrice == null) {
-            this.rentalPrice = pricePerMonth;
-        }
-    }
-
-
-
-
     @Column(name = "is_verified", nullable = false)
     @Builder.Default
     private boolean isVerified = false;

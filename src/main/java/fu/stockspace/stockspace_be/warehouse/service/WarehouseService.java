@@ -106,8 +106,7 @@ public class WarehouseService {
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_TYPE_NOT_FOUND));
 
         RentalPricingType pricingType = resolvePricingType(request.getRentalPricingType());
-        java.math.BigDecimal rentalPrice = resolveRentalPrice(
-                request.getRentalPrice(), request.getPricePerMonth());
+        java.math.BigDecimal rentalPrice = request.getRentalPrice();
         validateRentalPricing(pricingType, rentalPrice);
 
         SystemPolicy policy = systemPolicyRepository.findFirstByIsActiveTrueAndIsDeletedFalseOrderByCreatedAtDesc()
@@ -172,15 +171,13 @@ public class WarehouseService {
             warehouse.setCapacity(request.getCapacity());
         }
         boolean pricingChanged = request.getRentalPricingType() != null
-                || request.getRentalPrice() != null
-                || request.getPricePerMonth() != null;
+                || request.getRentalPrice() != null;
         if (pricingChanged) {
             RentalPricingType pricingType = request.getRentalPricingType() != null
                     ? request.getRentalPricingType()
                     : effectivePricingType(warehouse);
-            java.math.BigDecimal rentalPrice = resolveRentalPrice(
-                    request.getRentalPrice(), request.getPricePerMonth());
-            if (request.getRentalPrice() == null && request.getPricePerMonth() == null
+            java.math.BigDecimal rentalPrice = request.getRentalPrice();
+            if (request.getRentalPrice() == null
                     && pricingType == RentalPricingType.NEGOTIATED) {
                 rentalPrice = null;
             } else if (rentalPrice == null) {
@@ -479,15 +476,6 @@ public class WarehouseService {
                 : RentalPricingType.FIXED_MONTHLY;
     }
 
-    private java.math.BigDecimal resolveRentalPrice(java.math.BigDecimal rentalPrice,
-                                                    java.math.BigDecimal legacyPrice) {
-        if (rentalPrice != null && legacyPrice != null
-                && rentalPrice.compareTo(legacyPrice) != 0) {
-            throw new BadRequestException("rentalPrice and pricePerMonth must match when both are provided");
-        }
-        return rentalPrice != null ? rentalPrice : legacyPrice;
-    }
-
     private void validateRentalPricing(RentalPricingType pricingType,
                                        java.math.BigDecimal rentalPrice) {
         if (pricingType == RentalPricingType.NEGOTIATED) {
@@ -504,7 +492,7 @@ public class WarehouseService {
     }
 
     private String normalizeSortProperty(String sortBy) {
-        return "pricePerMonth".equals(sortBy) ? "rentalPrice" : sortBy;
+        return sortBy;
     }
 
     private List<String> attachImages(Warehouse warehouse, List<String> imageUrls) {
@@ -536,9 +524,7 @@ public class WarehouseService {
 
         String cover = urls.isEmpty() ? null : urls.get(0);
 
-        java.math.BigDecimal rentalPrice = w.getRentalPrice() != null
-                ? w.getRentalPrice()
-                : w.getPricePerMonth();
+        java.math.BigDecimal rentalPrice = w.getRentalPrice();
         RentalPricingType pricingType = effectivePricingType(w);
         String publicationStatus = resolvePublicationStatus(w);
         boolean publishableWarehouse = w.isActive()
@@ -554,7 +540,6 @@ public class WarehouseService {
                 .capacity(w.getCapacity())
                 .rentalPrice(rentalPrice)
                 .rentalPricingType(pricingType)
-                .pricePerMonth(rentalPrice)
                 .status(w.getStatus().name())
                 .rejectReason(w.getRejectReason())
                 .isVerified(w.isVerified())

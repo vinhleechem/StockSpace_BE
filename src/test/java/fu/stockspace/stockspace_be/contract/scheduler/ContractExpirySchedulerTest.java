@@ -143,19 +143,6 @@ class ContractExpirySchedulerTest {
         verify(contractRepository).save(contract);
     }
 
-    @Test
-    void legacyContractWithoutDirectRelationsIsSkippedWithoutCrashing() {
-        RentalContract legacy = RentalContract.builder()
-                .id(UUID.randomUUID()).status(ContractStatus.ACTIVE)
-                .endDate(LocalDate.now().minusDays(1)).build();
-        stubDailyQueries(List.of(), List.of(legacy));
-
-        assertDoesNotThrow(() -> scheduler.expireContracts());
-        assertEquals(ContractStatus.ACTIVE, legacy.getStatus());
-        verify(contractRepository, never()).save(legacy);
-        verifyNoInteractions(stockBatchRepository, warehouseLayoutService, assignmentRepository);
-    }
-
     private RentalContract activeContract(LocalDate endDate) {
         return RentalContract.builder()
                 .id(UUID.randomUUID())

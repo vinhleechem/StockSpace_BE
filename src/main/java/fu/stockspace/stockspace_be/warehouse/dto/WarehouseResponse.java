@@ -21,10 +21,6 @@ public class WarehouseResponse {
     private BigDecimal rentalPrice;
     private RentalPricingType rentalPricingType;
 
-    /** @deprecated Use rentalPrice. */
-    @Deprecated
-    private BigDecimal pricePerMonth;
-
     private String status;
     private String rejectReason;
     private boolean isVerified;

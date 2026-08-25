@@ -2,7 +2,6 @@ package fu.stockspace.stockspace_be.contract.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fu.stockspace.stockspace_be.auth.entity.User;
-import fu.stockspace.stockspace_be.booking.repository.BookingRequestRepository;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.contract.dto.RentalContractResponse;
 import fu.stockspace.stockspace_be.contract.dto.UpdateRentalContractRequest;
@@ -47,7 +46,6 @@ import static org.mockito.Mockito.when;
 class DirectContractSubmissionServiceTest {
 
     @Mock private RentalContractRepository contractRepository;
-    @Mock private BookingRequestRepository bookingRepository;
     @Mock private WarehouseService warehouseService;
     @Mock private fu.stockspace.stockspace_be.auth.repository.UserRepository userRepository;
     @Mock private WalletService walletService;

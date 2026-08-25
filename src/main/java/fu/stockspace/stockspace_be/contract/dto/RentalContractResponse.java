@@ -19,10 +19,6 @@ public class RentalContractResponse {
     private LocalDate endDate;
     private String paperContractFiles;
 
-    /** @deprecated Use paperContractFiles. */
-    @Deprecated
-    private String paperContractImages;
-
     private UUID tenantId;
     private String tenantName;
     private String tenantEmail;

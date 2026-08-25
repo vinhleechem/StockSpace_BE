@@ -40,13 +40,6 @@ public class CreateWarehouseRequest {
     @Digits(integer = 13, fraction = 2, message = "Rental price must have at most 13 integer digits and 2 decimal places")
     private BigDecimal rentalPrice;
 
-    /** @deprecated Use rentalPrice and rentalPricingType. */
-    @Deprecated
-    @DecimalMin(value = "0.0", inclusive = false, message = "Rental price must be greater than 0")
-    @DecimalMax(value = "9999999999999.99", message = "Rental price exceeds the supported limit")
-    @Digits(integer = 13, fraction = 2, message = "Rental price must have at most 13 integer digits and 2 decimal places")
-    private BigDecimal pricePerMonth;
-
     private RentalPricingType rentalPricingType;
 
     private List<String> imageUrls;

@@ -3,7 +3,6 @@ package fu.stockspace.stockspace_be.contract.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
-import fu.stockspace.stockspace_be.booking.repository.BookingRequestRepository;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.contract.entity.ContractStatus;
@@ -40,7 +39,6 @@ import static org.mockito.Mockito.when;
 class ContractLayoutServiceTest {
 
     @Mock private RentalContractRepository contractRepository;
-    @Mock private BookingRequestRepository bookingRepository;
     @Mock private WarehouseService warehouseService;
     @Mock private UserRepository userRepository;
     @Mock private WalletService walletService;

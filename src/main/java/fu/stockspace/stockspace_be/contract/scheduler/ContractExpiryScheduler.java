@@ -64,11 +64,6 @@ public class ContractExpiryScheduler {
             if (contract.isExpiryReminderSent()) {
                 continue;
             }
-            if (!hasDirectRelations(contract)) {
-                log.warn("Skipping expiry reminder for legacy contract {} without direct relations", contract.getId());
-                continue;
-            }
-
             User tenant = contract.getTenant();
             User owner = contract.getOwner();
             String warehouseName = contract.getWarehouse().getName();
@@ -113,11 +108,6 @@ public class ContractExpiryScheduler {
                 || !contract.getEndDate().isBefore(today)) {
             return;
         }
-        if (!hasDirectRelations(contract)) {
-            log.warn("Skipping legacy contract {} during direct expiry processing", contract.getId());
-            return;
-        }
-
         User tenant = contract.getTenant();
         User owner = contract.getOwner();
         Warehouse warehouse = contract.getWarehouse();
@@ -190,9 +180,4 @@ public class ContractExpiryScheduler {
         }
     }
 
-    private boolean hasDirectRelations(RentalContract contract) {
-        return contract.getOwner() != null
-                && contract.getTenant() != null
-                && contract.getWarehouse() != null;
-    }
 }

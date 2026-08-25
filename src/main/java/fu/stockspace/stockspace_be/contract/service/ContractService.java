@@ -171,7 +171,7 @@ public class ContractService {
     }
 
     /**
-     * Revalidates and submits a direct contract without relying on Booking.
+     * Revalidates and submits a direct contract.
      * The warehouse row is locked before the overlap query so two concurrent
      * submissions for the same warehouse observe a serialized state.
      */
@@ -287,9 +287,7 @@ public class ContractService {
     }
 
     private void requirePaperContractFiles(RentalContract contract) {
-        String files = contract.getPaperContractFiles() != null
-                ? contract.getPaperContractFiles()
-                : contract.getPaperContractImages();
+        String files = contract.getPaperContractFiles();
         if (files == null || files.isBlank()) {
             throw new BadRequestException("At least one paper contract file is required before submission");
         }
@@ -327,8 +325,8 @@ public class ContractService {
 
     /**
      * Confirms a direct contract submitted by its owner. This lifecycle is
-     * deliberately independent from the legacy Booking and wallet/deposit
-     * flow: tenant confirmation only activates the contract and does not
+     * deliberately independent from platform wallet flows: tenant confirmation
+     * only activates the contract and does not
      * change the warehouse listing status.
      */
     @Transactional
@@ -682,9 +680,7 @@ public class ContractService {
                 .getDefaultLayoutForContract(warehouse.getId());
         validateLeasedDimensions(
                 leasedWidth, leasedLength, leasedHeight, defaultLayout, pricingType);
-        BigDecimal rentalPrice = warehouse.getRentalPrice() != null
-                ? warehouse.getRentalPrice()
-                : warehouse.getPricePerMonth();
+        BigDecimal rentalPrice = warehouse.getRentalPrice();
         BigDecimal area = leasedWidth.multiply(leasedLength);
         BigDecimal finalMonthlyRent;
         BigDecimal rentalPriceSnapshot;
@@ -837,9 +833,7 @@ public class ContractService {
         if (owner == null && warehouse != null) {
             owner = warehouse.getOwner();
         }
-        String paperContractFiles = c.getPaperContractFiles() != null
-                ? c.getPaperContractFiles()
-                : c.getPaperContractImages();
+        String paperContractFiles = c.getPaperContractFiles();
         ActionFlags actionFlags = calculateActionFlags(c, viewerId, tenant, owner);
         return RentalContractResponse.builder()
                 .id(c.getId())
@@ -847,7 +841,6 @@ public class ContractService {
                 .startDate(c.getStartDate())
                 .endDate(c.getEndDate())
                 .paperContractFiles(paperContractFiles)
-                .paperContractImages(paperContractFiles)
                 .tenantId(tenant != null ? tenant.getId() : null)
                 .tenantName(tenant != null ? tenant.getFullName() : null)
                 .tenantEmail(tenant != null ? tenant.getEmail() : null)

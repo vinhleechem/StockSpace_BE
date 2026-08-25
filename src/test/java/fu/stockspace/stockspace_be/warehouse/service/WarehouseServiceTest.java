@@ -138,14 +138,13 @@ class WarehouseServiceTest {
 
         assertEquals(RentalPricingType.NEGOTIATED, response.getRentalPricingType());
         assertNull(response.getRentalPrice());
-        assertNull(response.getPricePerMonth());
     }
 
     @Test
-    void updateWarehouseRejectsConflictingCurrentAndLegacyRentalPrices() {
+    void updateWarehouseRejectsNonPositiveRentalPrice() {
         UpdateWarehouseRequest request = new UpdateWarehouseRequest();
-        request.setRentalPrice(new BigDecimal("1000000"));
-        request.setPricePerMonth(new BigDecimal("2000000"));
+        request.setRentalPricingType(RentalPricingType.FIXED_MONTHLY);
+        request.setRentalPrice(BigDecimal.ZERO);
 
         when(warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId))
                 .thenReturn(Optional.of(warehouse));

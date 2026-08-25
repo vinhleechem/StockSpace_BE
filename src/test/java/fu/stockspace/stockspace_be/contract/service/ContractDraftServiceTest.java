@@ -5,7 +5,6 @@ import fu.stockspace.stockspace_be.auth.entity.Role;
 import fu.stockspace.stockspace_be.auth.entity.RoleType;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
-import fu.stockspace.stockspace_be.booking.repository.BookingRequestRepository;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
@@ -50,7 +49,6 @@ import static org.mockito.Mockito.when;
 class ContractDraftServiceTest {
 
     @Mock private RentalContractRepository contractRepository;
-    @Mock private BookingRequestRepository bookingRepository;
     @Mock private WarehouseService warehouseService;
     @Mock private UserRepository userRepository;
     @Mock private WalletService walletService;
@@ -180,7 +178,6 @@ class ContractDraftServiceTest {
         assertEquals(ownerId, saved.getOwner().getId());
         assertEquals(tenantId, saved.getTenant().getId());
         assertEquals(warehouseId, saved.getWarehouse().getId());
-        assertNull(saved.getBooking());
         assertEquals("[\"https://example.com/contract.pdf\"]", saved.getPaperContractFiles());
         objectMapper.readTree(saved.getLayoutSnapshot());
     }
