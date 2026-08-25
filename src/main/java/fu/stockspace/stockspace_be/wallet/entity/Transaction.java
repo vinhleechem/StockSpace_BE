@@ -51,4 +51,7 @@ public class Transaction extends BaseEntity {
 
     @Column(name = "subscription_id")
     private UUID subscriptionId;
+
+    @Column(name = "listing_order_id")
+    private UUID listingOrderId;
 }

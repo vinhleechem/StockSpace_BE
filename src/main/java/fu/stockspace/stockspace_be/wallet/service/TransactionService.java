@@ -67,6 +67,7 @@ public class TransactionService {
                 .referenceId(t.getReferenceId())
                 .bookingId(t.getBookingId())
                 .subscriptionId(t.getSubscriptionId())
+                .listingOrderId(t.getListingOrderId())
                 .createdAt(t.getCreatedAt())
                 .build();
     }

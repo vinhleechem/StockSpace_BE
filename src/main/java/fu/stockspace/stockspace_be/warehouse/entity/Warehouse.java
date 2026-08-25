@@ -7,6 +7,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -24,7 +25,8 @@ import java.util.UUID;
 @Entity
 @Table(name = "warehouses", indexes = {
         @Index(name = "idx_warehouses_owner_id", columnList = "owner_id"),
-        @Index(name = "idx_warehouses_status",   columnList = "status")
+        @Index(name = "idx_warehouses_status",   columnList = "status"),
+        @Index(name = "idx_warehouses_visible_until", columnList = "visible_until")
 })
 @Getter
 @Setter
@@ -107,6 +109,12 @@ public class Warehouse extends BaseEntity {
 
     @Column(name = "reject_reason", columnDefinition = "TEXT")
     private String rejectReason;
+
+    @Column(name = "published_at")
+    private LocalDateTime publishedAt;
+
+    @Column(name = "visible_until")
+    private LocalDateTime visibleUntil;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "policy_version_id", nullable = false)

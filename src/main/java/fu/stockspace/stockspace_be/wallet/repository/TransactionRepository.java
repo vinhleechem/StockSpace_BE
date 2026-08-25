@@ -12,6 +12,7 @@ import java.util.UUID;
 
 public interface TransactionRepository extends JpaRepository<Transaction, UUID> {
     Optional<Transaction> findByPaymentCode(String paymentCode);
+    Optional<Transaction> findByListingOrderId(UUID listingOrderId);
     boolean existsByReferenceId(String referenceId);
     Page<Transaction> findByWalletId(UUID walletId, Pageable pageable);
 

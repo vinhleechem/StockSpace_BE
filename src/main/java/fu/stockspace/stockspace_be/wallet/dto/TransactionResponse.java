@@ -20,5 +20,6 @@ public class TransactionResponse {
     private String referenceId;
     private UUID bookingId;
     private UUID subscriptionId;
+    private UUID listingOrderId;
     private LocalDateTime createdAt;
 }
