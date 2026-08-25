@@ -61,6 +61,11 @@ public enum ErrorCode {
 
 
     CONTRACT_NOT_FOUND("Hợp đồng thuê kho không tồn tại", HttpStatus.NOT_FOUND),
+    TENANT_NOT_FOUND("Tenant không tồn tại trong hệ thống", HttpStatus.NOT_FOUND),
+    INVALID_ROLE("Người dùng không có vai trò phù hợp cho thao tác này", HttpStatus.BAD_REQUEST),
+    INVALID_CONTRACT_STATUS("Trạng thái hợp đồng không cho phép thực hiện thao tác này", HttpStatus.BAD_REQUEST),
+    CONTRACT_DATE_OVERLAP("Kho đã có hợp đồng trùng khoảng thời gian yêu cầu", HttpStatus.CONFLICT),
+    INVALID_LEASE_DIMENSIONS("Kích thước khu vực thuê không hợp lệ", HttpStatus.BAD_REQUEST),
 
 
     INSPECTION_NOT_FOUND("Yêu cầu kiểm định không tồn tại", HttpStatus.NOT_FOUND),
@@ -69,11 +74,12 @@ public enum ErrorCode {
 
 
     WALLET_NOT_FOUND("Ví điện tử không tồn tại", HttpStatus.NOT_FOUND),
-    WALLET_INSUFFICIENT_BALANCE("Số dư ví không đủ để thực hiện giao dịch", HttpStatus.BAD_REQUEST),
+    INSUFFICIENT_BALANCE("Số dư ví không đủ để thực hiện giao dịch", HttpStatus.BAD_REQUEST),
     TRANSACTION_NOT_FOUND("Giao dịch không tồn tại", HttpStatus.NOT_FOUND),
 
 
     PACKAGE_NOT_FOUND("Gói dịch vụ không tồn tại", HttpStatus.NOT_FOUND),
+    LISTING_PACKAGE_INACTIVE("Gói đăng tin hiện không hoạt động", HttpStatus.BAD_REQUEST),
     SUBSCRIPTION_ALREADY_ACTIVE("Bạn đã có gói dịch vụ đang hoạt động", HttpStatus.CONFLICT),
     SUBSCRIPTION_NOT_FOUND("Subscription không tồn tại", HttpStatus.NOT_FOUND),
 

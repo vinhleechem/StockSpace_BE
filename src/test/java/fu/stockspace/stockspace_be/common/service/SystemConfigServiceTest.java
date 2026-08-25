@@ -96,7 +96,7 @@ class SystemConfigServiceTest {
                 SystemConfigKey.CONTRACT_EXPIRY_DAYS.getKey(),
                 UpdateSystemConfigRequest.builder().configValue("0").build()));
         assertThrows(ResourceNotFoundException.class, () -> configService.updateConfig(
-                "deposit_percentage",
+                "retired_config_key",
                 UpdateSystemConfigRequest.builder().configValue("10").build()));
     }
 }

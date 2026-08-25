@@ -5,6 +5,7 @@ import fu.stockspace.stockspace_be.auth.entity.Role;
 import fu.stockspace.stockspace_be.auth.entity.RoleType;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
+import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
@@ -172,6 +173,7 @@ class ContractDraftServiceTest {
 
         assertEquals(ContractStatus.DRAFT.name(), response.getStatus());
         assertEquals("Paper contract signed outside the platform", response.getOwnerNote());
+        assertEquals(List.of("https://example.com/contract.pdf"), response.getPaperContractFiles());
         org.mockito.ArgumentCaptor<RentalContract> captor = org.mockito.ArgumentCaptor.forClass(RentalContract.class);
         verify(contractRepository).save(captor.capture());
         RentalContract saved = captor.getValue();
@@ -187,7 +189,9 @@ class ContractDraftServiceTest {
         stubDraftValidation();
         CreateRentalContractRequest request = request("9", "20", "5");
 
-        assertThrows(BadRequestException.class, () -> contractService.previewOwnerDraft(ownerId, request));
+        BadRequestException exception = assertThrows(BadRequestException.class,
+                () -> contractService.previewOwnerDraft(ownerId, request));
+        assertEquals(ErrorCode.INVALID_LEASE_DIMENSIONS, exception.getErrorCode());
         verify(contractRepository, never()).save(any(RentalContract.class));
     }
 
@@ -207,8 +211,28 @@ class ContractDraftServiceTest {
         when(userRepository.findActiveByEmailAndRole("tenant@example.com", RoleType.ROLE_TENANT.name()))
                 .thenReturn(Optional.empty());
 
-        assertThrows(ResourceNotFoundException.class,
+        ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class,
                 () -> contractService.previewOwnerDraft(ownerId, request("10", "20", "5")));
+        assertEquals(ErrorCode.TENANT_NOT_FOUND, exception.getErrorCode());
+        verify(warehouseLayoutService, never()).getDefaultLayoutForContract(warehouseId);
+    }
+
+    @Test
+    void previewRejectsAnExistingAccountWithoutTenantRole() {
+        User ownerAccount = User.builder()
+                .id(UUID.randomUUID())
+                .email("tenant@example.com")
+                .roles(Set.of(Role.builder().name(RoleType.ROLE_OWNER.name()).build()))
+                .build();
+        when(warehouseService.getOwnedWarehouseForContract(ownerId, warehouseId)).thenReturn(warehouse);
+        when(userRepository.findActiveByEmailAndRole("tenant@example.com", RoleType.ROLE_TENANT.name()))
+                .thenReturn(Optional.empty());
+        when(userRepository.findByEmailIgnoreCase("tenant@example.com")).thenReturn(Optional.of(ownerAccount));
+
+        BadRequestException exception = assertThrows(BadRequestException.class,
+                () -> contractService.previewOwnerDraft(ownerId, request("10", "20", "5")));
+
+        assertEquals(ErrorCode.INVALID_ROLE, exception.getErrorCode());
         verify(warehouseLayoutService, never()).getDefaultLayoutForContract(warehouseId);
     }
 

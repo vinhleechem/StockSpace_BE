@@ -1,5 +1,6 @@
 package fu.stockspace.stockspace_be.warehouse.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.DecimalMin;
@@ -12,6 +13,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Schema(description = "Complete contract-layout replacement; dimensions must exactly match the contract lease dimensions")
 public class BulkLayoutSaveRequest {
     @NotNull(message = "Chiều rộng lưới layout không được để trống")
     @DecimalMin(value = "0.000001", message = "Layout width must be greater than 0 meters")

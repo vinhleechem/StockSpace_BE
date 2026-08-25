@@ -3,6 +3,8 @@ package fu.stockspace.stockspace_be.contract.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
+import fu.stockspace.stockspace_be.common.exception.ErrorCode;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.contract.dto.RentalContractResponse;
 import fu.stockspace.stockspace_be.contract.dto.UpdateRentalContractRequest;
 import fu.stockspace.stockspace_be.contract.entity.ContractStatus;
@@ -213,9 +215,10 @@ class DirectContractSubmissionServiceTest {
                 eq(contractId), eq(tenantId), eq(warehouseId), any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(true);
 
-        assertThrows(BadRequestException.class,
+        ResourceConflictException exception = assertThrows(ResourceConflictException.class,
                 () -> contractService.submitOwnerContract(ownerId, contractId));
 
+        assertEquals(ErrorCode.CONTRACT_DATE_OVERLAP, exception.getErrorCode());
         assertEquals(ContractStatus.DRAFT, contract.getStatus());
         verify(warehouseLayoutService, never()).validateContractLayout(
                 any(), any(), any(), any(), any(), any());

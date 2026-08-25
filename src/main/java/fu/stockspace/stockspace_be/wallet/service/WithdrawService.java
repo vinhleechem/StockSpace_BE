@@ -40,7 +40,7 @@ public class WithdrawService {
         Wallet wallet = walletRepository.findByUserIdWithLock(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WALLET_NOT_FOUND));
         if (wallet.getBalance().compareTo(dto.getAmount()) < 0) {
-            throw new BadRequestException(ErrorCode.WALLET_INSUFFICIENT_BALANCE);
+            throw new BadRequestException(ErrorCode.INSUFFICIENT_BALANCE);
         }
         wallet.setBalance(wallet.getBalance().subtract(dto.getAmount()));
         walletRepository.save(wallet);

@@ -3,6 +3,8 @@ package fu.stockspace.stockspace_be.contract.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
+import fu.stockspace.stockspace_be.common.exception.ErrorCode;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.contract.dto.RentalContractResponse;
 import fu.stockspace.stockspace_be.contract.dto.TenantContractDecisionRequest;
@@ -163,10 +165,11 @@ class TenantContractReviewServiceTest {
         stubContractLookup();
         contract.setStatus(ContractStatus.ACTIVE);
 
-        assertThrows(BadRequestException.class,
+        BadRequestException exception = assertThrows(BadRequestException.class,
                 () -> contractService.requestDirectContractChanges(
                         tenantId, contractId, decision("Change the date")));
 
+        assertEquals(ErrorCode.INVALID_CONTRACT_STATUS, exception.getErrorCode());
         verify(contractRepository, never()).save(any());
     }
 
@@ -179,9 +182,10 @@ class TenantContractReviewServiceTest {
                 eq(contract.getStartDate()), eq(contract.getEndDate())))
                 .thenReturn(true);
 
-        assertThrows(BadRequestException.class,
+        ResourceConflictException exception = assertThrows(ResourceConflictException.class,
                 () -> contractService.confirmDirectContract(tenantId, contractId));
 
+        assertEquals(ErrorCode.CONTRACT_DATE_OVERLAP, exception.getErrorCode());
         assertEquals(ContractStatus.PENDING_TENANT_CONFIRM, contract.getStatus());
         verify(contractRepository, never()).save(any());
     }

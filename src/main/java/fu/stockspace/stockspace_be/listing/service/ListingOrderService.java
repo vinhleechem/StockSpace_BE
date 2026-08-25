@@ -151,7 +151,7 @@ public class ListingOrderService {
 
     private void validateListingPackage(ListingPackage listingPackage) {
         if (!listingPackage.isActive() || listingPackage.isDeleted()) {
-            throw new BadRequestException("Listing package is inactive");
+            throw new BadRequestException(ErrorCode.LISTING_PACKAGE_INACTIVE);
         }
         if (listingPackage.getDurationDays() == null
                 || !java.util.Set.of(10, 15, 30).contains(listingPackage.getDurationDays())) {

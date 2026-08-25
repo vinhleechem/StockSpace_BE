@@ -93,7 +93,6 @@ class TenantChatToolsTest {
         assertFalse(result.toString().contains("tenantEmail"));
         assertFalse(result.toString().contains("tenantName"));
         assertFalse(result.toString().contains("ownerName"));
-        assertFalse(result.toString().contains("deposit"));
         assertEquals("16000000", result.at("/contracts/0/finalMonthlyRent").asText());
         verify(contractService).getMyContractsAsTenant(userId, 0, 20);
     }
@@ -140,7 +139,6 @@ class TenantChatToolsTest {
         assertFalse(result.toString().contains("tenantEmail"));
         assertFalse(result.toString().contains("tenantName"));
         assertFalse(result.toString().contains("ownerName"));
-        assertFalse(result.toString().contains("deposit"));
         verify(contractService).getContractById(contractId, userId);
     }
 

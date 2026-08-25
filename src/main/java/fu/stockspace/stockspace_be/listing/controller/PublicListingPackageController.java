@@ -4,6 +4,9 @@ import fu.stockspace.stockspace_be.common.dto.ApiResponse;
 import fu.stockspace.stockspace_be.listing.dto.ListingPackageResponse;
 import fu.stockspace.stockspace_be.listing.service.ListingPackageService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -34,6 +37,9 @@ public class PublicListingPackageController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Get an active warehouse listing package")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Active package not found",
+            content = @Content(schema = @Schema(implementation = ApiResponse.class),
+                    examples = @ExampleObject(value = "{\"success\":false,\"code\":\"PACKAGE_NOT_FOUND\",\"message\":\"Listing package not found\"}")))
     public ResponseEntity<ApiResponse<ListingPackageResponse>> getPackage(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(
                 "Listing package retrieved successfully",

@@ -6,6 +6,8 @@ import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.InternalServerException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.contract.dto.*;
 import fu.stockspace.stockspace_be.contract.entity.ContractStatus;
@@ -20,6 +22,7 @@ import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
@@ -129,7 +132,8 @@ public class ContractService {
         RentalContract contract = findDirectContractForOwnerEdit(ownerId, contractId);
         if (contract.getStatus() != ContractStatus.DRAFT
                 && contract.getStatus() != ContractStatus.CHANGES_REQUESTED) {
-            throw new BadRequestException("Only DRAFT or CHANGES_REQUESTED contracts can be edited");
+            throw new BadRequestException(ErrorCode.INVALID_CONTRACT_STATUS,
+                    "Only DRAFT or CHANGES_REQUESTED contracts can be edited");
         }
         if (request == null) {
             throw new BadRequestException("Contract update request is required");
@@ -180,7 +184,8 @@ public class ContractService {
         RentalContract contract = findDirectContractForOwnerEdit(ownerId, contractId);
         if (contract.getStatus() != ContractStatus.DRAFT
                 && contract.getStatus() != ContractStatus.CHANGES_REQUESTED) {
-            throw new BadRequestException("Only DRAFT or CHANGES_REQUESTED contracts can be submitted");
+            throw new BadRequestException(ErrorCode.INVALID_CONTRACT_STATUS,
+                    "Only DRAFT or CHANGES_REQUESTED contracts can be submitted");
         }
 
         Warehouse lockedWarehouse = warehouseService.lockWarehouseForContractSubmit(
@@ -205,7 +210,7 @@ public class ContractService {
         if (contractRepository.existsDirectDateOverlapForSubmit(
                 contract.getId(), tenant.getId(), lockedWarehouse.getId(),
                 contract.getStartDate(), contract.getEndDate())) {
-            throw new BadRequestException(
+            throw new ResourceConflictException(ErrorCode.CONTRACT_DATE_OVERLAP,
                     "The tenant already has an overlapping contract for this warehouse");
         }
 
@@ -252,7 +257,8 @@ public class ContractService {
             throw new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND);
         }
         if (contract.getOwner() == null || contract.getTenant() == null || contract.getWarehouse() == null) {
-            throw new BadRequestException("This operation requires a direct rental contract");
+            throw new BadRequestException(ErrorCode.INVALID_CONTRACT_STATUS,
+                    "This operation requires a direct rental contract");
         }
         if (!ownerId.equals(contract.getOwner().getId())) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
@@ -340,7 +346,7 @@ public class ContractService {
         if (contractRepository.existsDirectDateOverlapForSubmit(
                 contract.getId(), tenantId, lockedWarehouse.getId(),
                 contract.getStartDate(), contract.getEndDate())) {
-            throw new BadRequestException(
+            throw new ResourceConflictException(ErrorCode.CONTRACT_DATE_OVERLAP,
                     "The tenant already has an overlapping contract for this warehouse");
         }
 
@@ -429,7 +435,8 @@ public class ContractService {
         }
         if (contract.getOwner() == null || contract.getTenant() == null
                 || contract.getWarehouse() == null) {
-            throw new BadRequestException("This operation requires a direct rental contract");
+            throw new BadRequestException(ErrorCode.INVALID_CONTRACT_STATUS,
+                    "This operation requires a direct rental contract");
         }
         if (!tenantId.equals(contract.getTenant().getId())) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
@@ -439,7 +446,7 @@ public class ContractService {
 
     private void requirePendingTenantConfirmation(RentalContract contract) {
         if (contract.getStatus() != ContractStatus.PENDING_TENANT_CONFIRM) {
-            throw new BadRequestException(
+            throw new BadRequestException(ErrorCode.INVALID_CONTRACT_STATUS,
                     "Contract must be in PENDING_TENANT_CONFIRM status for this action");
         }
     }
@@ -483,7 +490,8 @@ public class ContractService {
         requireContractOwner(contract, ownerId);
         if (contract.getStatus() != ContractStatus.DRAFT
                 && contract.getStatus() != ContractStatus.CHANGES_REQUESTED) {
-            throw new BadRequestException("Contract layout can only be edited in DRAFT or CHANGES_REQUESTED");
+            throw new BadRequestException(ErrorCode.INVALID_CONTRACT_STATUS,
+                    "Contract layout can only be edited in DRAFT or CHANGES_REQUESTED");
         }
         validateContractLayoutDimensions(contract, request);
 
@@ -508,7 +516,8 @@ public class ContractService {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
         if (!isTenantLayoutReadable(contract.getStatus())) {
-            throw new BadRequestException("Contract layout is not available in the current contract state");
+            throw new BadRequestException(ErrorCode.INVALID_CONTRACT_STATUS,
+                    "Contract layout is not available in the current contract state");
         }
         return getCurrentOrSnapshotLayout(contract);
     }
@@ -572,14 +581,16 @@ public class ContractService {
                                                    BulkLayoutSaveRequest request) {
         if (request == null || request.getWidth() == null || request.getLength() == null
                 || request.getHeight() == null) {
-            throw new BadRequestException("Contract layout dimensions are required");
+            throw new BadRequestException(ErrorCode.INVALID_LEASE_DIMENSIONS,
+                    "Contract layout dimensions are required");
         }
         if (contract.getLeasedWidth() == null || contract.getLeasedLength() == null
                 || contract.getLeasedHeight() == null
                 || request.getWidth().compareTo(contract.getLeasedWidth()) != 0
                 || request.getLength().compareTo(contract.getLeasedLength()) != 0
                 || request.getHeight().compareTo(contract.getLeasedHeight()) != 0) {
-            throw new BadRequestException("Contract layout dimensions cannot be changed");
+            throw new BadRequestException(ErrorCode.INVALID_LEASE_DIMENSIONS,
+                    "Contract layout dimensions cannot be changed");
         }
     }
 
@@ -602,7 +613,8 @@ public class ContractService {
         RentalContract contract = contractRepository.findById(contractId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
         if (contract.getStatus() != ContractStatus.DRAFT) {
-            throw new BadRequestException("Only DRAFT contracts can be deleted");
+            throw new BadRequestException(ErrorCode.INVALID_CONTRACT_STATUS,
+                    "Only DRAFT contracts can be deleted");
         }
         User owner = contract.getOwner();
         if (owner == null || !ownerId.equals(owner.getId())) {
@@ -635,11 +647,10 @@ public class ContractService {
         validateContractDates(request.getStartDate(), request.getEndDate());
 
         Warehouse warehouse = warehouseService.getOwnedWarehouseForContract(ownerId, request.getWarehouseId());
+        String tenantEmail = request.getTenantEmail().trim();
         User tenant = userRepository.findActiveByEmailAndRole(
-                        request.getTenantEmail().trim(), RoleType.ROLE_TENANT.name())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        ErrorCode.USER_NOT_FOUND,
-                        "Active tenant account was not found for the supplied email"));
+                        tenantEmail, RoleType.ROLE_TENANT.name())
+                .orElseGet(() -> resolveTenantLookupFailure(tenantEmail));
 
         return resolveContractTerms(
                 warehouse,
@@ -665,7 +676,8 @@ public class ContractService {
         }
         validateContractDates(startDate, endDate);
         if (!tenant.isActive() || tenant.isDeleted()) {
-            throw new BadRequestException("Tenant account must be active");
+            throw new BadRequestException(ErrorCode.INVALID_ROLE,
+                    "Tenant account must be active");
         }
         if (!warehouse.isActive() || warehouse.isDeleted()
                 || !warehouse.isVerified()
@@ -742,25 +754,44 @@ public class ContractService {
                                            RentalPricingType pricingType) {
         if (width == null || length == null || height == null
                 || width.signum() <= 0 || length.signum() <= 0 || height.signum() <= 0) {
-            throw new BadRequestException("Leased dimensions must be greater than 0");
+            throw new BadRequestException(ErrorCode.INVALID_LEASE_DIMENSIONS,
+                    "Leased dimensions must be greater than 0");
         }
         if (defaultLayout.getWidth() == null || defaultLayout.getLength() == null
                 || defaultLayout.getHeight() == null) {
-            throw new BadRequestException("Warehouse default layout dimensions are incomplete");
+            throw new BadRequestException(ErrorCode.INVALID_LEASE_DIMENSIONS,
+                    "Warehouse default layout dimensions are incomplete");
         }
         if (width.compareTo(defaultLayout.getWidth()) > 0
                 || length.compareTo(defaultLayout.getLength()) > 0
                 || height.compareTo(defaultLayout.getHeight()) > 0) {
-            throw new BadRequestException("Leased dimensions cannot exceed the warehouse default layout");
+            throw new BadRequestException(ErrorCode.INVALID_LEASE_DIMENSIONS,
+                    "Leased dimensions cannot exceed the warehouse default layout");
         }
 
         if (pricingType == RentalPricingType.FIXED_MONTHLY
                 && (defaultLayout.getWidth().compareTo(width) != 0
                 || defaultLayout.getLength().compareTo(length) != 0
                 || defaultLayout.getHeight().compareTo(height) != 0)) {
-            throw new BadRequestException(
+            throw new BadRequestException(ErrorCode.INVALID_LEASE_DIMENSIONS,
                     "FIXED_MONTHLY contracts must use the complete default layout dimensions");
         }
+    }
+
+    private User resolveTenantLookupFailure(String tenantEmail) {
+        User user = userRepository.findByEmailIgnoreCase(tenantEmail)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorCode.TENANT_NOT_FOUND,
+                        "Active tenant account was not found for the supplied email"));
+        boolean hasTenantRole = user.getRoles() != null && user.getRoles().stream()
+                .anyMatch(role -> RoleType.ROLE_TENANT.name().equals(role.getName()));
+        if (!hasTenantRole) {
+            throw new BadRequestException(ErrorCode.INVALID_ROLE,
+                    "The supplied account does not have the TENANT role");
+        }
+        throw new ResourceNotFoundException(
+                ErrorCode.TENANT_NOT_FOUND,
+                "Active tenant account was not found for the supplied email");
     }
 
     private RentalContract buildDraftContract(DraftTerms terms, CreateRentalContractRequest request) {
@@ -833,7 +864,7 @@ public class ContractService {
         if (owner == null && warehouse != null) {
             owner = warehouse.getOwner();
         }
-        String paperContractFiles = c.getPaperContractFiles();
+        List<String> paperContractFiles = deserializePaperContractFiles(c.getPaperContractFiles());
         ActionFlags actionFlags = calculateActionFlags(c, viewerId, tenant, owner);
         return RentalContractResponse.builder()
                 .id(c.getId())
@@ -873,6 +904,18 @@ public class ContractService {
                 .updatedAt(c.getUpdatedAt())
                 .submittedAt(c.getSubmittedAt())
                 .build();
+    }
+
+    private List<String> deserializePaperContractFiles(String value) {
+        if (value == null || value.isBlank()) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(value, new TypeReference<List<String>>() { });
+        } catch (JsonProcessingException e) {
+            throw new InternalServerException(ErrorCode.SYSTEM_ERROR,
+                    "Stored paper contract files are invalid JSON");
+        }
     }
 
     private ActionFlags calculateActionFlags(RentalContract contract,

@@ -10,6 +10,10 @@ import fu.stockspace.stockspace_be.contract.dto.TenantContractDecisionRequest;
 import fu.stockspace.stockspace_be.contract.service.ContractService;
 import fu.stockspace.stockspace_be.warehouse.dto.WarehouseLayoutResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +33,20 @@ import java.util.UUID;
 @RequestMapping("/api/tenant/contracts")
 @RequiredArgsConstructor
 @PreAuthorize("@rbac.hasPermission('CONTRACT_READ')")
+@ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Contract is not in a tenant-review state",
+                content = @Content(schema = @Schema(implementation = ApiResponse.class),
+                        examples = @ExampleObject(value = "{\"success\":false,\"code\":\"INVALID_CONTRACT_STATUS\",\"message\":\"Contract must be in PENDING_TENANT_CONFIRM status for this action\"}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Caller is not this contract's tenant",
+                content = @Content(schema = @Schema(implementation = ApiResponse.class),
+                        examples = @ExampleObject(value = "{\"success\":false,\"code\":\"FORBIDDEN\",\"message\":\"You cannot access this contract\"}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Contract not found",
+                content = @Content(schema = @Schema(implementation = ApiResponse.class),
+                        examples = @ExampleObject(value = "{\"success\":false,\"code\":\"CONTRACT_NOT_FOUND\",\"message\":\"Rental contract not found\"}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Confirmation would overlap an existing contract",
+                content = @Content(schema = @Schema(implementation = ApiResponse.class),
+                        examples = @ExampleObject(value = "{\"success\":false,\"code\":\"CONTRACT_DATE_OVERLAP\",\"message\":\"The tenant already has an overlapping contract for this warehouse\"}")))
+})
 public class TenantContractController {
 
     private final ContractService contractService;

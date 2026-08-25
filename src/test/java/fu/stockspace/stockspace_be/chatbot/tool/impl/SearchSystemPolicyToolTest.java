@@ -91,7 +91,7 @@ class SearchSystemPolicyToolTest {
     @Test
     void rejectsUnknownCategoryWithoutBroadeningSearch() throws Exception {
         String json = tool.execute(
-                Map.of("query", "hoàn cọc", "category", "anything"),
+                Map.of("query", "thay đổi hợp đồng", "category", "anything"),
                 null
         );
 
@@ -104,12 +104,12 @@ class SearchSystemPolicyToolTest {
 
     @Test
     void lexicalFallbackRanksRelevantDocumentAndReturnsNumericProvenance() throws Exception {
-        String query = "hoàn cọc khi hủy booking";
+        String query = "quy trình thay đổi khi hủy hợp đồng";
         SystemKnowledge matching = document(
                 KnowledgeCategory.CANCELLATION,
                 "kb.cancel",
-                "Hủy booking và hoàn cọc",
-                "Tenant được hoàn cọc khi hủy booking còn PENDING."
+                "Hủy hợp đồng và điều chỉnh điều khoản",
+                "Các bên xử lý thay đổi theo chính sách hợp đồng hiện hành."
         );
         SystemKnowledge irrelevant = document(
                 KnowledgeCategory.FAQ,
@@ -145,12 +145,12 @@ class SearchSystemPolicyToolTest {
 
     @Test
     void staleModelOrDimensionCannotInfluenceSemanticRanking() throws Exception {
-        String query = "hoàn cọc";
+        String query = "điều chỉnh hợp đồng";
         SystemKnowledge lexicalMatch = document(
                 KnowledgeCategory.CANCELLATION,
                 "kb.cancel",
-                "Hoàn cọc",
-                "Hoàn khoản đặt cọc khi booking bị từ chối."
+                "Điều chỉnh hợp đồng",
+                "Các bên thống nhất điều chỉnh trước khi xác nhận hợp đồng."
         );
         SystemKnowledge staleSemanticMatch = document(
                 KnowledgeCategory.CANCELLATION,
@@ -218,18 +218,18 @@ class SearchSystemPolicyToolTest {
 
     @Test
     void pgVectorSemanticHitIsMergedAndRankedAheadOfLexicalCandidates() throws Exception {
-        String query = "quy trình hoàn tiền đặt cọc";
+        String query = "quy trình gia hạn đăng tin";
         SystemKnowledge lexical = document(
                 KnowledgeCategory.POLICY,
                 "kb.lexical",
-                "Quy trình đặt cọc",
-                "Khách hàng thanh toán khoản đặt cọc."
+                "Quy trình đăng tin",
+                "Chủ kho mua gói hiển thị cho kho đã được duyệt."
         );
         SystemKnowledge semantic = document(
                 KnowledgeCategory.POLICY,
                 "kb.semantic",
                 "Xử lý giao dịch",
-                "Khoản tiền được hoàn lại theo trạng thái booking."
+                "Thời hạn mới được nối tiếp từ kỳ hiển thị đang hoạt động."
         );
         markIndexed(semantic, "current-model");
 
@@ -257,19 +257,19 @@ class SearchSystemPolicyToolTest {
 
     @Test
     void partialBackfillMergesNativeAndLegacySemanticScores() throws Exception {
-        String query = "quy trinh hoan tien dat coc";
+        String query = "quy trinh gia han dang tin";
         SystemKnowledge nativeDocument = document(
                 KnowledgeCategory.POLICY,
                 "kb.native",
                 "Xu ly giao dich",
-                "Thong tin khac ve booking."
+                "Thong tin khac ve hop dong."
         );
         markIndexed(nativeDocument, "current-model");
         SystemKnowledge legacyOnlyDocument = document(
                 KnowledgeCategory.POLICY,
                 "kb.legacy-only",
-                "Hoan tien",
-                "Khoan dat coc duoc tra lai."
+                "Gia han",
+                "Thoi gian hien thi duoc noi tiep."
         );
         markIndexed(legacyOnlyDocument, "current-model");
         legacyOnlyDocument.setEmbeddingVector(null);
@@ -299,12 +299,12 @@ class SearchSystemPolicyToolTest {
 
     @Test
     void pgVectorFailureFallsBackToLexicalResults() throws Exception {
-        String query = "quy định đặt cọc";
+        String query = "quy định đăng tin";
         SystemKnowledge lexical = document(
                 KnowledgeCategory.POLICY,
-                "kb.deposit",
-                "Quy định đặt cọc",
-                "Khách hàng thanh toán đặt cọc theo booking."
+                "kb.publication",
+                "Quy định đăng tin",
+                "Chủ kho thanh toán gói hiển thị cho kho đã được duyệt."
         );
         when(knowledgeRepository.findSearchCandidates(isNull(), any(Pageable.class)))
                 .thenReturn(List.of(lexical));
@@ -330,12 +330,12 @@ class SearchSystemPolicyToolTest {
 
     @Test
     void wrongDimensionEmbeddingSkipsPgVectorQuery() throws Exception {
-        String query = "quy định đặt cọc";
+        String query = "quy định đăng tin";
         SystemKnowledge lexical = document(
                 KnowledgeCategory.POLICY,
-                "kb.deposit",
-                "Quy định đặt cọc",
-                "Thông tin đặt cọc."
+                "kb.publication",
+                "Quy định đăng tin",
+                "Thông tin gói hiển thị."
         );
         when(knowledgeRepository.findSearchCandidates(isNull(), any(Pageable.class)))
                 .thenReturn(List.of(lexical));
@@ -349,12 +349,12 @@ class SearchSystemPolicyToolTest {
 
     @Test
     void disabledPgVectorReadPathUsesOneReleaseLegacySemanticFallback() throws Exception {
-        String query = "quy trình hoàn tiền đặt cọc";
+        String query = "quy trình gia hạn đăng tin";
         SystemKnowledge document = document(
                 KnowledgeCategory.POLICY,
                 "kb.rollback",
-                "Quy trình hoàn tiền đặt cọc",
-                "Khoản đặt cọc được hoàn theo trạng thái booking."
+                "Quy trình gia hạn đăng tin",
+                "Thời hạn mới được nối tiếp từ kỳ hiển thị đang hoạt động."
         );
         markIndexed(document, "current-model");
         SearchSystemPolicyTool rollbackTool = new SearchSystemPolicyTool(
@@ -388,14 +388,14 @@ class SearchSystemPolicyToolTest {
 
     @Test
     void topKIsHardCapped() throws Exception {
-        String query = "cọc";
+        String query = "đăng tin";
         List<SystemKnowledge> documents = new ArrayList<>();
         for (int index = 0; index < 8; index++) {
             documents.add(document(
                     KnowledgeCategory.POLICY,
-                    "kb.deposit." + index,
-                    "Thông tin cọc " + index,
-                    "Quy định cọc cho giao dịch."
+                    "kb.publication." + index,
+                    "Thông tin đăng tin " + index,
+                    "Quy định gói hiển thị cho kho."
             ));
         }
         when(knowledgeRepository.findSearchCandidates(isNull(), any(Pageable.class)))

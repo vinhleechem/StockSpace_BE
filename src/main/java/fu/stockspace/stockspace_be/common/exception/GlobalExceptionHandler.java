@@ -93,7 +93,7 @@ public class GlobalExceptionHandler {
 
     public ResponseEntity<ApiResponse<Void>> handleBadRequest(BadRequestException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.error(ex.getMessage()));
+                .body(error(ex.getErrorCode(), ex.getMessage()));
     }
 
 
@@ -102,7 +102,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(UnauthorizedException.class)
     public ResponseEntity<ApiResponse<Void>> handleUnauthorized(UnauthorizedException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(ApiResponse.error(ex.getMessage()));
+                .body(error(ex.getErrorCode(), ex.getMessage()));
     }
 
 
@@ -111,7 +111,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ForbiddenException.class)
     public ResponseEntity<ApiResponse<Void>> handleForbidden(ForbiddenException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(ApiResponse.error(ex.getMessage()));
+                .body(error(ex.getErrorCode(), ex.getMessage()));
     }
 
 
@@ -120,7 +120,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleResourceNotFound(ResourceNotFoundException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(ApiResponse.error(ex.getMessage()));
+                .body(error(ex.getErrorCode(), ex.getMessage()));
     }
 
 
@@ -129,7 +129,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ResourceConflictException.class)
     public ResponseEntity<ApiResponse<Void>> handleResourceConflict(ResourceConflictException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ApiResponse.error(ex.getMessage()));
+                .body(error(ex.getErrorCode(), ex.getMessage()));
     }
 
 
@@ -138,7 +138,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InternalServerException.class)
     public ResponseEntity<ApiResponse<Void>> handleInternalServer(InternalServerException ex) {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.error(ex.getMessage()));
+                .body(error(ex.getErrorCode(), ex.getMessage()));
     }
 
 
@@ -148,7 +148,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ChatProviderException.class)
     public ResponseEntity<ApiResponse<Void>> handleChatProvider(ChatProviderException ex) {
         return ResponseEntity.status(ex.getErrorCode().getStatus())
-                .body(ApiResponse.error(ex.getMessage()));
+                .body(ApiResponse.error(ex.getErrorCode(), ex.getMessage()));
     }
 
 
@@ -168,7 +168,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<ApiResponse<Void>> handleBadCredentials(BadCredentialsException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(ApiResponse.error("Invalid email or password"));
+                .body(ApiResponse.error(ErrorCode.INVALID_CREDENTIALS));
     }
 
 
@@ -177,7 +177,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DisabledException.class)
     public ResponseEntity<ApiResponse<Void>> handleDisabledAccount(DisabledException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(ApiResponse.error("Account is disabled. Please contact admin."));
+                .body(ApiResponse.error(ErrorCode.USER_LOCKED));
     }
 
 
@@ -186,7 +186,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<ApiResponse<Void>> handleAuthenticationException(AuthenticationException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(ApiResponse.error("Authentication required: " + ex.getMessage()));
+                .body(ApiResponse.error(ErrorCode.UNAUTHENTICATED));
     }
 
 
@@ -197,7 +197,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(ApiResponse.error("Access denied: You do not have permission to perform this action"));
+                .body(ApiResponse.error(ErrorCode.FORBIDDEN));
     }
 
 
@@ -209,6 +209,10 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleGenericException(Exception ex) {
         log.error("Unexpected error occurred: {}", ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.error("An unexpected error occurred. Please try again later."));
+                .body(ApiResponse.error(ErrorCode.SYSTEM_ERROR));
+    }
+
+    private <T> ApiResponse<T> error(ErrorCode errorCode, String message) {
+        return errorCode == null ? ApiResponse.error(message) : ApiResponse.error(errorCode, message);
     }
 }

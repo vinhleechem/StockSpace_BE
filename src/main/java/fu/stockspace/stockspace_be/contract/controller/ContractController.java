@@ -9,6 +9,10 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.UnauthorizedExcep
 import fu.stockspace.stockspace_be.contract.dto.RentalContractResponse;
 import fu.stockspace.stockspace_be.contract.service.ContractService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -26,6 +30,14 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/contracts")
 @RequiredArgsConstructor
+@ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Viewer is not a contract participant",
+                content = @Content(schema = @Schema(implementation = ApiResponse.class),
+                        examples = @ExampleObject(value = "{\"success\":false,\"code\":\"FORBIDDEN\",\"message\":\"You cannot access this contract\"}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Contract not found",
+                content = @Content(schema = @Schema(implementation = ApiResponse.class),
+                        examples = @ExampleObject(value = "{\"success\":false,\"code\":\"CONTRACT_NOT_FOUND\",\"message\":\"Rental contract not found\"}")))
+})
 public class ContractController {
 
     private final ContractService contractService;
