@@ -17,6 +17,8 @@ import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -116,6 +118,31 @@ class ListingOrderServiceTest {
         assertEquals(response.getPeriodEnd(), warehouse.getVisibleUntil());
         verify(transactionRepository).save(transaction);
         verify(warehouseRepository).save(warehouse);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {10, 15, 30})
+    void purchaseAcceptsEverySupportedListingDuration(int durationDays) {
+        listingPackage.setDurationDays(durationDays);
+        Transaction transaction = Transaction.builder().id(UUID.randomUUID()).build();
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(listingPackageRepository.findById(packageId)).thenReturn(Optional.of(listingPackage));
+        when(listingOrderRepository.save(any(ListingOrder.class))).thenAnswer(invocation -> {
+            ListingOrder order = invocation.getArgument(0);
+            order.setId(UUID.randomUUID());
+            return order;
+        });
+        when(walletService.deductBalance(
+                eq(ownerId), eq(listingPackage.getPrice()), eq(TransactionType.LISTING_FEE),
+                any(String.class), eq(null), eq(null)
+        )).thenReturn(transaction);
+
+        var response = listingOrderService.purchaseOrRenew(
+                ownerId, warehouseId, new PurchaseListingPackageRequest(packageId));
+
+        assertEquals(durationDays, response.getDurationDays());
+        assertEquals(response.getPeriodStart().plusDays(durationDays), response.getPeriodEnd());
+        assertEquals(response.getPeriodEnd(), warehouse.getVisibleUntil());
     }
 
     @Test

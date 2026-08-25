@@ -182,6 +182,33 @@ class DirectContractSubmissionServiceTest {
     }
 
     @Test
+    void submitScopesWarehouseOverlapToTheContractTenant() {
+        User secondTenant = User.builder()
+                .id(UUID.randomUUID())
+                .email("second-tenant@example.com")
+                .fullName("Second Tenant")
+                .build();
+        contract.setTenant(secondTenant);
+        stubContractLookup();
+        when(contractRepository.save(contract)).thenReturn(contract);
+        when(warehouseService.lockWarehouseForContractSubmit(warehouseId)).thenReturn(warehouse);
+        when(contractRepository.existsDirectDateOverlapForSubmit(
+                eq(contractId), eq(secondTenant.getId()), eq(warehouseId),
+                eq(contract.getStartDate()), eq(contract.getEndDate())))
+                .thenReturn(false);
+        when(warehouseLayoutService.findActiveTenantLayoutForContract(warehouseId, secondTenant.getId()))
+                .thenReturn(Optional.of(layout));
+        when(warehouseLayoutService.getDefaultLayoutForContract(warehouseId)).thenReturn(layout);
+
+        contractService.submitOwnerContract(ownerId, contractId);
+
+        verify(contractRepository).existsDirectDateOverlapForSubmit(
+                eq(contractId), eq(secondTenant.getId()), eq(warehouseId),
+                eq(contract.getStartDate()), eq(contract.getEndDate()));
+        assertEquals(ContractStatus.PENDING_TENANT_CONFIRM, contract.getStatus());
+    }
+
+    @Test
     void submitRejectsInclusiveDateOverlapBeforeChangingState() {
         stubContractLookup();
         when(warehouseService.lockWarehouseForContractSubmit(warehouseId)).thenReturn(warehouse);

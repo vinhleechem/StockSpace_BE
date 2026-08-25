@@ -49,6 +49,20 @@ class ListingPackageServiceTest {
     }
 
     @Test
+    void getPublicPackagesExposesAllSupportedDurationsInAscendingOrder() {
+        when(listingPackageRepository.findAllByIsActiveTrueAndIsDeletedFalseOrderByDurationDaysAsc())
+                .thenReturn(List.of(
+                        packageEntity(10, true, false),
+                        packageEntity(15, true, false),
+                        packageEntity(30, true, false)));
+
+        var response = listingPackageService.getPublicPackages();
+
+        assertEquals(List.of(10, 15, 30),
+                response.stream().map(item -> item.getDurationDays()).toList());
+    }
+
+    @Test
     void getPublicPackageByIdRejectsInactivePackage() {
         UUID id = UUID.randomUUID();
         when(listingPackageRepository.findById(id)).thenReturn(Optional.of(packageEntity(10, false, false)));
