@@ -2,6 +2,7 @@ package fu.stockspace.stockspace_be.warehouse.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fu.stockspace.stockspace_be.auth.entity.User;
+import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
@@ -42,6 +43,9 @@ class WarehouseServiceTest {
     @Mock
     private NotificationService notificationService;
 
+    @Mock
+    private TenantWarehouseAccessService tenantWarehouseAccessService;
+
     @InjectMocks
     private WarehouseService warehouseService;
 
@@ -68,6 +72,18 @@ class WarehouseServiceTest {
                 .owner(owner)
                 .images(new ArrayList<>())
                 .build();
+    }
+
+    @Test
+    void getActiveRentedWarehousesUsesCurrentDirectContractAccess() {
+        when(tenantWarehouseAccessService.findActiveContractWarehouses(ownerId))
+                .thenReturn(List.of(warehouse));
+
+        List<WarehouseResponse> responses = warehouseService.getActiveRentedWarehouses(ownerId);
+
+        assertEquals(1, responses.size());
+        assertEquals(warehouseId, responses.get(0).getId());
+        verify(tenantWarehouseAccessService).findActiveContractWarehouses(ownerId);
     }
 
     @Test

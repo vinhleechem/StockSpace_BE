@@ -5,6 +5,7 @@ import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
+import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.warehouse.dto.*;
 import fu.stockspace.stockspace_be.warehouse.entity.*;
@@ -39,6 +40,8 @@ class WarehouseLayoutServiceTest {
     private UserRepository userRepository;
     @Mock
     private RentalContractRepository contractRepository;
+    @Mock
+    private TenantWarehouseAccessService tenantWarehouseAccessService;
     @Mock
     private StockBatchRepository stockBatchRepository;
 
@@ -117,6 +120,32 @@ class WarehouseLayoutServiceTest {
         assertEquals(4, response.getRacks().get(0).getBins().get(0).getOccupiedPositions().size());
         assertTrue(response.getRacks().get(0).getBins().get(0).getOccupiedPositions().contains("0:0"));
         assertTrue(response.getRacks().get(0).getBins().get(0).getOccupiedPositions().contains("1:1"));
+    }
+
+    @Test
+    void testGetLayoutTree_TenantRequiresContractButNotSubscription() {
+        User tenant = User.builder().id(userId).email("tenant@test.com").build();
+        WarehouseLayout tenantLayout = WarehouseLayout.builder()
+                .id(UUID.randomUUID())
+                .warehouse(warehouse)
+                .tenant(tenant)
+                .isDefault(false)
+                .width(new BigDecimal("20"))
+                .length(new BigDecimal("20"))
+                .height(new BigDecimal("5"))
+                .build();
+        when(layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId))
+                .thenReturn(Optional.of(tenantLayout));
+        when(rackRepository.findAllByLayoutId(tenantLayout.getId()))
+                .thenReturn(Collections.emptyList());
+        when(binRepository.findAllByRackLayoutId(tenantLayout.getId()))
+                .thenReturn(Collections.emptyList());
+
+        WarehouseLayoutResponse response = layoutService.getLayoutTree(warehouseId, userId, "TENANT");
+
+        assertEquals(tenantLayout.getId(), response.getId());
+        verify(tenantWarehouseAccessService).requireActiveContract(userId, warehouseId);
+        verify(tenantWarehouseAccessService, never()).requireWmsAccess(userId, warehouseId);
     }
 
     @Test
@@ -349,7 +378,7 @@ class WarehouseLayoutServiceTest {
     @Test
     void testSaveLayoutBulk_TenantCannotAddRacks_ThrowsException() {
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
-        when(contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(userId, warehouseId)).thenReturn(true);
+        doNothing().when(tenantWarehouseAccessService).requireWmsAccess(userId, warehouseId);
         WarehouseLayout tenantLayout = WarehouseLayout.builder().id(UUID.randomUUID()).warehouse(warehouse).isDefault(false).build();
         when(layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId)).thenReturn(Optional.of(tenantLayout));
 
@@ -363,13 +392,19 @@ class WarehouseLayoutServiceTest {
         BadRequestException ex = assertThrows(BadRequestException.class, () ->
                 layoutService.saveLayoutBulk(warehouseId, userId, "TENANT", request));
 
+        verify(tenantWarehouseAccessService).requireWmsAccess(userId, warehouseId);
+
         assertEquals("Tenant không được phép thêm kệ hàng mới vào sơ đồ.", ex.getMessage());
     }
 
     @Test
-    void testSaveLayoutBulk_OwnerModifyLayoutWhenRented_ThrowsException() {
+    void testSaveLayoutBulk_OwnerCanModifyLayoutWhenRented() {
         warehouse.setStatus(WarehouseStatus.RENTED);
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)).thenReturn(Optional.of(defaultLayout));
+        when(rackRepository.findAllByLayoutId(defaultLayout.getId())).thenReturn(Collections.emptyList());
+        when(binRepository.findAllByRackLayoutId(defaultLayout.getId())).thenReturn(Collections.emptyList());
+        when(layoutRepository.save(any(WarehouseLayout.class))).thenReturn(defaultLayout);
 
         BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
                 .width(new BigDecimal("100"))
@@ -378,10 +413,8 @@ class WarehouseLayoutServiceTest {
                 .racks(Collections.emptyList())
                 .build();
 
-        BadRequestException ex = assertThrows(BadRequestException.class, () ->
+        assertDoesNotThrow(() ->
                 layoutService.saveLayoutBulk(warehouseId, userId, "OWNER", request));
-
-        assertTrue(ex.getMessage().contains("Không thể chỉnh sửa sơ đồ layout kho trong thời gian kho đang được cho thuê"));
     }
 
     @Test

@@ -6,6 +6,7 @@ import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
+import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.warehouse.dto.*;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
@@ -45,6 +46,7 @@ public class WarehouseLayoutService {
     private final WarehouseRepository warehouseRepository;
     private final UserRepository userRepository;
     private final RentalContractRepository contractRepository;
+    private final TenantWarehouseAccessService tenantWarehouseAccessService;
     private final StockBatchRepository stockBatchRepository;
     private final ObjectMapper objectMapper;
 
@@ -65,10 +67,7 @@ public class WarehouseLayoutService {
                 throw new ForbiddenException(ErrorCode.WAREHOUSE_NOT_OWNED);
             }
         } else if ("TENANT".equalsIgnoreCase(role)) {
-            if (userId == null
-                    || !contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(userId, warehouseId)) {
-                throw new ForbiddenException(ErrorCode.FORBIDDEN);
-            }
+            tenantWarehouseAccessService.requireActiveContract(userId, warehouseId);
 
             layout = layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId).orElse(null);
             if (layout != null && (layout.isDeleted() || !layout.isActive())) {
@@ -353,10 +352,6 @@ public class WarehouseLayoutService {
             if (!warehouse.getOwner().getId().equals(userId)) {
                 throw new ForbiddenException(ErrorCode.WAREHOUSE_NOT_OWNED);
             }
-            if (warehouse.getStatus() == fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus.RENTED) {
-                throw new BadRequestException("Không thể chỉnh sửa sơ đồ layout kho trong thời gian kho đang được cho thuê.");
-            }
-
             layout = layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId).orElse(null);
             if (layout == null) {
                 layout = WarehouseLayout.builder()
@@ -376,10 +371,7 @@ public class WarehouseLayoutService {
             if (savedOwnerLayout != null) layout = savedOwnerLayout;
 
         } else if (isTenantRole) {
-            boolean hasActiveContract = contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(userId, warehouseId);
-            if (!hasActiveContract) {
-                throw new ForbiddenException(ErrorCode.FORBIDDEN);
-            }
+            tenantWarehouseAccessService.requireWmsAccess(userId, warehouseId);
 
             layout = layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId).orElse(null);
             if (layout != null && (layout.isDeleted() || !layout.isActive())) {

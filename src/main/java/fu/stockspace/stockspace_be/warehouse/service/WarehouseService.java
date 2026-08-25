@@ -8,6 +8,7 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestExcepti
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
+import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.warehouse.dto.*;
 import fu.stockspace.stockspace_be.warehouse.entity.*;
 import fu.stockspace.stockspace_be.warehouse.repository.*;
@@ -24,7 +25,6 @@ import org.springframework.util.StringUtils;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
 
 import fu.stockspace.stockspace_be.auth.util.SecurityUtil;
-import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.staff.entity.AssignmentStatus;
 import fu.stockspace.stockspace_be.staff.entity.StaffWarehouseAssignment;
 import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
@@ -57,12 +57,12 @@ public class WarehouseService {
     private final UserRepository userRepository;
     private final SystemPolicyRepository systemPolicyRepository;
     private final NotificationService notificationService;
-    private final RentalContractRepository rentalContractRepository;
+    private final TenantWarehouseAccessService tenantWarehouseAccessService;
     private final StaffWarehouseAssignmentRepository staffWarehouseAssignmentRepository;
 
     @Transactional(readOnly = true)
     public List<WarehouseResponse> getActiveRentedWarehouses(UUID tenantId) {
-        List<Warehouse> warehouses = rentalContractRepository.findActiveRentedWarehousesByTenantId(tenantId);
+        List<Warehouse> warehouses = tenantWarehouseAccessService.findActiveContractWarehouses(tenantId);
 
 
         boolean isStaff = SecurityUtil.getCurrentUser()

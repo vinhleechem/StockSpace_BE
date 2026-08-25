@@ -83,6 +83,23 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
             """)
     boolean existsByTenantIdAndWarehouseIdAndStatusActive(@Param("tenantId") UUID tenantId, @Param("warehouseId") UUID warehouseId);
 
+    @Query("""
+            SELECT COUNT(c) > 0 FROM RentalContract c
+            WHERE c.tenant.id = :tenantId
+              AND c.warehouse.id = :warehouseId
+              AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
+              AND c.isActive = true
+              AND c.isDeleted = false
+              AND c.startDate IS NOT NULL
+              AND c.endDate IS NOT NULL
+              AND c.startDate <= :today
+              AND c.endDate >= :today
+            """)
+    boolean existsCurrentDirectActiveContract(
+            @Param("tenantId") UUID tenantId,
+            @Param("warehouseId") UUID warehouseId,
+            @Param("today") java.time.LocalDate today);
+
     /**
      * Direct-contract overlap check used while the parent warehouse row is
      * locked. Date boundaries are inclusive: a contract ending on a date
@@ -119,6 +136,22 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
               AND c.isDeleted = false
             """)
     List<fu.stockspace.stockspace_be.warehouse.entity.Warehouse> findActiveDirectWarehousesByTenantId(@Param("tenantId") UUID tenantId);
+
+    @Query("""
+            SELECT DISTINCT w FROM RentalContract c
+            JOIN c.warehouse w
+            WHERE c.tenant.id = :tenantId
+              AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
+              AND c.isActive = true
+              AND c.isDeleted = false
+              AND c.startDate IS NOT NULL
+              AND c.endDate IS NOT NULL
+              AND c.startDate <= :today
+              AND c.endDate >= :today
+            """)
+    List<fu.stockspace.stockspace_be.warehouse.entity.Warehouse> findCurrentDirectWarehousesByTenantId(
+            @Param("tenantId") UUID tenantId,
+            @Param("today") java.time.LocalDate today);
 
     @Query("""
             SELECT DISTINCT legacyBooking.warehouse FROM RentalContract c
