@@ -12,6 +12,6 @@ import lombok.NoArgsConstructor;
 public class PlatformSummaryResponse {
     private long totalUsers;
     private long totalWarehouses;
-    private long totalBookings;
     private long totalContracts;
+    private java.util.Map<String, Long> contractCountsByStatus;
 }

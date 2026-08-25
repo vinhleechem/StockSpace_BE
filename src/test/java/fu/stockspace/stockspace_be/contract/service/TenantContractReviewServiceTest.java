@@ -134,7 +134,7 @@ class TenantContractReviewServiceTest {
         assertEquals("Please correct the leased area", contract.getChangeRequestReason());
         assertFalse(contract.isTenantConfirmed());
         verify(notificationService).push(
-                eq(ownerId), eq("Rental contract changes requested"), any(), eq("CONTRACT"));
+                eq(ownerId), eq("Rental contract changes requested"), any(), eq("CONTRACT_CHANGES_REQUESTED"));
         verifyNoInteractions(walletService, bookingRepository);
     }
 

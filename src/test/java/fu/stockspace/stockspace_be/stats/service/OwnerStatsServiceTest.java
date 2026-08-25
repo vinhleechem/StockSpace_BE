@@ -2,11 +2,8 @@ package fu.stockspace.stockspace_be.stats.service;
 
 import fu.stockspace.stockspace_be.stats.dto.OccupancyStatsResponse;
 import fu.stockspace.stockspace_be.stats.dto.RevenueStatsResponse;
-import fu.stockspace.stockspace_be.wallet.entity.Wallet;
-import fu.stockspace.stockspace_be.wallet.repository.TransactionRepository;
-import fu.stockspace.stockspace_be.wallet.repository.WalletRepository;
+import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
-import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,10 +26,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class OwnerStatsServiceTest {
 
-    @Mock private WalletRepository walletRepository;
-    @Mock private TransactionRepository transactionRepository;
     @Mock private WarehouseRepository warehouseRepository;
-    @Mock private fu.stockspace.stockspace_be.wallet.service.WalletService walletService;
+    @Mock private RentalContractRepository contractRepository;
 
     @InjectMocks
     private OwnerStatsService ownerStatsService;
@@ -46,37 +41,32 @@ class OwnerStatsServiceTest {
 
     @Test
     void testGetRevenueSummary_Success() {
-        Wallet wallet = Wallet.builder().id(UUID.randomUUID()).build();
-        when(walletService.getOrCreateWallet(ownerId)).thenReturn(wallet);
-
-        Object[] row1 = new Object[]{1, 5000000L};
-        List<Object[]> monthlyData = java.util.Collections.singletonList(row1);
-
-        when(transactionRepository.findMonthlyRevenueByWalletIdAndTypesAndYear(eq(wallet.getId()), any(), eq(2026)))
-                .thenReturn(monthlyData);
-
-
         RevenueStatsResponse response = ownerStatsService.getRevenueSummary(ownerId, 2026);
 
         assertNotNull(response);
         assertEquals(2026, response.getYear());
-        assertEquals(new BigDecimal("5000000"), response.getTotalRevenue());
+        assertEquals(BigDecimal.ZERO, response.getTotalRevenue());
         assertEquals(12, response.getMonthlyRevenue().size());
-        assertEquals(new BigDecimal("5000000"), response.getMonthlyRevenue().get(0).getRevenue());
+        assertEquals(BigDecimal.ZERO, response.getMonthlyRevenue().get(0).getRevenue());
     }
 
     @Test
     void testGetOccupancyRate_Success() {
-        Warehouse w1 = Warehouse.builder().id(UUID.randomUUID()).name("Kho Rented").status(WarehouseStatus.RENTED).build();
-        Warehouse w2 = Warehouse.builder().id(UUID.randomUUID()).name("Kho Avail").status(WarehouseStatus.AVAILABLE).build();
+        Warehouse w1 = Warehouse.builder().id(UUID.randomUUID()).name("Kho A").build();
+        Warehouse w2 = Warehouse.builder().id(UUID.randomUUID()).name("Kho B").build();
         when(warehouseRepository.findByOwnerId(eq(ownerId), any())).thenReturn(new PageImpl<>(List.of(w1, w2)));
+        when(contractRepository.findCurrentDirectActiveWarehouseIdsByOwnerId(eq(ownerId), any()))
+                .thenReturn(List.of(w1.getId()));
+        when(contractRepository.countCurrentDirectActiveContractsByOwnerId(eq(ownerId), any())).thenReturn(2L);
+        when(contractRepository.countDistinctCurrentDirectActiveTenantsByOwnerId(eq(ownerId), any())).thenReturn(2L);
 
         OccupancyStatsResponse response = ownerStatsService.getOccupancyRate(ownerId);
 
         assertNotNull(response);
         assertEquals(2, response.getTotalWarehouses());
-        assertEquals(1, response.getRentedWarehousesCount());
-        assertEquals(1, response.getAvailableWarehousesCount());
+        assertEquals(1, response.getWarehousesWithActiveContracts());
+        assertEquals(2, response.getActiveContractCount());
+        assertEquals(2, response.getActiveTenantCount());
         assertEquals(50.0, response.getOccupancyRatePercentage());
     }
 }

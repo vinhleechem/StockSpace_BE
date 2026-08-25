@@ -2,10 +2,6 @@ package fu.stockspace.stockspace_be.chatbot.tool.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatTool;
-import fu.stockspace.stockspace_be.wallet.entity.TransactionType;
-import fu.stockspace.stockspace_be.wallet.entity.Wallet;
-import fu.stockspace.stockspace_be.wallet.repository.TransactionRepository;
-import fu.stockspace.stockspace_be.wallet.repository.WalletRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -24,8 +20,6 @@ import java.util.*;
 public class GetRevenueSummaryTool implements ChatTool {
 
     private final ObjectMapper objectMapper;
-    private final WalletRepository walletRepository;
-    private final TransactionRepository transactionRepository;
 
     @Override
     public String getName() {
@@ -34,7 +28,7 @@ public class GetRevenueSummaryTool implements ChatTool {
 
     @Override
     public String getDescription() {
-        return "Xem thống kê tổng doanh thu cho thuê kho theo từng tháng trong năm của Owner.";
+        return "Xem trạng thái ghi nhận doanh thu thuê kho của Chủ kho. Tiền thuê được thanh toán ngoài StockSpace nên không được suy ra từ giao dịch ví.";
     }
 
     @Override
@@ -64,43 +58,19 @@ public class GetRevenueSummaryTool implements ChatTool {
                 } catch (NumberFormatException ignored) {}
             }
 
-            Optional<Wallet> walletOpt = walletRepository.findByUserId(userId);
-            if (walletOpt.isEmpty()) {
-                return "{\"year\":" + year + ",\"totalRevenue\":0,\"monthlyRevenue\":[]}";
-            }
-
-            Wallet wallet = walletOpt.get();
-            List<TransactionType> revenueTypes = List.of(
-                    TransactionType.DEPOSIT_RECEIVED,
-                    TransactionType.DEPOSIT_PAYMENT
-            );
-            List<Object[]> monthlyData = transactionRepository.findMonthlyRevenueByWalletIdAndTypesAndYear(
-                    wallet.getId(), revenueTypes, year);
-
-            Map<Integer, BigDecimal> monthMap = new HashMap<>();
-            BigDecimal totalRevenue = BigDecimal.ZERO;
-
-            for (Object[] row : monthlyData) {
-                if (row != null && row.length >= 2 && row[0] != null && row[1] != null) {
-                    int month = ((Number) row[0]).intValue();
-                    BigDecimal amount = new BigDecimal(row[1].toString());
-                    monthMap.merge(month, amount, BigDecimal::add);
-                    totalRevenue = totalRevenue.add(amount);
-                }
-            }
-
             List<Map<String, Object>> monthlyList = new ArrayList<>();
             for (int m = 1; m <= 12; m++) {
                 Map<String, Object> mItem = new LinkedHashMap<>();
                 mItem.put("month", m);
-                mItem.put("revenue", monthMap.getOrDefault(m, BigDecimal.ZERO));
+                mItem.put("revenue", BigDecimal.ZERO);
                 monthlyList.add(mItem);
             }
 
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("year", year);
-            result.put("totalRevenue", totalRevenue);
+            result.put("totalRevenue", BigDecimal.ZERO);
             result.put("monthlyRevenue", monthlyList);
+            result.put("message", "StockSpace không thu hộ tiền thuê; doanh thu thực nhận không được ghi nhận trong ví nền tảng.");
 
             return objectMapper.writeValueAsString(result);
         } catch (Exception e) {

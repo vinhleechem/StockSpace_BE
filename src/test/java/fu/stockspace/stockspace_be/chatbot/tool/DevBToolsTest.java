@@ -2,7 +2,6 @@ package fu.stockspace.stockspace_be.chatbot.tool;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
-import fu.stockspace.stockspace_be.booking.repository.BookingRequestRepository;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatTool;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatRequestContext;
 import fu.stockspace.stockspace_be.chatbot.tool.impl.*;
@@ -13,9 +12,6 @@ import fu.stockspace.stockspace_be.inspection.dto.InspectionReportResponse;
 import fu.stockspace.stockspace_be.inspection.service.InspectionService;
 import fu.stockspace.stockspace_be.staff.entity.TenantMember;
 import fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository;
-import fu.stockspace.stockspace_be.wallet.entity.Wallet;
-import fu.stockspace.stockspace_be.wallet.repository.TransactionRepository;
-import fu.stockspace.stockspace_be.wallet.repository.WalletRepository;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
@@ -46,13 +42,10 @@ class DevBToolsTest {
     private ObjectMapper objectMapper = new ObjectMapper();
 
     @Mock private WarehouseRepository warehouseRepository;
-    @Mock private WalletRepository walletRepository;
-    @Mock private TransactionRepository transactionRepository;
     @Mock private TenantMemberRepository tenantMemberRepository;
     @Mock private StockBatchService stockBatchService;
     @Mock private InventoryReceiptService receiptService;
     @Mock private UserRepository userRepository;
-    @Mock private BookingRequestRepository bookingRepository;
     @Mock private RentalContractRepository contractRepository;
     @Mock private InspectionService inspectionService;
 
@@ -75,11 +68,7 @@ class DevBToolsTest {
 
     @Test
     void testGetRevenueSummaryTool_Success() {
-        GetRevenueSummaryTool tool = new GetRevenueSummaryTool(objectMapper, walletRepository, transactionRepository);
-        Wallet wallet = Wallet.builder().id(UUID.randomUUID()).build();
-        when(walletRepository.findByUserId(userId)).thenReturn(Optional.of(wallet));
-        when(transactionRepository.findMonthlyRevenueByWalletIdAndTypesAndYear(any(), any(), any(Integer.class)))
-                .thenReturn(Collections.emptyList());
+        GetRevenueSummaryTool tool = new GetRevenueSummaryTool(objectMapper);
 
         String json = tool.execute(Collections.emptyMap(), userId);
         assertTrue(json.contains("totalRevenue"));
@@ -133,7 +122,7 @@ class DevBToolsTest {
 
     @Test
     void testGetPlatformSummaryTool_Success() {
-        GetPlatformSummaryTool tool = new GetPlatformSummaryTool(objectMapper, userRepository, warehouseRepository, bookingRepository, contractRepository);
+        GetPlatformSummaryTool tool = new GetPlatformSummaryTool(objectMapper, userRepository, warehouseRepository, contractRepository);
         when(userRepository.count()).thenReturn(10L);
         when(warehouseRepository.count()).thenReturn(5L);
 

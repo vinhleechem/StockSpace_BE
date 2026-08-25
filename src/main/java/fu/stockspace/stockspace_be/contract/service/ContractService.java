@@ -352,7 +352,7 @@ public class ContractService {
                     tenant.getId(),
                     "Rental contract requires confirmation",
                     "The owner submitted a rental contract for warehouse " + warehouse.getName() + ".",
-                    "CONTRACT");
+                    "CONTRACT_SUBMITTED");
         } catch (Exception e) {
             log.warn("Failed to push direct contract notification for {}: {}",
                     contract.getId(), e.getMessage());
@@ -389,7 +389,8 @@ public class ContractService {
                 contract,
                 "Rental contract confirmed",
                 "The tenant confirmed the rental contract for warehouse "
-                        + lockedWarehouse.getName() + ".");
+                        + lockedWarehouse.getName() + ".",
+                "CONTRACT_CONFIRMED");
         return mapToResponse(contract, tenantId);
     }
 
@@ -418,7 +419,8 @@ public class ContractService {
                 contract,
                 "Rental contract changes requested",
                 "The tenant requested changes to the rental contract for warehouse "
-                        + contract.getWarehouse().getName() + ". Reason: " + reason);
+                        + contract.getWarehouse().getName() + ". Reason: " + reason,
+                "CONTRACT_CHANGES_REQUESTED");
         return mapToResponse(contract, tenantId);
     }
 
@@ -453,7 +455,8 @@ public class ContractService {
                 contract,
                 "Rental contract rejected",
                 "The tenant rejected the rental contract for warehouse "
-                        + contract.getWarehouse().getName() + ". Reason: " + reason);
+                        + contract.getWarehouse().getName() + ". Reason: " + reason,
+                "CONTRACT_REJECTED");
         return mapToResponse(contract, tenantId);
     }
 
@@ -493,10 +496,11 @@ public class ContractService {
 
     private void notifyOwnerOfTenantDecision(RentalContract contract,
                                              String title,
-                                             String message) {
+                                             String message,
+                                             String type) {
         try {
             notificationService.push(
-                    contract.getOwner().getId(), title, message, "CONTRACT");
+                    contract.getOwner().getId(), title, message, type);
         } catch (Exception e) {
             log.warn("Failed to push direct contract decision notification for {}: {}",
                     contract.getId(), e.getMessage());

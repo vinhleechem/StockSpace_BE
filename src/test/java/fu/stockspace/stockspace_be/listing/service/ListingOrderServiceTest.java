@@ -8,6 +8,7 @@ import fu.stockspace.stockspace_be.listing.entity.ListingOrder;
 import fu.stockspace.stockspace_be.listing.entity.ListingPackage;
 import fu.stockspace.stockspace_be.listing.repository.ListingOrderRepository;
 import fu.stockspace.stockspace_be.listing.repository.ListingPackageRepository;
+import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import fu.stockspace.stockspace_be.wallet.entity.Transaction;
 import fu.stockspace.stockspace_be.wallet.entity.TransactionType;
 import fu.stockspace.stockspace_be.wallet.service.WalletService;
@@ -56,6 +57,9 @@ class ListingOrderServiceTest {
 
     @Mock
     private WalletService walletService;
+
+    @Mock
+    private NotificationService notificationService;
 
     @InjectMocks
     private ListingOrderService listingOrderService;
@@ -118,6 +122,7 @@ class ListingOrderServiceTest {
         assertEquals(response.getPeriodEnd(), warehouse.getVisibleUntil());
         verify(transactionRepository).save(transaction);
         verify(warehouseRepository).save(warehouse);
+        verify(notificationService).push(eq(ownerId), any(String.class), any(String.class), eq("LISTING_PUBLISHED"));
     }
 
     @ParameterizedTest

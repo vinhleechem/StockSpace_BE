@@ -2,7 +2,7 @@ package fu.stockspace.stockspace_be.stats.service;
 
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 
-import fu.stockspace.stockspace_be.booking.repository.BookingRequestRepository;
+import fu.stockspace.stockspace_be.contract.entity.ContractStatus;
 import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.stats.dto.PlatformSummaryResponse;
 import fu.stockspace.stockspace_be.stats.dto.RevenueStatsResponse;
@@ -27,7 +27,6 @@ class AdminStatsServiceTest {
 
     @Mock private UserRepository userRepository;
     @Mock private WarehouseRepository warehouseRepository;
-    @Mock private BookingRequestRepository bookingRepository;
     @Mock private RentalContractRepository contractRepository;
     @Mock private TransactionRepository transactionRepository;
 
@@ -39,16 +38,17 @@ class AdminStatsServiceTest {
     void testGetPlatformSummary_Success() {
         when(userRepository.count()).thenReturn(100L);
         when(warehouseRepository.count()).thenReturn(20L);
-        when(bookingRepository.count()).thenReturn(15L);
-        when(contractRepository.count()).thenReturn(10L);
+        when(contractRepository.countDirectContractsByStatus()).thenReturn(List.of(
+                new Object[]{ContractStatus.ACTIVE, 7L},
+                new Object[]{ContractStatus.DRAFT, 3L}));
 
         PlatformSummaryResponse response = adminStatsService.getPlatformSummary();
 
         assertNotNull(response);
         assertEquals(100L, response.getTotalUsers());
         assertEquals(20L, response.getTotalWarehouses());
-        assertEquals(15L, response.getTotalBookings());
         assertEquals(10L, response.getTotalContracts());
+        assertEquals(7L, response.getContractCountsByStatus().get("ACTIVE"));
     }
 
     @Test
@@ -56,16 +56,22 @@ class AdminStatsServiceTest {
         Object[] row1 = new Object[]{3, 1500000L};
         List<Object[]> monthlyData = java.util.Collections.singletonList(row1);
 
-        when(transactionRepository.findMonthlyRevenueByTypesAndYear(any(), eq(2026)))
+        when(transactionRepository.findMonthlyRevenueByTypeAndYear(
+                fu.stockspace.stockspace_be.wallet.entity.TransactionType.LISTING_FEE, 2026))
                 .thenReturn(monthlyData);
+        when(transactionRepository.findMonthlyRevenueByTypeAndYear(
+                fu.stockspace.stockspace_be.wallet.entity.TransactionType.PACKAGE_PAYMENT, 2026))
+                .thenReturn(java.util.Collections.singletonList(new Object[]{3, 500000L}));
 
 
         RevenueStatsResponse response = adminStatsService.getMonthlyRevenue(2026);
 
         assertNotNull(response);
         assertEquals(2026, response.getYear());
-        assertEquals(new BigDecimal("1500000"), response.getTotalRevenue());
+        assertEquals(new BigDecimal("2000000"), response.getTotalRevenue());
+        assertEquals(new BigDecimal("1500000"), response.getListingFeeRevenue());
+        assertEquals(new BigDecimal("500000"), response.getServicePackageRevenue());
         assertEquals(12, response.getMonthlyRevenue().size());
-        assertEquals(new BigDecimal("1500000"), response.getMonthlyRevenue().get(2).getRevenue());
+        assertEquals(new BigDecimal("2000000"), response.getMonthlyRevenue().get(2).getRevenue());
     }
 }

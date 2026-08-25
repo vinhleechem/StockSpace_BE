@@ -14,6 +14,16 @@ import java.util.UUID;
 
 public interface RentalContractRepository extends JpaRepository<RentalContract, UUID> {
 
+    @Query("""
+            SELECT c.status, COUNT(c) FROM RentalContract c
+            WHERE c.owner IS NOT NULL
+              AND c.tenant IS NOT NULL
+              AND c.warehouse IS NOT NULL
+              AND c.isDeleted = false
+            GROUP BY c.status
+            """)
+    List<Object[]> countDirectContractsByStatus();
+
     Optional<RentalContract> findByBookingId(UUID bookingId);
 
 
