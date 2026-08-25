@@ -3,16 +3,13 @@ import java.util.UUID;
 import fu.stockspace.stockspace_be.auth.entity.RoleType;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
-import fu.stockspace.stockspace_be.auth.util.TenantContextUtil;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.contract.dto.*;
 import fu.stockspace.stockspace_be.contract.entity.ContractStatus;
-import fu.stockspace.stockspace_be.contract.entity.DisputeTicket;
 import fu.stockspace.stockspace_be.contract.entity.RentalContract;
-import fu.stockspace.stockspace_be.contract.repository.DisputeTicketRepository;
 import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseService;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseLayoutService;
@@ -37,7 +34,6 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 
 
@@ -54,7 +50,6 @@ public class ContractService {
 
     private final RentalContractRepository contractRepository;
     private final WarehouseService warehouseService;
-    private final DisputeTicketRepository disputeRepository;
     private final UserRepository userRepository;
     private final WarehouseLayoutService warehouseLayoutService;
     private final NotificationService notificationService;
@@ -236,8 +231,6 @@ public class ContractService {
 
         applyDraftTerms(contract, terms, contract.getOwnerNote());
         contract.setLayoutSnapshot(serializeLayoutSnapshot(layout));
-        contract.setTenantConfirmed(false);
-        contract.setOwnerConfirmed(false);
         if (contract.getChangeRequestReason() != null && !contract.getChangeRequestReason().isBlank()) {
             log.info("Owner {} resubmitting contract {} after tenant change request: {}",
                     ownerId, contract.getId(), contract.getChangeRequestReason());
@@ -353,7 +346,6 @@ public class ContractService {
                     "The tenant already has an overlapping contract for this warehouse");
         }
 
-        contract.setTenantConfirmed(true);
         contract.setConfirmedAt(LocalDateTime.now());
         contract.setStatus(ContractStatus.ACTIVE);
         contract = contractRepository.save(contract);
@@ -383,7 +375,6 @@ public class ContractService {
 
         contract.setChangeRequestReason(reason);
         contract.setRejectionReason(null);
-        contract.setTenantConfirmed(false);
         contract.setConfirmedAt(null);
         contract.setStatus(ContractStatus.CHANGES_REQUESTED);
         contract = contractRepository.save(contract);
@@ -413,7 +404,6 @@ public class ContractService {
 
         contract.setRejectionReason(reason);
         contract.setChangeRequestReason(null);
-        contract.setTenantConfirmed(false);
         contract.setConfirmedAt(null);
         contract.setStatus(ContractStatus.REJECTED);
         contract = contractRepository.save(contract);
@@ -836,54 +826,6 @@ public class ContractService {
 
 
 
-    @Transactional
-    public RentalContractResponse confirmHandover(UUID userId, UUID contractId) {
-        RentalContract contract = contractRepository.findById(contractId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
-        if (contract.getStatus() != ContractStatus.PENDING_HANDOVER) {
-            throw new BadRequestException("Chỉ được xác nhận bàn giao khi hợp đồng đang ở trạng thái chờ bàn giao");
-        }
-        UUID tenantId = contract.getTenant().getId();
-        UUID ownerId = contract.getOwner().getId();
-        if (userId.equals(tenantId)) {
-            if (contract.isTenantConfirmed()) {
-                throw new BadRequestException(ErrorCode.CONTRACT_ALREADY_CONFIRMED);
-            }
-            contract.setTenantConfirmed(true);
-            log.info("Tenant {} confirmed handover for contract {}", userId, contractId);
-        } else if (userId.equals(ownerId)) {
-            if (contract.isOwnerConfirmed()) {
-                throw new BadRequestException(ErrorCode.CONTRACT_ALREADY_CONFIRMED);
-            }
-            contract.setOwnerConfirmed(true);
-            log.info("Owner {} confirmed handover for contract {}", userId, contractId);
-        } else {
-            throw new ForbiddenException(ErrorCode.FORBIDDEN);
-        }
-
-        if (contract.isTenantConfirmed() && contract.isOwnerConfirmed()) {
-            contract.setStatus(ContractStatus.COMPLETED);
-            warehouseService.markAsAvailable(contract.getWarehouse().getId());
-            log.info("Contract {} COMPLETED — warehouse {} is now AVAILABLE",
-                    contractId, contract.getWarehouse().getId());
-        } else {
-            contract.setStatus(ContractStatus.PENDING_HANDOVER);
-        }
-        contract = contractRepository.save(contract);
-        return mapToResponse(contract);
-    }
-
-
-
-
-    @Transactional
-    public void setDisputed(UUID contractId) {
-        RentalContract contract = contractRepository.findById(contractId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
-        contract.setStatus(ContractStatus.DISPUTED);
-        contractRepository.save(contract);
-    }
-
     public RentalContractResponse mapToResponse(RentalContract c) {
         return mapToResponse(c, null);
     }
@@ -902,8 +844,6 @@ public class ContractService {
         return RentalContractResponse.builder()
                 .id(c.getId())
                 .status(c.getStatus().name())
-                .tenantConfirmed(c.isTenantConfirmed())
-                .ownerConfirmed(c.isOwnerConfirmed())
                 .startDate(c.getStartDate())
                 .endDate(c.getEndDate())
                 .paperContractFiles(paperContractFiles)
@@ -939,8 +879,6 @@ public class ContractService {
                 .createdAt(c.getCreatedAt())
                 .updatedAt(c.getUpdatedAt())
                 .submittedAt(c.getSubmittedAt())
-                .cancelReason(c.getCancelReason())
-                .cancelEvidence(c.getCancelEvidence())
                 .build();
     }
 
@@ -988,217 +926,4 @@ public class ContractService {
 
 
 
-    @Transactional
-    public RentalContractResponse submitOnlineContract(UUID ownerId, UUID contractId, SubmitContractRequest request) {
-        log.info("Owner {} submitting online contract for contract {}", ownerId, contractId);
-        RentalContract contract = contractRepository.findById(contractId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
-        UUID actualOwnerId = contract.getOwner().getId();
-        if (!ownerId.equals(actualOwnerId)) {
-            throw new ForbiddenException(ErrorCode.FORBIDDEN);
-        }
-        if (contract.getStatus() != ContractStatus.UNDER_NEGOTIATION) {
-            throw new BadRequestException("Hợp đồng không ở trạng thái thương lượng");
-        }
-        if (request.getStartDate().isAfter(request.getEndDate())) {
-            throw new BadRequestException("Ngày bắt đầu phải trước ngày kết thúc");
-        }
-        if (ChronoUnit.DAYS.between(request.getStartDate(), request.getEndDate()) < 7) {
-            throw new BadRequestException("Thời gian thuê kho tối thiểu là 7 ngày");
-        }
-        contract.setStartDate(request.getStartDate());
-        contract.setEndDate(request.getEndDate());
-        try {
-            contract.setPaperContractFiles(objectMapper.writeValueAsString(request.getPaperContractFiles()));
-        } catch (JsonProcessingException e) {
-            throw new BadRequestException("Paper contract files must be valid JSON");
-        }
-        contract.setStatus(ContractStatus.PENDING_TENANT_CONFIRM);
-        contract.setSubmittedAt(LocalDateTime.now());
-        contract = contractRepository.save(contract);
-        log.info("Contract {} status updated to PENDING_TENANT_CONFIRM", contractId);
-
-
-        try {
-            UUID tenantId = contract.getTenant().getId();
-            String warehouseName = contract.getWarehouse().getName();
-            notificationService.push(
-                    tenantId,
-                    "Hợp đồng cần xác nhận",
-                    "Owner đã cập nhật hợp đồng kho " + warehouseName + ". Bạn có 7 ngày để ký xác nhận.",
-                    "CONTRACT"
-            );
-        } catch (Exception e) {
-            log.warn("Failed to push contract notification to tenant: {}", e.getMessage());
-        }
-
-        return mapToResponse(contract);
-    }
-
-
-
-    @Transactional
-    public RentalContractResponse tenantConfirmContract(UUID tenantId, UUID contractId) {
-        log.info("Tenant {} confirming contract {}", tenantId, contractId);
-        RentalContract contract = contractRepository.findById(contractId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
-        UUID actualTenantId = contract.getTenant().getId();
-        if (!tenantId.equals(actualTenantId)) {
-            throw new ForbiddenException(ErrorCode.FORBIDDEN);
-        }
-        if (contract.getStatus() != ContractStatus.PENDING_TENANT_CONFIRM) {
-            throw new BadRequestException("Hợp đồng không ở trạng thái chờ xác nhận");
-        }
-
-        if (contract.getSubmittedAt() != null && contract.getSubmittedAt().plusDays(7).isBefore(LocalDateTime.now())) {
-            throw new BadRequestException("Hợp đồng đã quá hạn 7 ngày để xác nhận");
-        }
-        contract.setTenantConfirmed(true);
-        contract.setOwnerConfirmed(true);
-        contract.setStatus(ContractStatus.ACTIVE);
-
-        try {
-            warehouseLayoutService.cloneLayout(contract.getWarehouse().getId(), actualTenantId);
-        } catch (Exception e) {
-            log.error("Failed to auto-clone layout for tenant {} after contract activation: {}", actualTenantId, e.getMessage());
-        }
-
-
-        contract = contractRepository.save(contract);
-        log.info("Contract {} is now ACTIVE", contractId);
-        return mapToResponse(contract);
-    }
-
-
-
-    @Transactional
-    public RentalContractResponse tenantReportFailed(UUID tenantId, UUID contractId, TenantReportFailedRequest request) {
-        log.info("Tenant {} reporting contract failed: {}", tenantId, contractId);
-        RentalContract contract = contractRepository.findById(contractId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
-        UUID actualTenantId = contract.getTenant().getId();
-        if (!tenantId.equals(actualTenantId)) {
-            throw new ForbiddenException(ErrorCode.FORBIDDEN);
-        }
-        if (contract.getStatus() != ContractStatus.UNDER_NEGOTIATION
-                && contract.getStatus() != ContractStatus.PENDING_TENANT_CONFIRM) {
-            throw new BadRequestException("Không thể báo cáo sự cố hợp đồng ở trạng thái hiện tại");
-        }
-
-        if (disputeRepository.findByContractId(contract.getId()).isPresent()) {
-            throw new BadRequestException("Hợp đồng này đã có tranh chấp đang mở");
-        }
-        User tenant = userRepository.findById(tenantId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
-        String evidenceJson = request.getEvidenceImages() != null ? request.getEvidenceImages().toString() : null;
-        DisputeTicket ticket = DisputeTicket.builder()
-                .contract(contract)
-                .raisedBy(tenant)
-                .reason(request.getReason())
-                .evidenceImages(evidenceJson)
-                .status("OPEN")
-                .build();
-        disputeRepository.save(ticket);
-        contract.setStatus(ContractStatus.DISPUTED);
-        contract = contractRepository.save(contract);
-        log.info("Dispute ticket opened for contract {} by Tenant", contractId);
-        return mapToResponse(contract);
-    }
-
-
-
-    @Transactional
-    public RentalContractResponse ownerRequestCancel(UUID ownerId, UUID contractId, OwnerCancelRequest request) {
-        log.info("Owner {} requesting cancellation for contract {}", ownerId, contractId);
-        RentalContract contract = contractRepository.findById(contractId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
-        UUID actualOwnerId = contract.getOwner().getId();
-        if (!ownerId.equals(actualOwnerId)) {
-            throw new ForbiddenException(ErrorCode.FORBIDDEN);
-        }
-        if (contract.getStatus() != ContractStatus.UNDER_NEGOTIATION
-                && contract.getStatus() != ContractStatus.PENDING_TENANT_CONFIRM) {
-            throw new BadRequestException("Không thể đề xuất hủy hợp đồng ở trạng thái hiện tại");
-        }
-        contract.setCancelReason(request.getReason());
-        String evidenceJson = request.getEvidenceImages() != null ? request.getEvidenceImages().toString() : null;
-        contract.setCancelEvidence(evidenceJson);
-        contract.setStatus(ContractStatus.PENDING_CANCEL);
-        contract = contractRepository.save(contract);
-        log.info("Contract {} is now PENDING_CANCEL", contractId);
-        return mapToResponse(contract);
-    }
-
-
-
-    @Transactional
-    public RentalContractResponse tenantRespondCancel(UUID tenantId, UUID contractId, boolean agree) {
-        log.info("Tenant {} responding to cancel request for contract {}, agree={}", tenantId, contractId, agree);
-        RentalContract contract = contractRepository.findById(contractId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
-        UUID actualTenantId = contract.getTenant().getId();
-        if (!tenantId.equals(actualTenantId)) {
-            throw new ForbiddenException(ErrorCode.FORBIDDEN);
-        }
-        if (contract.getStatus() != ContractStatus.PENDING_CANCEL) {
-            throw new BadRequestException("Hợp đồng không có yêu cầu hủy nào đang chờ phản hồi");
-        }
-        if (agree) {
-
-            contract.setStatus(ContractStatus.CANCELLED);
-            warehouseService.markAsAvailable(contract.getWarehouse().getId());
-
-
-
-
-
-
-
-
-            log.info("Contract {} cancelled by mutual agreement", contractId);
-        } else {
-
-            if (disputeRepository.findByContractId(contract.getId()).isPresent()) {
-                throw new BadRequestException("Hợp đồng này đã có tranh chấp đang mở");
-            }
-            User tenant = userRepository.findById(tenantId)
-                    .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
-            DisputeTicket ticket = DisputeTicket.builder()
-                    .contract(contract)
-                    .raisedBy(tenant)
-                    .reason("Tenant không đồng ý yêu cầu hủy thương lượng của Owner. Lý do hủy của Owner: " + contract.getCancelReason())
-                    .evidenceImages(contract.getCancelEvidence())
-                    .status("OPEN")
-                    .build();
-            disputeRepository.save(ticket);
-            contract.setStatus(ContractStatus.DISPUTED);
-            log.info("Tenant disagreed to cancel. Contract {} status changed to DISPUTED", contractId);
-
-            try {
-                String warehouseName = contract.getWarehouse().getName();
-                UUID ownerId = contract.getOwner().getId();
-
-                // 1. Thông báo cho Owner rằng Tenant không đồng ý hủy và đã mở tranh chấp
-                notificationService.push(
-                        ownerId,
-                        "Khách thuê từ chối yêu cầu hủy",
-                        "Khách thuê không đồng ý yêu cầu hủy hợp đồng kho '" + warehouseName + "'. Vụ việc đã được chuyển thành tranh chấp để Ban quản trị phân xử.",
-                        "DISPUTE"
-                );
-
-                // 2. Thông báo cho Admin hệ thống
-                userRepository.findFirstByRoles_Name(RoleType.ROLE_ADMIN.name())
-                        .ifPresent(admin -> notificationService.push(
-                                admin.getId(),
-                                "Tranh chấp hợp đồng mới",
-                                "Có một tranh chấp mới phát sinh từ việc từ chối hủy hợp đồng kho '" + warehouseName + "'. Vui lòng kiểm tra và phân xử.",
-                                "DISPUTE"
-                        ));
-            } catch (Exception e) {
-                log.warn("Failed to push dispute notification: {}", e.getMessage());
-            }
-        }
-        contract = contractRepository.save(contract);
-        return mapToResponse(contract);
-    }
 }

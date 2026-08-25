@@ -112,7 +112,7 @@ public class RentalContract extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)
     @Builder.Default
-    private ContractStatus status = ContractStatus.UNDER_NEGOTIATION;
+    private ContractStatus status = ContractStatus.DRAFT;
 
     @Column(name = "start_date")
     private LocalDate startDate;

@@ -31,6 +31,10 @@ class DefaultRbacPolicyTest {
         assertTrue(grants.values().stream()
                 .flatMap(Set::stream)
                 .noneMatch(permission -> permission.name().startsWith("RENTAL_REQUEST_")));
+        assertTrue(grants.values().stream()
+                .flatMap(Set::stream)
+                .noneMatch(permission -> permission.name().startsWith("DISPUTE_")
+                        || permission.name().equals("CONTRACT_HANDOVER_CONFIRM")));
         assertFalse(grants.get(RoleType.ROLE_STAFF).contains(PermissionCode.STAFF_MANAGE));
         assertTrue(grants.get(RoleType.ROLE_INSPECTOR).contains(PermissionCode.INSPECTION_EXECUTE));
     }

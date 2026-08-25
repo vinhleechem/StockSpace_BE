@@ -64,7 +64,6 @@ public enum ErrorCode {
 
 
     CONTRACT_NOT_FOUND("Hợp đồng thuê kho không tồn tại", HttpStatus.NOT_FOUND),
-    CONTRACT_ALREADY_CONFIRMED("Bạn đã xác nhận bàn giao hoặc hợp đồng đã hoàn thành", HttpStatus.BAD_REQUEST),
 
 
     INSPECTION_NOT_FOUND("Yêu cầu kiểm định không tồn tại", HttpStatus.NOT_FOUND),
@@ -87,8 +86,6 @@ public enum ErrorCode {
     WITHDRAW_ALREADY_PROCESSED("Yêu cầu rút tiền đã được xử lý", HttpStatus.BAD_REQUEST),
 
 
-    DISPUTE_NOT_FOUND("Tranh chấp không tồn tại", HttpStatus.NOT_FOUND),
-    DISPUTE_ALREADY_OPEN("Đã có tranh chấp đang mở cho hợp đồng này", HttpStatus.CONFLICT),
 
 
     NOTIFICATION_NOT_FOUND("Không tìm thấy thông báo", HttpStatus.NOT_FOUND),
@@ -150,7 +147,6 @@ public enum ErrorCode {
     REVIEW_ALREADY_EXISTS("Bạn đã đánh giá kho này cho hợp đồng này rồi", HttpStatus.CONFLICT),
     REVIEW_NOT_AUTHORIZED("Bạn không có quyền thực hiện thao tác này với đánh giá", HttpStatus.FORBIDDEN),
     REVIEW_EDIT_EXPIRED("Chỉ được sửa đánh giá trong vòng 7 ngày kể từ ngày tạo", HttpStatus.BAD_REQUEST),
-    REVIEW_CONTRACT_NOT_COMPLETED("Chỉ được đánh giá kho sau khi hợp đồng kết thúc", HttpStatus.BAD_REQUEST),
     REVIEW_OWNER_ALREADY_REPLIED("Owner đã phản hồi đánh giá này rồi", HttpStatus.CONFLICT);
 
     private final String message;

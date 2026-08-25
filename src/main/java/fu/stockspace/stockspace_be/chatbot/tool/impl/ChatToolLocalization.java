@@ -20,17 +20,11 @@ final class ChatToolLocalization {
 
         return switch (rawStatus.trim().toUpperCase(Locale.ROOT)) {
             case "DRAFT" -> "Bản nháp";
-            case "UNDER_NEGOTIATION" -> "Đang thương lượng";
             case "PENDING_TENANT_CONFIRM" -> "Chờ người thuê xác nhận";
             case "CHANGES_REQUESTED" -> "Người thuê yêu cầu chỉnh sửa";
             case "ACTIVE" -> "Đang có hiệu lực";
             case "REJECTED" -> "Đã từ chối";
             case "EXPIRED" -> "Đã hết hạn";
-            case "PENDING_CANCEL" -> "Chờ phản hồi yêu cầu hủy";
-            case "CANCELLED" -> "Đã hủy";
-            case "PENDING_HANDOVER" -> "Chờ xác nhận bàn giao";
-            case "COMPLETED" -> "Đã hoàn tất";
-            case "DISPUTED" -> "Đang tranh chấp";
             default -> "Không xác định";
         };
     }

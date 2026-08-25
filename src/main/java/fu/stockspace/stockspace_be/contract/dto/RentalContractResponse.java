@@ -15,8 +15,6 @@ public class RentalContractResponse {
 
     private UUID id;
     private String status;
-    private boolean tenantConfirmed;
-    private boolean ownerConfirmed;
     private LocalDate startDate;
     private LocalDate endDate;
     private String paperContractFiles;
@@ -60,6 +58,4 @@ public class RentalContractResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private LocalDateTime submittedAt;
-    private String cancelReason;
-    private String cancelEvidence;
 }

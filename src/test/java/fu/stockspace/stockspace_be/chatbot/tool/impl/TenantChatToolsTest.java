@@ -79,7 +79,6 @@ class TenantChatToolsTest {
                 .ownerId(UUID.randomUUID())
                 .ownerName("Owner Secret")
                 .paperContractImages("[\"private.jpg\"]")
-                .cancelEvidence("[\"evidence.jpg\"]")
                 .build();
         when(contractService.getMyContractsAsTenant(userId, 0, 20))
                 .thenReturn(new PageImpl<>(List.of(contract), PageRequest.of(0, 20), 1));

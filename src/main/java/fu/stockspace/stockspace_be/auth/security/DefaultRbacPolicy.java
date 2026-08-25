@@ -27,9 +27,8 @@ public final class DefaultRbacPolicy {
                 PermissionCode.WAREHOUSE_READ, PermissionCode.WAREHOUSE_CREATE,
                 PermissionCode.WAREHOUSE_UPDATE, PermissionCode.WAREHOUSE_DELETE,
                 PermissionCode.WAREHOUSE_LAYOUT_OWNER_MANAGE,
-                PermissionCode.CONTRACT_READ, PermissionCode.CONTRACT_HANDOVER_CONFIRM,
-                PermissionCode.CONTRACT_OWNER_MANAGE, PermissionCode.DISPUTE_CREATE,
-                PermissionCode.DISPUTE_READ, PermissionCode.INSPECTION_READ,
+                PermissionCode.CONTRACT_READ, PermissionCode.CONTRACT_OWNER_MANAGE,
+                PermissionCode.INSPECTION_READ,
                 PermissionCode.INSPECTION_REQUEST, PermissionCode.OWNER_STATS_READ
         ));
         grants.put(RoleType.ROLE_TENANT, permissions(
@@ -38,9 +37,8 @@ public final class DefaultRbacPolicy {
                 PermissionCode.NOTIFICATION_READ, PermissionCode.NOTIFICATION_UPDATE,
                 PermissionCode.WALLET_READ, PermissionCode.WALLET_TOP_UP, PermissionCode.WALLET_WITHDRAW,
                 PermissionCode.WAREHOUSE_READ, PermissionCode.WAREHOUSE_LAYOUT_TENANT_MANAGE,
-                PermissionCode.CONTRACT_READ, PermissionCode.CONTRACT_HANDOVER_CONFIRM,
-                PermissionCode.CONTRACT_TENANT_MANAGE, PermissionCode.DISPUTE_CREATE,
-                PermissionCode.DISPUTE_READ, PermissionCode.INVENTORY_READ,
+                PermissionCode.CONTRACT_READ, PermissionCode.CONTRACT_TENANT_MANAGE,
+                PermissionCode.INVENTORY_READ,
                 PermissionCode.INVENTORY_CREATE, PermissionCode.INVENTORY_UPDATE,
                 PermissionCode.INVENTORY_DELETE, PermissionCode.INBOUND_CREATE,
                 PermissionCode.OUTBOUND_CREATE, PermissionCode.INVENTORY_AUDIT_MANAGE,
@@ -64,8 +62,7 @@ public final class DefaultRbacPolicy {
                 PermissionCode.NOTIFICATION_READ, PermissionCode.NOTIFICATION_UPDATE,
                 PermissionCode.WALLET_READ, PermissionCode.WALLET_TOP_UP, PermissionCode.WALLET_WITHDRAW,
                 PermissionCode.WAREHOUSE_READ, PermissionCode.WAREHOUSE_REVIEW,
-                PermissionCode.INSPECTION_READ, PermissionCode.INSPECTION_EXECUTE,
-                PermissionCode.DISPUTE_RESOLVE
+                PermissionCode.INSPECTION_READ, PermissionCode.INSPECTION_EXECUTE
         ));
 
         return Collections.unmodifiableMap(grants);

@@ -9,7 +9,6 @@ import fu.stockspace.stockspace_be.contract.dto.RentalContractResponse;
 import fu.stockspace.stockspace_be.contract.dto.TenantContractDecisionRequest;
 import fu.stockspace.stockspace_be.contract.entity.ContractStatus;
 import fu.stockspace.stockspace_be.contract.entity.RentalContract;
-import fu.stockspace.stockspace_be.contract.repository.DisputeTicketRepository;
 import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
@@ -47,7 +46,6 @@ class TenantContractReviewServiceTest {
     @Mock private RentalContractRepository contractRepository;
     @Mock private BookingRequestRepository bookingRepository;
     @Mock private WarehouseService warehouseService;
-    @Mock private DisputeTicketRepository disputeRepository;
     @Mock private fu.stockspace.stockspace_be.auth.repository.UserRepository userRepository;
     @Mock private WalletService walletService;
     @Mock private WarehouseLayoutService warehouseLayoutService;
@@ -113,7 +111,6 @@ class TenantContractReviewServiceTest {
         RentalContractResponse response = contractService.confirmDirectContract(tenantId, contractId);
 
         assertEquals(ContractStatus.ACTIVE, contract.getStatus());
-        assertTrueConfirmed();
         assertNotNull(contract.getConfirmedAt());
         assertEquals(Boolean.FALSE, response.isCanManageWms());
         verify(warehouseService).lockWarehouseForContractSubmit(warehouseId);
@@ -203,7 +200,4 @@ class TenantContractReviewServiceTest {
         return request;
     }
 
-    private void assertTrueConfirmed() {
-        org.junit.jupiter.api.Assertions.assertTrue(contract.isTenantConfirmed());
-    }
 }

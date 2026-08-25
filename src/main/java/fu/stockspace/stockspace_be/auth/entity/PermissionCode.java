@@ -27,12 +27,8 @@ public enum PermissionCode {
     WAREHOUSE_REVIEW("Review warehouse listings"),
 
     CONTRACT_READ("View own rental contracts"),
-    CONTRACT_HANDOVER_CONFIRM("Confirm handover on own contracts"),
-    CONTRACT_OWNER_MANAGE("Submit or cancel own owner-side contracts"),
-    CONTRACT_TENANT_MANAGE("Confirm, report, or respond on own tenant-side contracts"),
-    DISPUTE_CREATE("Create disputes for own contracts"),
-    DISPUTE_READ("View own disputes"),
-    DISPUTE_RESOLVE("Resolve disputes"),
+    CONTRACT_OWNER_MANAGE("Create, edit, and submit own owner-side contracts"),
+    CONTRACT_TENANT_MANAGE("Confirm, request changes to, or reject own tenant-side contracts"),
 
     INSPECTION_READ("View inspections"),
     INSPECTION_REQUEST("Request inspection for own warehouse"),

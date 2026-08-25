@@ -260,7 +260,7 @@ public class DataInitializer implements CommandLineRunner {
         private void seedSystemKnowledge() {
                 List<KnowledgeSeed> seeds = List.of(
                                 new KnowledgeSeed(
-                                                "kb.damage-dispute.current",
+                                                "kb.damage-claims.current",
                                                 KnowledgeCategory.INSURANCE,
                                                 "Bảo hiểm & Đền bù hàng hóa hư hỏng",
                                                 "StockSpace không tự động cấp hợp đồng bảo hiểm hoặc cam kết một mức bồi thường cố định. "
