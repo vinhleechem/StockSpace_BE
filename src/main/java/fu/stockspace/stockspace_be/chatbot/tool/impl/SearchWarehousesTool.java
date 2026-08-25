@@ -144,10 +144,9 @@ public class SearchWarehousesTool implements ChatTool {
         map.put("name", w.getName());
         map.put("address", w.getAddress());
         map.put("description", w.getDescription());
-        map.put("rentalPrice", w.getRentalPrice() != null ? w.getRentalPrice() : w.getPricePerMonth());
+        map.put("rentalPrice", w.getRentalPrice());
         map.put("rentalPricingType", w.getRentalPricingType() != null
                 ? w.getRentalPricingType().name() : "FIXED_MONTHLY");
-        map.put("pricePerMonth", w.getPricePerMonth());
         map.put("capacity", w.getCapacity());
         map.put("type", w.getType() != null ? w.getType().getName() : null);
         map.put("isVerified", w.isVerified());

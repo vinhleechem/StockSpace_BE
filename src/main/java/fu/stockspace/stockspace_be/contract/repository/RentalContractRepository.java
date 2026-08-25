@@ -154,6 +154,45 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
             @Param("today") java.time.LocalDate today);
 
     @Query("""
+            SELECT COUNT(c) FROM RentalContract c
+            WHERE c.owner.id = :ownerId
+              AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
+              AND c.isActive = true
+              AND c.isDeleted = false
+              AND c.startDate <= :today
+              AND c.endDate >= :today
+            """)
+    long countCurrentDirectActiveContractsByOwnerId(
+            @Param("ownerId") UUID ownerId,
+            @Param("today") java.time.LocalDate today);
+
+    @Query("""
+            SELECT COUNT(DISTINCT c.tenant.id) FROM RentalContract c
+            WHERE c.owner.id = :ownerId
+              AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
+              AND c.isActive = true
+              AND c.isDeleted = false
+              AND c.startDate <= :today
+              AND c.endDate >= :today
+            """)
+    long countDistinctCurrentDirectActiveTenantsByOwnerId(
+            @Param("ownerId") UUID ownerId,
+            @Param("today") java.time.LocalDate today);
+
+    @Query("""
+            SELECT DISTINCT c.warehouse.id FROM RentalContract c
+            WHERE c.owner.id = :ownerId
+              AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
+              AND c.isActive = true
+              AND c.isDeleted = false
+              AND c.startDate <= :today
+              AND c.endDate >= :today
+            """)
+    List<UUID> findCurrentDirectActiveWarehouseIdsByOwnerId(
+            @Param("ownerId") UUID ownerId,
+            @Param("today") java.time.LocalDate today);
+
+    @Query("""
             SELECT DISTINCT legacyBooking.warehouse FROM RentalContract c
             JOIN c.booking legacyBooking
             WHERE legacyBooking.tenant.id = :tenantId

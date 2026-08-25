@@ -2,8 +2,8 @@ package fu.stockspace.stockspace_be.chatbot.tool.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatTool;
+import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
-import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -11,6 +11,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
+import java.time.LocalDate;
 
 
 
@@ -23,6 +24,7 @@ public class GetOccupancyTool implements ChatTool {
 
     private final ObjectMapper objectMapper;
     private final WarehouseRepository warehouseRepository;
+    private final RentalContractRepository contractRepository;
 
     @Override
     public String getName() {
@@ -31,7 +33,7 @@ public class GetOccupancyTool implements ChatTool {
 
     @Override
     public String getDescription() {
-        return "Xem tỷ lệ lấp đầy kho (tỷ lệ kho đã được thuê RENTED) của Chủ kho (Owner).";
+        return "Xem số hợp đồng, số người thuê đang hoạt động và tỷ lệ kho có người thuê của Chủ kho.";
     }
 
     @Override
@@ -48,28 +50,27 @@ public class GetOccupancyTool implements ChatTool {
         try {
             List<Warehouse> warehouses = warehouseRepository.findByOwnerId(userId, Pageable.unpaged()).getContent();
             int total = warehouses.size();
-            int rented = 0;
-            List<String> rentedWarehouses = new ArrayList<>();
-            List<String> availableWarehouses = new ArrayList<>();
+            LocalDate today = LocalDate.now();
+            Set<UUID> occupiedWarehouseIds = new HashSet<>(
+                    contractRepository.findCurrentDirectActiveWarehouseIdsByOwnerId(userId, today));
+            long activeContractCount = contractRepository
+                    .countCurrentDirectActiveContractsByOwnerId(userId, today);
+            long activeTenantCount = contractRepository
+                    .countDistinctCurrentDirectActiveTenantsByOwnerId(userId, today);
+            List<String> occupiedWarehouseNames = warehouses.stream()
+                    .filter(warehouse -> occupiedWarehouseIds.contains(warehouse.getId()))
+                    .map(Warehouse::getName)
+                    .toList();
 
-            for (Warehouse w : warehouses) {
-                if (w.getStatus() == WarehouseStatus.RENTED) {
-                    rented++;
-                    rentedWarehouses.add(w.getName());
-                } else if (w.getStatus() == WarehouseStatus.AVAILABLE) {
-                    availableWarehouses.add(w.getName());
-                }
-            }
-
-            double rate = total > 0 ? ((double) rented / total) * 100.0 : 0.0;
+            double rate = total > 0 ? ((double) occupiedWarehouseIds.size() / total) * 100.0 : 0.0;
 
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("totalWarehouses", total);
-            result.put("rentedWarehousesCount", rented);
-            result.put("availableWarehousesCount", availableWarehouses.size());
+            result.put("warehousesWithActiveContracts", occupiedWarehouseIds.size());
+            result.put("activeContractCount", activeContractCount);
+            result.put("activeTenantCount", activeTenantCount);
             result.put("occupancyRatePercentage", Math.round(rate * 100.0) / 100.0);
-            result.put("rentedWarehouseNames", rentedWarehouses);
-            result.put("availableWarehouseNames", availableWarehouses);
+            result.put("occupiedWarehouseNames", occupiedWarehouseNames);
 
             return objectMapper.writeValueAsString(result);
         } catch (Exception e) {

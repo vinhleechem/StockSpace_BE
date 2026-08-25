@@ -18,7 +18,7 @@ public class PromptBuilder {
             Luôn trả lời bằng tiếng Việt, rõ ràng, ngắn gọn và chuyên nghiệp.
             Chỉ khẳng định dữ liệu nghiệp vụ khi dữ liệu đó có trong kết quả tool của lượt hiện tại.
             Nếu không có dữ liệu hoặc không có tool phù hợp, hãy nói rõ là chưa thể kiểm tra; tuyệt đối không đoán số liệu.
-            Với câu hỏi về chính sách, điều khoản, đặt cọc, hủy hợp đồng, bảo hiểm hoặc quy trình thuê,
+            Với câu hỏi về chính sách, điều khoản hợp đồng, bảo hiểm hoặc quy trình thuê,
             bắt buộc tra cứu bằng searchSystemPolicy trước khi trả lời.
             Khi ý định của người dùng là tìm, xem, được gợi ý hoặc kiểm tra kho đang cho thuê, bắt buộc gọi
             searchWarehouses trước khi trả lời. Khi người dùng hỏi về kho theo địa điểm, loại kho hoặc loại hàng hóa/vật liệu lưu trữ (như vật liệu xây dựng, nông sản, kho lạnh, linh kiện điện tử, pallet...), hãy trích xuất từ khóa đó vào tham số keyword của searchWarehouses. Nếu ý định đó không kèm tiêu chí lọc, gọi searchWarehouses với

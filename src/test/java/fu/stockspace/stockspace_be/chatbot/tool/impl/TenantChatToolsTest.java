@@ -69,7 +69,10 @@ class TenantChatToolsTest {
                 .warehouseName("Kho A")
                 .startDate(LocalDate.of(2026, 1, 1))
                 .endDate(LocalDate.of(2026, 12, 31))
-                .depositAmount(new BigDecimal("5000000"))
+                .pricingType(fu.stockspace.stockspace_be.warehouse.entity.RentalPricingType.PER_SQUARE_METER_MONTHLY)
+                .rentalPriceSnapshot(new BigDecimal("200000"))
+                .leasedAreaM2(new BigDecimal("80"))
+                .finalMonthlyRent(new BigDecimal("16000000"))
                 .tenantId(userId)
                 .tenantName("Tenant Secret")
                 .tenantEmail("tenant@example.com")
@@ -94,6 +97,8 @@ class TenantChatToolsTest {
         assertFalse(result.toString().contains("ownerName"));
         assertFalse(result.toString().contains("paperContractImages"));
         assertFalse(result.toString().contains("cancelEvidence"));
+        assertFalse(result.toString().contains("deposit"));
+        assertEquals("16000000", result.at("/contracts/0/finalMonthlyRent").asText());
         verify(contractService).getMyContractsAsTenant(userId, 0, 20);
     }
 
@@ -118,8 +123,11 @@ class TenantChatToolsTest {
                 .tenantName("Tenant Secret")
                 .tenantEmail("tenant@example.com")
                 .ownerName("Owner Secret")
-                .tenantConfirmed(true)
-                .ownerConfirmed(false)
+                .leasedWidth(new BigDecimal("10"))
+                .leasedLength(new BigDecimal("8"))
+                .leasedHeight(new BigDecimal("4"))
+                .leasedAreaM2(new BigDecimal("80"))
+                .finalMonthlyRent(new BigDecimal("16000000"))
                 .build();
         when(contractService.getContractById(contractId, userId)).thenReturn(contract);
 
@@ -130,14 +138,15 @@ class TenantChatToolsTest {
         assertEquals(contractId.toString(), result.get("id").asText());
         assertEquals("Kho B", result.get("warehouseName").asText());
         assertEquals("Đang có hiệu lực", result.get("status").asText());
-        assertTrue(result.get("nguoiThueDaXacNhan").asBoolean());
-        assertFalse(result.get("chuKhoDaXacNhan").asBoolean());
+        assertEquals("80", result.get("leasedAreaM2").asText());
+        assertEquals("16000000", result.get("finalMonthlyRent").asText());
         assertFalse(result.has("tenantConfirmed"));
         assertFalse(result.has("ownerConfirmed"));
         assertFalse(result.toString().contains("ACTIVE"));
         assertFalse(result.toString().contains("tenantEmail"));
         assertFalse(result.toString().contains("tenantName"));
         assertFalse(result.toString().contains("ownerName"));
+        assertFalse(result.toString().contains("deposit"));
         verify(contractService).getContractById(contractId, userId);
     }
 

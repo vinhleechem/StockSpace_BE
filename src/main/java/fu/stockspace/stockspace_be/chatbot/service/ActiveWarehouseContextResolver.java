@@ -1,7 +1,7 @@
 package fu.stockspace.stockspace_be.chatbot.service;
 
 import fu.stockspace.stockspace_be.chatbot.tool.ChatRequestContext;
-import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
+import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.staff.entity.AssignmentStatus;
 import fu.stockspace.stockspace_be.staff.entity.TenantMember;
 import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
@@ -27,7 +27,7 @@ import java.util.UUID;
 public class ActiveWarehouseContextResolver {
 
     private final WarehouseRepository warehouseRepository;
-    private final RentalContractRepository contractRepository;
+    private final TenantWarehouseAccessService accessService;
     private final TenantMemberRepository tenantMemberRepository;
     private final StaffWarehouseAssignmentRepository assignmentRepository;
 
@@ -59,7 +59,7 @@ public class ActiveWarehouseContextResolver {
     }
 
     private Optional<Warehouse> resolveTenantWarehouse(UUID tenantId, UUID warehouseId) {
-        if (!contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(tenantId, warehouseId)) {
+        if (!accessService.canObserveWarehouse(tenantId, warehouseId)) {
             return Optional.empty();
         }
         return warehouseRepository.findById(warehouseId);
@@ -75,8 +75,7 @@ public class ActiveWarehouseContextResolver {
         UUID tenantId = member.get().getTenant().getId();
         boolean assigned = assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
                 staffId, tenantId, warehouseId, AssignmentStatus.ACTIVE);
-        boolean hasActiveContract = contractRepository
-                .existsByTenantIdAndWarehouseIdAndStatusActive(tenantId, warehouseId);
+        boolean hasActiveContract = accessService.canObserveWarehouse(tenantId, warehouseId);
         if (!assigned || !hasActiveContract) {
             return Optional.empty();
         }
