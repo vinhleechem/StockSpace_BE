@@ -36,6 +36,16 @@ public class RentalContractResponse {
     private UUID ownerId;
     private String ownerName;
 
+    /** State- and viewer-dependent actions available to the current user. */
+    private boolean canEdit;
+    private boolean canDelete;
+    private boolean canSubmit;
+    private boolean canConfirm;
+    private boolean canRequestChanges;
+    private boolean canReject;
+    private boolean canViewLayout;
+    private boolean canManageWms;
+
     private RentalPricingType pricingType;
     private BigDecimal rentalPriceSnapshot;
     private BigDecimal finalMonthlyRent;

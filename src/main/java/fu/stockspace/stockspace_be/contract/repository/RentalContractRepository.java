@@ -83,6 +83,33 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
             """)
     boolean existsByTenantIdAndWarehouseIdAndStatusActive(@Param("tenantId") UUID tenantId, @Param("warehouseId") UUID warehouseId);
 
+    /**
+     * Direct-contract overlap check used while the parent warehouse row is
+     * locked. Date boundaries are inclusive: a contract ending on a date
+     * conflicts with another contract starting on that same date.
+     */
+    @Query("""
+            SELECT COUNT(c) > 0 FROM RentalContract c
+            WHERE c.id <> :contractId
+              AND c.tenant.id = :tenantId
+              AND c.warehouse.id = :warehouseId
+              AND c.status IN (
+                    fu.stockspace.stockspace_be.contract.entity.ContractStatus.PENDING_TENANT_CONFIRM,
+                    fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE)
+              AND c.isActive = true
+              AND c.isDeleted = false
+              AND c.startDate IS NOT NULL
+              AND c.endDate IS NOT NULL
+              AND c.startDate <= :endDate
+              AND c.endDate >= :startDate
+            """)
+    boolean existsDirectDateOverlapForSubmit(
+            @Param("contractId") UUID contractId,
+            @Param("tenantId") UUID tenantId,
+            @Param("warehouseId") UUID warehouseId,
+            @Param("startDate") java.time.LocalDate startDate,
+            @Param("endDate") java.time.LocalDate endDate);
+
     @Query("""
             SELECT DISTINCT w FROM RentalContract c
             JOIN c.warehouse w

@@ -7,6 +7,7 @@ import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.UnauthorizedException;
 import fu.stockspace.stockspace_be.contract.dto.CreateRentalContractRequest;
 import fu.stockspace.stockspace_be.contract.dto.RentalContractResponse;
+import fu.stockspace.stockspace_be.contract.dto.UpdateRentalContractRequest;
 import fu.stockspace.stockspace_be.contract.service.ContractService;
 import fu.stockspace.stockspace_be.warehouse.dto.BulkLayoutSaveRequest;
 import fu.stockspace.stockspace_be.warehouse.dto.WarehouseLayoutResponse;
@@ -53,6 +54,27 @@ public class OwnerContractController {
         RentalContractResponse response = contractService.createOwnerDraft(getCurrentUserId(), request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Rental contract draft created", response));
+    }
+
+    @PutMapping("/{contractId}")
+    @PreAuthorize("@rbac.hasPermission('CONTRACT_OWNER_MANAGE')")
+    @Operation(summary = "Update a direct rental contract draft")
+    public ResponseEntity<ApiResponse<RentalContractResponse>> update(
+            @PathVariable UUID contractId,
+            @Valid @RequestBody UpdateRentalContractRequest request) {
+        RentalContractResponse response = contractService
+                .updateOwnerDraft(getCurrentUserId(), contractId, request);
+        return ResponseEntity.ok(ApiResponse.success("Rental contract draft updated", response));
+    }
+
+    @PostMapping("/{contractId}/submit")
+    @PreAuthorize("@rbac.hasPermission('CONTRACT_OWNER_MANAGE')")
+    @Operation(summary = "Submit a direct rental contract to the tenant")
+    public ResponseEntity<ApiResponse<RentalContractResponse>> submit(
+            @PathVariable UUID contractId) {
+        RentalContractResponse response = contractService
+                .submitOwnerContract(getCurrentUserId(), contractId);
+        return ResponseEntity.ok(ApiResponse.success("Rental contract submitted to tenant", response));
     }
 
     @DeleteMapping("/{contractId}")

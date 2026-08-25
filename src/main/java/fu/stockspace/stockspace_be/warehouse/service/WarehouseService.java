@@ -511,6 +511,16 @@ public class WarehouseService {
         return getOwnedWarehouse(ownerId, warehouseId);
     }
 
+    /**
+     * Locks a warehouse row for direct-contract submission. Contract overlap
+     * checks are serialized per warehouse without locking unrelated warehouses.
+     */
+    @Transactional
+    public Warehouse lockWarehouseForContractSubmit(UUID warehouseId) {
+        return warehouseRepository.findByIdForUpdate(warehouseId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
+    }
+
     private RentalPricingType resolvePricingType(RentalPricingType requestedType) {
         return requestedType != null ? requestedType : RentalPricingType.FIXED_MONTHLY;
     }

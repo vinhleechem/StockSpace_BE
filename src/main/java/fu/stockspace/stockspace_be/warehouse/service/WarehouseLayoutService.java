@@ -596,6 +596,86 @@ public class WarehouseLayoutService {
                 .map(this::mapToLayoutResponse);
     }
 
+    /**
+     * Revalidates a contract layout response without changing any layout
+     * data. This is used immediately before contract submission so a stale or
+     * manually altered layout cannot bypass the same geometry rules used by
+     * bulk layout saves.
+     */
+    @Transactional(readOnly = true)
+    public void validateContractLayout(WarehouseLayoutResponse layout,
+                                       UUID warehouseId,
+                                       UUID tenantId,
+                                       BigDecimal expectedWidth,
+                                       BigDecimal expectedLength,
+                                       BigDecimal expectedHeight) {
+        if (layout == null
+                || !warehouseId.equals(layout.getWarehouseId())
+                || !tenantId.equals(layout.getTenantId())) {
+            throw invalidGeometry("Contract layout relations are invalid");
+        }
+        if (layout.getWidth() == null || layout.getLength() == null || layout.getHeight() == null
+                || expectedWidth == null || expectedLength == null || expectedHeight == null
+                || layout.getWidth().compareTo(expectedWidth) != 0
+                || layout.getLength().compareTo(expectedLength) != 0
+                || layout.getHeight().compareTo(expectedHeight) != 0) {
+            throw invalidGeometry("Contract layout dimensions do not match the contract");
+        }
+
+        WarehouseLayout validationLayout = WarehouseLayout.builder()
+                .width(expectedWidth)
+                .length(expectedLength)
+                .height(expectedHeight)
+                .build();
+        validateRequestGeometry(validationLayout, toValidationRequest(layout), false);
+    }
+
+    private BulkLayoutSaveRequest toValidationRequest(WarehouseLayoutResponse layout) {
+        List<RackSaveRequest> racks = layout.getRacks() == null
+                ? List.of()
+                : layout.getRacks().stream()
+                .map(rack -> RackSaveRequest.builder()
+                        .id(rack.getId())
+                        .name(rack.getName())
+                        .code(rack.getCode())
+                        .maxWeight(rack.getMaxWeight())
+                        .maxVolume(rack.getMaxVolume())
+                        .coordinateX(rack.getCoordinateX())
+                        .coordinateY(rack.getCoordinateY())
+                        .positionZ(rack.getPositionZ())
+                        .rotation(rack.getRotation())
+                        .width(rack.getWidth())
+                        .length(rack.getLength())
+                        .height(rack.getHeight())
+                        .bins(rack.getBins() == null
+                                ? List.of()
+                                : rack.getBins().stream()
+                                .map(bin -> BinSaveRequest.builder()
+                                        .id(bin.getId())
+                                        .shelfLevel(bin.getShelfLevel())
+                                        .name(bin.getName())
+                                        .code(bin.getCode())
+                                        .maxWeight(bin.getMaxWeight())
+                                        .maxVolume(bin.getMaxVolume())
+                                        .coordinateX(bin.getCoordinateX())
+                                        .coordinateY(bin.getCoordinateY())
+                                        .positionZ(bin.getPositionZ())
+                                        .width(bin.getWidth())
+                                        .length(bin.getLength())
+                                        .height(bin.getHeight())
+                                        .build())
+                                .toList())
+                        .build())
+                .toList();
+        return BulkLayoutSaveRequest.builder()
+                .width(layout.getWidth())
+                .length(layout.getLength())
+                .height(layout.getHeight())
+                .racks(racks)
+                .positions(layout.getPositions())
+                .build();
+    }
+
 
 
 
