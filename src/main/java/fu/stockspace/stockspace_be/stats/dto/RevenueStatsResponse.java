@@ -15,5 +15,7 @@ import java.util.List;
 public class RevenueStatsResponse {
     private int year;
     private BigDecimal totalRevenue;
+    private BigDecimal listingFeeRevenue;
+    private BigDecimal servicePackageRevenue;
     private List<MonthlyRevenueDto> monthlyRevenue;
 }

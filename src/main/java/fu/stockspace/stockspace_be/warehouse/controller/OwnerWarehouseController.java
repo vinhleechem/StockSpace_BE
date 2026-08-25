@@ -12,7 +12,9 @@ import fu.stockspace.stockspace_be.warehouse.service.WarehouseService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -50,6 +52,14 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/owner/warehouses")
 @RequiredArgsConstructor
+@ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Warehouse is not owned by the caller",
+                content = @Content(schema = @Schema(implementation = ApiResponse.class),
+                        examples = @ExampleObject(value = "{\"success\":false,\"code\":\"WAREHOUSE_NOT_OWNED\",\"message\":\"You are not the warehouse owner\"}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Warehouse not found",
+                content = @Content(schema = @Schema(implementation = ApiResponse.class),
+                        examples = @ExampleObject(value = "{\"success\":false,\"code\":\"WAREHOUSE_NOT_FOUND\",\"message\":\"Warehouse not found\"}")))
+})
 public class OwnerWarehouseController {
 
     private final WarehouseService warehouseService;

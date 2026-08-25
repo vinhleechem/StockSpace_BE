@@ -61,7 +61,7 @@ public class WarehouseService {
     private final StaffWarehouseAssignmentRepository staffWarehouseAssignmentRepository;
 
     @Transactional(readOnly = true)
-    public List<WarehouseResponse> getActiveRentedWarehouses(UUID tenantId) {
+    public List<WarehouseResponse> getActiveContractWarehouses(UUID tenantId) {
         List<Warehouse> warehouses = tenantWarehouseAccessService.findActiveContractWarehouses(tenantId);
 
 
@@ -106,8 +106,7 @@ public class WarehouseService {
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_TYPE_NOT_FOUND));
 
         RentalPricingType pricingType = resolvePricingType(request.getRentalPricingType());
-        java.math.BigDecimal rentalPrice = resolveRentalPrice(
-                request.getRentalPrice(), request.getPricePerMonth());
+        java.math.BigDecimal rentalPrice = request.getRentalPrice();
         validateRentalPricing(pricingType, rentalPrice);
 
         SystemPolicy policy = systemPolicyRepository.findFirstByIsActiveTrueAndIsDeletedFalseOrderByCreatedAtDesc()
@@ -172,15 +171,13 @@ public class WarehouseService {
             warehouse.setCapacity(request.getCapacity());
         }
         boolean pricingChanged = request.getRentalPricingType() != null
-                || request.getRentalPrice() != null
-                || request.getPricePerMonth() != null;
+                || request.getRentalPrice() != null;
         if (pricingChanged) {
             RentalPricingType pricingType = request.getRentalPricingType() != null
                     ? request.getRentalPricingType()
                     : effectivePricingType(warehouse);
-            java.math.BigDecimal rentalPrice = resolveRentalPrice(
-                    request.getRentalPrice(), request.getPricePerMonth());
-            if (request.getRentalPrice() == null && request.getPricePerMonth() == null
+            java.math.BigDecimal rentalPrice = request.getRentalPrice();
+            if (request.getRentalPrice() == null
                     && pricingType == RentalPricingType.NEGOTIATED) {
                 rentalPrice = null;
             } else if (rentalPrice == null) {
@@ -209,8 +206,8 @@ public class WarehouseService {
     public void deleteWarehouse(UUID ownerId, UUID warehouseId) {
         Warehouse warehouse = getOwnedWarehouse(ownerId, warehouseId);
 
-        if (warehouse.getStatus() == WarehouseStatus.RENTED) {
-            throw new BadRequestException(ErrorCode.WAREHOUSE_CANNOT_DELETE_RENTED);
+        if (warehouseRepository.hasCurrentActiveContract(warehouseId)) {
+            throw new BadRequestException(ErrorCode.WAREHOUSE_HAS_ACTIVE_CONTRACTS);
         }
 
         warehouse.setDeleted(true);
@@ -224,7 +221,7 @@ public class WarehouseService {
 
     @Transactional
     public WarehouseResponse updateStatus(UUID ownerId, UUID warehouseId, WarehouseStatus newStatus) {
-        if (newStatus == WarehouseStatus.RENTED || newStatus == WarehouseStatus.PENDING_APPROVAL) {
+        if (newStatus == WarehouseStatus.PENDING_APPROVAL) {
             throw new BadRequestException(ErrorCode.WAREHOUSE_INVALID_STATUS_TRANSITION);
         }
 
@@ -449,32 +446,6 @@ public class WarehouseService {
 
 
 
-    @Transactional
-    public void markAsAvailable(UUID warehouseId) {
-        Warehouse warehouse = warehouseRepository.findById(warehouseId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
-
-        warehouse.setStatus(WarehouseStatus.AVAILABLE);
-        warehouseRepository.save(warehouse);
-        log.info("Warehouse {} marked as AVAILABLE", warehouseId);
-    }
-
-
-
-
-
-    @Transactional
-    public void markAsRented(UUID warehouseId) {
-        Warehouse warehouse = warehouseRepository.findById(warehouseId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
-
-        warehouse.setStatus(WarehouseStatus.RENTED);
-        warehouseRepository.save(warehouse);
-        log.info("Warehouse {} marked as RENTED", warehouseId);
-    }
-
-
-
     private Warehouse getOwnedWarehouse(UUID ownerId, UUID warehouseId) {
         return warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId)
                 .orElseThrow(() -> new ForbiddenException(ErrorCode.WAREHOUSE_NOT_OWNED));
@@ -505,15 +476,6 @@ public class WarehouseService {
                 : RentalPricingType.FIXED_MONTHLY;
     }
 
-    private java.math.BigDecimal resolveRentalPrice(java.math.BigDecimal rentalPrice,
-                                                    java.math.BigDecimal legacyPrice) {
-        if (rentalPrice != null && legacyPrice != null
-                && rentalPrice.compareTo(legacyPrice) != 0) {
-            throw new BadRequestException("rentalPrice and pricePerMonth must match when both are provided");
-        }
-        return rentalPrice != null ? rentalPrice : legacyPrice;
-    }
-
     private void validateRentalPricing(RentalPricingType pricingType,
                                        java.math.BigDecimal rentalPrice) {
         if (pricingType == RentalPricingType.NEGOTIATED) {
@@ -530,7 +492,7 @@ public class WarehouseService {
     }
 
     private String normalizeSortProperty(String sortBy) {
-        return "pricePerMonth".equals(sortBy) ? "rentalPrice" : sortBy;
+        return sortBy;
     }
 
     private List<String> attachImages(Warehouse warehouse, List<String> imageUrls) {
@@ -562,9 +524,7 @@ public class WarehouseService {
 
         String cover = urls.isEmpty() ? null : urls.get(0);
 
-        java.math.BigDecimal rentalPrice = w.getRentalPrice() != null
-                ? w.getRentalPrice()
-                : w.getPricePerMonth();
+        java.math.BigDecimal rentalPrice = w.getRentalPrice();
         RentalPricingType pricingType = effectivePricingType(w);
         String publicationStatus = resolvePublicationStatus(w);
         boolean publishableWarehouse = w.isActive()
@@ -580,7 +540,6 @@ public class WarehouseService {
                 .capacity(w.getCapacity())
                 .rentalPrice(rentalPrice)
                 .rentalPricingType(pricingType)
-                .pricePerMonth(rentalPrice)
                 .status(w.getStatus().name())
                 .rejectReason(w.getRejectReason())
                 .isVerified(w.isVerified())

@@ -32,7 +32,7 @@ public class GetMyContractsTool implements ChatTool {
     @Override
     public String getDescription() {
         return "Lấy danh sách hợp đồng thuê kho của người thuê đang đăng nhập, gồm kho, trạng thái, " +
-               "thời hạn và tiền đặt cọc. Không dùng cho khách chưa đăng nhập.";
+               "thời hạn, kích thước thuê và giá thuê cuối cùng. Không dùng cho khách chưa đăng nhập.";
     }
 
     @Override
@@ -71,7 +71,10 @@ public class GetMyContractsTool implements ChatTool {
         result.put("warehouseName", contract.getWarehouseName());
         result.put("startDate", contract.getStartDate());
         result.put("endDate", contract.getEndDate());
-        result.put("depositAmount", contract.getDepositAmount());
+        result.put("pricingType", contract.getPricingType());
+        result.put("rentalPriceSnapshot", contract.getRentalPriceSnapshot());
+        result.put("leasedAreaM2", contract.getLeasedAreaM2());
+        result.put("finalMonthlyRent", contract.getFinalMonthlyRent());
         return result;
     }
 }

@@ -12,6 +12,10 @@ import fu.stockspace.stockspace_be.contract.service.ContractService;
 import fu.stockspace.stockspace_be.warehouse.dto.BulkLayoutSaveRequest;
 import fu.stockspace.stockspace_be.warehouse.dto.WarehouseLayoutResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +37,25 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/owner/contracts")
 @RequiredArgsConstructor
+@ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid participant, state, pricing, or layout dimensions",
+                content = @Content(schema = @Schema(implementation = ApiResponse.class), examples = {
+                        @ExampleObject(name = "Invalid role", value = "{\"success\":false,\"code\":\"INVALID_ROLE\",\"message\":\"The supplied account does not have the TENANT role\"}"),
+                        @ExampleObject(name = "Invalid status", value = "{\"success\":false,\"code\":\"INVALID_CONTRACT_STATUS\",\"message\":\"Only DRAFT or CHANGES_REQUESTED contracts can be submitted\"}"),
+                        @ExampleObject(name = "Invalid dimensions", value = "{\"success\":false,\"code\":\"INVALID_LEASE_DIMENSIONS\",\"message\":\"Leased dimensions cannot exceed the warehouse default layout\"}")
+                })),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Warehouse or contract is not owned by the caller",
+                content = @Content(schema = @Schema(implementation = ApiResponse.class),
+                        examples = @ExampleObject(value = "{\"success\":false,\"code\":\"WAREHOUSE_NOT_OWNED\",\"message\":\"You are not the warehouse owner\"}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Tenant or contract not found",
+                content = @Content(schema = @Schema(implementation = ApiResponse.class), examples = {
+                        @ExampleObject(name = "Tenant not found", value = "{\"success\":false,\"code\":\"TENANT_NOT_FOUND\",\"message\":\"Active tenant account was not found for the supplied email\"}"),
+                        @ExampleObject(name = "Contract not found", value = "{\"success\":false,\"code\":\"CONTRACT_NOT_FOUND\",\"message\":\"Rental contract not found\"}")
+                })),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Same tenant and warehouse have an overlapping contract",
+                content = @Content(schema = @Schema(implementation = ApiResponse.class),
+                        examples = @ExampleObject(value = "{\"success\":false,\"code\":\"CONTRACT_DATE_OVERLAP\",\"message\":\"The tenant already has an overlapping contract for this warehouse\"}")))
+})
 public class OwnerContractController {
 
     private final ContractService contractService;

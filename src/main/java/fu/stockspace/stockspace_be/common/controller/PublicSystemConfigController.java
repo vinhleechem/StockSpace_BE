@@ -20,7 +20,7 @@ public class PublicSystemConfigController {
     private final SystemConfigService configService;
 
     @GetMapping
-    @Operation(summary = "Lấy danh sách các cấu hình công khai (Tỷ lệ cọc, hạn ký hợp đồng...)")
+    @Operation(summary = "Lấy danh sách cấu hình công khai của hợp đồng và kiểm định")
     public ResponseEntity<ApiResponse<List<SystemConfigResponse>>> getPublicConfigs() {
         List<SystemConfigResponse> response = configService.getPublicConfigs();
         return ResponseEntity.ok(ApiResponse.success("Lấy cấu hình hệ thống thành công", response));

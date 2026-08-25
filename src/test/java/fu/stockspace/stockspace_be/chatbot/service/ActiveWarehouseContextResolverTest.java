@@ -2,7 +2,7 @@ package fu.stockspace.stockspace_be.chatbot.service;
 
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatRequestContext;
-import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
+import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.staff.entity.AssignmentStatus;
 import fu.stockspace.stockspace_be.staff.entity.TenantMember;
 import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
@@ -24,12 +24,12 @@ import static org.mockito.Mockito.when;
 class ActiveWarehouseContextResolverTest {
 
     private final WarehouseRepository warehouseRepository = mock(WarehouseRepository.class);
-    private final RentalContractRepository contractRepository = mock(RentalContractRepository.class);
+    private final TenantWarehouseAccessService accessService = mock(TenantWarehouseAccessService.class);
     private final TenantMemberRepository tenantMemberRepository = mock(TenantMemberRepository.class);
     private final StaffWarehouseAssignmentRepository assignmentRepository =
             mock(StaffWarehouseAssignmentRepository.class);
     private final ActiveWarehouseContextResolver resolver = new ActiveWarehouseContextResolver(
-            warehouseRepository, contractRepository, tenantMemberRepository, assignmentRepository);
+            warehouseRepository, accessService, tenantMemberRepository, assignmentRepository);
 
     @Test
     void resolvesOwnerContextOnlyAfterOwnershipCheck() {
@@ -49,7 +49,7 @@ class ActiveWarehouseContextResolverTest {
     void doesNotExposeTenantWarehouseNameWithoutAnActiveContract() {
         UUID tenantId = UUID.randomUUID();
         UUID warehouseId = UUID.randomUUID();
-        when(contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(tenantId, warehouseId))
+        when(accessService.canObserveWarehouse(tenantId, warehouseId))
                 .thenReturn(false);
 
         ChatRequestContext context = resolver.resolve(tenantId, "ROLE_TENANT", warehouseId);
@@ -72,7 +72,7 @@ class ActiveWarehouseContextResolverTest {
                 .thenReturn(Optional.of(membership));
         when(assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
                 staffId, tenantId, warehouseId, AssignmentStatus.ACTIVE)).thenReturn(true);
-        when(contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(tenantId, warehouseId))
+        when(accessService.canObserveWarehouse(tenantId, warehouseId))
                 .thenReturn(true);
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
 

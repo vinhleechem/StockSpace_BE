@@ -380,11 +380,11 @@ Số commit là 12–10 và phần của VIỆT ANH chứa nhiều thay đổi 
 - **Xác nhận VINH đang làm trên đúng Handoff HEAD của A12.**
   - **Thực hiện:** `git rev-parse HEAD`, so với hash A12; `git status --short`; `.\mvnw.cmd verify`.
   - **Không được:** checkout từ dev cũ rồi cherry-pick tùy ý; sửa lại migration A1/A2/A8/A9 đã bàn giao mà không trao đổi.
-  - **Handoff hash đã xác nhận:** `________________`
+  - **Handoff hash đã xác nhận:** `f055a0e` (đã xác nhận là ancestor của baseline `1bab796`)
 
 ## B1. Chuyển toàn bộ WMS khỏi Contract.booking
 
-- [ ] Áp dụng direct Contract + Subscription gate cho Product, Stock, Receipt và Audit
+- [x] Áp dụng direct Contract + Subscription gate cho Product, Stock, Receipt và Audit
   - **Commit đề xuất:** `refactor(wms): authorize operations through direct contracts`
   - **Code bắt buộc rà:**
     - `StockBatchRepository`, `StockBatchService`, `StockBatchController`.
@@ -400,11 +400,11 @@ Số commit là 12–10 và phần của VIỆT ANH chứa nhiều thay đổi 
   - **Search gate:** chạy `rg "contract\.booking|getBooking\(\)"` trên WMS; kết quả phải bằng 0.
   - **Test trong commit:** cập nhật `StockBatchServiceTest`, `InventoryReceiptServiceTest`, `InventoryAuditServiceTest`, Product tests; thêm active/no-subscription/no-contract cases.
   - **Hoàn thành khi:** Tenant dùng được toàn bộ WMS với Contract direct và không thể bypass Subscription qua endpoint còn sót.
-  - **Commit hoàn thành:** `________________`
+  - **Commit hoàn thành:** `b976d29`
 
 ## B2. Staff authorization theo Contract direct
 
-- [ ] Chuyển Staff assignment/revoke sang access policy mới
+- [x] Chuyển Staff assignment/revoke sang access policy mới
   - **Commit đề xuất:** `refactor(staff): authorize assignments through direct contracts`
   - **Rules:**
     - Tenant assign Staff vào Warehouse phải có Contract ACTIVE với Warehouse và Subscription ACTIVE.
@@ -415,11 +415,11 @@ Số commit là 12–10 và phần của VIỆT ANH chứa nhiều thay đổi 
   - **Code:** `TenantStaffService`, assignment/member repositories, controllers và các helper resolve tenant.
   - **Test trong commit:** active/no-contract/no-subscription, wrong tenant, multiple tenants same Warehouse, revoke isolation, history retained.
   - **Hoàn thành khi:** Staff workflow không còn query qua Booking và không bypass Subscription.
-  - **Commit hoàn thành:** `________________`
+  - **Commit hoàn thành:** `f4b4117`
 
 ## B3. Chatbot theo direct Contract và API mới
 
-- [ ] Đồng bộ Chatbot tools/context với Contract, Listing và pricing mới
+- [x] Đồng bộ Chatbot tools/context với Contract, Listing và pricing mới
   - **Commit đề xuất:** `refactor(chatbot): align tools with direct rental contracts`
   - **Context:** `ActiveWarehouseContextResolver` và tenant WMS tools dùng `TenantWarehouseAccessService`.
   - **Remove:** `GetWarehouseBookingsTool` khỏi registry, prompt và suggested operations.
@@ -429,11 +429,11 @@ Số commit là 12–10 và phần của VIỆT ANH chứa nhiều thay đổi 
   - **Knowledge/prompt:** bỏ câu Booking guarantee, rental deposit và Admin phân xử cọc.
   - **Test trong commit:** registry, active context, public/tenant tools, no phone leak, no booking tool.
   - **Hoàn thành khi:** Chatbot không quảng bá hoặc gọi API đã retire và tuân thủ cùng access policy như REST API.
-  - **Commit hoàn thành:** `________________`
+  - **Commit hoàn thành:** `111670e`
 
 ## B4. Stats và notifications theo Contract mới
 
-- [ ] Thay booking/rented/deposit metrics bằng Contract/listing metrics rõ nghĩa
+- [x] Thay booking/rented/deposit metrics bằng Contract/listing metrics rõ nghĩa
   - **Commit đề xuất:** `refactor(stats): report direct contract and listing metrics`
   - **Admin stats:** bỏ `totalBookings` hoặc đổi thành `totalContracts`/counts theo status; không đổi tên field mà giữ semantic cũ.
   - **Owner stats:** không dùng RENTED để tính occupancy/revenue; có thể trả activeContractCount và activeTenantCount distinct.
@@ -441,11 +441,11 @@ Số commit là 12–10 và phần của VIỆT ANH chứa nhiều thay đổi 
   - **Notifications:** sửa type/message booking/deposit sang contract submit/change/confirm/reject và listing publish/expire; không tạo notification cũ mới.
   - **Test trong commit:** AdminStatsServiceTest, OwnerStatsServiceTest, NotificationServiceTest và mapper/controller response.
   - **Hoàn thành khi:** dashboard backend không còn số liệu có tên/ý nghĩa Booking hoặc Warehouse RENTED.
-  - **Commit hoàn thành:** `________________`
+  - **Commit hoàn thành:** `912b8b0`
 
 ## B5. Expiry scheduler theo Contract direct
 
-- [ ] Đổi scheduler sang `ACTIVE → EXPIRED` và cleanup an toàn
+- [x] Đổi scheduler sang `ACTIVE → EXPIRED` và cleanup an toàn
   - **Commit đề xuất:** `refactor(contract): simplify expiry and tenant cleanup`
   - **Scheduler rules:**
     - Reminder trước 30 ngày, gửi một lần bằng `expiryReminderSent`; dùng direct Owner/Tenant/Warehouse.
@@ -459,11 +459,11 @@ Số commit là 12–10 và phần của VIỆT ANH chứa nhiều thay đổi 
   - **Legacy mapping behavior:** scheduler không xử lý status cũ sau khi final migration chạy; trước final migration phải bỏ qua có log, không crash.
   - **Test trong commit:** reminder boundary, expiry, idempotency, no duplicate cleanup, active sibling contract safety, notification failure policy.
   - **Hoàn thành khi:** Contract expiry không cần Booking, deposit, handover hoặc markAsAvailable.
-  - **Commit hoàn thành:** `________________`
+  - **Commit hoàn thành:** `f1f3b51`
 
 ## B6. Retire Booking và rental deposit khỏi application flow
 
-- [ ] Ngừng toàn bộ API Booking và nghiệp vụ rental security deposit
+- [x] Ngừng toàn bộ API Booking và nghiệp vụ rental security deposit
   - **Commit đề xuất:** `refactor(booking): retire rental requests and security deposits`
   - **Remove/disable application code:** Tenant/Owner Booking controllers, BookingService và chatbot booking tool; repository/entity có thể giữ tạm nếu migration compatibility còn cần ở commit này.
   - **Contract:** xóa `createContractFromBooking`, fallback Booking sau khi xác nhận direct fields đã đầy đủ; response không còn bookingId/depositAmount.
@@ -474,11 +474,11 @@ Số commit là 12–10 và phần của VIỆT ANH chứa nhiều thay đổi 
   - **Database:** chưa drop `booking_requests` nếu cần giữ lịch sử; application không tạo/update row mới.
   - **Test trong commit:** booking endpoints absent/410 theo strategy đã chốt; no deposit wallet interaction; permission policy; existing TOP_UP, PACKAGE_PAYMENT, LISTING_FEE, WITHDRAWAL vẫn chạy.
   - **Hoàn thành khi:** `rg "BookingService|createContractFromBooking|deposit_percentage" src/main/java` không còn active business reference.
-  - **Commit hoàn thành:** `________________`
+  - **Commit hoàn thành:** `fd3f295`
 
 ## B7. Retire Dispute/cancel/handover flow cũ
 
-- [ ] Bỏ Dispute và các Contract transition ngoài state machine mới
+- [x] Bỏ Dispute và các Contract transition ngoài state machine mới
   - **Commit đề xuất:** `refactor(contract): retire dispute cancellation and handover flows`
   - **Remove/disable:** DisputeController/Service active API, tenant-report-failed, owner-cancel, tenant-respond-cancel, confirm-handover.
   - **ContractStatus code:** chỉ business code mới dùng `DRAFT`, `PENDING_TENANT_CONFIRM`, `CHANGES_REQUESTED`, `ACTIVE`, `REJECTED`, `EXPIRED`; legacy status còn trong enum tới migration B9 nếu cần đọc dữ liệu.
@@ -487,11 +487,11 @@ Số commit là 12–10 và phần của VIỆT ANH chứa nhiều thay đổi 
   - **Data:** giữ dispute table/evidence lịch sử read-only hoặc export theo quyết định dữ liệu; không hard-delete production rows trong commit code.
   - **Test trong commit:** security endpoints, state transition invalid, no dispute/deposit references trong Contract response.
   - **Hoàn thành khi:** application chỉ còn sáu Contract status mới trong mọi luồng tạo mới.
-  - **Commit hoàn thành:** `________________`
+  - **Commit hoàn thành:** `60ddfa3`
 
 ## B8. Bỏ Warehouse.RENTED khỏi code
 
-- [ ] Decouple hoàn toàn trạng thái bài đăng khỏi Contract
+- [x] Decouple hoàn toàn trạng thái bài đăng khỏi Contract
   - **Commit đề xuất:** `refactor(warehouse): remove rented listing status`
   - **Code rà bắt buộc:** WarehouseService, WarehouseLayoutService, InspectionService, Repository search, Admin/Owner stats, Chatbot localization/search/occupancy, DTO comments/tests.
   - **Rules:**
@@ -503,11 +503,11 @@ Số commit là 12–10 và phần của VIỆT ANH chứa nhiều thay đổi 
   - **Search gate:** `rg "RENTED|markAsRented" src/main/java src/test` chỉ còn migration/comment lịch sử được chấp nhận.
   - **Test trong commit:** Warehouse lifecycle, inspection, search, layout owner update, stats/chatbot.
   - **Hoàn thành khi:** nhiều Contract ACTIVE không làm bài đăng biến mất hoặc khóa Warehouse.
-  - **Commit hoàn thành:** `________________`
+  - **Commit hoàn thành:** `3ff8dd2`
 
 ## B9. Finalize database constraints và loại cột chuyển tiếp
 
-- [ ] Chốt migration sau khi application không còn phụ thuộc legacy relations
+- [x] Chốt migration sau khi application không còn phụ thuộc legacy relations
   - **Commit đề xuất:** `chore(db): finalize direct rental contract schema`
   - **Preflight:** `ops/maintenance/rental_contract_refactor_preflight.sql` phải kiểm tra:
     - direct owner/tenant/warehouse null hoặc FK invalid.
@@ -533,11 +533,11 @@ Số commit là 12–10 và phần của VIỆT ANH chứa nhiều thay đổi 
   - **Post-check:** file SQL riêng hoặc cuối migration đếm zero invalid rows; application startup không để Hibernate tự tạo lại cột cũ.
   - **Test trong commit:** schema/migration smoke test nếu hạ tầng cho phép; tối thiểu repository/entity mapping + verify trên PostgreSQL local.
   - **Hoàn thành khi:** schema production-target không còn cột chuyển tiếp trong Contract/Warehouse và app startup sạch.
-  - **Commit hoàn thành:** `________________`
+  - **Commit hoàn thành:** `019b662`
 
 ## B10. Final regression, OpenAPI và FE handoff
 
-- [ ] Chốt backend để FE có thể triển khai không phải suy đoán API
+- [x] Chốt backend để FE có thể triển khai không phải suy đoán API
   - **Commit đề xuất:** `test(api): finalize rental refactor contract`
   - **OpenAPI:** tất cả endpoint mới có summary, request/response schema, status/action flags và error examples; endpoint cũ không còn xuất hiện.
   - **Error contract tối thiểu:** `WAREHOUSE_NOT_OWNED`, `TENANT_NOT_FOUND/INVALID_ROLE`, `CONTRACT_NOT_FOUND`, `INVALID_CONTRACT_STATUS`, `CONTRACT_DATE_OVERLAP`, `INVALID_LEASE_DIMENSIONS`, `SUBSCRIPTION_REQUIRED`, `LISTING_PACKAGE_INACTIVE`, `INSUFFICIENT_BALANCE`.
@@ -559,7 +559,11 @@ Số commit là 12–10 và phần của VIỆT ANH chứa nhiều thay đổi 
   - **Command:** `.\mvnw.cmd verify` và CI xanh.
   - **Handoff FE:** xuất Swagger/OpenAPI JSON hoặc link environment; dùng phụ lục API cuối trong tài liệu này làm checklist tích hợp.
   - **Hoàn thành khi:** tất cả checkbox B1–B9 có hash, full verify xanh, migration preflight/post-check xanh trên bản sao database.
-  - **Commit hoàn thành / Final backend HEAD:** `________________`
+  - **Kết quả verify:** `PASS — 347 tests, 0 failures, 0 errors, 2 skipped`.
+  - **Kết quả static gate:** sạch; chỉ còn `DEPOSIT_PAYMENT`, `DEPOSIT_RECEIVED`, `DEPOSIT_REFUND` trong enum transaction lịch sử được cho phép.
+  - **Kết quả migration:** preflight/post-check đều zero invalid rows trên PostgreSQL 17 representative legacy fixture; migration chạy lại lần hai thành công.
+  - **Swagger/OpenAPI runtime:** `/v3/api-docs`; Swagger UI: `/swagger-ui/index.html`.
+  - **Commit hoàn thành / Final backend HEAD:** `59c201c`
 
 ---
 
@@ -709,22 +713,22 @@ Kết quả được phép còn lại chỉ là:
 
 ## VIỆT ANH → VINH
 
-- Baseline dev commit: `________________`
-- Branch: `________________`
+- Baseline dev commit: `1bab796`
+- Branch: `refactor/rental-contract-dev-b`
 - A12 HEAD: `f055a0e`
 - Full verify: `PASS (340 tests passed, 2 skipped)`
-- Migration preflight file/result: `________________`
-- Known issue được chấp nhận trước Phần B: `________________`
+- Migration preflight file/result: `ops/maintenance/rental_contract_refactor_preflight.sql` — `PASS` trên PostgreSQL 17 representative legacy fixture.
+- Known issue được chấp nhận trước Phần B: legacy Booking/deposit/Dispute/RENTED và các consumer phụ thuộc được giao cho B1–B9 cleanup.
 
 ## VINH → Team/FE
 
-- Branch: `________________`
-- B10 final HEAD: `________________`
-- Full verify: `PASS / FAIL`
-- Production-copy migration preflight: `PASS / FAIL`
-- Post-migration verification: `PASS / FAIL`
-- Swagger/OpenAPI location: `________________`
-- Known limitation còn lại: `________________`
+- Branch: `refactor/rental-contract-dev-b`
+- B10 final HEAD: `59c201c`
+- Full verify: `PASS — 347 tests, 0 failures, 0 errors, 2 skipped`
+- Production-copy migration preflight: `PENDING external database access`; PostgreSQL 17 representative legacy fixture: `PASS`
+- Post-migration verification: representative fixture `PASS`; idempotent second run `PASS`
+- Swagger/OpenAPI location: `/v3/api-docs`; `/swagger-ui/index.html`
+- Known limitation còn lại: phải chạy lại preflight/migration/post-check trên controlled production copy trước deploy; legacy deposit transaction enum/fields được giữ read-only để đọc lịch sử.
 
 ## Definition of Done toàn bộ Backend (Gate, không phải nhiệm vụ commit)
 

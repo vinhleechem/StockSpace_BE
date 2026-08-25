@@ -65,10 +65,9 @@ public class GetWarehouseDetailTool implements ChatTool {
             detail.put("name", w.getName());
             detail.put("address", w.getAddress());
             detail.put("description", w.getDescription());
-            detail.put("rentalPrice", w.getRentalPrice() != null ? w.getRentalPrice() : w.getPricePerMonth());
+            detail.put("rentalPrice", w.getRentalPrice());
             detail.put("rentalPricingType", w.getRentalPricingType() != null
                     ? w.getRentalPricingType().name() : "FIXED_MONTHLY");
-            detail.put("pricePerMonth", w.getPricePerMonth());
             detail.put("capacity", w.getCapacity());
             detail.put("type", w.getType() != null ? w.getType().getName() : null);
             detail.put("status", ChatToolLocalization.warehouseStatus(w.getStatus()));

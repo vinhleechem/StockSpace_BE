@@ -27,7 +27,7 @@ import java.util.Set;
 @Slf4j
 public class RbacPolicyInitializer implements CommandLineRunner {
 
-    private static final String POLICY_VERSION = "2026-08-10.1";
+    private static final String POLICY_VERSION = "2026-08-25.2";
     private static final String POLICY_VERSION_KEY = "rbac_policy_version";
 
     private final PermissionRepository permissionRepository;
@@ -52,9 +52,7 @@ public class RbacPolicyInitializer implements CommandLineRunner {
             }
 
             if (newRole || applyDefaultGrants) {
-                Set<Permission> grants = role.getPermissions() == null
-                        ? new HashSet<>()
-                        : role.getPermissions();
+                Set<Permission> grants = new HashSet<>();
                 entry.getValue().forEach(code -> grants.add(permissions.get(code)));
                 role.setPermissions(grants);
             }

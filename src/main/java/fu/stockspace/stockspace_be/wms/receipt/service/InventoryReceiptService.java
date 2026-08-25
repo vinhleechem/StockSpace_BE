@@ -4,16 +4,15 @@ import fu.stockspace.stockspace_be.auth.entity.RoleType;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.auth.util.TenantContextUtil;
-import fu.stockspace.stockspace_be.booking.entity.ApprovalStatus;
+import fu.stockspace.stockspace_be.common.entity.ApprovalStatus;
 import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
-import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
+import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
-import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
 import fu.stockspace.stockspace_be.staff.entity.AssignmentStatus;
 import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
@@ -66,9 +65,8 @@ public class InventoryReceiptService {
     private final ProductSkuRepository productSkuRepository;
     private final WarehouseRackRepository rackRepository;
     private final WarehouseBinRepository binRepository;
-    private final SubscriptionService subscriptionService;
     private final fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository tenantMemberRepository;
-    private final RentalContractRepository rentalContractRepository;
+    private final TenantWarehouseAccessService accessService;
     private final StaffWarehouseAssignmentRepository assignmentRepository;
     private final NotificationService notificationService;
 
@@ -79,13 +77,9 @@ public class InventoryReceiptService {
 
         UUID tenantId = resolveTenantId(creator);
 
-        if (!subscriptionService.hasActiveSubscription(tenantId)) {
-            throw new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED);
-        }
-
         Warehouse warehouse = warehouseRepository.findById(request.getWarehouseId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
-        requireWarehouseAccess(creator, tenantId, warehouse.getId());
+        requireWarehouseMutationAccess(creator, tenantId, warehouse.getId());
 
         InventoryReceipt receipt = InventoryReceipt.builder()
                 .warehouse(warehouse)
@@ -178,11 +172,7 @@ public class InventoryReceiptService {
         if (!creatorTenantId.equals(approverTenantId)) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
-        requireActiveWarehouseContract(approverTenantId, receipt.getWarehouse().getId());
-
-        if (!subscriptionService.hasActiveSubscription(creatorTenantId)) {
-            throw new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED);
-        }
+        requireWarehouseMutationAccess(approver, approverTenantId, receipt.getWarehouse().getId());
 
         List<InventoryReceiptItem> items = receiptItemRepository.findByReceiptId(receiptId);
 
@@ -286,11 +276,7 @@ public class InventoryReceiptService {
         if (!creatorTenantId.equals(approverTenantId)) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
-        requireActiveWarehouseContract(approverTenantId, receipt.getWarehouse().getId());
-
-        if (!subscriptionService.hasActiveSubscription(creatorTenantId)) {
-            throw new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED);
-        }
+        requireWarehouseMutationAccess(approver, approverTenantId, receipt.getWarehouse().getId());
 
         receipt.setStatus(ApprovalStatus.REJECTED);
         if (reason != null && !reason.isBlank()) {
@@ -340,7 +326,7 @@ public class InventoryReceiptService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
         UUID tenantId = resolveTenantId(user);
-        requireWarehouseAccess(user, tenantId, warehouseId);
+        requireWarehouseObservationAccess(user, tenantId, warehouseId);
         return getReceiptsByWarehouse(warehouseId, type, pageable);
     }
 
@@ -363,7 +349,7 @@ public class InventoryReceiptService {
         UUID tenantId = resolveTenantId(user);
         InventoryReceipt receipt = receiptRepository.findById(receiptId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RECEIPT_NOT_FOUND));
-        requireWarehouseAccess(user, tenantId, receipt.getWarehouse().getId());
+        requireWarehouseObservationAccess(user, tenantId, receipt.getWarehouse().getId());
         List<InventoryReceiptItem> items = receiptItemRepository.findByReceiptId(receiptId);
         return mapToResponse(receipt, items);
     }
@@ -413,6 +399,8 @@ public class InventoryReceiptService {
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
+        UUID tenantId = resolveTenantId(creator);
+        requireWarehouseMutationAccess(creator, tenantId, warehouseId);
         if (quantity <= 0) {
             throw new BadRequestException("Adjustment quantity must be greater than 0");
         }
@@ -472,20 +460,6 @@ public class InventoryReceiptService {
 
 
 
-    @Transactional
-    public void recordTransaction(UUID receiptId, UUID batchId, int qty) {
-        InventoryReceipt receipt = receiptRepository.findById(receiptId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RECEIPT_NOT_FOUND));
-        StockBatch batch = stockBatchRepository.findById(batchId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STOCK_BATCH_NOT_FOUND));
-        InventoryTransaction tx = InventoryTransaction.builder()
-                .receipt(receipt)
-                .batch(batch)
-                .quantityChanged(qty)
-                .build();
-        transactionRepository.save(tx);
-    }
-
     @Transactional(readOnly = true)
     public byte[] exportReceiptsToCsv(UUID warehouseId, DocumentType type) {
         Page<InventoryReceipt> page;
@@ -538,7 +512,7 @@ public class InventoryReceiptService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
         UUID tenantId = resolveTenantId(user);
-        requireWarehouseAccess(user, tenantId, warehouseId);
+        requireWarehouseObservationAccess(user, tenantId, warehouseId);
         return exportReceiptsToCsv(warehouseId, type);
     }
 
@@ -591,7 +565,7 @@ public class InventoryReceiptService {
         UUID tenantId = resolveTenantId(user);
         StockBatch batch = stockBatchRepository.findByIdAndIsDeletedFalse(batchId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STOCK_BATCH_NOT_FOUND));
-        requireWarehouseAccess(user, tenantId, batch.getWarehouse().getId());
+        requireWarehouseObservationAccess(user, tenantId, batch.getWarehouse().getId());
         return getTransactionsByBatch(batchId, pageable);
     }
 
@@ -735,9 +709,8 @@ public class InventoryReceiptService {
         return user.getId();
     }
 
-    private void requireWarehouseAccess(User user, UUID tenantId, UUID warehouseId) {
-        requireActiveWarehouseContract(tenantId, warehouseId);
-
+    private void requireWarehouseObservationAccess(User user, UUID tenantId, UUID warehouseId) {
+        accessService.requireActiveContract(tenantId, warehouseId);
         if (isStaff(user)
                 && !assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
                 user.getId(), tenantId, warehouseId, AssignmentStatus.ACTIVE)) {
@@ -745,10 +718,9 @@ public class InventoryReceiptService {
         }
     }
 
-    private void requireActiveWarehouseContract(UUID tenantId, UUID warehouseId) {
-        if (!rentalContractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(tenantId, warehouseId)) {
-            throw new ForbiddenException(ErrorCode.FORBIDDEN);
-        }
+    private void requireWarehouseMutationAccess(User user, UUID tenantId, UUID warehouseId) {
+        requireWarehouseObservationAccess(user, tenantId, warehouseId);
+        accessService.requireActiveSubscription(tenantId);
     }
 
     private boolean isStaff(User user) {

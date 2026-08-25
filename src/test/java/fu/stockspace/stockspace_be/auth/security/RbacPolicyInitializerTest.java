@@ -74,7 +74,7 @@ class RbacPolicyInitializerTest {
                         : Optional.empty());
         when(roleRepository.save(any(Role.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(systemConfigRepository.findByConfigKey("rbac_policy_version")).thenReturn(Optional.of(
-                SystemConfig.builder().configKey("rbac_policy_version").configValue("2026-08-10.1").build()));
+                SystemConfig.builder().configKey("rbac_policy_version").configValue("2026-08-25.2").build()));
 
         new RbacPolicyInitializer(permissionRepository, roleRepository, systemConfigRepository).run();
 

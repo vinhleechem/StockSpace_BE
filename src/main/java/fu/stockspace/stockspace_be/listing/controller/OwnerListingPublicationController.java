@@ -8,6 +8,10 @@ import fu.stockspace.stockspace_be.listing.dto.ListingOrderResponse;
 import fu.stockspace.stockspace_be.listing.dto.PurchaseListingPackageRequest;
 import fu.stockspace.stockspace_be.listing.service.ListingOrderService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +33,19 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @PreAuthorize("@rbac.hasPermission('WAREHOUSE_UPDATE')")
 @Tag(name = "Owner - Warehouse Publications")
+@ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Publication package cannot be purchased",
+                content = @Content(schema = @Schema(implementation = ApiResponse.class), examples = {
+                        @ExampleObject(name = "Inactive package", value = "{\"success\":false,\"code\":\"LISTING_PACKAGE_INACTIVE\",\"message\":\"Listing package is inactive\"}"),
+                        @ExampleObject(name = "Insufficient balance", value = "{\"success\":false,\"code\":\"INSUFFICIENT_BALANCE\",\"message\":\"Wallet balance is insufficient\"}")
+                })),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Warehouse is not owned by the caller",
+                content = @Content(schema = @Schema(implementation = ApiResponse.class),
+                        examples = @ExampleObject(value = "{\"success\":false,\"code\":\"WAREHOUSE_NOT_OWNED\",\"message\":\"You are not the warehouse owner\"}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Warehouse or package not found",
+                content = @Content(schema = @Schema(implementation = ApiResponse.class),
+                        examples = @ExampleObject(value = "{\"success\":false,\"code\":\"PACKAGE_NOT_FOUND\",\"message\":\"Listing package not found\"}")))
+})
 public class OwnerListingPublicationController {
 
     private final ListingOrderService listingOrderService;

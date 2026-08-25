@@ -5,8 +5,7 @@ import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
-import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
-import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
+import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseBin;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseRack;
@@ -51,8 +50,7 @@ class StockBatchServiceTest {
     @Mock private ProductSkuRepository productSkuRepository;
     @Mock private WarehouseRackRepository rackRepository;
     @Mock private WarehouseBinRepository binRepository;
-    @Mock private SubscriptionService subscriptionService;
-    @Mock private RentalContractRepository contractRepository;
+    @Mock private TenantWarehouseAccessService accessService;
     @Mock private fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository assignmentRepository;
 
     @InjectMocks
@@ -94,10 +92,7 @@ class StockBatchServiceTest {
 
     @Test
     void testGetStockByWarehouse_Success() {
-        when(subscriptionService.hasActiveSubscription(tenantId)).thenReturn(true);
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
-        when(contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(tenantId, warehouseId))
-                .thenReturn(true);
 
         Page<StockBatch> page = new PageImpl<>(List.of(stockBatch));
         when(stockBatchRepository.findByWarehouseIdAndTenantId(
@@ -116,19 +111,19 @@ class StockBatchServiceTest {
     }
 
     @Test
-    void testGetStockByWarehouse_SubscriptionRequired() {
-        when(subscriptionService.hasActiveSubscription(tenantId)).thenReturn(false);
+    void testGetStockByWarehouse_ReadDoesNotRequireSubscription() {
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(stockBatchRepository.findByWarehouseIdAndTenantId(eq(warehouseId), eq(tenantId), any()))
+                .thenReturn(Page.empty());
 
-        Pageable pageable = PageRequest.of(0, 10);
-        ForbiddenException ex = assertThrows(ForbiddenException.class,
-                () -> stockBatchService.getStockByWarehouse(tenantId, warehouseId, pageable));
+        stockBatchService.getStockByWarehouse(tenantId, warehouseId, PageRequest.of(0, 10));
 
-        assertEquals(ErrorCode.SUBSCRIPTION_REQUIRED.getMessage(), ex.getMessage());
+        verify(accessService).requireActiveContract(tenantId, warehouseId);
+        verify(accessService, never()).requireActiveSubscription(any());
     }
 
     @Test
     void testGetStockByWarehouse_WarehouseNotFound() {
-        when(subscriptionService.hasActiveSubscription(tenantId)).thenReturn(true);
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.empty());
 
         Pageable pageable = PageRequest.of(0, 10);
@@ -138,10 +133,7 @@ class StockBatchServiceTest {
 
     @Test
     void testGetStockByWarehouse_EmptyResult() {
-        when(subscriptionService.hasActiveSubscription(tenantId)).thenReturn(true);
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
-        when(contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(tenantId, warehouseId))
-                .thenReturn(true);
 
         Page<StockBatch> emptyPage = new PageImpl<>(Collections.emptyList());
         when(stockBatchRepository.findByWarehouseIdAndTenantId(
@@ -158,10 +150,9 @@ class StockBatchServiceTest {
 
     @Test
     void testGetStockByWarehouse_RejectsTenantWithoutActiveContract() {
-        when(subscriptionService.hasActiveSubscription(tenantId)).thenReturn(true);
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
-        when(contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(tenantId, warehouseId))
-                .thenReturn(false);
+        doThrow(new ForbiddenException(ErrorCode.FORBIDDEN))
+                .when(accessService).requireActiveContract(tenantId, warehouseId);
 
         Pageable pageable = PageRequest.of(0, 10);
         ForbiddenException exception = assertThrows(ForbiddenException.class,
@@ -185,10 +176,7 @@ class StockBatchServiceTest {
         when(projection.getUomName()).thenReturn("Box");
         when(projection.getTotalQuantity()).thenReturn(0L);
 
-        when(subscriptionService.hasActiveSubscription(tenantId)).thenReturn(true);
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
-        when(contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(tenantId, warehouseId))
-                .thenReturn(true);
         PageRequest pageable = PageRequest.of(0, 20);
         when(productSkuRepository.findWarehouseStockOverview(tenantId, warehouseId, pageable))
                 .thenReturn(new PageImpl<>(List.of(projection), pageable, 1));
@@ -206,10 +194,9 @@ class StockBatchServiceTest {
 
     @Test
     void testGetStockOverviewByWarehouse_RejectsTenantWithoutActiveContract() {
-        when(subscriptionService.hasActiveSubscription(tenantId)).thenReturn(true);
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
-        when(contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(tenantId, warehouseId))
-                .thenReturn(false);
+        doThrow(new ForbiddenException(ErrorCode.FORBIDDEN))
+                .when(accessService).requireActiveContract(tenantId, warehouseId);
 
         PageRequest pageable = PageRequest.of(0, 20);
         assertThrows(ForbiddenException.class,
@@ -227,10 +214,7 @@ class StockBatchServiceTest {
         when(projection.getProductCount()).thenReturn(3L);
         when(projection.getBatchCount()).thenReturn(7L);
         when(projection.getTotalQuantity()).thenReturn(125L);
-        when(subscriptionService.hasActiveSubscription(tenantId)).thenReturn(true);
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
-        when(contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(tenantId, warehouseId))
-                .thenReturn(true);
         when(stockBatchRepository.summarizeByWarehouseIdAndTenantId(warehouseId, tenantId))
                 .thenReturn(projection);
 
@@ -246,10 +230,9 @@ class StockBatchServiceTest {
 
     @Test
     void testGetStockSummaryByWarehouse_RejectsTenantWithoutActiveContract() {
-        when(subscriptionService.hasActiveSubscription(tenantId)).thenReturn(true);
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
-        when(contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(tenantId, warehouseId))
-                .thenReturn(false);
+        doThrow(new ForbiddenException(ErrorCode.FORBIDDEN))
+                .when(accessService).requireActiveContract(tenantId, warehouseId);
 
         assertThrows(ForbiddenException.class,
                 () -> stockBatchService.getStockSummaryByWarehouse(tenantId, warehouseId));
@@ -282,7 +265,6 @@ class StockBatchServiceTest {
                 .quantity(40)
                 .build();
 
-        when(subscriptionService.hasActiveSubscription(tenantId)).thenReturn(true);
         when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, tenantId))
                 .thenReturn(Optional.of(productSku));
         when(stockBatchRepository.findBySkuIdInActiveTenantWarehouses(skuId, tenantId))
@@ -302,18 +284,7 @@ class StockBatchServiceTest {
 
 
     @Test
-    void testGetStockSummaryBySku_SubscriptionRequired() {
-        when(subscriptionService.hasActiveSubscription(tenantId)).thenReturn(false);
-
-        ForbiddenException ex = assertThrows(ForbiddenException.class,
-                () -> stockBatchService.getStockSummaryBySku(tenantId, skuId));
-
-        assertEquals(ErrorCode.SUBSCRIPTION_REQUIRED.getMessage(), ex.getMessage());
-    }
-
-    @Test
     void testGetStockSummaryBySku_SkuNotFound() {
-        when(subscriptionService.hasActiveSubscription(tenantId)).thenReturn(true);
         when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, tenantId))
                 .thenReturn(Optional.empty());
 
@@ -323,7 +294,6 @@ class StockBatchServiceTest {
 
     @Test
     void testGetStockSummaryBySku_NoStock() {
-        when(subscriptionService.hasActiveSubscription(tenantId)).thenReturn(true);
         when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, tenantId))
                 .thenReturn(Optional.of(productSku));
         when(stockBatchRepository.findBySkuIdInActiveTenantWarehouses(skuId, tenantId))
@@ -456,7 +426,7 @@ class StockBatchServiceTest {
 
         assertNotNull(response);
         assertEquals(1, response.getContent().size());
-        verify(subscriptionService, never()).hasActiveSubscription(any());
+        verifyNoInteractions(accessService);
     }
 
     @Test

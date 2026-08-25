@@ -1,6 +1,7 @@
 package fu.stockspace.stockspace_be.warehouse.dto;
 
 import fu.stockspace.stockspace_be.warehouse.entity.RentalPricingType;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
@@ -16,6 +17,7 @@ import java.util.UUID;
 
 @Getter
 @Setter
+@Schema(description = "Warehouse creation payload; submitted as the JSON 'request' part of multipart/form-data")
 public class CreateWarehouseRequest {
 
     @NotNull(message = "Warehouse type is required")
@@ -35,18 +37,13 @@ public class CreateWarehouseRequest {
     @DecimalMax(value = "99999999.99", message = "Capacity exceeds the supported limit")
     private BigDecimal capacity;
 
+    @Schema(description = "Required and positive for fixed/per-m² pricing; must be null for negotiated pricing", example = "100000000")
     @DecimalMin(value = "0.0", inclusive = false, message = "Rental price must be greater than 0")
     @DecimalMax(value = "9999999999999.99", message = "Rental price exceeds the supported limit")
     @Digits(integer = 13, fraction = 2, message = "Rental price must have at most 13 integer digits and 2 decimal places")
     private BigDecimal rentalPrice;
 
-    /** @deprecated Use rentalPrice and rentalPricingType. */
-    @Deprecated
-    @DecimalMin(value = "0.0", inclusive = false, message = "Rental price must be greater than 0")
-    @DecimalMax(value = "9999999999999.99", message = "Rental price exceeds the supported limit")
-    @Digits(integer = 13, fraction = 2, message = "Rental price must have at most 13 integer digits and 2 decimal places")
-    private BigDecimal pricePerMonth;
-
+    @Schema(example = "FIXED_MONTHLY", allowableValues = {"FIXED_MONTHLY", "PER_SQUARE_METER_MONTHLY", "NEGOTIATED"})
     private RentalPricingType rentalPricingType;
 
     private List<String> imageUrls;

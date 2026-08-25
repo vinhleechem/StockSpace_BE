@@ -4,26 +4,31 @@ import fu.stockspace.stockspace_be.contract.entity.RentalContract;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import jakarta.persistence.LockModeType;
 
 public interface RentalContractRepository extends JpaRepository<RentalContract, UUID> {
 
-    Optional<RentalContract> findByBookingId(UUID bookingId);
-
+    @Query("""
+            SELECT c.status, COUNT(c) FROM RentalContract c
+            WHERE c.owner IS NOT NULL
+              AND c.tenant IS NOT NULL
+              AND c.warehouse IS NOT NULL
+              AND c.isDeleted = false
+            GROUP BY c.status
+            """)
+    List<Object[]> countDirectContractsByStatus();
 
     @Query("""
             SELECT c FROM RentalContract c
-            LEFT JOIN c.tenant directTenant
-            LEFT JOIN c.booking legacyBooking
-            LEFT JOIN legacyBooking.tenant legacyTenant
-            WHERE directTenant.id = :tenantId
-               OR legacyTenant.id = :tenantId
+            WHERE c.tenant.id = :tenantId
+              AND c.isDeleted = false
             ORDER BY c.createdAt DESC
             """)
     Page<RentalContract> findByTenantId(@Param("tenantId") UUID tenantId, Pageable pageable);
@@ -31,12 +36,8 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
 
     @Query("""
             SELECT c FROM RentalContract c
-            LEFT JOIN c.owner directOwner
-            LEFT JOIN c.booking legacyBooking
-            LEFT JOIN legacyBooking.warehouse legacyWarehouse
-            LEFT JOIN legacyWarehouse.owner legacyOwner
-            WHERE directOwner.id = :ownerId
-               OR legacyOwner.id = :ownerId
+            WHERE c.owner.id = :ownerId
+              AND c.isDeleted = false
             ORDER BY c.createdAt DESC
             """)
     Page<RentalContract> findByOwnerId(@Param("ownerId") UUID ownerId, Pageable pageable);
@@ -57,6 +58,7 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
             @Param("fromDate") java.time.LocalDate fromDate,
             @Param("toDate") java.time.LocalDate toDate);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             SELECT c FROM RentalContract c
             WHERE c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
@@ -69,17 +71,13 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
 
     @Query("""
             SELECT COUNT(c) > 0 FROM RentalContract c
-            LEFT JOIN c.tenant directTenant
-            LEFT JOIN c.warehouse directWarehouse
-            LEFT JOIN c.booking legacyBooking
-            LEFT JOIN legacyBooking.tenant legacyTenant
-            LEFT JOIN legacyBooking.warehouse legacyWarehouse
-            WHERE (directTenant.id = :tenantId OR legacyTenant.id = :tenantId)
-              AND (directWarehouse.id = :warehouseId OR legacyWarehouse.id = :warehouseId)
+            WHERE c.tenant.id = :tenantId
+              AND c.warehouse.id = :warehouseId
               AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
               AND c.isActive = true
               AND c.isDeleted = false
-              AND (legacyBooking IS NULL OR (legacyBooking.isActive = true AND legacyBooking.isDeleted = false))
+              AND c.startDate <= CURRENT_DATE
+              AND c.endDate >= CURRENT_DATE
             """)
     boolean existsByTenantIdAndWarehouseIdAndStatusActive(@Param("tenantId") UUID tenantId, @Param("warehouseId") UUID warehouseId);
 
@@ -128,14 +126,21 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
             @Param("endDate") java.time.LocalDate endDate);
 
     @Query("""
-            SELECT DISTINCT w FROM RentalContract c
-            JOIN c.warehouse w
-            WHERE c.tenant.id = :tenantId
+            SELECT COUNT(c) > 0 FROM RentalContract c
+            WHERE c.id <> :contractId
+              AND c.tenant.id = :tenantId
+              AND c.warehouse.id = :warehouseId
               AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
               AND c.isActive = true
               AND c.isDeleted = false
+              AND c.startDate <= :today
+              AND c.endDate >= :today
             """)
-    List<fu.stockspace.stockspace_be.warehouse.entity.Warehouse> findActiveDirectWarehousesByTenantId(@Param("tenantId") UUID tenantId);
+    boolean existsOtherCurrentDirectActiveContract(
+            @Param("contractId") UUID contractId,
+            @Param("tenantId") UUID tenantId,
+            @Param("warehouseId") UUID warehouseId,
+            @Param("today") java.time.LocalDate today);
 
     @Query("""
             SELECT DISTINCT w FROM RentalContract c
@@ -154,26 +159,43 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
             @Param("today") java.time.LocalDate today);
 
     @Query("""
-            SELECT DISTINCT legacyBooking.warehouse FROM RentalContract c
-            JOIN c.booking legacyBooking
-            WHERE legacyBooking.tenant.id = :tenantId
+            SELECT COUNT(c) FROM RentalContract c
+            WHERE c.owner.id = :ownerId
               AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
               AND c.isActive = true
               AND c.isDeleted = false
-              AND legacyBooking.isActive = true
-              AND legacyBooking.isDeleted = false
+              AND c.startDate <= :today
+              AND c.endDate >= :today
             """)
-    List<fu.stockspace.stockspace_be.warehouse.entity.Warehouse> findActiveLegacyWarehousesByTenantId(@Param("tenantId") UUID tenantId);
+    long countCurrentDirectActiveContractsByOwnerId(
+            @Param("ownerId") UUID ownerId,
+            @Param("today") java.time.LocalDate today);
 
-    default List<fu.stockspace.stockspace_be.warehouse.entity.Warehouse> findActiveRentedWarehousesByTenantId(UUID tenantId) {
-        List<fu.stockspace.stockspace_be.warehouse.entity.Warehouse> warehouses =
-                new ArrayList<>(findActiveDirectWarehousesByTenantId(tenantId));
-        findActiveLegacyWarehousesByTenantId(tenantId).forEach(legacyWarehouse -> {
-            if (warehouses.stream().noneMatch(warehouse -> warehouse.getId().equals(legacyWarehouse.getId()))) {
-                warehouses.add(legacyWarehouse);
-            }
-        });
-        return warehouses;
-    }
+    @Query("""
+            SELECT COUNT(DISTINCT c.tenant.id) FROM RentalContract c
+            WHERE c.owner.id = :ownerId
+              AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
+              AND c.isActive = true
+              AND c.isDeleted = false
+              AND c.startDate <= :today
+              AND c.endDate >= :today
+            """)
+    long countDistinctCurrentDirectActiveTenantsByOwnerId(
+            @Param("ownerId") UUID ownerId,
+            @Param("today") java.time.LocalDate today);
+
+    @Query("""
+            SELECT DISTINCT c.warehouse.id FROM RentalContract c
+            WHERE c.owner.id = :ownerId
+              AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
+              AND c.isActive = true
+              AND c.isDeleted = false
+              AND c.startDate <= :today
+              AND c.endDate >= :today
+            """)
+    List<UUID> findCurrentDirectActiveWarehouseIdsByOwnerId(
+            @Param("ownerId") UUID ownerId,
+            @Param("today") java.time.LocalDate today);
+
 }
 

@@ -10,6 +10,9 @@ import fu.stockspace.stockspace_be.warehouse.service.WarehouseLayoutService;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.util.SecurityUtil;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -41,7 +44,7 @@ public class PublicWarehouseController {
     private static final int MAX_KEYWORD_LENGTH = 100;
     private static final BigDecimal MAX_FILTER_AMOUNT = new BigDecimal("9999999999999.99");
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
-            "createdAt", "updatedAt", "name", "pricePerMonth", "rentalPrice", "capacity"
+            "createdAt", "updatedAt", "name", "rentalPrice", "capacity"
     );
 
     private final WarehouseService warehouseService;
@@ -154,6 +157,9 @@ public class PublicWarehouseController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Xem chi tiết kho bãi")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Published warehouse not found",
+            content = @Content(schema = @Schema(implementation = ApiResponse.class),
+                    examples = @ExampleObject(value = "{\"success\":false,\"code\":\"WAREHOUSE_NOT_FOUND\",\"message\":\"Warehouse not found\"}")))
     public ResponseEntity<ApiResponse<WarehouseResponse>> getDetail(@PathVariable UUID id) {
         WarehouseResponse response = warehouseService.getWarehouseDetail(id);
         return ResponseEntity.ok(ApiResponse.success("Lấy thông tin kho thành công", response));
@@ -162,6 +168,9 @@ public class PublicWarehouseController {
     @GetMapping("/{id}/owner-contact")
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "Get the warehouse owner contact for an authenticated user")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Authentication required",
+            content = @Content(schema = @Schema(implementation = ApiResponse.class),
+                    examples = @ExampleObject(value = "{\"success\":false,\"code\":\"UNAUTHENTICATED\",\"message\":\"Authentication required\"}")))
     public ResponseEntity<ApiResponse<WarehouseOwnerContactResponse>> getOwnerContact(
             @PathVariable UUID id) {
         WarehouseOwnerContactResponse response = warehouseService.getOwnerContact(id);

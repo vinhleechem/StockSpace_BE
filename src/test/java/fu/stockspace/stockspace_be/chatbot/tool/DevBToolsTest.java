@@ -2,9 +2,6 @@ package fu.stockspace.stockspace_be.chatbot.tool;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
-import fu.stockspace.stockspace_be.booking.dto.BookingResponse;
-import fu.stockspace.stockspace_be.booking.repository.BookingRequestRepository;
-import fu.stockspace.stockspace_be.booking.service.BookingService;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatTool;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatRequestContext;
 import fu.stockspace.stockspace_be.chatbot.tool.impl.*;
@@ -15,9 +12,6 @@ import fu.stockspace.stockspace_be.inspection.dto.InspectionReportResponse;
 import fu.stockspace.stockspace_be.inspection.service.InspectionService;
 import fu.stockspace.stockspace_be.staff.entity.TenantMember;
 import fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository;
-import fu.stockspace.stockspace_be.wallet.entity.Wallet;
-import fu.stockspace.stockspace_be.wallet.repository.TransactionRepository;
-import fu.stockspace.stockspace_be.wallet.repository.WalletRepository;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
@@ -48,14 +42,10 @@ class DevBToolsTest {
     private ObjectMapper objectMapper = new ObjectMapper();
 
     @Mock private WarehouseRepository warehouseRepository;
-    @Mock private BookingService bookingService;
-    @Mock private WalletRepository walletRepository;
-    @Mock private TransactionRepository transactionRepository;
     @Mock private TenantMemberRepository tenantMemberRepository;
     @Mock private StockBatchService stockBatchService;
     @Mock private InventoryReceiptService receiptService;
     @Mock private UserRepository userRepository;
-    @Mock private BookingRequestRepository bookingRepository;
     @Mock private RentalContractRepository contractRepository;
     @Mock private InspectionService inspectionService;
 
@@ -77,22 +67,8 @@ class DevBToolsTest {
     }
 
     @Test
-    void testGetWarehouseBookingsTool_Success() {
-        GetWarehouseBookingsTool tool = new GetWarehouseBookingsTool(objectMapper, bookingService);
-        PagedResponse<BookingResponse> paged = PagedResponse.<BookingResponse>builder().content(Collections.emptyList()).build();
-        when(bookingService.getIncomingRequests(eq(userId), eq(0), eq(50))).thenReturn(paged);
-
-        String json = tool.execute(Collections.emptyMap(), userId);
-        assertNotNull(json);
-    }
-
-    @Test
     void testGetRevenueSummaryTool_Success() {
-        GetRevenueSummaryTool tool = new GetRevenueSummaryTool(objectMapper, walletRepository, transactionRepository);
-        Wallet wallet = Wallet.builder().id(UUID.randomUUID()).build();
-        when(walletRepository.findByUserId(userId)).thenReturn(Optional.of(wallet));
-        when(transactionRepository.findMonthlyRevenueByWalletIdAndTypesAndYear(any(), any(), any(Integer.class)))
-                .thenReturn(Collections.emptyList());
+        GetRevenueSummaryTool tool = new GetRevenueSummaryTool(objectMapper);
 
         String json = tool.execute(Collections.emptyMap(), userId);
         assertTrue(json.contains("totalRevenue"));
@@ -100,13 +76,18 @@ class DevBToolsTest {
 
     @Test
     void testGetOccupancyTool_Success() {
-        GetOccupancyTool tool = new GetOccupancyTool(objectMapper, warehouseRepository);
-        Warehouse w = Warehouse.builder().id(UUID.randomUUID()).name("Kho Rented").status(WarehouseStatus.RENTED).build();
+        GetOccupancyTool tool = new GetOccupancyTool(objectMapper, warehouseRepository, contractRepository);
+        Warehouse w = Warehouse.builder().id(UUID.randomUUID()).name("Kho A").status(WarehouseStatus.AVAILABLE).build();
         when(warehouseRepository.findByOwnerId(eq(userId), any())).thenReturn(new PageImpl<>(List.of(w)));
+        when(contractRepository.findCurrentDirectActiveWarehouseIdsByOwnerId(eq(userId), any()))
+                .thenReturn(List.of(w.getId()));
+        when(contractRepository.countCurrentDirectActiveContractsByOwnerId(eq(userId), any())).thenReturn(2L);
+        when(contractRepository.countDistinctCurrentDirectActiveTenantsByOwnerId(eq(userId), any())).thenReturn(2L);
 
         String json = tool.execute(Collections.emptyMap(), userId);
         assertTrue(json.contains("occupancyRatePercentage"));
         assertTrue(json.contains("100.0"));
+        assertTrue(json.contains("activeTenantCount"));
     }
 
     @Test
@@ -141,7 +122,7 @@ class DevBToolsTest {
 
     @Test
     void testGetPlatformSummaryTool_Success() {
-        GetPlatformSummaryTool tool = new GetPlatformSummaryTool(objectMapper, userRepository, warehouseRepository, bookingRepository, contractRepository);
+        GetPlatformSummaryTool tool = new GetPlatformSummaryTool(objectMapper, userRepository, warehouseRepository, contractRepository);
         when(userRepository.count()).thenReturn(10L);
         when(warehouseRepository.count()).thenReturn(5L);
 

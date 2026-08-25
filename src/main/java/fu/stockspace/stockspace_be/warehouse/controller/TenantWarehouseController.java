@@ -34,10 +34,10 @@ public class TenantWarehouseController {
 
 
     @GetMapping("/my-warehouses")
-    @Operation(summary = "Lấy danh sách các kho đang thuê của Tenant / Staff")
-    public ResponseEntity<ApiResponse<List<WarehouseResponse>>> getMyRentedWarehouses() {
+    @Operation(summary = "Lấy danh sách kho có hợp đồng hiệu lực của Tenant / Staff")
+    public ResponseEntity<ApiResponse<List<WarehouseResponse>>> getMyContractWarehouses() {
         UUID tenantId = TenantContextUtil.getCurrentTenantId();
-        List<WarehouseResponse> response = warehouseService.getActiveRentedWarehouses(tenantId);
-        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách kho đang thuê thành công", response));
+        List<WarehouseResponse> response = warehouseService.getActiveContractWarehouses(tenantId);
+        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách kho có hợp đồng hiệu lực thành công", response));
     }
 }

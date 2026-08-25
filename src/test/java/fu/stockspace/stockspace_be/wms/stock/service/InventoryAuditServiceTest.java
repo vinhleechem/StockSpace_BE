@@ -9,10 +9,10 @@ import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
-import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
+import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
+import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
 import fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository;
-import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
 import fu.stockspace.stockspace_be.wms.product.entity.ProductSku;
@@ -53,9 +53,9 @@ class InventoryAuditServiceTest {
     @Mock private ProductSkuRepository productSkuRepository;
     @Mock private InventoryReceiptService inventoryReceiptService;
     @Mock private NotificationService notificationService;
-    @Mock private SubscriptionService subscriptionService;
     @Mock private TenantMemberRepository tenantMemberRepository;
-    @Mock private RentalContractRepository rentalContractRepository;
+    @Mock private StaffWarehouseAssignmentRepository assignmentRepository;
+    @Mock private TenantWarehouseAccessService accessService;
 
     @InjectMocks
     private InventoryAuditService inventoryAuditService;
@@ -148,12 +148,14 @@ class InventoryAuditServiceTest {
                 .actualQuantity(null)
                 .discrepancy(null)
                 .build();
+
+        lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
+        lenient().when(userRepository.findById(approverId)).thenReturn(Optional.of(approverUser));
+        lenient().when(accessService.findActiveContractWarehouses(userId)).thenReturn(List.of(warehouse));
     }
 
     @Test
     void testCreateAudit_Success_SnapshotsCurrentStock() {
-        when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
-        when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
         when(auditRepository.save(any(InventoryAudit.class))).thenReturn(pendingAudit);
 
@@ -191,8 +193,9 @@ class InventoryAuditServiceTest {
 
     @Test
     void testCreateAudit_SubscriptionRequired() {
-        when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
-        when(subscriptionService.hasActiveSubscription(userId)).thenReturn(false);
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        doThrow(new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED))
+                .when(accessService).requireActiveSubscription(userId);
 
         CreateInventoryAuditRequest request = CreateInventoryAuditRequest.builder()
                 .warehouseId(warehouseId)
@@ -206,8 +209,6 @@ class InventoryAuditServiceTest {
 
     @Test
     void testCreateAudit_WarehouseNotFound() {
-        when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
-        when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.empty());
 
         CreateInventoryAuditRequest request = CreateInventoryAuditRequest.builder()
@@ -220,8 +221,6 @@ class InventoryAuditServiceTest {
 
     @Test
     void testCreateAudit_EmptyWarehouse_ZeroItems() {
-        when(subscriptionService.hasActiveSubscription(userId)).thenReturn(true);
-        when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
         when(auditRepository.save(any(InventoryAudit.class))).thenReturn(pendingAudit);
 
@@ -607,7 +606,7 @@ class InventoryAuditServiceTest {
     void testGetMyAudits_Success_Paginated() {
         Page<InventoryAudit> page = new PageImpl<>(List.of(pendingAudit, submittedAudit),
                 PageRequest.of(0, 10), 2);
-        when(auditRepository.findByRequestedByIdAndIsDeletedFalse(eq(userId), any(Pageable.class)))
+        when(auditRepository.findAuditsForTenant(isNull(), eq(List.of(warehouseId)), eq(userId), any(Pageable.class)))
                 .thenReturn(page);
 
         InventoryAuditItem item = InventoryAuditItem.builder()
@@ -627,7 +626,7 @@ class InventoryAuditServiceTest {
     @Test
     void testGetMyAudits_Empty() {
         Page<InventoryAudit> emptyPage = new PageImpl<>(Collections.emptyList());
-        when(auditRepository.findByRequestedByIdAndIsDeletedFalse(eq(userId), any(Pageable.class)))
+        when(auditRepository.findAuditsForTenant(isNull(), eq(List.of(warehouseId)), eq(userId), any(Pageable.class)))
                 .thenReturn(emptyPage);
 
         Pageable pageable = PageRequest.of(0, 10);
@@ -658,7 +657,11 @@ class InventoryAuditServiceTest {
     @Test
     void testGetAuditDetail_Forbidden_NotOwner() {
         UUID strangerUserId = UUID.randomUUID();
+        User stranger = User.builder().id(strangerUserId).build();
         when(auditRepository.findById(auditId)).thenReturn(Optional.of(pendingAudit));
+        when(userRepository.findById(strangerUserId)).thenReturn(Optional.of(stranger));
+        doThrow(new ForbiddenException(ErrorCode.FORBIDDEN))
+                .when(accessService).requireActiveContract(strangerUserId, warehouseId);
 
         ForbiddenException ex = assertThrows(ForbiddenException.class,
                 () -> inventoryAuditService.getAuditDetail(strangerUserId, auditId));

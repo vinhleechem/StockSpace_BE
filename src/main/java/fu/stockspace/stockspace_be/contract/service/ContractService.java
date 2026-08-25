@@ -3,19 +3,15 @@ import java.util.UUID;
 import fu.stockspace.stockspace_be.auth.entity.RoleType;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
-import fu.stockspace.stockspace_be.auth.util.TenantContextUtil;
-import fu.stockspace.stockspace_be.booking.entity.BookingRequest;
-
-import fu.stockspace.stockspace_be.booking.repository.BookingRequestRepository;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.InternalServerException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.contract.dto.*;
 import fu.stockspace.stockspace_be.contract.entity.ContractStatus;
-import fu.stockspace.stockspace_be.contract.entity.DisputeTicket;
 import fu.stockspace.stockspace_be.contract.entity.RentalContract;
-import fu.stockspace.stockspace_be.contract.repository.DisputeTicketRepository;
 import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseService;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseLayoutService;
@@ -24,10 +20,9 @@ import fu.stockspace.stockspace_be.warehouse.dto.BulkLayoutSaveRequest;
 import fu.stockspace.stockspace_be.warehouse.entity.RentalPricingType;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
-import fu.stockspace.stockspace_be.wallet.service.WalletService;
-import fu.stockspace.stockspace_be.wallet.entity.TransactionType;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
@@ -42,7 +37,6 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 
 
@@ -58,37 +52,14 @@ public class ContractService {
     private static final long MIN_RENTAL_DURATION_DAYS = 7;
 
     private final RentalContractRepository contractRepository;
-    private final BookingRequestRepository bookingRepository;
     private final WarehouseService warehouseService;
-    private final DisputeTicketRepository disputeRepository;
     private final UserRepository userRepository;
-    private final WalletService walletService;
     private final WarehouseLayoutService warehouseLayoutService;
     private final NotificationService notificationService;
     private final SubscriptionService subscriptionService;
     private final ObjectMapper objectMapper;
 
 
-
-
-
-
-    @Transactional
-    public RentalContract createContractFromBooking(UUID bookingId) {
-        BookingRequest booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.BOOKING_NOT_FOUND));
-        RentalContract contract = RentalContract.builder()
-                .booking(booking)
-                .status(ContractStatus.UNDER_NEGOTIATION)
-                .startDate(null)
-                .endDate(null)
-                .tenantConfirmed(false)
-                .ownerConfirmed(false)
-                .build();
-        contract = contractRepository.save(contract);
-        log.info("RentalContract created: {} in UNDER_NEGOTIATION state for booking {}", contract.getId(), bookingId);
-        return contract;
-    }
 
 
 
@@ -115,8 +86,8 @@ public class ContractService {
     public RentalContractResponse getContractById(UUID contractId, UUID userId) {
         RentalContract contract = contractRepository.findById(contractId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
-        UUID tenantId = contract.getEffectiveTenant() != null ? contract.getEffectiveTenant().getId() : null;
-        UUID ownerId = contract.getEffectiveOwner() != null ? contract.getEffectiveOwner().getId() : null;
+        UUID tenantId = contract.getTenant() != null ? contract.getTenant().getId() : null;
+        UUID ownerId = contract.getOwner() != null ? contract.getOwner().getId() : null;
         if (!userId.equals(tenantId) && !userId.equals(ownerId)) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
@@ -161,7 +132,8 @@ public class ContractService {
         RentalContract contract = findDirectContractForOwnerEdit(ownerId, contractId);
         if (contract.getStatus() != ContractStatus.DRAFT
                 && contract.getStatus() != ContractStatus.CHANGES_REQUESTED) {
-            throw new BadRequestException("Only DRAFT or CHANGES_REQUESTED contracts can be edited");
+            throw new BadRequestException(ErrorCode.INVALID_CONTRACT_STATUS,
+                    "Only DRAFT or CHANGES_REQUESTED contracts can be edited");
         }
         if (request == null) {
             throw new BadRequestException("Contract update request is required");
@@ -203,7 +175,7 @@ public class ContractService {
     }
 
     /**
-     * Revalidates and submits a direct contract without relying on Booking.
+     * Revalidates and submits a direct contract.
      * The warehouse row is locked before the overlap query so two concurrent
      * submissions for the same warehouse observe a serialized state.
      */
@@ -212,7 +184,8 @@ public class ContractService {
         RentalContract contract = findDirectContractForOwnerEdit(ownerId, contractId);
         if (contract.getStatus() != ContractStatus.DRAFT
                 && contract.getStatus() != ContractStatus.CHANGES_REQUESTED) {
-            throw new BadRequestException("Only DRAFT or CHANGES_REQUESTED contracts can be submitted");
+            throw new BadRequestException(ErrorCode.INVALID_CONTRACT_STATUS,
+                    "Only DRAFT or CHANGES_REQUESTED contracts can be submitted");
         }
 
         Warehouse lockedWarehouse = warehouseService.lockWarehouseForContractSubmit(
@@ -237,7 +210,7 @@ public class ContractService {
         if (contractRepository.existsDirectDateOverlapForSubmit(
                 contract.getId(), tenant.getId(), lockedWarehouse.getId(),
                 contract.getStartDate(), contract.getEndDate())) {
-            throw new BadRequestException(
+            throw new ResourceConflictException(ErrorCode.CONTRACT_DATE_OVERLAP,
                     "The tenant already has an overlapping contract for this warehouse");
         }
 
@@ -263,8 +236,6 @@ public class ContractService {
 
         applyDraftTerms(contract, terms, contract.getOwnerNote());
         contract.setLayoutSnapshot(serializeLayoutSnapshot(layout));
-        contract.setTenantConfirmed(false);
-        contract.setOwnerConfirmed(false);
         if (contract.getChangeRequestReason() != null && !contract.getChangeRequestReason().isBlank()) {
             log.info("Owner {} resubmitting contract {} after tenant change request: {}",
                     ownerId, contract.getId(), contract.getChangeRequestReason());
@@ -286,7 +257,8 @@ public class ContractService {
             throw new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND);
         }
         if (contract.getOwner() == null || contract.getTenant() == null || contract.getWarehouse() == null) {
-            throw new BadRequestException("This operation requires a direct rental contract");
+            throw new BadRequestException(ErrorCode.INVALID_CONTRACT_STATUS,
+                    "This operation requires a direct rental contract");
         }
         if (!ownerId.equals(contract.getOwner().getId())) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
@@ -321,9 +293,7 @@ public class ContractService {
     }
 
     private void requirePaperContractFiles(RentalContract contract) {
-        String files = contract.getPaperContractFiles() != null
-                ? contract.getPaperContractFiles()
-                : contract.getPaperContractImages();
+        String files = contract.getPaperContractFiles();
         if (files == null || files.isBlank()) {
             throw new BadRequestException("At least one paper contract file is required before submission");
         }
@@ -352,7 +322,7 @@ public class ContractService {
                     tenant.getId(),
                     "Rental contract requires confirmation",
                     "The owner submitted a rental contract for warehouse " + warehouse.getName() + ".",
-                    "CONTRACT");
+                    "CONTRACT_SUBMITTED");
         } catch (Exception e) {
             log.warn("Failed to push direct contract notification for {}: {}",
                     contract.getId(), e.getMessage());
@@ -361,8 +331,8 @@ public class ContractService {
 
     /**
      * Confirms a direct contract submitted by its owner. This lifecycle is
-     * deliberately independent from the legacy Booking and wallet/deposit
-     * flow: tenant confirmation only activates the contract and does not
+     * deliberately independent from platform wallet flows: tenant confirmation
+     * only activates the contract and does not
      * change the warehouse listing status.
      */
     @Transactional
@@ -376,11 +346,10 @@ public class ContractService {
         if (contractRepository.existsDirectDateOverlapForSubmit(
                 contract.getId(), tenantId, lockedWarehouse.getId(),
                 contract.getStartDate(), contract.getEndDate())) {
-            throw new BadRequestException(
+            throw new ResourceConflictException(ErrorCode.CONTRACT_DATE_OVERLAP,
                     "The tenant already has an overlapping contract for this warehouse");
         }
 
-        contract.setTenantConfirmed(true);
         contract.setConfirmedAt(LocalDateTime.now());
         contract.setStatus(ContractStatus.ACTIVE);
         contract = contractRepository.save(contract);
@@ -389,7 +358,8 @@ public class ContractService {
                 contract,
                 "Rental contract confirmed",
                 "The tenant confirmed the rental contract for warehouse "
-                        + lockedWarehouse.getName() + ".");
+                        + lockedWarehouse.getName() + ".",
+                "CONTRACT_CONFIRMED");
         return mapToResponse(contract, tenantId);
     }
 
@@ -409,7 +379,6 @@ public class ContractService {
 
         contract.setChangeRequestReason(reason);
         contract.setRejectionReason(null);
-        contract.setTenantConfirmed(false);
         contract.setConfirmedAt(null);
         contract.setStatus(ContractStatus.CHANGES_REQUESTED);
         contract = contractRepository.save(contract);
@@ -418,7 +387,8 @@ public class ContractService {
                 contract,
                 "Rental contract changes requested",
                 "The tenant requested changes to the rental contract for warehouse "
-                        + contract.getWarehouse().getName() + ". Reason: " + reason);
+                        + contract.getWarehouse().getName() + ". Reason: " + reason,
+                "CONTRACT_CHANGES_REQUESTED");
         return mapToResponse(contract, tenantId);
     }
 
@@ -438,7 +408,6 @@ public class ContractService {
 
         contract.setRejectionReason(reason);
         contract.setChangeRequestReason(null);
-        contract.setTenantConfirmed(false);
         contract.setConfirmedAt(null);
         contract.setStatus(ContractStatus.REJECTED);
         contract = contractRepository.save(contract);
@@ -453,7 +422,8 @@ public class ContractService {
                 contract,
                 "Rental contract rejected",
                 "The tenant rejected the rental contract for warehouse "
-                        + contract.getWarehouse().getName() + ". Reason: " + reason);
+                        + contract.getWarehouse().getName() + ". Reason: " + reason,
+                "CONTRACT_REJECTED");
         return mapToResponse(contract, tenantId);
     }
 
@@ -465,7 +435,8 @@ public class ContractService {
         }
         if (contract.getOwner() == null || contract.getTenant() == null
                 || contract.getWarehouse() == null) {
-            throw new BadRequestException("This operation requires a direct rental contract");
+            throw new BadRequestException(ErrorCode.INVALID_CONTRACT_STATUS,
+                    "This operation requires a direct rental contract");
         }
         if (!tenantId.equals(contract.getTenant().getId())) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
@@ -475,7 +446,7 @@ public class ContractService {
 
     private void requirePendingTenantConfirmation(RentalContract contract) {
         if (contract.getStatus() != ContractStatus.PENDING_TENANT_CONFIRM) {
-            throw new BadRequestException(
+            throw new BadRequestException(ErrorCode.INVALID_CONTRACT_STATUS,
                     "Contract must be in PENDING_TENANT_CONFIRM status for this action");
         }
     }
@@ -493,10 +464,11 @@ public class ContractService {
 
     private void notifyOwnerOfTenantDecision(RentalContract contract,
                                              String title,
-                                             String message) {
+                                             String message,
+                                             String type) {
         try {
             notificationService.push(
-                    contract.getOwner().getId(), title, message, "CONTRACT");
+                    contract.getOwner().getId(), title, message, type);
         } catch (Exception e) {
             log.warn("Failed to push direct contract decision notification for {}: {}",
                     contract.getId(), e.getMessage());
@@ -518,12 +490,13 @@ public class ContractService {
         requireContractOwner(contract, ownerId);
         if (contract.getStatus() != ContractStatus.DRAFT
                 && contract.getStatus() != ContractStatus.CHANGES_REQUESTED) {
-            throw new BadRequestException("Contract layout can only be edited in DRAFT or CHANGES_REQUESTED");
+            throw new BadRequestException(ErrorCode.INVALID_CONTRACT_STATUS,
+                    "Contract layout can only be edited in DRAFT or CHANGES_REQUESTED");
         }
         validateContractLayoutDimensions(contract, request);
 
-        Warehouse warehouse = contract.getEffectiveWarehouse();
-        User tenant = contract.getEffectiveTenant();
+        Warehouse warehouse = contract.getWarehouse();
+        User tenant = contract.getTenant();
         if (warehouse == null || tenant == null) {
             throw new BadRequestException("Contract relations are incomplete");
         }
@@ -538,12 +511,13 @@ public class ContractService {
     @Transactional(readOnly = true)
     public WarehouseLayoutResponse getTenantContractLayout(UUID tenantId, UUID contractId) {
         RentalContract contract = findContractForLayout(contractId);
-        User tenant = contract.getEffectiveTenant();
+        User tenant = contract.getTenant();
         if (tenant == null || !tenantId.equals(tenant.getId())) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
         if (!isTenantLayoutReadable(contract.getStatus())) {
-            throw new BadRequestException("Contract layout is not available in the current contract state");
+            throw new BadRequestException(ErrorCode.INVALID_CONTRACT_STATUS,
+                    "Contract layout is not available in the current contract state");
         }
         return getCurrentOrSnapshotLayout(contract);
     }
@@ -558,15 +532,15 @@ public class ContractService {
     }
 
     private void requireContractOwner(RentalContract contract, UUID ownerId) {
-        User owner = contract.getEffectiveOwner();
+        User owner = contract.getOwner();
         if (owner == null || !ownerId.equals(owner.getId())) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
     }
 
     private WarehouseLayoutResponse getCurrentOrSnapshotLayout(RentalContract contract) {
-        Warehouse warehouse = contract.getEffectiveWarehouse();
-        User tenant = contract.getEffectiveTenant();
+        Warehouse warehouse = contract.getWarehouse();
+        User tenant = contract.getTenant();
         if (warehouse == null || tenant == null) {
             throw new BadRequestException("Contract relations are incomplete");
         }
@@ -607,14 +581,16 @@ public class ContractService {
                                                    BulkLayoutSaveRequest request) {
         if (request == null || request.getWidth() == null || request.getLength() == null
                 || request.getHeight() == null) {
-            throw new BadRequestException("Contract layout dimensions are required");
+            throw new BadRequestException(ErrorCode.INVALID_LEASE_DIMENSIONS,
+                    "Contract layout dimensions are required");
         }
         if (contract.getLeasedWidth() == null || contract.getLeasedLength() == null
                 || contract.getLeasedHeight() == null
                 || request.getWidth().compareTo(contract.getLeasedWidth()) != 0
                 || request.getLength().compareTo(contract.getLeasedLength()) != 0
                 || request.getHeight().compareTo(contract.getLeasedHeight()) != 0) {
-            throw new BadRequestException("Contract layout dimensions cannot be changed");
+            throw new BadRequestException(ErrorCode.INVALID_LEASE_DIMENSIONS,
+                    "Contract layout dimensions cannot be changed");
         }
     }
 
@@ -637,9 +613,10 @@ public class ContractService {
         RentalContract contract = contractRepository.findById(contractId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
         if (contract.getStatus() != ContractStatus.DRAFT) {
-            throw new BadRequestException("Only DRAFT contracts can be deleted");
+            throw new BadRequestException(ErrorCode.INVALID_CONTRACT_STATUS,
+                    "Only DRAFT contracts can be deleted");
         }
-        User owner = contract.getEffectiveOwner();
+        User owner = contract.getOwner();
         if (owner == null || !ownerId.equals(owner.getId())) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
@@ -648,8 +625,8 @@ public class ContractService {
         contract.setDeleted(true);
         contractRepository.save(contract);
 
-        Warehouse warehouse = contract.getEffectiveWarehouse();
-        User tenant = contract.getEffectiveTenant();
+        Warehouse warehouse = contract.getWarehouse();
+        User tenant = contract.getTenant();
         if (warehouse != null && tenant != null
                 && !contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(
                 tenant.getId(), warehouse.getId())) {
@@ -670,11 +647,10 @@ public class ContractService {
         validateContractDates(request.getStartDate(), request.getEndDate());
 
         Warehouse warehouse = warehouseService.getOwnedWarehouseForContract(ownerId, request.getWarehouseId());
+        String tenantEmail = request.getTenantEmail().trim();
         User tenant = userRepository.findActiveByEmailAndRole(
-                        request.getTenantEmail().trim(), RoleType.ROLE_TENANT.name())
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        ErrorCode.USER_NOT_FOUND,
-                        "Active tenant account was not found for the supplied email"));
+                        tenantEmail, RoleType.ROLE_TENANT.name())
+                .orElseGet(() -> resolveTenantLookupFailure(tenantEmail));
 
         return resolveContractTerms(
                 warehouse,
@@ -700,7 +676,8 @@ public class ContractService {
         }
         validateContractDates(startDate, endDate);
         if (!tenant.isActive() || tenant.isDeleted()) {
-            throw new BadRequestException("Tenant account must be active");
+            throw new BadRequestException(ErrorCode.INVALID_ROLE,
+                    "Tenant account must be active");
         }
         if (!warehouse.isActive() || warehouse.isDeleted()
                 || !warehouse.isVerified()
@@ -715,9 +692,7 @@ public class ContractService {
                 .getDefaultLayoutForContract(warehouse.getId());
         validateLeasedDimensions(
                 leasedWidth, leasedLength, leasedHeight, defaultLayout, pricingType);
-        BigDecimal rentalPrice = warehouse.getRentalPrice() != null
-                ? warehouse.getRentalPrice()
-                : warehouse.getPricePerMonth();
+        BigDecimal rentalPrice = warehouse.getRentalPrice();
         BigDecimal area = leasedWidth.multiply(leasedLength);
         BigDecimal finalMonthlyRent;
         BigDecimal rentalPriceSnapshot;
@@ -779,25 +754,44 @@ public class ContractService {
                                            RentalPricingType pricingType) {
         if (width == null || length == null || height == null
                 || width.signum() <= 0 || length.signum() <= 0 || height.signum() <= 0) {
-            throw new BadRequestException("Leased dimensions must be greater than 0");
+            throw new BadRequestException(ErrorCode.INVALID_LEASE_DIMENSIONS,
+                    "Leased dimensions must be greater than 0");
         }
         if (defaultLayout.getWidth() == null || defaultLayout.getLength() == null
                 || defaultLayout.getHeight() == null) {
-            throw new BadRequestException("Warehouse default layout dimensions are incomplete");
+            throw new BadRequestException(ErrorCode.INVALID_LEASE_DIMENSIONS,
+                    "Warehouse default layout dimensions are incomplete");
         }
         if (width.compareTo(defaultLayout.getWidth()) > 0
                 || length.compareTo(defaultLayout.getLength()) > 0
                 || height.compareTo(defaultLayout.getHeight()) > 0) {
-            throw new BadRequestException("Leased dimensions cannot exceed the warehouse default layout");
+            throw new BadRequestException(ErrorCode.INVALID_LEASE_DIMENSIONS,
+                    "Leased dimensions cannot exceed the warehouse default layout");
         }
 
         if (pricingType == RentalPricingType.FIXED_MONTHLY
                 && (defaultLayout.getWidth().compareTo(width) != 0
                 || defaultLayout.getLength().compareTo(length) != 0
                 || defaultLayout.getHeight().compareTo(height) != 0)) {
-            throw new BadRequestException(
+            throw new BadRequestException(ErrorCode.INVALID_LEASE_DIMENSIONS,
                     "FIXED_MONTHLY contracts must use the complete default layout dimensions");
         }
+    }
+
+    private User resolveTenantLookupFailure(String tenantEmail) {
+        User user = userRepository.findByEmailIgnoreCase(tenantEmail)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorCode.TENANT_NOT_FOUND,
+                        "Active tenant account was not found for the supplied email"));
+        boolean hasTenantRole = user.getRoles() != null && user.getRoles().stream()
+                .anyMatch(role -> RoleType.ROLE_TENANT.name().equals(role.getName()));
+        if (!hasTenantRole) {
+            throw new BadRequestException(ErrorCode.INVALID_ROLE,
+                    "The supplied account does not have the TENANT role");
+        }
+        throw new ResourceNotFoundException(
+                ErrorCode.TENANT_NOT_FOUND,
+                "Active tenant account was not found for the supplied email");
     }
 
     private RentalContract buildDraftContract(DraftTerms terms, CreateRentalContractRequest request) {
@@ -859,81 +853,25 @@ public class ContractService {
 
 
 
-    @Transactional
-    public RentalContractResponse confirmHandover(UUID userId, UUID contractId) {
-        RentalContract contract = contractRepository.findById(contractId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
-        if (contract.getStatus() != ContractStatus.PENDING_HANDOVER) {
-            throw new BadRequestException("Chỉ được xác nhận bàn giao khi hợp đồng đang ở trạng thái chờ bàn giao");
-        }
-        UUID tenantId = contract.getBooking().getTenant().getId();
-        UUID ownerId = contract.getBooking().getWarehouse().getOwner().getId();
-        if (userId.equals(tenantId)) {
-            if (contract.isTenantConfirmed()) {
-                throw new BadRequestException(ErrorCode.CONTRACT_ALREADY_CONFIRMED);
-            }
-            contract.setTenantConfirmed(true);
-            log.info("Tenant {} confirmed handover for contract {}", userId, contractId);
-        } else if (userId.equals(ownerId)) {
-            if (contract.isOwnerConfirmed()) {
-                throw new BadRequestException(ErrorCode.CONTRACT_ALREADY_CONFIRMED);
-            }
-            contract.setOwnerConfirmed(true);
-            log.info("Owner {} confirmed handover for contract {}", userId, contractId);
-        } else {
-            throw new ForbiddenException(ErrorCode.FORBIDDEN);
-        }
-
-        if (contract.isTenantConfirmed() && contract.isOwnerConfirmed()) {
-            contract.setStatus(ContractStatus.COMPLETED);
-            warehouseService.markAsAvailable(contract.getBooking().getWarehouse().getId());
-            log.info("Contract {} COMPLETED — warehouse {} is now AVAILABLE",
-                    contractId, contract.getBooking().getWarehouse().getId());
-        } else {
-            contract.setStatus(ContractStatus.PENDING_HANDOVER);
-        }
-        contract = contractRepository.save(contract);
-        return mapToResponse(contract);
-    }
-
-
-
-
-    @Transactional
-    public void setDisputed(UUID contractId) {
-        RentalContract contract = contractRepository.findById(contractId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
-        contract.setStatus(ContractStatus.DISPUTED);
-        contractRepository.save(contract);
-    }
-
     public RentalContractResponse mapToResponse(RentalContract c) {
         return mapToResponse(c, null);
     }
 
     public RentalContractResponse mapToResponse(RentalContract c, UUID viewerId) {
-        BookingRequest b = c.getBooking();
-        var tenant = c.getEffectiveTenant();
-        var warehouse = c.getEffectiveWarehouse();
-        var owner = c.getEffectiveOwner();
+        var tenant = c.getTenant();
+        var warehouse = c.getWarehouse();
+        var owner = c.getOwner();
         if (owner == null && warehouse != null) {
             owner = warehouse.getOwner();
         }
-        String paperContractFiles = c.getPaperContractFiles() != null
-                ? c.getPaperContractFiles()
-                : c.getPaperContractImages();
+        List<String> paperContractFiles = deserializePaperContractFiles(c.getPaperContractFiles());
         ActionFlags actionFlags = calculateActionFlags(c, viewerId, tenant, owner);
         return RentalContractResponse.builder()
                 .id(c.getId())
                 .status(c.getStatus().name())
-                .tenantConfirmed(c.isTenantConfirmed())
-                .ownerConfirmed(c.isOwnerConfirmed())
                 .startDate(c.getStartDate())
                 .endDate(c.getEndDate())
                 .paperContractFiles(paperContractFiles)
-                .paperContractImages(paperContractFiles)
-                .bookingId(b != null ? b.getId() : null)
-                .depositAmount(b != null ? b.getDepositAmount() : null)
                 .tenantId(tenant != null ? tenant.getId() : null)
                 .tenantName(tenant != null ? tenant.getFullName() : null)
                 .tenantEmail(tenant != null ? tenant.getEmail() : null)
@@ -965,9 +903,19 @@ public class ContractService {
                 .createdAt(c.getCreatedAt())
                 .updatedAt(c.getUpdatedAt())
                 .submittedAt(c.getSubmittedAt())
-                .cancelReason(c.getCancelReason())
-                .cancelEvidence(c.getCancelEvidence())
                 .build();
+    }
+
+    private List<String> deserializePaperContractFiles(String value) {
+        if (value == null || value.isBlank()) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(value, new TypeReference<List<String>>() { });
+        } catch (JsonProcessingException e) {
+            throw new InternalServerException(ErrorCode.SYSTEM_ERROR,
+                    "Stored paper contract files are invalid JSON");
+        }
     }
 
     private ActionFlags calculateActionFlags(RentalContract contract,
@@ -1014,244 +962,4 @@ public class ContractService {
 
 
 
-    @Transactional
-    public RentalContractResponse submitOnlineContract(UUID ownerId, UUID contractId, SubmitContractRequest request) {
-        log.info("Owner {} submitting online contract for contract {}", ownerId, contractId);
-        RentalContract contract = contractRepository.findById(contractId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
-        UUID actualOwnerId = contract.getBooking().getWarehouse().getOwner().getId();
-        if (!ownerId.equals(actualOwnerId)) {
-            throw new ForbiddenException(ErrorCode.FORBIDDEN);
-        }
-        if (contract.getStatus() != ContractStatus.UNDER_NEGOTIATION) {
-            throw new BadRequestException("Hợp đồng không ở trạng thái thương lượng");
-        }
-        if (request.getStartDate().isAfter(request.getEndDate())) {
-            throw new BadRequestException("Ngày bắt đầu phải trước ngày kết thúc");
-        }
-        if (ChronoUnit.DAYS.between(request.getStartDate(), request.getEndDate()) < 7) {
-            throw new BadRequestException("Thời gian thuê kho tối thiểu là 7 ngày");
-        }
-        contract.setStartDate(request.getStartDate());
-        contract.setEndDate(request.getEndDate());
-        try {
-            contract.setPaperContractFiles(objectMapper.writeValueAsString(request.getPaperContractFiles()));
-        } catch (JsonProcessingException e) {
-            throw new BadRequestException("Paper contract files must be valid JSON");
-        }
-        contract.setStatus(ContractStatus.PENDING_TENANT_CONFIRM);
-        contract.setSubmittedAt(LocalDateTime.now());
-        contract = contractRepository.save(contract);
-        log.info("Contract {} status updated to PENDING_TENANT_CONFIRM", contractId);
-
-
-        try {
-            UUID tenantId = contract.getBooking().getTenant().getId();
-            String warehouseName = contract.getBooking().getWarehouse().getName();
-            notificationService.push(
-                    tenantId,
-                    "Hợp đồng cần xác nhận",
-                    "Owner đã cập nhật hợp đồng kho " + warehouseName + ". Bạn có 7 ngày để ký xác nhận.",
-                    "CONTRACT"
-            );
-        } catch (Exception e) {
-            log.warn("Failed to push contract notification to tenant: {}", e.getMessage());
-        }
-
-        return mapToResponse(contract);
-    }
-
-
-
-    @Transactional
-    public RentalContractResponse tenantConfirmContract(UUID tenantId, UUID contractId) {
-        log.info("Tenant {} confirming contract {}", tenantId, contractId);
-        RentalContract contract = contractRepository.findById(contractId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
-        UUID actualTenantId = contract.getBooking().getTenant().getId();
-        if (!tenantId.equals(actualTenantId)) {
-            throw new ForbiddenException(ErrorCode.FORBIDDEN);
-        }
-        if (contract.getStatus() != ContractStatus.PENDING_TENANT_CONFIRM) {
-            throw new BadRequestException("Hợp đồng không ở trạng thái chờ xác nhận");
-        }
-
-        if (contract.getSubmittedAt() != null && contract.getSubmittedAt().plusDays(7).isBefore(LocalDateTime.now())) {
-            throw new BadRequestException("Hợp đồng đã quá hạn 7 ngày để xác nhận. Tiền cọc đã bị xử lý.");
-        }
-        contract.setTenantConfirmed(true);
-        contract.setOwnerConfirmed(true);
-        contract.setStatus(ContractStatus.ACTIVE);
-
-        try {
-            warehouseLayoutService.cloneLayout(contract.getBooking().getWarehouse().getId(), actualTenantId);
-        } catch (Exception e) {
-            log.error("Failed to auto-clone layout for tenant {} after contract activation: {}", actualTenantId, e.getMessage());
-        }
-
-
-        BigDecimal depositAmount = contract.getBooking().getDepositAmount();
-        if (depositAmount == null) {
-            depositAmount = BigDecimal.ZERO;
-        }
-        walletService.refundBalance(
-            contract.getBooking().getWarehouse().getOwner().getId(),
-            depositAmount,
-            TransactionType.DEPOSIT_RECEIVED,
-            "Nhận cọc thuê kho: " + contract.getBooking().getWarehouse().getName(),
-            contract.getBooking().getId(),
-            null
-        );
-
-        contract = contractRepository.save(contract);
-        log.info("Contract {} is now ACTIVE", contractId);
-        return mapToResponse(contract);
-    }
-
-
-
-    @Transactional
-    public RentalContractResponse tenantReportFailed(UUID tenantId, UUID contractId, TenantReportFailedRequest request) {
-        log.info("Tenant {} reporting contract failed: {}", tenantId, contractId);
-        RentalContract contract = contractRepository.findById(contractId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
-        UUID actualTenantId = contract.getBooking().getTenant().getId();
-        if (!tenantId.equals(actualTenantId)) {
-            throw new ForbiddenException(ErrorCode.FORBIDDEN);
-        }
-        if (contract.getStatus() != ContractStatus.UNDER_NEGOTIATION
-                && contract.getStatus() != ContractStatus.PENDING_TENANT_CONFIRM) {
-            throw new BadRequestException("Không thể báo cáo sự cố hợp đồng ở trạng thái hiện tại");
-        }
-
-        if (disputeRepository.findByContractId(contract.getId()).isPresent()) {
-            throw new BadRequestException("Hợp đồng này đã có tranh chấp đang mở");
-        }
-        User tenant = userRepository.findById(tenantId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
-        String evidenceJson = request.getEvidenceImages() != null ? request.getEvidenceImages().toString() : null;
-        DisputeTicket ticket = DisputeTicket.builder()
-                .contract(contract)
-                .raisedBy(tenant)
-                .reason(request.getReason())
-                .evidenceImages(evidenceJson)
-                .status("OPEN")
-                .build();
-        disputeRepository.save(ticket);
-        contract.setStatus(ContractStatus.DISPUTED);
-        contract = contractRepository.save(contract);
-        log.info("Dispute ticket opened for contract {} by Tenant", contractId);
-        return mapToResponse(contract);
-    }
-
-
-
-    @Transactional
-    public RentalContractResponse ownerRequestCancel(UUID ownerId, UUID contractId, OwnerCancelRequest request) {
-        log.info("Owner {} requesting cancellation for contract {}", ownerId, contractId);
-        RentalContract contract = contractRepository.findById(contractId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
-        UUID actualOwnerId = contract.getBooking().getWarehouse().getOwner().getId();
-        if (!ownerId.equals(actualOwnerId)) {
-            throw new ForbiddenException(ErrorCode.FORBIDDEN);
-        }
-        if (contract.getStatus() != ContractStatus.UNDER_NEGOTIATION
-                && contract.getStatus() != ContractStatus.PENDING_TENANT_CONFIRM) {
-            throw new BadRequestException("Không thể đề xuất hủy hợp đồng ở trạng thái hiện tại");
-        }
-        contract.setCancelReason(request.getReason());
-        String evidenceJson = request.getEvidenceImages() != null ? request.getEvidenceImages().toString() : null;
-        contract.setCancelEvidence(evidenceJson);
-        contract.setStatus(ContractStatus.PENDING_CANCEL);
-        contract = contractRepository.save(contract);
-        log.info("Contract {} is now PENDING_CANCEL", contractId);
-        return mapToResponse(contract);
-    }
-
-
-
-    @Transactional
-    public RentalContractResponse tenantRespondCancel(UUID tenantId, UUID contractId, boolean agree) {
-        log.info("Tenant {} responding to cancel request for contract {}, agree={}", tenantId, contractId, agree);
-        RentalContract contract = contractRepository.findById(contractId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
-        UUID actualTenantId = contract.getBooking().getTenant().getId();
-        if (!tenantId.equals(actualTenantId)) {
-            throw new ForbiddenException(ErrorCode.FORBIDDEN);
-        }
-        if (contract.getStatus() != ContractStatus.PENDING_CANCEL) {
-            throw new BadRequestException("Hợp đồng không có yêu cầu hủy nào đang chờ phản hồi");
-        }
-        if (agree) {
-
-            contract.setStatus(ContractStatus.CANCELLED);
-            warehouseService.markAsAvailable(contract.getBooking().getWarehouse().getId());
-
-
-
-
-
-
-
-
-            walletService.refundBalance(
-                tenantId,
-                contract.getBooking().getDepositAmount(),
-                TransactionType.DEPOSIT_REFUND,
-                "Hoàn đặt cọc thuê kho do hai bên đồng thuận hủy: " + contract.getBooking().getWarehouse().getName(),
-                contract.getBooking().getId(),
-                null
-            );
-
-
-            contract.getBooking().setStatus(fu.stockspace.stockspace_be.booking.entity.ApprovalStatus.CANCELLED);
-            contract.getBooking().setRejectReason("Hợp đồng bị hủy do hai bên đồng thuận hủy");
-            bookingRepository.save(contract.getBooking());
-
-            log.info("Contract {} cancelled by mutual agreement", contractId);
-        } else {
-
-            if (disputeRepository.findByContractId(contract.getId()).isPresent()) {
-                throw new BadRequestException("Hợp đồng này đã có tranh chấp đang mở");
-            }
-            User tenant = userRepository.findById(tenantId)
-                    .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
-            DisputeTicket ticket = DisputeTicket.builder()
-                    .contract(contract)
-                    .raisedBy(tenant)
-                    .reason("Tenant không đồng ý yêu cầu hủy thương lượng của Owner. Lý do hủy của Owner: " + contract.getCancelReason())
-                    .evidenceImages(contract.getCancelEvidence())
-                    .status("OPEN")
-                    .build();
-            disputeRepository.save(ticket);
-            contract.setStatus(ContractStatus.DISPUTED);
-            log.info("Tenant disagreed to cancel. Contract {} status changed to DISPUTED", contractId);
-
-            try {
-                String warehouseName = contract.getBooking().getWarehouse().getName();
-                UUID ownerId = contract.getBooking().getWarehouse().getOwner().getId();
-
-                // 1. Thông báo cho Owner rằng Tenant không đồng ý hủy và đã mở tranh chấp
-                notificationService.push(
-                        ownerId,
-                        "Khách thuê từ chối yêu cầu hủy",
-                        "Khách thuê không đồng ý yêu cầu hủy hợp đồng kho '" + warehouseName + "'. Vụ việc đã được chuyển thành tranh chấp để Ban quản trị phân xử.",
-                        "DISPUTE"
-                );
-
-                // 2. Thông báo cho Admin hệ thống
-                userRepository.findFirstByRoles_Name(RoleType.ROLE_ADMIN.name())
-                        .ifPresent(admin -> notificationService.push(
-                                admin.getId(),
-                                "Tranh chấp hợp đồng mới",
-                                "Có một tranh chấp mới phát sinh từ việc từ chối hủy hợp đồng kho '" + warehouseName + "'. Vui lòng kiểm tra và phân xử.",
-                                "DISPUTE"
-                        ));
-            } catch (Exception e) {
-                log.warn("Failed to push dispute notification: {}", e.getMessage());
-            }
-        }
-        contract = contractRepository.save(contract);
-        return mapToResponse(contract);
-    }
 }

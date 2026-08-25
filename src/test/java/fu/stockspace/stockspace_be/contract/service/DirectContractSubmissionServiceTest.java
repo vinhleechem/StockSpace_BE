@@ -2,13 +2,13 @@ package fu.stockspace.stockspace_be.contract.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fu.stockspace.stockspace_be.auth.entity.User;
-import fu.stockspace.stockspace_be.booking.repository.BookingRequestRepository;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
+import fu.stockspace.stockspace_be.common.exception.ErrorCode;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.contract.dto.RentalContractResponse;
 import fu.stockspace.stockspace_be.contract.dto.UpdateRentalContractRequest;
 import fu.stockspace.stockspace_be.contract.entity.ContractStatus;
 import fu.stockspace.stockspace_be.contract.entity.RentalContract;
-import fu.stockspace.stockspace_be.contract.repository.DisputeTicketRepository;
 import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
@@ -48,9 +48,7 @@ import static org.mockito.Mockito.when;
 class DirectContractSubmissionServiceTest {
 
     @Mock private RentalContractRepository contractRepository;
-    @Mock private BookingRequestRepository bookingRepository;
     @Mock private WarehouseService warehouseService;
-    @Mock private DisputeTicketRepository disputeRepository;
     @Mock private fu.stockspace.stockspace_be.auth.repository.UserRepository userRepository;
     @Mock private WalletService walletService;
     @Mock private WarehouseLayoutService warehouseLayoutService;
@@ -217,9 +215,10 @@ class DirectContractSubmissionServiceTest {
                 eq(contractId), eq(tenantId), eq(warehouseId), any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(true);
 
-        assertThrows(BadRequestException.class,
+        ResourceConflictException exception = assertThrows(ResourceConflictException.class,
                 () -> contractService.submitOwnerContract(ownerId, contractId));
 
+        assertEquals(ErrorCode.CONTRACT_DATE_OVERLAP, exception.getErrorCode());
         assertEquals(ContractStatus.DRAFT, contract.getStatus());
         verify(warehouseLayoutService, never()).validateContractLayout(
                 any(), any(), any(), any(), any(), any());

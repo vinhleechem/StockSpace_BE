@@ -1,6 +1,6 @@
 package fu.stockspace.stockspace_be.wms.receipt.repository;
 
-import fu.stockspace.stockspace_be.booking.entity.ApprovalStatus;
+import fu.stockspace.stockspace_be.common.entity.ApprovalStatus;
 import fu.stockspace.stockspace_be.wms.receipt.entity.DocumentType;
 import fu.stockspace.stockspace_be.wms.receipt.entity.InventoryReceipt;
 

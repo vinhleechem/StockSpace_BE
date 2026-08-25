@@ -1,5 +1,6 @@
 package fu.stockspace.stockspace_be.common.service;
 
+import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.subscription.entity.Subscription;
@@ -76,8 +77,11 @@ class TenantWarehouseAccessServiceTest {
                 eq(tenantId), eq(SubscriptionStatus.ACTIVE), any(LocalDate.class)))
                 .thenReturn(Optional.empty());
 
-        assertThrows(ForbiddenException.class,
+        ForbiddenException exception = assertThrows(ForbiddenException.class,
                 () -> accessService.requireWmsAccess(tenantId, warehouseId));
+
+        assertEquals(ErrorCode.SUBSCRIPTION_REQUIRED, exception.getErrorCode());
+        assertDoesNotThrow(() -> accessService.requireActiveContract(tenantId, warehouseId));
     }
 
     @Test

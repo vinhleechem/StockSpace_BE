@@ -1,6 +1,7 @@
 package fu.stockspace.stockspace_be.listing.service;
 
 import fu.stockspace.stockspace_be.auth.entity.User;
+import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.listing.dto.PurchaseListingPackageRequest;
@@ -8,6 +9,7 @@ import fu.stockspace.stockspace_be.listing.entity.ListingOrder;
 import fu.stockspace.stockspace_be.listing.entity.ListingPackage;
 import fu.stockspace.stockspace_be.listing.repository.ListingOrderRepository;
 import fu.stockspace.stockspace_be.listing.repository.ListingPackageRepository;
+import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import fu.stockspace.stockspace_be.wallet.entity.Transaction;
 import fu.stockspace.stockspace_be.wallet.entity.TransactionType;
 import fu.stockspace.stockspace_be.wallet.service.WalletService;
@@ -56,6 +58,9 @@ class ListingOrderServiceTest {
 
     @Mock
     private WalletService walletService;
+
+    @Mock
+    private NotificationService notificationService;
 
     @InjectMocks
     private ListingOrderService listingOrderService;
@@ -118,6 +123,7 @@ class ListingOrderServiceTest {
         assertEquals(response.getPeriodEnd(), warehouse.getVisibleUntil());
         verify(transactionRepository).save(transaction);
         verify(warehouseRepository).save(warehouse);
+        verify(notificationService).push(eq(ownerId), any(String.class), any(String.class), eq("LISTING_PUBLISHED"));
     }
 
     @ParameterizedTest
@@ -232,8 +238,10 @@ class ListingOrderServiceTest {
         when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
         when(listingPackageRepository.findById(packageId)).thenReturn(Optional.of(listingPackage));
 
-        assertThrows(BadRequestException.class, () -> listingOrderService.purchaseOrRenew(
-                ownerId, warehouseId, new PurchaseListingPackageRequest(packageId)));
+        BadRequestException exception = assertThrows(BadRequestException.class,
+                () -> listingOrderService.purchaseOrRenew(
+                        ownerId, warehouseId, new PurchaseListingPackageRequest(packageId)));
+        assertEquals(ErrorCode.LISTING_PACKAGE_INACTIVE, exception.getErrorCode());
         verify(walletService, never()).deductBalance(any(), any(), any(), any(), any(), any());
     }
 
@@ -252,8 +260,10 @@ class ListingOrderServiceTest {
         warehouse.setOwner(User.builder().id(UUID.randomUUID()).build());
         when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
 
-        assertThrows(ForbiddenException.class, () -> listingOrderService.purchaseOrRenew(
-                ownerId, warehouseId, new PurchaseListingPackageRequest(packageId)));
+        ForbiddenException exception = assertThrows(ForbiddenException.class,
+                () -> listingOrderService.purchaseOrRenew(
+                        ownerId, warehouseId, new PurchaseListingPackageRequest(packageId)));
+        assertEquals(ErrorCode.WAREHOUSE_NOT_OWNED, exception.getErrorCode());
         verify(listingPackageRepository, never()).findById(any());
     }
 
@@ -267,10 +277,12 @@ class ListingOrderServiceTest {
             return order;
         });
         when(walletService.deductBalance(any(), any(), eq(TransactionType.LISTING_FEE), any(), eq(null), eq(null)))
-                .thenThrow(new BadRequestException("Insufficient balance"));
+                .thenThrow(new BadRequestException(ErrorCode.INSUFFICIENT_BALANCE));
 
-        assertThrows(BadRequestException.class, () -> listingOrderService.purchaseOrRenew(
-                ownerId, warehouseId, new PurchaseListingPackageRequest(packageId)));
+        BadRequestException exception = assertThrows(BadRequestException.class,
+                () -> listingOrderService.purchaseOrRenew(
+                        ownerId, warehouseId, new PurchaseListingPackageRequest(packageId)));
+        assertEquals(ErrorCode.INSUFFICIENT_BALANCE, exception.getErrorCode());
         verify(transactionRepository, never()).save(any());
         verify(warehouseRepository, never()).save(warehouse);
     }

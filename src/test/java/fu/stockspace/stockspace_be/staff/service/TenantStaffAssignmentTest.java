@@ -2,7 +2,9 @@ package fu.stockspace.stockspace_be.staff.service;
 
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
-import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
+import fu.stockspace.stockspace_be.common.exception.ErrorCode;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
+import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.staff.dto.AssignWarehouseRequest;
 import fu.stockspace.stockspace_be.staff.dto.StaffAssignmentResponse;
 import fu.stockspace.stockspace_be.staff.dto.StaffWorkHistoryResponse;
@@ -40,7 +42,7 @@ class TenantStaffAssignmentTest {
     private WarehouseRepository warehouseRepository;
 
     @Mock
-    private RentalContractRepository contractRepository;
+    private TenantWarehouseAccessService accessService;
 
     @Mock
     private UserRepository userRepository;
@@ -87,7 +89,6 @@ class TenantStaffAssignmentTest {
         when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenantUser));
         when(userRepository.findById(staffUserId)).thenReturn(Optional.of(staffUser));
         when(memberRepository.existsByUserIdAndTenantIdAndIsActiveTrueAndIsDeletedFalse(staffUserId, tenantId)).thenReturn(true);
-        when(contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(tenantId, warehouseId)).thenReturn(true);
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
         when(assignmentRepository.findByStaffIdAndTenantIdAndStatus(staffUserId, tenantId, AssignmentStatus.ACTIVE))
                 .thenReturn(List.of());
@@ -112,6 +113,7 @@ class TenantStaffAssignmentTest {
         assertEquals("Trưởng Kho Hà Nội", response.getCustomTitle());
         assertEquals(warehouseId, response.getWarehouseId());
         assertEquals(AssignmentStatus.ACTIVE, response.getStatus());
+        verify(accessService).requireWmsAccess(tenantId, warehouseId);
     }
 
     @Test
@@ -127,7 +129,53 @@ class TenantStaffAssignmentTest {
 
         assertThrows(fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException.class,
                 () -> staffService.assignWarehouseToStaff(tenantId, staffUserId, req));
-        verify(contractRepository, never()).existsByTenantIdAndWarehouseIdAndStatusActive(any(), any());
+        verifyNoInteractions(accessService);
+    }
+
+    @Test
+    void assignWarehouseToStaff_rejectsMissingContractOrSubscription() {
+        AssignWarehouseRequest request = AssignWarehouseRequest.builder().warehouseId(warehouseId).build();
+        when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenantUser));
+        when(userRepository.findById(staffUserId)).thenReturn(Optional.of(staffUser));
+        when(memberRepository.existsByUserIdAndTenantIdAndIsActiveTrueAndIsDeletedFalse(staffUserId, tenantId))
+                .thenReturn(true);
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        doThrow(new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED))
+                .when(accessService).requireWmsAccess(tenantId, warehouseId);
+
+        assertThrows(ForbiddenException.class,
+                () -> staffService.assignWarehouseToStaff(tenantId, staffUserId, request));
+        verify(assignmentRepository, never()).save(any());
+    }
+
+    @Test
+    void revokeWarehouseAssignment_isTenantScopedAndRequiresWmsAccess() {
+        UUID assignmentId = UUID.randomUUID();
+        StaffWarehouseAssignment assignment = StaffWarehouseAssignment.builder()
+                .id(assignmentId).staff(staffUser).tenant(tenantUser).warehouse(warehouse)
+                .assignedBy(tenantUser).startDate(LocalDateTime.now()).status(AssignmentStatus.ACTIVE).build();
+        when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
+
+        staffService.revokeWarehouseAssignment(tenantId, assignmentId);
+
+        verify(accessService).requireWmsAccess(tenantId, warehouseId);
+        assertEquals(AssignmentStatus.REVOKED, assignment.getStatus());
+        assertNotNull(assignment.getEndDate());
+    }
+
+    @Test
+    void revokeWarehouseAssignment_doesNotTouchAnotherTenantAssignment() {
+        UUID assignmentId = UUID.randomUUID();
+        User anotherTenant = User.builder().id(UUID.randomUUID()).build();
+        StaffWarehouseAssignment assignment = StaffWarehouseAssignment.builder()
+                .id(assignmentId).staff(staffUser).tenant(anotherTenant).warehouse(warehouse)
+                .assignedBy(anotherTenant).startDate(LocalDateTime.now()).status(AssignmentStatus.ACTIVE).build();
+        when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
+
+        assertThrows(ForbiddenException.class,
+                () -> staffService.revokeWarehouseAssignment(tenantId, assignmentId));
+        verifyNoInteractions(accessService);
+        verify(assignmentRepository, never()).save(any());
     }
 
     @Test

@@ -145,16 +145,7 @@ public class SystemConfigService {
 
     private void validateValue(SystemConfigKey configKey, String value) {
         String key = configKey.getKey();
-        if (key.equals("deposit_percentage")) {
-            try {
-                int val = Integer.parseInt(value.trim());
-                if (val < 0 || val > 100) {
-                    throw new BadRequestException(ErrorCode.CONFIG_INVALID_VALUE, "Tỷ lệ phần trăm cọc phải nằm trong khoảng từ 0% đến 100%");
-                }
-            } catch (NumberFormatException e) {
-                throw new BadRequestException(ErrorCode.CONFIG_INVALID_VALUE, "Tỷ lệ phần trăm cọc phải là số nguyên");
-            }
-        } else if (key.equals("contract_expiry_days")) {
+        if (key.equals("contract_expiry_days")) {
             try {
                 int val = Integer.parseInt(value.trim());
                 if (val <= 0) {

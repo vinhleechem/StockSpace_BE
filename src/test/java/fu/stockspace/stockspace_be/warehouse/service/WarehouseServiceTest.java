@@ -75,11 +75,11 @@ class WarehouseServiceTest {
     }
 
     @Test
-    void getActiveRentedWarehousesUsesCurrentDirectContractAccess() {
+    void getActiveContractWarehousesUsesCurrentDirectContractAccess() {
         when(tenantWarehouseAccessService.findActiveContractWarehouses(ownerId))
                 .thenReturn(List.of(warehouse));
 
-        List<WarehouseResponse> responses = warehouseService.getActiveRentedWarehouses(ownerId);
+        List<WarehouseResponse> responses = warehouseService.getActiveContractWarehouses(ownerId);
 
         assertEquals(1, responses.size());
         assertEquals(warehouseId, responses.get(0).getId());
@@ -138,14 +138,13 @@ class WarehouseServiceTest {
 
         assertEquals(RentalPricingType.NEGOTIATED, response.getRentalPricingType());
         assertNull(response.getRentalPrice());
-        assertNull(response.getPricePerMonth());
     }
 
     @Test
-    void updateWarehouseRejectsConflictingCurrentAndLegacyRentalPrices() {
+    void updateWarehouseRejectsNonPositiveRentalPrice() {
         UpdateWarehouseRequest request = new UpdateWarehouseRequest();
-        request.setRentalPrice(new BigDecimal("1000000"));
-        request.setPricePerMonth(new BigDecimal("2000000"));
+        request.setRentalPricingType(RentalPricingType.FIXED_MONTHLY);
+        request.setRentalPrice(BigDecimal.ZERO);
 
         when(warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId))
                 .thenReturn(Optional.of(warehouse));
@@ -296,5 +295,32 @@ class WarehouseServiceTest {
         assertEquals("DRAFT", response.getPublicationStatus());
         assertTrue(response.isCanPublish());
         assertFalse(response.isCanRenew());
+    }
+
+    @Test
+    void deleteWarehouseIsBlockedByAnActiveContractInsteadOfListingStatus() {
+        warehouse.setStatus(WarehouseStatus.AVAILABLE);
+        when(warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId))
+                .thenReturn(Optional.of(warehouse));
+        when(warehouseRepository.hasCurrentActiveContract(warehouseId)).thenReturn(true);
+
+        BadRequestException exception = assertThrows(
+                BadRequestException.class,
+                () -> warehouseService.deleteWarehouse(ownerId, warehouseId));
+
+        assertEquals("Không thể xoá kho đang có hợp đồng thuê hiệu lực", exception.getMessage());
+        verify(warehouseRepository, never()).save(any(Warehouse.class));
+    }
+
+    @Test
+    void deleteWarehouseSucceedsWhenNoActiveContractExists() {
+        when(warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId))
+                .thenReturn(Optional.of(warehouse));
+        when(warehouseRepository.hasCurrentActiveContract(warehouseId)).thenReturn(false);
+
+        warehouseService.deleteWarehouse(ownerId, warehouseId);
+
+        assertTrue(warehouse.isDeleted());
+        verify(warehouseRepository).save(warehouse);
     }
 }

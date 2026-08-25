@@ -11,6 +11,7 @@ import fu.stockspace.stockspace_be.listing.entity.ListingOrder;
 import fu.stockspace.stockspace_be.listing.entity.ListingPackage;
 import fu.stockspace.stockspace_be.listing.repository.ListingOrderRepository;
 import fu.stockspace.stockspace_be.listing.repository.ListingPackageRepository;
+import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import fu.stockspace.stockspace_be.wallet.entity.Transaction;
 import fu.stockspace.stockspace_be.wallet.entity.TransactionType;
 import fu.stockspace.stockspace_be.wallet.repository.TransactionRepository;
@@ -38,6 +39,7 @@ public class ListingOrderService {
     private final WarehouseRepository warehouseRepository;
     private final TransactionRepository transactionRepository;
     private final WalletService walletService;
+    private final NotificationService notificationService;
 
     @Transactional
     public ListingOrderResponse purchaseOrRenew(
@@ -97,9 +99,24 @@ public class ListingOrderService {
         warehouse.setVisibleUntil(periodEnd);
         warehouseRepository.save(warehouse);
 
+        notifyPublication(ownerId, warehouse, periodEnd, extendingActivePublication);
+
         log.info("Owner {} purchased {}-day listing package for warehouse {} until {}",
                 ownerId, listingPackage.getDurationDays(), warehouseId, periodEnd);
         return mapToResponse(order, transaction.getId());
+    }
+
+    private void notifyPublication(UUID ownerId, Warehouse warehouse, LocalDateTime periodEnd, boolean renewed) {
+        try {
+            notificationService.push(
+                    ownerId,
+                    renewed ? "Warehouse publication renewed" : "Warehouse published",
+                    "Warehouse " + warehouse.getName() + " is visible until " + periodEnd + ".",
+                    renewed ? "LISTING_RENEWED" : "LISTING_PUBLISHED");
+        } catch (Exception exception) {
+            log.warn("Failed to push listing publication notification for warehouse {}: {}",
+                    warehouse.getId(), exception.getMessage());
+        }
     }
 
     @Transactional(readOnly = true)
@@ -134,7 +151,7 @@ public class ListingOrderService {
 
     private void validateListingPackage(ListingPackage listingPackage) {
         if (!listingPackage.isActive() || listingPackage.isDeleted()) {
-            throw new BadRequestException("Listing package is inactive");
+            throw new BadRequestException(ErrorCode.LISTING_PACKAGE_INACTIVE);
         }
         if (listingPackage.getDurationDays() == null
                 || !java.util.Set.of(10, 15, 30).contains(listingPackage.getDurationDays())) {

@@ -1,6 +1,6 @@
 package fu.stockspace.stockspace_be.wallet.entity;
 import fu.stockspace.stockspace_be.auth.entity.User;
-import fu.stockspace.stockspace_be.booking.entity.ApprovalStatus;
+import fu.stockspace.stockspace_be.common.entity.ApprovalStatus;
 import fu.stockspace.stockspace_be.common.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;

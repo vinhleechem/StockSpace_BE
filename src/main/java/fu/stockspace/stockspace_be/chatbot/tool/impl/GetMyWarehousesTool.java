@@ -54,10 +54,9 @@ public class GetMyWarehousesTool implements ChatTool {
                 map.put("address", w.getAddress());
                 map.put("status", w.getStatus() != null ? w.getStatus().name() : "UNKNOWN");
                 map.put("capacity", w.getCapacity());
-                map.put("rentalPrice", w.getRentalPrice() != null ? w.getRentalPrice() : w.getPricePerMonth());
+                map.put("rentalPrice", w.getRentalPrice());
                 map.put("rentalPricingType", w.getRentalPricingType() != null
                         ? w.getRentalPricingType().name() : "FIXED_MONTHLY");
-                map.put("pricePerMonth", w.getPricePerMonth());
                 result.add(map);
             }
             return objectMapper.writeValueAsString(result);
