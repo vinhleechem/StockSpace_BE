@@ -4,6 +4,7 @@ import fu.stockspace.stockspace_be.contract.entity.RentalContract;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -11,6 +12,7 @@ import java.util.Optional;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import jakarta.persistence.LockModeType;
 
 public interface RentalContractRepository extends JpaRepository<RentalContract, UUID> {
 
@@ -67,6 +69,7 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
             @Param("fromDate") java.time.LocalDate fromDate,
             @Param("toDate") java.time.LocalDate toDate);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             SELECT c FROM RentalContract c
             WHERE c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
@@ -136,6 +139,23 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
             @Param("warehouseId") UUID warehouseId,
             @Param("startDate") java.time.LocalDate startDate,
             @Param("endDate") java.time.LocalDate endDate);
+
+    @Query("""
+            SELECT COUNT(c) > 0 FROM RentalContract c
+            WHERE c.id <> :contractId
+              AND c.tenant.id = :tenantId
+              AND c.warehouse.id = :warehouseId
+              AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
+              AND c.isActive = true
+              AND c.isDeleted = false
+              AND c.startDate <= :today
+              AND c.endDate >= :today
+            """)
+    boolean existsOtherCurrentDirectActiveContract(
+            @Param("contractId") UUID contractId,
+            @Param("tenantId") UUID tenantId,
+            @Param("warehouseId") UUID warehouseId,
+            @Param("today") java.time.LocalDate today);
 
     @Query("""
             SELECT DISTINCT w FROM RentalContract c

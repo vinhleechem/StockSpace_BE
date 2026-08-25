@@ -39,6 +39,19 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
             WHERE b.warehouse.id = :warehouseId
               AND s.tenant.id = :tenantId
               AND b.isActive = true
+              AND b.isDeleted = false
+              AND s.isDeleted = false
+            """)
+    List<StockBatch> findAllByWarehouseIdAndTenantId(
+            @Param("warehouseId") UUID warehouseId,
+            @Param("tenantId") UUID tenantId);
+
+    @Query("""
+            SELECT b FROM StockBatch b
+            JOIN ProductSku s ON s.id = b.skuId
+            WHERE b.warehouse.id = :warehouseId
+              AND s.tenant.id = :tenantId
+              AND b.isActive = true
               AND s.isActive = true
               AND b.isDeleted = false
               AND s.isDeleted = false
