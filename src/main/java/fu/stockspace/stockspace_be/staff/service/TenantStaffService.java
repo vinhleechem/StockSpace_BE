@@ -10,7 +10,7 @@ import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
-import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
+import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.staff.dto.*;
 import fu.stockspace.stockspace_be.staff.entity.*;
 import fu.stockspace.stockspace_be.staff.repository.StaffInvitationRepository;
@@ -49,7 +49,7 @@ public class TenantStaffService {
     private final StaffInvitationRepository invitationRepository;
     private final StaffWarehouseAssignmentRepository assignmentRepository;
     private final WarehouseRepository warehouseRepository;
-    private final RentalContractRepository contractRepository;
+    private final TenantWarehouseAccessService accessService;
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final SubscriptionRepository subscriptionRepository;
@@ -346,13 +346,9 @@ public class TenantStaffService {
         }
 
 
-        boolean isRented = contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(tenantId, request.getWarehouseId());
-        if (!isRented) {
-            throw new BadRequestException(ErrorCode.WAREHOUSE_NOT_FOUND);
-        }
-
         Warehouse warehouse = warehouseRepository.findById(request.getWarehouseId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
+        accessService.requireWmsAccess(tenantId, warehouse.getId());
 
 
         List<StaffWarehouseAssignment> existing = assignmentRepository
@@ -388,6 +384,8 @@ public class TenantStaffService {
         if (!assignment.getTenant().getId().equals(tenantId)) {
             throw new fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException(ErrorCode.FORBIDDEN);
         }
+
+        accessService.requireWmsAccess(tenantId, assignment.getWarehouse().getId());
 
         assignment.setStatus(AssignmentStatus.REVOKED);
         assignment.setEndDate(LocalDateTime.now());
