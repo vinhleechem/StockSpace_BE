@@ -64,6 +64,8 @@ class PublicWarehouseChatToolsTest {
                         .execute(Map.of("warehouseId", warehouseId.toString()), null));
 
         assertEquals(warehouseId.toString(), result.get("id").asText());
+        assertEquals("15000000", result.get("rentalPrice").asText());
+        assertEquals("FIXED_MONTHLY", result.get("rentalPricingType").asText());
         assertEquals("Sẵn sàng cho thuê", result.get("status").asText());
         assertFalse(result.toString().contains("AVAILABLE"));
         verify(warehouseRepository).findPublicAvailableById(warehouseId);

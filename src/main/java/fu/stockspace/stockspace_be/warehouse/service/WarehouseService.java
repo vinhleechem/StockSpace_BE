@@ -109,6 +109,11 @@ public class WarehouseService {
         WarehouseType type = warehouseTypeRepository.findById(request.getTypeId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_TYPE_NOT_FOUND));
 
+        RentalPricingType pricingType = resolvePricingType(request.getRentalPricingType());
+        java.math.BigDecimal rentalPrice = resolveRentalPrice(
+                request.getRentalPrice(), request.getPricePerMonth());
+        validateRentalPricing(pricingType, rentalPrice);
+
         SystemPolicy policy = systemPolicyRepository.findFirstByIsActiveTrueAndIsDeletedFalseOrderByCreatedAtDesc()
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy chính sách/cam kết ràng buộc hiệu lực nào trong hệ thống"));
 
@@ -119,7 +124,8 @@ public class WarehouseService {
                 .address(request.getAddress())
                 .description(request.getDescription())
                 .capacity(request.getCapacity())
-                .pricePerMonth(request.getPricePerMonth())
+                .rentalPricingType(pricingType)
+                .rentalPrice(rentalPrice)
                 .status(WarehouseStatus.PENDING_APPROVAL)
                 .isVerified(false)
                 .policy(policy)
@@ -205,8 +211,24 @@ public class WarehouseService {
         if (request.getCapacity() != null) {
             warehouse.setCapacity(request.getCapacity());
         }
-        if (request.getPricePerMonth() != null) {
-            warehouse.setPricePerMonth(request.getPricePerMonth());
+        boolean pricingChanged = request.getRentalPricingType() != null
+                || request.getRentalPrice() != null
+                || request.getPricePerMonth() != null;
+        if (pricingChanged) {
+            RentalPricingType pricingType = request.getRentalPricingType() != null
+                    ? request.getRentalPricingType()
+                    : effectivePricingType(warehouse);
+            java.math.BigDecimal rentalPrice = resolveRentalPrice(
+                    request.getRentalPrice(), request.getPricePerMonth());
+            if (request.getRentalPrice() == null && request.getPricePerMonth() == null
+                    && pricingType == RentalPricingType.NEGOTIATED) {
+                rentalPrice = null;
+            } else if (rentalPrice == null) {
+                rentalPrice = warehouse.getRentalPrice();
+            }
+            validateRentalPricing(pricingType, rentalPrice);
+            warehouse.setRentalPricingType(pricingType);
+            warehouse.setRentalPrice(rentalPrice);
         }
         if (request.getTypeId() != null) {
             WarehouseType type = warehouseTypeRepository.findById(request.getTypeId())
@@ -259,9 +281,10 @@ public class WarehouseService {
 
     @Transactional(readOnly = true)
     public PagedResponse<WarehouseResponse> getMyWarehouses(UUID ownerId, int page, int size, String sortBy, String sortDir) {
+        String normalizedSortBy = normalizeSortProperty(sortBy);
         Sort sort = "asc".equalsIgnoreCase(sortDir)
-                ? Sort.by(sortBy).ascending()
-                : Sort.by(sortBy).descending();
+                ? Sort.by(normalizedSortBy).ascending()
+                : Sort.by(normalizedSortBy).descending();
         Pageable pageable = PageRequest.of(page, size, sort);
 
         Page<Warehouse> warehousePage = warehouseRepository.findByOwnerId(ownerId, pageable);
@@ -311,9 +334,10 @@ public class WarehouseService {
     @Transactional(readOnly = true)
     public PagedResponse<WarehouseResponse> searchWarehouses(WarehouseSearchRequest request,
                                                     int page, int size, String sortBy, String sortDir) {
+        String normalizedSortBy = normalizeSortProperty(sortBy);
         Sort sort = "asc".equalsIgnoreCase(sortDir)
-                ? Sort.by(sortBy).ascending()
-                : Sort.by(sortBy).descending();
+                ? Sort.by(normalizedSortBy).ascending()
+                : Sort.by(normalizedSortBy).descending();
         Pageable pageable = PageRequest.of(page, size, sort);
 
         String kw = StringUtils.hasText(request.getKeyword()) ? "%" + request.getKeyword().trim().toLowerCase() + "%" : null;
@@ -321,8 +345,8 @@ public class WarehouseService {
         Page<Warehouse> result = warehouseRepository.searchPublic(
                 kw,
                 WarehouseStatus.AVAILABLE,
-                request.getMinPrice(),
-                request.getMaxPrice(),
+                request.getEffectiveMinRentalPrice(),
+                request.getEffectiveMaxRentalPrice(),
                 request.getMinCapacity(),
                 pageable
         );
@@ -482,6 +506,44 @@ public class WarehouseService {
                 .orElseThrow(() -> new ForbiddenException(ErrorCode.WAREHOUSE_NOT_OWNED));
     }
 
+    private RentalPricingType resolvePricingType(RentalPricingType requestedType) {
+        return requestedType != null ? requestedType : RentalPricingType.FIXED_MONTHLY;
+    }
+
+    private RentalPricingType effectivePricingType(Warehouse warehouse) {
+        return warehouse.getRentalPricingType() != null
+                ? warehouse.getRentalPricingType()
+                : RentalPricingType.FIXED_MONTHLY;
+    }
+
+    private java.math.BigDecimal resolveRentalPrice(java.math.BigDecimal rentalPrice,
+                                                    java.math.BigDecimal legacyPrice) {
+        if (rentalPrice != null && legacyPrice != null
+                && rentalPrice.compareTo(legacyPrice) != 0) {
+            throw new BadRequestException("rentalPrice and pricePerMonth must match when both are provided");
+        }
+        return rentalPrice != null ? rentalPrice : legacyPrice;
+    }
+
+    private void validateRentalPricing(RentalPricingType pricingType,
+                                       java.math.BigDecimal rentalPrice) {
+        if (pricingType == RentalPricingType.NEGOTIATED) {
+            if (rentalPrice != null) {
+                throw new BadRequestException(
+                        "rentalPrice must be omitted when rentalPricingType is NEGOTIATED");
+            }
+            return;
+        }
+        if (rentalPrice == null || rentalPrice.signum() <= 0) {
+            throw new BadRequestException(
+                    "rentalPrice is required and must be greater than 0 for the selected pricing type");
+        }
+    }
+
+    private String normalizeSortProperty(String sortBy) {
+        return "pricePerMonth".equals(sortBy) ? "rentalPrice" : sortBy;
+    }
+
     private List<String> attachImages(Warehouse warehouse, List<String> imageUrls) {
         List<String> savedUrls = new ArrayList<>();
         int startOrder = warehouse.getImages().size();
@@ -511,13 +573,20 @@ public class WarehouseService {
 
         String cover = urls.isEmpty() ? null : urls.get(0);
 
+        java.math.BigDecimal rentalPrice = w.getRentalPrice() != null
+                ? w.getRentalPrice()
+                : w.getPricePerMonth();
+        RentalPricingType pricingType = effectivePricingType(w);
+
         return WarehouseResponse.builder()
                 .id(w.getId())
                 .name(w.getName())
                 .address(w.getAddress())
                 .description(w.getDescription())
                 .capacity(w.getCapacity())
-                .pricePerMonth(w.getPricePerMonth())
+                .rentalPrice(rentalPrice)
+                .rentalPricingType(pricingType)
+                .pricePerMonth(rentalPrice)
                 .status(w.getStatus().name())
                 .rejectReason(w.getRejectReason())
                 .isVerified(w.isVerified())

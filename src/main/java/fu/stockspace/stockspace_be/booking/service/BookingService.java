@@ -16,6 +16,7 @@ import fu.stockspace.stockspace_be.common.repository.SystemPolicyRepository;
 import fu.stockspace.stockspace_be.contract.service.ContractService;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
+import fu.stockspace.stockspace_be.warehouse.entity.RentalPricingType;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseService;
 import fu.stockspace.stockspace_be.wallet.service.WalletService;
@@ -82,6 +83,11 @@ public class BookingService {
 
         if (warehouse.getStatus() != WarehouseStatus.AVAILABLE) {
             throw new BadRequestException(ErrorCode.WAREHOUSE_NOT_AVAILABLE);
+        }
+
+        if (warehouse.getRentalPricingType() == RentalPricingType.NEGOTIATED) {
+            throw new BadRequestException(
+                    "Negotiated-price warehouses must be agreed with the owner before contract creation");
         }
 
         boolean hasExistingBooking = bookingRepository.existsByWarehouseIdAndStatusIn(

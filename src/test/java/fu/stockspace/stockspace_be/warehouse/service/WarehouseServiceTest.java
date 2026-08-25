@@ -2,8 +2,11 @@ package fu.stockspace.stockspace_be.warehouse.service;
 
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
+import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.warehouse.dto.WarehouseResponse;
+import fu.stockspace.stockspace_be.warehouse.dto.UpdateWarehouseRequest;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
+import fu.stockspace.stockspace_be.warehouse.entity.RentalPricingType;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.ArrayList;
+import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -92,5 +96,39 @@ class WarehouseServiceTest {
         assertNotNull(response);
         assertEquals(WarehouseStatus.AVAILABLE.name(), response.getStatus());
         assertNull(response.getRejectReason());
+    }
+
+    @Test
+    void updateWarehouse_AllowsNegotiatedPricingWithoutNumericRentalPrice() {
+        warehouse.setRentalPricingType(RentalPricingType.FIXED_MONTHLY);
+        warehouse.setRentalPrice(new BigDecimal("15000000"));
+
+        UpdateWarehouseRequest request = new UpdateWarehouseRequest();
+        request.setRentalPricingType(RentalPricingType.NEGOTIATED);
+
+        when(warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId))
+                .thenReturn(Optional.of(warehouse));
+        when(warehouseRepository.save(any(Warehouse.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        WarehouseResponse response = warehouseService.updateWarehouse(ownerId, warehouseId, request);
+
+        assertEquals(RentalPricingType.NEGOTIATED, response.getRentalPricingType());
+        assertNull(response.getRentalPrice());
+        assertNull(response.getPricePerMonth());
+    }
+
+    @Test
+    void updateWarehouseRejectsConflictingCurrentAndLegacyRentalPrices() {
+        UpdateWarehouseRequest request = new UpdateWarehouseRequest();
+        request.setRentalPrice(new BigDecimal("1000000"));
+        request.setPricePerMonth(new BigDecimal("2000000"));
+
+        when(warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId))
+                .thenReturn(Optional.of(warehouse));
+
+        assertThrows(BadRequestException.class,
+                () -> warehouseService.updateWarehouse(ownerId, warehouseId, request));
+        verify(warehouseRepository, never()).save(any(Warehouse.class));
     }
 }

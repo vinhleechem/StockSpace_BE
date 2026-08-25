@@ -20,10 +20,26 @@ public class WarehouseSearchRequest {
     private WarehouseStatus status;
 
 
+    private BigDecimal minRentalPrice;
+
+
+    private BigDecimal maxRentalPrice;
+
+    /** @deprecated Use minRentalPrice. */
+    @Deprecated
     private BigDecimal minPrice;
 
-
+    /** @deprecated Use maxRentalPrice. */
+    @Deprecated
     private BigDecimal maxPrice;
+
+    public BigDecimal getEffectiveMinRentalPrice() {
+        return minRentalPrice != null ? minRentalPrice : minPrice;
+    }
+
+    public BigDecimal getEffectiveMaxRentalPrice() {
+        return maxRentalPrice != null ? maxRentalPrice : maxPrice;
+    }
 
 
     private BigDecimal minCapacity;

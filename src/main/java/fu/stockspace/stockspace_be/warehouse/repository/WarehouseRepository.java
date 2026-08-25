@@ -47,8 +47,8 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
                    OR LOWER(w.address) LIKE :keyword
                    OR LOWER(w.description) LIKE :keyword
                    OR LOWER(w.type.name) LIKE :keyword)
-              AND (:minPrice IS NULL OR w.pricePerMonth >= :minPrice)
-              AND (:maxPrice IS NULL OR w.pricePerMonth <= :maxPrice)
+              AND (:minPrice IS NULL OR w.rentalPrice >= :minPrice)
+              AND (:maxPrice IS NULL OR w.rentalPrice <= :maxPrice)
               AND (:minCapacity IS NULL OR w.capacity >= :minCapacity)
             """)
     Page<Warehouse> searchPublic(

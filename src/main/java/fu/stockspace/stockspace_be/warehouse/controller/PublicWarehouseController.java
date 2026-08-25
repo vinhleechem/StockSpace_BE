@@ -40,7 +40,7 @@ public class PublicWarehouseController {
     private static final int MAX_KEYWORD_LENGTH = 100;
     private static final BigDecimal MAX_FILTER_AMOUNT = new BigDecimal("9999999999999.99");
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
-            "createdAt", "updatedAt", "name", "pricePerMonth", "capacity"
+            "createdAt", "updatedAt", "name", "pricePerMonth", "rentalPrice", "capacity"
     );
 
     private final WarehouseService warehouseService;
@@ -68,18 +68,25 @@ public class PublicWarehouseController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) BigDecimal minPrice,
             @RequestParam(required = false) BigDecimal maxPrice,
+            @RequestParam(required = false) BigDecimal minRentalPrice,
+            @RequestParam(required = false) BigDecimal maxRentalPrice,
             @RequestParam(required = false) BigDecimal minCapacity,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir
     ) {
-        validateSearchParameters(keyword, minPrice, maxPrice, minCapacity, page, size, sortBy, sortDir);
+        BigDecimal effectiveMinRentalPrice = coalescePriceFilter("minPrice", minPrice,
+                "minRentalPrice", minRentalPrice);
+        BigDecimal effectiveMaxRentalPrice = coalescePriceFilter("maxPrice", maxPrice,
+                "maxRentalPrice", maxRentalPrice);
+        validateSearchParameters(keyword, effectiveMinRentalPrice, effectiveMaxRentalPrice,
+                minCapacity, page, size, sortBy, sortDir);
 
         WarehouseSearchRequest request = new WarehouseSearchRequest();
         request.setKeyword(keyword);
-        request.setMinPrice(minPrice);
-        request.setMaxPrice(maxPrice);
+        request.setMinRentalPrice(effectiveMinRentalPrice);
+        request.setMaxRentalPrice(effectiveMaxRentalPrice);
         request.setMinCapacity(minCapacity);
 
         PagedResponse<WarehouseResponse> result = warehouseService.searchWarehouses(request, page, size, sortBy, sortDir);
@@ -133,6 +140,15 @@ public class PublicWarehouseController {
             throw new BadRequestException(field + " must be between 0 and "
                     + MAX_FILTER_AMOUNT.toPlainString() + " with at most 2 decimal places");
         }
+    }
+
+    private BigDecimal coalescePriceFilter(String legacyName, BigDecimal legacyValue,
+                                           String currentName, BigDecimal currentValue) {
+        if (legacyValue != null && currentValue != null
+                && legacyValue.compareTo(currentValue) != 0) {
+            throw new BadRequestException(legacyName + " and " + currentName + " must match when both are provided");
+        }
+        return currentValue != null ? currentValue : legacyValue;
     }
 
     @GetMapping("/{id}")

@@ -63,8 +63,35 @@ public class Warehouse extends BaseEntity {
     @Column(name = "capacity", nullable = false, precision = 10, scale = 2)
     private BigDecimal capacity;
 
-    @Column(name = "price_per_month", nullable = false, precision = 15, scale = 2)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "rental_pricing_type", nullable = false, length = 40)
+    @Builder.Default
+    private RentalPricingType rentalPricingType = RentalPricingType.FIXED_MONTHLY;
+
+    @Column(name = "rental_price", precision = 15, scale = 2)
+    private BigDecimal rentalPrice;
+
+    /**
+     * Transitional source compatibility for code that still uses the old
+     * field name. This field is not persisted; the migration keeps the old
+     * database column while rental_price becomes the canonical value.
+     */
+    @Transient
+    @Deprecated
     private BigDecimal pricePerMonth;
+
+    @Deprecated
+    public BigDecimal getPricePerMonth() {
+        return rentalPrice != null ? rentalPrice : pricePerMonth;
+    }
+
+    @Deprecated
+    public void setPricePerMonth(BigDecimal pricePerMonth) {
+        this.pricePerMonth = pricePerMonth;
+        if (this.rentalPrice == null) {
+            this.rentalPrice = pricePerMonth;
+        }
+    }
 
 
 
