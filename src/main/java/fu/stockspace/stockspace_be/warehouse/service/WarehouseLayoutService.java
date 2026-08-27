@@ -91,6 +91,28 @@ public class WarehouseLayoutService {
         return mapToLayoutResponse(layout);
     }
 
+    /**
+     * Read-only layout access for Staff assigned to a tenant warehouse.
+     * Staff can inspect the tenant snapshot, but cannot use this method to
+     * modify layout data.
+     */
+    @Transactional(readOnly = true)
+    public WarehouseLayoutResponse getStaffLayoutTree(UUID warehouseId, UUID staffId, UUID tenantId) {
+        tenantWarehouseAccessService.requireActiveContract(tenantId, warehouseId);
+        tenantWarehouseAccessService.requireActiveStaffAssignment(staffId, tenantId, warehouseId);
+
+        WarehouseLayout layout = layoutRepository.findByWarehouseIdAndTenantId(warehouseId, tenantId)
+                .filter(candidate -> candidate.isActive() && !candidate.isDeleted())
+                .orElseGet(() -> layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)
+                        .filter(candidate -> candidate.isActive() && !candidate.isDeleted())
+                        .orElse(null));
+
+        if (layout == null) {
+            throw new ResourceNotFoundException(ErrorCode.LAYOUT_NOT_FOUND);
+        }
+        return mapToLayoutResponse(layout);
+    }
+
 
 
 
