@@ -16,6 +16,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -65,5 +66,14 @@ public class StockTransferController {
         StockTransferResponse response = transferService.getTransfer(
                 SecurityUtil.getCurrentUserId(), id);
         return ResponseEntity.ok(ApiResponse.success("Lấy chi tiết chuyển kho thành công", response));
+    }
+
+    @PatchMapping("/{id}/approve-dispatch")
+    @PreAuthorize("@rbac.hasPermission('INVENTORY_UPDATE')")
+    @Operation(summary = "Duyệt xuất kho và chuyển trạng thái sang IN_TRANSIT")
+    public ResponseEntity<ApiResponse<StockTransferResponse>> approveDispatch(@PathVariable UUID id) {
+        StockTransferResponse response = transferService.approveDispatch(
+                SecurityUtil.getCurrentUserId(), id);
+        return ResponseEntity.ok(ApiResponse.success("Duyệt xuất kho chuyển tiếp thành công", response));
     }
 }

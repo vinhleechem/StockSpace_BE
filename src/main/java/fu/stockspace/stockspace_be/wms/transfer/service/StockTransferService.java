@@ -3,11 +3,13 @@ package fu.stockspace.stockspace_be.wms.transfer.service;
 import fu.stockspace.stockspace_be.auth.entity.RoleType;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
+import fu.stockspace.stockspace_be.common.entity.ApprovalStatus;
 import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.staff.entity.AssignmentStatus;
 import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
@@ -18,6 +20,13 @@ import fu.stockspace.stockspace_be.warehouse.entity.WarehouseRack;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
 import fu.stockspace.stockspace_be.wms.product.entity.ProductSku;
 import fu.stockspace.stockspace_be.wms.product.repository.ProductSkuRepository;
+import fu.stockspace.stockspace_be.wms.receipt.entity.DocumentType;
+import fu.stockspace.stockspace_be.wms.receipt.entity.InventoryReceipt;
+import fu.stockspace.stockspace_be.wms.receipt.entity.InventoryReceiptItem;
+import fu.stockspace.stockspace_be.wms.receipt.entity.InventoryTransaction;
+import fu.stockspace.stockspace_be.wms.receipt.repository.InventoryReceiptItemRepository;
+import fu.stockspace.stockspace_be.wms.receipt.repository.InventoryReceiptRepository;
+import fu.stockspace.stockspace_be.wms.receipt.repository.InventoryTransactionRepository;
 import fu.stockspace.stockspace_be.wms.stock.entity.StockBatch;
 import fu.stockspace.stockspace_be.wms.stock.repository.StockBatchRepository;
 import fu.stockspace.stockspace_be.wms.transfer.dto.CreateStockTransferRequest;
@@ -41,6 +50,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -55,6 +66,9 @@ public class StockTransferService {
     private final UserRepository userRepository;
     private final ProductSkuRepository productSkuRepository;
     private final StockBatchRepository stockBatchRepository;
+    private final InventoryReceiptRepository receiptRepository;
+    private final InventoryReceiptItemRepository receiptItemRepository;
+    private final InventoryTransactionRepository transactionRepository;
     private final TenantMemberRepository tenantMemberRepository;
     private final TenantWarehouseAccessService accessService;
     private final StaffWarehouseAssignmentRepository assignmentRepository;
@@ -160,6 +174,60 @@ public class StockTransferService {
         return mapToResponse(transfer);
     }
 
+    @Transactional
+    public StockTransferResponse approveDispatch(UUID userId, UUID transferId) {
+        User approver = findUser(userId);
+        if (isStaff(approver) || !hasRole(approver, RoleType.ROLE_TENANT)) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        }
+        UUID tenantId = resolveTenantId(approver);
+        StockTransfer transfer = transferRepository.findByIdForUpdate(transferId)
+                .filter(candidate -> candidate.getTenant() != null
+                        && tenantId.equals(candidate.getTenant().getId()))
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STOCK_TRANSFER_NOT_FOUND));
+        if (transfer.getStatus() != StockTransferStatus.PENDING) {
+            throw new ResourceConflictException(ErrorCode.STOCK_TRANSFER_INVALID_STATUS);
+        }
+
+        requireTenantMutationAccess(tenantId, transfer);
+        List<LockedSourceAllocation> lockedAllocations = lockAndValidateSourceAllocations(transfer);
+
+        InventoryReceipt outboundReceipt = receiptRepository.save(InventoryReceipt.builder()
+                .warehouse(transfer.getSourceWarehouse())
+                .createdBy(approver)
+                .type(DocumentType.OUTBOUND)
+                .status(ApprovalStatus.APPROVED)
+                .referenceId(transfer.getId())
+                .build());
+
+        for (LockedSourceAllocation locked : lockedAllocations) {
+            StockTransferSourceAllocation allocation = locked.allocation();
+            StockTransferItem item = locked.item();
+            StockBatch batch = locked.batch();
+            batch.setQuantity(batch.getQuantity() - allocation.getQuantity());
+            stockBatchRepository.save(batch);
+
+            InventoryReceiptItem receiptItem = receiptItemRepository.save(InventoryReceiptItem.builder()
+                    .receipt(outboundReceipt)
+                    .sku(item.getSku())
+                    .quantity(allocation.getQuantity())
+                    .rack(allocation.getSourceRack())
+                    .bin(allocation.getSourceBin())
+                    .build());
+            transactionRepository.save(InventoryTransaction.builder()
+                    .receipt(outboundReceipt)
+                    .batch(batch)
+                    .quantityChanged(-allocation.getQuantity())
+                    .build());
+        }
+
+        transfer.setApprovedBy(approver);
+        transfer.setApprovedAt(java.time.LocalDateTime.now());
+        transfer.setOutboundReceipt(outboundReceipt);
+        transfer.setStatus(StockTransferStatus.IN_TRANSIT);
+        return mapToResponse(transferRepository.save(transfer));
+    }
+
     private void validateSourceAllocation(StockBatch batch, ProductSku sku,
                                           Warehouse sourceWarehouse,
                                           StockTransferSourceAllocationRequest request) {
@@ -183,6 +251,50 @@ public class StockTransferService {
         if (isStaff(user)) {
             requireStaffAssignments(user.getId(), tenantId, sourceWarehouseId, destinationWarehouseId);
         }
+    }
+
+    private void requireTenantMutationAccess(UUID tenantId, StockTransfer transfer) {
+        accessService.requireActiveContract(tenantId, transfer.getSourceWarehouse().getId());
+        accessService.requireActiveContract(tenantId, transfer.getDestinationWarehouse().getId());
+        accessService.requireActiveSubscription(tenantId);
+    }
+
+    private List<LockedSourceAllocation> lockAndValidateSourceAllocations(StockTransfer transfer) {
+        List<SourceAllocationReference> references = new ArrayList<>();
+        for (StockTransferItem item : transfer.getItems()) {
+            for (StockTransferSourceAllocation allocation : item.getSourceAllocations()) {
+                references.add(new SourceAllocationReference(item, allocation));
+            }
+        }
+        references.sort(Comparator.comparing(reference -> reference.allocation()
+                .getSourceStockBatch().getId()));
+
+        List<LockedSourceAllocation> lockedAllocations = new ArrayList<>();
+        Set<UUID> lockedBatchIds = new HashSet<>();
+        for (SourceAllocationReference reference : references) {
+            StockTransferSourceAllocation allocation = reference.allocation();
+            UUID batchId = allocation.getSourceStockBatch().getId();
+            if (!lockedBatchIds.add(batchId)) {
+                throw new BadRequestException(ErrorCode.STOCK_TRANSFER_INVALID_ALLOCATION,
+                        "Một source stock batch không được phân bổ lặp lại");
+            }
+
+            StockBatch batch = stockBatchRepository.findByIdForUpdate(batchId)
+                    .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STOCK_BATCH_NOT_FOUND));
+            if (batch.getWarehouse() == null
+                    || !transfer.getSourceWarehouse().getId().equals(batch.getWarehouse().getId())
+                    || !reference.item().getSku().getId().equals(batch.getSkuId())
+                    || batch.getRack() == null || batch.getBin() == null
+                    || allocation.getSourceRack() == null || allocation.getSourceBin() == null
+                    || !allocation.getSourceRack().getId().equals(batch.getRack().getId())
+                    || !allocation.getSourceBin().getId().equals(batch.getBin().getId())
+                    || batch.getQuantity() < allocation.getQuantity()) {
+                throw new BadRequestException(ErrorCode.STOCK_TRANSFER_INVALID_ALLOCATION,
+                        "Source stock batch không còn khớp vị trí hoặc không đủ số lượng");
+            }
+            lockedAllocations.add(new LockedSourceAllocation(reference.item(), allocation, batch));
+        }
+        return lockedAllocations;
     }
 
     private void requireStaffAssignments(UUID staffId, UUID tenantId,
@@ -231,6 +343,15 @@ public class StockTransferService {
     private boolean hasRole(User user, RoleType roleType) {
         return user.getRoles() != null && user.getRoles().stream()
                 .anyMatch(role -> roleType.name().equals(role.getName()));
+    }
+
+    private record SourceAllocationReference(StockTransferItem item,
+                                             StockTransferSourceAllocation allocation) {
+    }
+
+    private record LockedSourceAllocation(StockTransferItem item,
+                                          StockTransferSourceAllocation allocation,
+                                          StockBatch batch) {
     }
 
     private StockTransferResponse mapToResponse(StockTransfer transfer) {
