@@ -111,6 +111,44 @@ class StockBatchServiceTest {
     }
 
     @Test
+    void testGetStockByWarehouse_StaffWithActiveAssignment_AllowsRead() {
+        UUID staffId = UUID.randomUUID();
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
+                staffId, tenantId, warehouseId,
+                fu.stockspace.stockspace_be.staff.entity.AssignmentStatus.ACTIVE))
+                .thenReturn(true);
+        when(stockBatchRepository.findByWarehouseIdAndTenantId(eq(warehouseId), eq(tenantId), any()))
+                .thenReturn(Page.empty());
+
+        PagedResponse<StockBatchResponse> response = stockBatchService.getStockByWarehouse(
+                tenantId, warehouseId, staffId, PageRequest.of(0, 20));
+
+        assertNotNull(response);
+        assertTrue(response.getContent().isEmpty());
+        verify(assignmentRepository).existsActiveByStaffAndTenantAndWarehouse(
+                staffId, tenantId, warehouseId,
+                fu.stockspace.stockspace_be.staff.entity.AssignmentStatus.ACTIVE);
+        verify(stockBatchRepository).findByWarehouseIdAndTenantId(eq(warehouseId), eq(tenantId), any());
+    }
+
+    @Test
+    void testGetStockByWarehouse_StaffWithoutActiveAssignment_IsForbidden() {
+        UUID staffId = UUID.randomUUID();
+        when(assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
+                staffId, tenantId, warehouseId,
+                fu.stockspace.stockspace_be.staff.entity.AssignmentStatus.ACTIVE))
+                .thenReturn(false);
+
+        assertThrows(ForbiddenException.class,
+                () -> stockBatchService.getStockByWarehouse(
+                        tenantId, warehouseId, staffId, PageRequest.of(0, 20)));
+
+        verify(stockBatchRepository, never())
+                .findByWarehouseIdAndTenantId(any(), any(), any());
+    }
+
+    @Test
     void testGetStockByWarehouse_ReadDoesNotRequireSubscription() {
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
         when(stockBatchRepository.findByWarehouseIdAndTenantId(eq(warehouseId), eq(tenantId), any()))
