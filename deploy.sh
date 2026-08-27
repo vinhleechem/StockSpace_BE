@@ -90,34 +90,24 @@ deploy() {
     git reset --hard "origin/$BRANCH"
     log_success "Code đã cập nhật."
 
-    MIGRATION_FILES=(ops/migrations/*.sql)
-    if [ -f "${MIGRATION_FILES[0]}" ]; then
-        log_info "Khởi động PostgreSQL và chạy migration chatbot/RAG..."
-        docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d postgres
-        DB_READY=false
-        for ATTEMPT in $(seq 1 30); do
-            if docker compose -f docker-compose.yml -f docker-compose.prod.yml \
-                exec -T postgres pg_isready \
-                -U "${DB_USERNAME:-postgres}" \
-                -d "${DB_NAME:-stockspace}" > /dev/null 2>&1; then
-                DB_READY=true
-                break
-            fi
-            sleep 2
-        done
-        if [ "$DB_READY" != "true" ]; then
-            log_error "PostgreSQL chưa sẵn sàng để chạy migration."
+    log_info "Khởi động PostgreSQL và chạy migration runner..."
+    docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d postgres
+    DB_READY=false
+    for ATTEMPT in $(seq 1 30); do
+        if docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+            exec -T postgres pg_isready \
+            -U "${DB_USERNAME:-postgres}" \
+            -d "${DB_NAME:-stockspace}" > /dev/null 2>&1; then
+            DB_READY=true
+            break
         fi
-        for MIGRATION_FILE in "${MIGRATION_FILES[@]}"; do
-            log_info "Running migration: $MIGRATION_FILE"
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml \
-                exec -T postgres psql \
-                -v ON_ERROR_STOP=1 \
-                -U "${DB_USERNAME:-postgres}" \
-                -d "${DB_NAME:-stockspace}" < "$MIGRATION_FILE"
-        done
-        log_success "Production migrations completed."
+        sleep 2
+    done
+    if [ "$DB_READY" != "true" ]; then
+        log_error "PostgreSQL chưa sẵn sàng để chạy migration."
     fi
+    bash "$APP_DIR/ops/run-migrations.sh" --docker
+    log_success "Production migrations completed."
 
     log_info "Build image và khởi động containers..."
     docker compose pull postgres nginx 2>/dev/null || true  # Pull image mới nhất từ registry
