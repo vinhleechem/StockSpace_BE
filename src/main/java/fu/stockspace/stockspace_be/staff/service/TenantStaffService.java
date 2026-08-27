@@ -322,6 +322,7 @@ public class TenantStaffService {
                 .findByStaffIdAndTenantIdAndStatus(member.getUser().getId(), tenantId, AssignmentStatus.ACTIVE);
         for (StaffWarehouseAssignment a : activeAssignments) {
             a.setStatus(AssignmentStatus.REVOKED);
+            a.setActive(false);
             a.setEndDate(now);
         }
         assignmentRepository.saveAll(activeAssignments);
@@ -388,6 +389,7 @@ public class TenantStaffService {
         accessService.requireWmsAccess(tenantId, assignment.getWarehouse().getId());
 
         assignment.setStatus(AssignmentStatus.REVOKED);
+        assignment.setActive(false);
         assignment.setEndDate(LocalDateTime.now());
         assignmentRepository.save(assignment);
     }

@@ -152,6 +152,7 @@ public class ContractExpiryScheduler {
         LocalDateTime now = LocalDateTime.now();
         assignments.forEach(assignment -> {
             assignment.setStatus(AssignmentStatus.REVOKED);
+            assignment.setActive(false);
             assignment.setEndDate(now);
         });
         if (!assignments.isEmpty()) {

@@ -72,6 +72,7 @@ class ContractExpirySchedulerTest {
         assertTrue(batch.isDeleted());
         assertFalse(batch.isActive());
         assertEquals(AssignmentStatus.REVOKED, assignment.getStatus());
+        assertFalse(assignment.isActive());
         verify(stockBatchRepository).findAllByWarehouseIdAndTenantId(warehouse.getId(), tenant.getId());
         verify(warehouseLayoutService).archiveTenantLayout(warehouse.getId(), tenant.getId());
         verify(assignmentRepository).saveAll(List.of(assignment));
