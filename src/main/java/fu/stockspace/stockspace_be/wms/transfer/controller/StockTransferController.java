@@ -4,6 +4,7 @@ import fu.stockspace.stockspace_be.auth.util.SecurityUtil;
 import fu.stockspace.stockspace_be.common.dto.ApiResponse;
 import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.wms.transfer.dto.CreateStockTransferRequest;
+import fu.stockspace.stockspace_be.wms.transfer.dto.ReceiveStockTransferRequest;
 import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferResponse;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferStatus;
 import fu.stockspace.stockspace_be.wms.transfer.service.StockTransferService;
@@ -75,5 +76,16 @@ public class StockTransferController {
         StockTransferResponse response = transferService.approveDispatch(
                 SecurityUtil.getCurrentUserId(), id);
         return ResponseEntity.ok(ApiResponse.success("Duyệt xuất kho chuyển tiếp thành công", response));
+    }
+
+    @PostMapping("/{id}/receive")
+    @PreAuthorize("@rbac.hasPermission('INVENTORY_UPDATE')")
+    @Operation(summary = "Nhận hàng tại kho đích và hoàn tất chuyển kho")
+    public ResponseEntity<ApiResponse<StockTransferResponse>> receiveTransfer(
+            @PathVariable UUID id,
+            @Valid @RequestBody ReceiveStockTransferRequest request) {
+        StockTransferResponse response = transferService.receiveTransfer(
+                SecurityUtil.getCurrentUserId(), id, request);
+        return ResponseEntity.ok(ApiResponse.success("Nhận chuyển kho thành công", response));
     }
 }

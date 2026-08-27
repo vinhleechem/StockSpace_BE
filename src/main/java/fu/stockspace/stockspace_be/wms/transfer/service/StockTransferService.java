@@ -17,7 +17,14 @@ import fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseBin;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseRack;
+import fu.stockspace.stockspace_be.warehouse.entity.WarehouseLayout;
+import fu.stockspace.stockspace_be.warehouse.repository.WarehouseBinRepository;
+import fu.stockspace.stockspace_be.warehouse.repository.WarehouseLayoutRepository;
+import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRackRepository;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
+import fu.stockspace.stockspace_be.wms.capacity.PhysicalLoad;
+import fu.stockspace.stockspace_be.wms.capacity.PhysicalLoadCalculator;
+import fu.stockspace.stockspace_be.wms.capacity.PhysicalLoadLine;
 import fu.stockspace.stockspace_be.wms.product.entity.ProductSku;
 import fu.stockspace.stockspace_be.wms.product.repository.ProductSkuRepository;
 import fu.stockspace.stockspace_be.wms.receipt.entity.DocumentType;
@@ -30,6 +37,8 @@ import fu.stockspace.stockspace_be.wms.receipt.repository.InventoryTransactionRe
 import fu.stockspace.stockspace_be.wms.stock.entity.StockBatch;
 import fu.stockspace.stockspace_be.wms.stock.repository.StockBatchRepository;
 import fu.stockspace.stockspace_be.wms.transfer.dto.CreateStockTransferRequest;
+import fu.stockspace.stockspace_be.wms.transfer.dto.ReceiveStockTransferRequest;
+import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferDestinationAllocationRequest;
 import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferDestinationAllocationResponse;
 import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferItemRequest;
 import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferItemResponse;
@@ -54,6 +63,8 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -63,6 +74,9 @@ public class StockTransferService {
 
     private final StockTransferRepository transferRepository;
     private final WarehouseRepository warehouseRepository;
+    private final WarehouseLayoutRepository layoutRepository;
+    private final WarehouseRackRepository rackRepository;
+    private final WarehouseBinRepository binRepository;
     private final UserRepository userRepository;
     private final ProductSkuRepository productSkuRepository;
     private final StockBatchRepository stockBatchRepository;
@@ -72,6 +86,7 @@ public class StockTransferService {
     private final TenantMemberRepository tenantMemberRepository;
     private final TenantWarehouseAccessService accessService;
     private final StaffWarehouseAssignmentRepository assignmentRepository;
+    private final PhysicalLoadCalculator physicalLoadCalculator;
 
     @Transactional
     public StockTransferResponse createTransfer(UUID userId, CreateStockTransferRequest request) {
@@ -228,6 +243,87 @@ public class StockTransferService {
         return mapToResponse(transferRepository.save(transfer));
     }
 
+    @Transactional
+    public StockTransferResponse receiveTransfer(UUID userId, UUID transferId,
+                                                 ReceiveStockTransferRequest request) {
+        User receiver = findUser(userId);
+        if (isStaff(receiver) || !hasRole(receiver, RoleType.ROLE_TENANT)) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        }
+        UUID tenantId = resolveTenantId(receiver);
+        StockTransfer transfer = transferRepository.findByIdForUpdate(transferId)
+                .filter(candidate -> candidate.getTenant() != null
+                        && tenantId.equals(candidate.getTenant().getId()))
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STOCK_TRANSFER_NOT_FOUND));
+        if (transfer.getStatus() != StockTransferStatus.IN_TRANSIT) {
+            throw new ResourceConflictException(ErrorCode.STOCK_TRANSFER_INVALID_STATUS);
+        }
+
+        requireTenantMutationAccess(tenantId, transfer);
+        WarehouseLayout destinationLayout = findActiveTenantLayout(
+                transfer.getDestinationWarehouse().getId(), tenantId);
+        List<DestinationAllocationReference> references = validateDestinationAllocations(
+                transfer, request, destinationLayout);
+        Map<UUID, WarehouseRack> lockedRacks = lockDestinationRacks(references, destinationLayout);
+        Map<UUID, WarehouseBin> lockedBins = lockDestinationBins(references, lockedRacks, destinationLayout);
+        validateDestinationCapacity(tenantId, transfer, references, lockedRacks, lockedBins);
+
+        InventoryReceipt inboundReceipt = receiptRepository.save(InventoryReceipt.builder()
+                .warehouse(transfer.getDestinationWarehouse())
+                .createdBy(receiver)
+                .type(DocumentType.INBOUND)
+                .status(ApprovalStatus.APPROVED)
+                .referenceId(transfer.getId())
+                .build());
+
+        for (DestinationAllocationReference reference : references) {
+            StockTransferItem item = reference.item();
+            StockTransferDestinationAllocationRequest allocationRequest = reference.request();
+            WarehouseRack rack = lockedRacks.get(allocationRequest.getDestinationRackId());
+            WarehouseBin bin = lockedBins.get(allocationRequest.getDestinationBinId());
+
+            StockBatch batch = stockBatchRepository
+                    .findBySkuIdAndWarehouseIdAndRackIdAndBinIdForUpdate(
+                            item.getSku().getId(), transfer.getDestinationWarehouse().getId(),
+                            rack.getId(), bin.getId())
+                    .orElseGet(() -> StockBatch.builder()
+                            .skuId(item.getSku().getId())
+                            .warehouse(transfer.getDestinationWarehouse())
+                            .rack(rack)
+                            .bin(bin)
+                            .quantity(0)
+                            .arrivalDate(java.time.LocalDateTime.now())
+                            .build());
+            batch.setQuantity(batch.getQuantity() + allocationRequest.getQuantity());
+            stockBatchRepository.save(batch);
+
+            item.getDestinationAllocations().add(StockTransferDestinationAllocation.builder()
+                    .item(item)
+                    .destinationRack(rack)
+                    .destinationBin(bin)
+                    .quantity(allocationRequest.getQuantity())
+                    .build());
+            receiptItemRepository.save(InventoryReceiptItem.builder()
+                    .receipt(inboundReceipt)
+                    .sku(item.getSku())
+                    .quantity(allocationRequest.getQuantity())
+                    .rack(rack)
+                    .bin(bin)
+                    .build());
+            transactionRepository.save(InventoryTransaction.builder()
+                    .receipt(inboundReceipt)
+                    .batch(batch)
+                    .quantityChanged(allocationRequest.getQuantity())
+                    .build());
+        }
+
+        transfer.setReceivedBy(receiver);
+        transfer.setReceivedAt(java.time.LocalDateTime.now());
+        transfer.setInboundReceipt(inboundReceipt);
+        transfer.setStatus(StockTransferStatus.COMPLETED);
+        return mapToResponse(transferRepository.save(transfer));
+    }
+
     private void validateSourceAllocation(StockBatch batch, ProductSku sku,
                                           Warehouse sourceWarehouse,
                                           StockTransferSourceAllocationRequest request) {
@@ -257,6 +353,165 @@ public class StockTransferService {
         accessService.requireActiveContract(tenantId, transfer.getSourceWarehouse().getId());
         accessService.requireActiveContract(tenantId, transfer.getDestinationWarehouse().getId());
         accessService.requireActiveSubscription(tenantId);
+    }
+
+    private WarehouseLayout findActiveTenantLayout(UUID warehouseId, UUID tenantId) {
+        return layoutRepository.findByWarehouseIdAndTenantId(warehouseId, tenantId)
+                .filter(layout -> layout.isActive() && !layout.isDeleted())
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.LAYOUT_NOT_FOUND));
+    }
+
+    private List<DestinationAllocationReference> validateDestinationAllocations(
+            StockTransfer transfer, ReceiveStockTransferRequest request, WarehouseLayout layout) {
+        Map<UUID, StockTransferItem> itemsById = transfer.getItems().stream()
+                .collect(java.util.stream.Collectors.toMap(StockTransferItem::getId, item -> item));
+        Map<UUID, Long> quantitiesByItem = new LinkedHashMap<>();
+        Set<DestinationLocationKey> locations = new HashSet<>();
+        List<DestinationAllocationReference> references = new ArrayList<>();
+
+        for (StockTransferDestinationAllocationRequest allocationRequest : request.getDestinationAllocations()) {
+            StockTransferItem item = itemsById.get(allocationRequest.getItemId());
+            if (item == null || !locations.add(new DestinationLocationKey(
+                    allocationRequest.getItemId(), allocationRequest.getDestinationRackId(),
+                    allocationRequest.getDestinationBinId()))) {
+                throw new BadRequestException(ErrorCode.STOCK_TRANSFER_INVALID_ALLOCATION,
+                        "Destination allocation không thuộc transfer hoặc bị lặp");
+            }
+            WarehouseRack rack = rackRepository.findByIdAndIsDeletedFalse(
+                            allocationRequest.getDestinationRackId())
+                    .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RACK_NOT_FOUND));
+            WarehouseBin bin = binRepository.findByIdAndIsDeletedFalse(
+                            allocationRequest.getDestinationBinId())
+                    .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_BIN_NOT_FOUND));
+            if (!rack.isActive() || !bin.isActive()
+                    || rack.getLayout() == null || !layout.getId().equals(rack.getLayout().getId())
+                    || bin.getRack() == null || !rack.getId().equals(bin.getRack().getId())) {
+                throw new BadRequestException(ErrorCode.STOCK_TRANSFER_INVALID_ALLOCATION,
+                        "Rack/bin đích không thuộc layout của warehouse đích");
+            }
+            quantitiesByItem.merge(item.getId(), (long) allocationRequest.getQuantity(), Long::sum);
+            references.add(new DestinationAllocationReference(item, allocationRequest, rack, bin));
+        }
+
+        for (StockTransferItem item : transfer.getItems()) {
+            if (!item.getDestinationAllocations().isEmpty()
+                    || quantitiesByItem.getOrDefault(item.getId(), 0L) != item.getRequestedQuantity()) {
+                throw new BadRequestException(ErrorCode.STOCK_TRANSFER_INVALID_ALLOCATION,
+                        "Tổng phân bổ đích phải bằng requestedQuantity của từng SKU");
+            }
+        }
+        references.sort(Comparator
+                .comparing((DestinationAllocationReference reference) -> reference.request()
+                        .getDestinationRackId())
+                .thenComparing(reference -> reference.request().getDestinationBinId())
+                .thenComparing(reference -> reference.item().getId()));
+        return references;
+    }
+
+    private Map<UUID, WarehouseRack> lockDestinationRacks(
+            List<DestinationAllocationReference> references, WarehouseLayout layout) {
+        Set<UUID> rackIds = references.stream()
+                .map(reference -> reference.request().getDestinationRackId())
+                .collect(java.util.stream.Collectors.toCollection(java.util.TreeSet::new));
+        Map<UUID, WarehouseRack> locked = new LinkedHashMap<>();
+        for (UUID rackId : rackIds) {
+            WarehouseRack rack = rackRepository.findByIdForUpdate(rackId)
+                    .filter(candidate -> candidate.isActive()
+                            && candidate.getLayout() != null
+                            && layout.getId().equals(candidate.getLayout().getId()))
+                    .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RACK_NOT_FOUND));
+            locked.put(rackId, rack);
+        }
+        return locked;
+    }
+
+    private Map<UUID, WarehouseBin> lockDestinationBins(
+            List<DestinationAllocationReference> references,
+            Map<UUID, WarehouseRack> lockedRacks,
+            WarehouseLayout layout) {
+        Set<UUID> binIds = references.stream()
+                .map(reference -> reference.request().getDestinationBinId())
+                .collect(java.util.stream.Collectors.toCollection(java.util.TreeSet::new));
+        Map<UUID, WarehouseBin> locked = new LinkedHashMap<>();
+        for (UUID binId : binIds) {
+            WarehouseBin bin = binRepository.findByIdForUpdate(binId)
+                    .filter(candidate -> candidate.isActive()
+                            && candidate.getRack() != null
+                            && lockedRacks.containsKey(candidate.getRack().getId())
+                            && candidate.getRack().getLayout() != null
+                            && layout.getId().equals(candidate.getRack().getLayout().getId()))
+                    .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_BIN_NOT_FOUND));
+            locked.put(binId, bin);
+        }
+        return locked;
+    }
+
+    private void validateDestinationCapacity(UUID tenantId, StockTransfer transfer,
+                                             List<DestinationAllocationReference> references,
+                                             Map<UUID, WarehouseRack> racks,
+                                             Map<UUID, WarehouseBin> bins) {
+        List<PhysicalLoadLine> currentLoads = stockBatchRepository
+                .findActivePhysicalLoadsByWarehouseIdAndTenantId(
+                        transfer.getDestinationWarehouse().getId(), tenantId);
+        Map<UUID, List<PhysicalLoadLine>> currentByRack = currentLoads.stream()
+                .filter(line -> line.rackId() != null)
+                .collect(java.util.stream.Collectors.groupingBy(PhysicalLoadLine::rackId));
+        Map<UUID, List<PhysicalLoadLine>> currentByBin = currentLoads.stream()
+                .filter(line -> line.binId() != null)
+                .collect(java.util.stream.Collectors.groupingBy(PhysicalLoadLine::binId));
+        Map<UUID, List<PhysicalLoadLine>> incomingByRack = new LinkedHashMap<>();
+        Map<UUID, List<PhysicalLoadLine>> incomingByBin = new LinkedHashMap<>();
+        for (DestinationAllocationReference reference : references) {
+            ProductSku sku = reference.item().getSku();
+            StockTransferDestinationAllocationRequest request = reference.request();
+            PhysicalLoadLine line = new PhysicalLoadLine(
+                    request.getDestinationRackId(), request.getDestinationBinId(), sku.getId(),
+                    sku.getSkuCode(), sku.getName(), sku.getUnitWeightKg(), sku.getUnitVolumeM3(),
+                    request.getQuantity());
+            incomingByRack.computeIfAbsent(request.getDestinationRackId(), ignored -> new ArrayList<>())
+                    .add(line);
+            incomingByBin.computeIfAbsent(request.getDestinationBinId(), ignored -> new ArrayList<>())
+                    .add(line);
+        }
+
+        boolean hasLimitedRack = incomingByRack.keySet().stream()
+                .map(racks::get)
+                .anyMatch(rack -> physicalLoadCalculator.isLimited(rack.getMaxWeight())
+                        || physicalLoadCalculator.isLimited(rack.getMaxVolume()));
+        boolean hasLimitedBin = incomingByBin.keySet().stream()
+                .map(bins::get)
+                .anyMatch(bin -> physicalLoadCalculator.isLimited(bin.getMaxWeight())
+                        || physicalLoadCalculator.isLimited(bin.getMaxVolume()));
+        if (!hasLimitedRack && !hasLimitedBin) {
+            return;
+        }
+
+        for (UUID rackId : incomingByRack.keySet()) {
+            WarehouseRack rack = racks.get(rackId);
+            boolean weightLimited = physicalLoadCalculator.isLimited(rack.getMaxWeight());
+            boolean volumeLimited = physicalLoadCalculator.isLimited(rack.getMaxVolume());
+            if (!weightLimited && !volumeLimited) {
+                continue;
+            }
+            List<PhysicalLoadLine> lines = new ArrayList<>(currentByRack.getOrDefault(rackId, List.of()));
+            lines.addAll(incomingByRack.get(rackId));
+            PhysicalLoad load = physicalLoadCalculator.calculate(lines, weightLimited, volumeLimited);
+            physicalLoadCalculator.assertWithinCapacity(
+                    "rack", rack.getName(), rack.getMaxWeight(), rack.getMaxVolume(), load);
+        }
+        for (UUID binId : incomingByBin.keySet()) {
+            WarehouseBin bin = bins.get(binId);
+            boolean weightLimited = physicalLoadCalculator.isLimited(bin.getMaxWeight());
+            boolean volumeLimited = physicalLoadCalculator.isLimited(bin.getMaxVolume());
+            if (!weightLimited && !volumeLimited) {
+                continue;
+            }
+            List<PhysicalLoadLine> lines = new ArrayList<>(currentByBin.getOrDefault(binId, List.of()));
+            lines.addAll(incomingByBin.get(binId));
+            PhysicalLoad load = physicalLoadCalculator.calculate(lines, weightLimited, volumeLimited);
+            physicalLoadCalculator.assertWithinCapacity(
+                    "bin", bin.getName(), bin.getMaxWeight(), bin.getMaxVolume(), load);
+        }
     }
 
     private List<LockedSourceAllocation> lockAndValidateSourceAllocations(StockTransfer transfer) {
@@ -352,6 +607,15 @@ public class StockTransferService {
     private record LockedSourceAllocation(StockTransferItem item,
                                           StockTransferSourceAllocation allocation,
                                           StockBatch batch) {
+    }
+
+    private record DestinationAllocationReference(StockTransferItem item,
+                                                  StockTransferDestinationAllocationRequest request,
+                                                  WarehouseRack rack,
+                                                  WarehouseBin bin) {
+    }
+
+    private record DestinationLocationKey(UUID itemId, UUID rackId, UUID binId) {
     }
 
     private StockTransferResponse mapToResponse(StockTransfer transfer) {
