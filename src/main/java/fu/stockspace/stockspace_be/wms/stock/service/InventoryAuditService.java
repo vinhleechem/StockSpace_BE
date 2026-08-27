@@ -71,8 +71,8 @@ public class InventoryAuditService {
                 .build();
         audit = auditRepository.save(audit);
 
-        List<StockBatch> batches = stockBatchRepository.findByWarehouseIdAndIsDeletedFalse(
-                warehouse.getId(), Pageable.unpaged()).getContent();
+        List<StockBatch> batches = stockBatchRepository.findByWarehouseIdAndTenantId(
+                warehouse.getId(), tenantId, Pageable.unpaged()).getContent();
 
         final InventoryAudit savedAudit = audit;
         List<InventoryAuditItem> items = batches.stream()
@@ -122,7 +122,7 @@ public class InventoryAuditService {
 
     @Transactional
     public InventoryAuditResponse submitAudit(UUID userId, UUID auditId, SubmitAuditRequest request) {
-        InventoryAudit audit = getAuditForUser(auditId, userId);
+        InventoryAudit audit = getAuditForUserForUpdate(auditId, userId);
         User actor = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
         requireWarehouseMutationAccess(actor, resolveTenantId(userId), audit.getWarehouse().getId());
@@ -171,7 +171,7 @@ public class InventoryAuditService {
 
     @Transactional
     public InventoryAuditResponse approveAudit(UUID approverId, UUID auditId) {
-        InventoryAudit audit = auditRepository.findById(auditId)
+        InventoryAudit audit = auditRepository.findByIdForUpdate(auditId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.AUDIT_NOT_FOUND));
 
         if (audit.getStatus() != AuditStatus.SUBMITTED) {
@@ -181,7 +181,9 @@ public class InventoryAuditService {
         User approver = userRepository.findById(approverId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
         ensureApproverIsTenant(approver);
-        requireWarehouseMutationAccess(approver, resolveTenantId(approverId), audit.getWarehouse().getId());
+        UUID tenantId = resolveTenantId(approverId);
+        requireAuditTenantAccess(audit, tenantId);
+        requireWarehouseMutationAccess(approver, tenantId, audit.getWarehouse().getId());
 
         List<InventoryAuditItem> items = auditItemRepository.findByAuditId(auditId);
         UUID warehouseId = audit.getWarehouse().getId();
@@ -215,7 +217,7 @@ public class InventoryAuditService {
 
     @Transactional
     public InventoryAuditResponse rejectAudit(UUID approverId, UUID auditId, String reason) {
-        InventoryAudit audit = auditRepository.findById(auditId)
+        InventoryAudit audit = auditRepository.findByIdForUpdate(auditId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.AUDIT_NOT_FOUND));
 
         if (audit.getStatus() != AuditStatus.SUBMITTED && audit.getStatus() != AuditStatus.PENDING) {
@@ -225,7 +227,9 @@ public class InventoryAuditService {
         User approver = userRepository.findById(approverId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
         ensureApproverIsTenant(approver);
-        requireWarehouseMutationAccess(approver, resolveTenantId(approverId), audit.getWarehouse().getId());
+        UUID tenantId = resolveTenantId(approverId);
+        requireAuditTenantAccess(audit, tenantId);
+        requireWarehouseMutationAccess(approver, tenantId, audit.getWarehouse().getId());
 
         audit.setApprovedBy(approver);
         audit.setStatus(AuditStatus.REJECTED);
@@ -269,9 +273,10 @@ public class InventoryAuditService {
         Page<InventoryAudit> page;
         if (warehouseId != null) {
             requireWarehouseObservationAccess(actor, tenantId, warehouseId);
-            page = auditRepository.findByWarehouseIdAndIsDeletedFalse(warehouseId, pageable);
+            page = auditRepository.findAuditsForTenant(
+                    warehouseId, List.of(warehouseId), tenantId, pageable);
         } else if (!accessibleWarehouseIds.isEmpty()) {
-            page = auditRepository.findAuditsForTenant(null, accessibleWarehouseIds, userId, pageable);
+            page = auditRepository.findAuditsForTenant(null, accessibleWarehouseIds, tenantId, pageable);
         } else {
             page = Page.empty(pageable);
         }
@@ -303,8 +308,34 @@ public class InventoryAuditService {
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.AUDIT_NOT_FOUND));
         User actor = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
-        requireWarehouseObservationAccess(actor, resolveTenantId(userId), audit.getWarehouse().getId());
+        UUID tenantId = resolveTenantId(userId);
+        requireAuditTenantAccess(audit, tenantId);
+        requireWarehouseObservationAccess(actor, tenantId, audit.getWarehouse().getId());
         return audit;
+    }
+
+    private InventoryAudit getAuditForUserForUpdate(UUID auditId, UUID userId) {
+        InventoryAudit audit = auditRepository.findByIdForUpdate(auditId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.AUDIT_NOT_FOUND));
+        User actor = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+        UUID tenantId = resolveTenantId(userId);
+        requireAuditTenantAccess(audit, tenantId);
+        requireWarehouseObservationAccess(actor, tenantId, audit.getWarehouse().getId());
+        return audit;
+    }
+
+    private void requireAuditTenantAccess(InventoryAudit audit, UUID tenantId) {
+        UUID requesterId = audit.getRequestedBy().getId();
+        boolean requestedByTenant = requesterId.equals(tenantId);
+        boolean requestedByStaffOfTenant = tenantMemberRepository
+                .findByUserIdOrderByJoinedAtDesc(requesterId)
+                .stream()
+                .anyMatch(member -> member.getTenant() != null
+                        && tenantId.equals(member.getTenant().getId()));
+        if (!requestedByTenant && !requestedByStaffOfTenant) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        }
     }
 
     private UUID resolveTenantId(UUID userId) {
