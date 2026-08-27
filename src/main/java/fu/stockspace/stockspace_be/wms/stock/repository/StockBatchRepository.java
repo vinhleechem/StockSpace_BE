@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
 
 import java.util.List;
 import java.util.Optional;
@@ -28,6 +30,22 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
 
     Optional<StockBatch> findBySkuIdAndWarehouseIdAndRackIdAndBinIdAndIsDeletedFalse(
             UUID skuId, UUID warehouseId, UUID rackId, UUID binId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select b from StockBatch b
+            where b.skuId = :skuId
+              and b.warehouse.id = :warehouseId
+              and b.rack.id = :rackId
+              and b.bin.id = :binId
+              and b.isActive = true
+              and b.isDeleted = false
+            """)
+    Optional<StockBatch> findBySkuIdAndWarehouseIdAndRackIdAndBinIdForUpdate(
+            @Param("skuId") UUID skuId,
+            @Param("warehouseId") UUID warehouseId,
+            @Param("rackId") UUID rackId,
+            @Param("binId") UUID binId);
 
 
     Page<StockBatch> findByWarehouseIdAndIsDeletedFalse(UUID warehouseId, Pageable pageable);
@@ -167,6 +185,10 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
     int sumQuantityByBinId(@Param("binId") UUID binId);
 
     Optional<StockBatch> findByIdAndIsDeletedFalse(UUID id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select b from StockBatch b where b.id = :id and b.isActive = true and b.isDeleted = false")
+    Optional<StockBatch> findByIdForUpdate(@Param("id") UUID id);
 
     interface WarehouseStockSummaryProjection {
         Long getProductCount();
