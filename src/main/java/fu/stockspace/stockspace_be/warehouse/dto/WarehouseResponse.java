@@ -18,6 +18,10 @@ public class WarehouseResponse {
     private UUID id;
     private String name;
     private String address;
+    private String provinceCode;
+    private String provinceName;
+    private String districtCode;
+    private String districtName;
     private String description;
     private BigDecimal capacity;
     @Schema(description = "Listing price source; distinct from a contract's final monthly rent")

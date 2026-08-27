@@ -155,6 +155,65 @@ class WarehouseServiceTest {
     }
 
     @Test
+    void updateWarehouseRejectsIncompleteStructuredLocation() {
+        UpdateWarehouseRequest request = new UpdateWarehouseRequest();
+        request.setProvinceCode("79");
+
+        when(warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId))
+                .thenReturn(Optional.of(warehouse));
+
+        assertThrows(BadRequestException.class,
+                () -> warehouseService.updateWarehouse(ownerId, warehouseId, request));
+        verify(warehouseRepository, never()).save(any(Warehouse.class));
+    }
+
+    @Test
+    void updateWarehouseStoresCompleteStructuredLocation() {
+        UpdateWarehouseRequest request = new UpdateWarehouseRequest();
+        request.setProvinceCode("79");
+        request.setProvinceName("Thành phố Hồ Chí Minh");
+        request.setDistrictCode("760");
+        request.setDistrictName("Quận 9");
+
+        when(warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId))
+                .thenReturn(Optional.of(warehouse));
+        when(warehouseRepository.save(any(Warehouse.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        WarehouseResponse response = warehouseService.updateWarehouse(ownerId, warehouseId, request);
+
+        assertEquals("79", warehouse.getProvinceCode());
+        assertEquals("Thành phố Hồ Chí Minh", warehouse.getProvinceName());
+        assertEquals("760", warehouse.getDistrictCode());
+        assertEquals("Quận 9", warehouse.getDistrictName());
+        assertEquals("79", response.getProvinceCode());
+        assertEquals("760", response.getDistrictCode());
+    }
+
+    @Test
+    void updateWarehouseClearsNormalizedLocationWhenAddressChangesWithoutStructuredLocation() {
+        warehouse.setProvinceCode("79");
+        warehouse.setProvinceName("Thành phố Hồ Chí Minh");
+        warehouse.setDistrictCode("760");
+        warehouse.setDistrictName("Quận 9");
+
+        UpdateWarehouseRequest request = new UpdateWarehouseRequest();
+        request.setAddress("Địa chỉ mới");
+
+        when(warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId))
+                .thenReturn(Optional.of(warehouse));
+        when(warehouseRepository.save(any(Warehouse.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        warehouseService.updateWarehouse(ownerId, warehouseId, request);
+
+        assertNull(warehouse.getProvinceCode());
+        assertNull(warehouse.getProvinceName());
+        assertNull(warehouse.getDistrictCode());
+        assertNull(warehouse.getDistrictName());
+    }
+
+    @Test
     void authenticatedContactRequestReturnsOwnerPhoneForVerifiedActiveWarehouse() {
         warehouse.setStatus(WarehouseStatus.AVAILABLE);
         warehouse.setVerified(true);

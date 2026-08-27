@@ -30,6 +30,18 @@ public class CreateWarehouseRequest {
     @NotBlank(message = "Address is required")
     private String address;
 
+    @Size(max = 50, message = "Province code must not exceed 50 characters")
+    private String provinceCode;
+
+    @Size(max = 255, message = "Province name must not exceed 255 characters")
+    private String provinceName;
+
+    @Size(max = 50, message = "District code must not exceed 50 characters")
+    private String districtCode;
+
+    @Size(max = 255, message = "District name must not exceed 255 characters")
+    private String districtName;
+
     private String description;
 
     @NotNull(message = "Capacity is required")
