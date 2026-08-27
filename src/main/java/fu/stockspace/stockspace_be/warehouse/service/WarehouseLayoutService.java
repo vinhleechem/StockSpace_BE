@@ -460,35 +460,33 @@ public class WarehouseLayoutService {
             }
         }
 
-        if (!isTenantRole) {
-            List<UUID> racksToDelete = dbRacks.stream().map(WarehouseRack::getId)
-                    .filter(id -> !reqRackIds.contains(id)).collect(Collectors.toList());
-            List<UUID> binsToDelete = dbBins.stream().map(WarehouseBin::getId)
-                    .filter(id -> !reqBinIds.contains(id)).collect(Collectors.toList());
+        List<UUID> racksToDelete = dbRacks.stream().map(WarehouseRack::getId)
+                .filter(id -> !reqRackIds.contains(id)).collect(Collectors.toList());
+        List<UUID> binsToDelete = dbBins.stream().map(WarehouseBin::getId)
+                .filter(id -> !reqBinIds.contains(id)).collect(Collectors.toList());
 
-            for (UUID binId : binsToDelete) {
-                if (stockBatchRepository.existsByBinIdAndQuantityGreaterThanAndIsDeletedFalse(binId, 0)) {
-                    WarehouseBin bin = dbBinMap.get(binId);
-                    String name = bin != null ? bin.getName() : binId.toString();
-                    throw new BadRequestException(ErrorCode.WAREHOUSE_BIN_NOT_EMPTY,
-                            "Không thể xóa ô chứa " + name + " vì vẫn còn hàng tồn kho");
-                }
+        for (UUID binId : binsToDelete) {
+            if (stockBatchRepository.existsByBinIdAndQuantityGreaterThanAndIsDeletedFalse(binId, 0)) {
+                WarehouseBin bin = dbBinMap.get(binId);
+                String name = bin != null ? bin.getName() : binId.toString();
+                throw new BadRequestException(ErrorCode.WAREHOUSE_BIN_NOT_EMPTY,
+                        "Không thể xóa ô chứa " + name + " vì vẫn còn hàng tồn kho");
             }
-            for (UUID rackId : racksToDelete) {
-                if (stockBatchRepository.existsByRackIdAndQuantityGreaterThanAndIsDeletedFalse(rackId, 0)) {
-                    WarehouseRack rack = dbRackMap.get(rackId);
-                    String name = rack != null ? rack.getName() : rackId.toString();
-                    throw new BadRequestException(ErrorCode.WAREHOUSE_BIN_NOT_EMPTY,
-                            "Không thể xóa kệ hàng " + name + " vì vẫn còn hàng tồn kho");
-                }
+        }
+        for (UUID rackId : racksToDelete) {
+            if (stockBatchRepository.existsByRackIdAndQuantityGreaterThanAndIsDeletedFalse(rackId, 0)) {
+                WarehouseRack rack = dbRackMap.get(rackId);
+                String name = rack != null ? rack.getName() : rackId.toString();
+                throw new BadRequestException(ErrorCode.WAREHOUSE_BIN_NOT_EMPTY,
+                        "Không thể xóa kệ hàng " + name + " vì vẫn còn hàng tồn kho");
             }
+        }
 
-            for (UUID binId : binsToDelete) {
-                binRepository.deleteById(binId);
-            }
-            for (UUID rackId : racksToDelete) {
-                rackRepository.deleteById(rackId);
-            }
+        for (UUID binId : binsToDelete) {
+            binRepository.deleteById(binId);
+        }
+        for (UUID rackId : racksToDelete) {
+            rackRepository.deleteById(rackId);
         }
 
 
