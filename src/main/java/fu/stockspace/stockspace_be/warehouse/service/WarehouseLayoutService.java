@@ -345,53 +345,78 @@ public class WarehouseLayoutService {
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
 
-        WarehouseLayout layout = null;
-        boolean isTenantRole = "TENANT".equalsIgnoreCase(role);
+        boolean isTenantRole = role != null && "TENANT".equalsIgnoreCase(role.trim());
+        WarehouseLayout layout = resolveLayoutForSave(warehouse, warehouseId, userId, role, request);
+        if (isTenantRole) {
+            validateTenantSnapshotDimensions(layout, request);
+        }
 
-        if ("OWNER".equalsIgnoreCase(role)) {
-            if (!warehouse.getOwner().getId().equals(userId)) {
+        layout.setPositions(serializePositions(request.getPositions()));
+        WarehouseLayout savedLayout = layoutRepository.save(layout);
+        if (savedLayout != null) layout = savedLayout;
+
+        return saveLayoutContents(layout, request, isTenantRole);
+    }
+
+    /**
+     * Resolves the only layout a caller is allowed to mutate. Owner writes the
+     * warehouse default layout; Tenant writes only its own active snapshot.
+     */
+    private WarehouseLayout resolveLayoutForSave(Warehouse warehouse,
+                                                  UUID warehouseId,
+                                                  UUID userId,
+                                                  String role,
+                                                  BulkLayoutSaveRequest request) {
+        String normalizedRole = role == null ? "" : role.trim().toUpperCase(Locale.ROOT);
+
+        if ("OWNER".equals(normalizedRole)) {
+            if (warehouse.getOwner() == null || !warehouse.getOwner().getId().equals(userId)) {
                 throw new ForbiddenException(ErrorCode.WAREHOUSE_NOT_OWNED);
             }
-            layout = layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId).orElse(null);
-            if (layout == null) {
-                layout = WarehouseLayout.builder()
-                        .warehouse(warehouse)
-                        .isDefault(true)
-                        .width(request.getWidth())
-                        .length(request.getLength() != null ? request.getLength() : new BigDecimal("100"))
-                        .height(request.getHeight())
-                        .build();
-            } else {
-                layout.setWidth(request.getWidth());
-                if (request.getLength() != null) layout.setLength(request.getLength());
-                layout.setHeight(request.getHeight());
-            }
-            layout.setPositions(serializePositions(request.getPositions()));
-            WarehouseLayout savedOwnerLayout = layoutRepository.save(layout);
-            if (savedOwnerLayout != null) layout = savedOwnerLayout;
 
-        } else if (isTenantRole) {
+            WarehouseLayout layout = layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)
+                    .orElseGet(() -> WarehouseLayout.builder()
+                            .warehouse(warehouse)
+                            .isDefault(true)
+                            .width(request.getWidth())
+                            .length(request.getLength())
+                            .height(request.getHeight())
+                            .build());
+            layout.setWidth(request.getWidth());
+            layout.setLength(request.getLength());
+            layout.setHeight(request.getHeight());
+            return layout;
+        }
+
+        if ("TENANT".equals(normalizedRole)) {
             tenantWarehouseAccessService.requireWmsAccess(userId, warehouseId);
 
-            layout = layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId).orElse(null);
-            if (layout != null && (layout.isDeleted() || !layout.isActive())) {
-                layout = null;
-            }
+            WarehouseLayout layout = layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId)
+                    .filter(existing -> !existing.isDeleted() && existing.isActive())
+                    .orElse(null);
             if (layout == null) {
                 cloneLayout(warehouseId, userId);
                 layout = layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId)
+                        .filter(existing -> !existing.isDeleted() && existing.isActive())
                         .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.LAYOUT_NOT_FOUND));
             }
-            layout.setPositions(serializePositions(request.getPositions()));
-            WarehouseLayout savedTenantLayout = layoutRepository.save(layout);
-            if (savedTenantLayout != null) layout = savedTenantLayout;
-
-        } else {
-            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+            return layout;
         }
 
+        throw new ForbiddenException(ErrorCode.FORBIDDEN);
+    }
 
-        return saveLayoutContents(layout, request, isTenantRole);
+    private void validateTenantSnapshotDimensions(WarehouseLayout layout, BulkLayoutSaveRequest request) {
+        requirePositive("layout.width", request.getWidth());
+        requirePositive("layout.length", request.getLength());
+        requirePositive("layout.height", request.getHeight());
+
+        if (layout.getWidth() == null || layout.getLength() == null || layout.getHeight() == null
+                || layout.getWidth().compareTo(request.getWidth()) != 0
+                || layout.getLength().compareTo(request.getLength()) != 0
+                || layout.getHeight().compareTo(request.getHeight()) != 0) {
+            throw invalidGeometry("Tenant cannot change the dimensions of its layout snapshot");
+        }
     }
 
     private WarehouseLayoutResponse saveLayoutContents(WarehouseLayout layout,
@@ -420,60 +445,48 @@ public class WarehouseLayoutService {
         }
 
 
-        if (isTenantRole) {
-
-            if (request.getRacks() != null) {
-                for (RackSaveRequest rReq : request.getRacks()) {
-                    if (rReq.getId() == null || !dbRackMap.containsKey(rReq.getId())) {
-                        throw new BadRequestException("Tenant không được phép thêm kệ hàng mới vào sơ đồ.");
-                    }
-                    if (rReq.getBins() != null) {
-                        for (BinSaveRequest bReq : rReq.getBins()) {
-                            if (bReq.getId() == null || !dbBinMap.containsKey(bReq.getId())) {
-                                throw new BadRequestException("Tenant không được phép thêm ô chứa mới vào sơ đồ.");
-                            }
+        if (request.getRacks() != null) {
+            for (RackSaveRequest rReq : request.getRacks()) {
+                if (rReq.getId() != null && !dbRackMap.containsKey(rReq.getId())) {
+                    throw new BadRequestException("Rack does not belong to this layout: " + rReq.getId());
+                }
+                if (rReq.getBins() != null) {
+                    for (BinSaveRequest bReq : rReq.getBins()) {
+                        if (bReq.getId() != null && !dbBinMap.containsKey(bReq.getId())) {
+                            throw new BadRequestException("Bin does not belong to this layout: " + bReq.getId());
                         }
                     }
                 }
             }
+        }
 
+        List<UUID> racksToDelete = dbRacks.stream().map(WarehouseRack::getId)
+                .filter(id -> !reqRackIds.contains(id)).collect(Collectors.toList());
+        List<UUID> binsToDelete = dbBins.stream().map(WarehouseBin::getId)
+                .filter(id -> !reqBinIds.contains(id)).collect(Collectors.toList());
 
-            if (reqRackIds.size() != dbRacks.size() || reqBinIds.size() != dbBins.size()) {
-                throw new BadRequestException("Tenant không được phép xóa kệ hàng hoặc ô chứa khỏi sơ đồ.");
+        for (UUID binId : binsToDelete) {
+            if (stockBatchRepository.existsByBinIdAndQuantityGreaterThanAndIsDeletedFalse(binId, 0)) {
+                WarehouseBin bin = dbBinMap.get(binId);
+                String name = bin != null ? bin.getName() : binId.toString();
+                throw new BadRequestException(ErrorCode.WAREHOUSE_BIN_NOT_EMPTY,
+                        "Không thể xóa ô chứa " + name + " vì vẫn còn hàng tồn kho");
+            }
+        }
+        for (UUID rackId : racksToDelete) {
+            if (stockBatchRepository.existsByRackIdAndQuantityGreaterThanAndIsDeletedFalse(rackId, 0)) {
+                WarehouseRack rack = dbRackMap.get(rackId);
+                String name = rack != null ? rack.getName() : rackId.toString();
+                throw new BadRequestException(ErrorCode.WAREHOUSE_BIN_NOT_EMPTY,
+                        "Không thể xóa kệ hàng " + name + " vì vẫn còn hàng tồn kho");
             }
         }
 
-
-        if (!isTenantRole) {
-            List<UUID> racksToDelete = dbRacks.stream().map(WarehouseRack::getId)
-                    .filter(id -> !reqRackIds.contains(id)).collect(Collectors.toList());
-            List<UUID> binsToDelete = dbBins.stream().map(WarehouseBin::getId)
-                    .filter(id -> !reqBinIds.contains(id)).collect(Collectors.toList());
-
-
-            for (UUID binId : binsToDelete) {
-                if (stockBatchRepository.existsByBinIdAndQuantityGreaterThanAndIsDeletedFalse(binId, 0)) {
-                    WarehouseBin bin = dbBinMap.get(binId);
-                    String name = bin != null ? bin.getName() : binId.toString();
-                    throw new BadRequestException(ErrorCode.WAREHOUSE_BIN_NOT_EMPTY,
-                            "Không thể xóa ô chứa " + name + " vì vẫn còn hàng tồn kho");
-                }
-            }
-            for (UUID rackId : racksToDelete) {
-                if (stockBatchRepository.existsByRackIdAndQuantityGreaterThanAndIsDeletedFalse(rackId, 0)) {
-                    WarehouseRack rack = dbRackMap.get(rackId);
-                    String name = rack != null ? rack.getName() : rackId.toString();
-                    throw new BadRequestException(ErrorCode.WAREHOUSE_BIN_NOT_EMPTY,
-                            "Không thể xóa kệ hàng " + name + " vì vẫn còn hàng tồn kho");
-                }
-            }
-
-            for (UUID binId : binsToDelete) {
-                binRepository.deleteById(binId);
-            }
-            for (UUID rackId : racksToDelete) {
-                rackRepository.deleteById(rackId);
-            }
+        for (UUID binId : binsToDelete) {
+            binRepository.deleteById(binId);
+        }
+        for (UUID rackId : racksToDelete) {
+            rackRepository.deleteById(rackId);
         }
 
 
@@ -482,26 +495,17 @@ public class WarehouseLayoutService {
                 WarehouseRack rack;
                 if (rReq.getId() != null && dbRackMap.containsKey(rReq.getId())) {
                     rack = dbRackMap.get(rReq.getId());
-                    if (isTenantRole) {
-
-                        rack.setCoordinateX(rReq.getCoordinateX());
-                        rack.setCoordinateY(rReq.getCoordinateY());
-                        if (rReq.getPositionZ() != null) rack.setPositionZ(rReq.getPositionZ());
-                        if (rReq.getRotation() != null) rack.setRotation(rReq.getRotation());
-                    } else {
-
-                        rack.setName(rReq.getName());
-                        rack.setCode(rReq.getCode());
-                        rack.setMaxWeight(rReq.getMaxWeight());
-                        rack.setMaxVolume(rReq.getMaxVolume());
-                        rack.setCoordinateX(rReq.getCoordinateX());
-                        rack.setCoordinateY(rReq.getCoordinateY());
-                        if (rReq.getPositionZ() != null) rack.setPositionZ(rReq.getPositionZ());
-                        if (rReq.getRotation() != null) rack.setRotation(rReq.getRotation());
-                        rack.setWidth(rReq.getWidth());
-                        if (rReq.getLength() != null) rack.setLength(rReq.getLength());
-                        rack.setHeight(rReq.getHeight());
-                    }
+                    rack.setName(rReq.getName());
+                    rack.setCode(rReq.getCode());
+                    rack.setMaxWeight(rReq.getMaxWeight());
+                    rack.setMaxVolume(rReq.getMaxVolume());
+                    rack.setCoordinateX(rReq.getCoordinateX());
+                    rack.setCoordinateY(rReq.getCoordinateY());
+                    if (rReq.getPositionZ() != null) rack.setPositionZ(rReq.getPositionZ());
+                    if (rReq.getRotation() != null) rack.setRotation(rReq.getRotation());
+                    rack.setWidth(rReq.getWidth());
+                    rack.setLength(rReq.getLength());
+                    rack.setHeight(rReq.getHeight());
                 } else {
                     rack = WarehouseRack.builder()
                             .layout(layout)
@@ -525,24 +529,21 @@ public class WarehouseLayoutService {
                         WarehouseBin bin;
                         if (bReq.getId() != null && dbBinMap.containsKey(bReq.getId())) {
                             bin = dbBinMap.get(bReq.getId());
-                            if (isTenantRole) {
-                                bin.setCoordinateX(bReq.getCoordinateX());
-                                bin.setCoordinateY(bReq.getCoordinateY());
-                                if (bReq.getPositionZ() != null) bin.setPositionZ(bReq.getPositionZ());
-                            } else {
-                                bin.setRack(rack);
-                                bin.setName(bReq.getName());
-                                bin.setCode(bReq.getCode());
-                                bin.setMaxWeight(bReq.getMaxWeight());
-                                bin.setMaxVolume(bReq.getMaxVolume());
-                                if (bReq.getShelfLevel() != null) bin.setShelfLevel(bReq.getShelfLevel());
-                                bin.setCoordinateX(bReq.getCoordinateX());
-                                bin.setCoordinateY(bReq.getCoordinateY());
-                                if (bReq.getPositionZ() != null) bin.setPositionZ(bReq.getPositionZ());
-                                bin.setWidth(bReq.getWidth());
-                                if (bReq.getLength() != null) bin.setLength(bReq.getLength());
-                                bin.setHeight(bReq.getHeight());
+                            if (isTenantRole && (bin.getRack() == null || !rack.getId().equals(bin.getRack().getId()))) {
+                                throw new BadRequestException("Bin does not belong to the requested rack: " + bReq.getId());
                             }
+                            bin.setRack(rack);
+                            bin.setName(bReq.getName());
+                            bin.setCode(bReq.getCode());
+                            bin.setMaxWeight(bReq.getMaxWeight());
+                            bin.setMaxVolume(bReq.getMaxVolume());
+                            if (bReq.getShelfLevel() != null) bin.setShelfLevel(bReq.getShelfLevel());
+                            bin.setCoordinateX(bReq.getCoordinateX());
+                            bin.setCoordinateY(bReq.getCoordinateY());
+                            if (bReq.getPositionZ() != null) bin.setPositionZ(bReq.getPositionZ());
+                            bin.setWidth(bReq.getWidth());
+                            bin.setLength(bReq.getLength());
+                            bin.setHeight(bReq.getHeight());
                         } else {
                             bin = WarehouseBin.builder()
                                     .rack(rack)
