@@ -1,5 +1,6 @@
 package fu.stockspace.stockspace_be.wms.stock.repository;
 
+import fu.stockspace.stockspace_be.wms.capacity.PhysicalLoadLine;
 import fu.stockspace.stockspace_be.wms.stock.entity.StockBatch;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -32,6 +33,31 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
     Page<StockBatch> findByWarehouseIdAndIsDeletedFalse(UUID warehouseId, Pageable pageable);
 
     List<StockBatch> findAllByWarehouseIdAndIsDeletedFalse(UUID warehouseId);
+
+    @Query("""
+            SELECT new fu.stockspace.stockspace_be.wms.capacity.PhysicalLoadLine(
+                   b.rack.id,
+                   b.bin.id,
+                   b.skuId,
+                   s.skuCode,
+                   s.name,
+                   s.unitWeightKg,
+                   s.unitVolumeM3,
+                   b.quantity)
+            FROM StockBatch b
+            JOIN ProductSku s ON s.id = b.skuId
+            WHERE b.warehouse.id = :warehouseId
+              AND b.rack IS NOT NULL
+              AND b.bin IS NOT NULL
+              AND b.isActive = true
+              AND b.isDeleted = false
+              AND s.isActive = true
+              AND s.isDeleted = false
+              AND (s.tenant.id = :tenantId OR s.tenant IS NULL)
+            """)
+    List<PhysicalLoadLine> findActivePhysicalLoadsByWarehouseIdAndTenantId(
+            @Param("warehouseId") UUID warehouseId,
+            @Param("tenantId") UUID tenantId);
 
     @Query("""
             SELECT b FROM StockBatch b
