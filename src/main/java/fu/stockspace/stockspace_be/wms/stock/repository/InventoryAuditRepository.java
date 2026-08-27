@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.UUID;
 
 @Repository
@@ -24,11 +25,21 @@ public interface InventoryAuditRepository extends JpaRepository<InventoryAudit, 
     Page<InventoryAudit> findByIsDeletedFalse(Pageable pageable);
 
     @Query("""
+            select a from InventoryAudit a
+            where a.warehouse.id in :warehouseIds
+              and a.isActive = true
+              and a.isDeleted = false
+            order by a.createdAt desc, a.id desc
+            """)
+    List<InventoryAudit> findActiveOperationsByWarehouseIds(
+            @Param("warehouseIds") Collection<UUID> warehouseIds);
+
+    @Query("""
             SELECT a FROM InventoryAudit a
             WHERE a.isDeleted = false
               AND (
                 (:warehouseId IS NOT NULL AND a.warehouse.id = :warehouseId)
-                OR (:warehouseId IS NULL AND (a.warehouse.id IN :warehouseIds OR a.requestedBy.id = :userId))
+                OR (:warehouseId IS NULL AND a.warehouse.id IN :warehouseIds)
               )
             """)
     Page<InventoryAudit> findAuditsForTenant(

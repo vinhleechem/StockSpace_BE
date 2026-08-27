@@ -111,6 +111,37 @@ class StockBatchServiceTest {
     }
 
     @Test
+    void testGetStockByWarehouse_StaffWithActiveAssignment_AllowsRead() {
+        UUID staffId = UUID.randomUUID();
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        doNothing().when(accessService).requireActiveStaffAssignment(staffId, tenantId, warehouseId);
+        when(stockBatchRepository.findByWarehouseIdAndTenantId(eq(warehouseId), eq(tenantId), any()))
+                .thenReturn(Page.empty());
+
+        PagedResponse<StockBatchResponse> response = stockBatchService.getStockByWarehouse(
+                tenantId, warehouseId, staffId, PageRequest.of(0, 20));
+
+        assertNotNull(response);
+        assertTrue(response.getContent().isEmpty());
+        verify(accessService).requireActiveStaffAssignment(staffId, tenantId, warehouseId);
+        verify(stockBatchRepository).findByWarehouseIdAndTenantId(eq(warehouseId), eq(tenantId), any());
+    }
+
+    @Test
+    void testGetStockByWarehouse_StaffWithoutActiveAssignment_IsForbidden() {
+        UUID staffId = UUID.randomUUID();
+        doThrow(new ForbiddenException(ErrorCode.FORBIDDEN))
+                .when(accessService).requireActiveStaffAssignment(staffId, tenantId, warehouseId);
+
+        assertThrows(ForbiddenException.class,
+                () -> stockBatchService.getStockByWarehouse(
+                        tenantId, warehouseId, staffId, PageRequest.of(0, 20)));
+
+        verify(stockBatchRepository, never())
+                .findByWarehouseIdAndTenantId(any(), any(), any());
+    }
+
+    @Test
     void testGetStockByWarehouse_ReadDoesNotRequireSubscription() {
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
         when(stockBatchRepository.findByWarehouseIdAndTenantId(eq(warehouseId), eq(tenantId), any()))
@@ -280,6 +311,29 @@ class StockBatchServiceTest {
         assertEquals(2, summary.getLocations().size());
         assertEquals(warehouseId, summary.getLocations().get(0).getWarehouseId());
         assertEquals("Test Warehouse", summary.getLocations().get(0).getWarehouseName());
+    }
+
+    @Test
+    void testGetStockSummaryBySku_StaffUsesAssignedWarehouseScope() {
+        UUID staffId = UUID.randomUUID();
+        StockBatch assignedBatch = StockBatch.builder()
+                .id(UUID.randomUUID())
+                .skuId(skuId)
+                .warehouse(warehouse)
+                .quantity(12)
+                .build();
+        when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, tenantId))
+                .thenReturn(Optional.of(productSku));
+        when(stockBatchRepository.findBySkuIdInActiveAssignedTenantWarehouses(
+                skuId, tenantId, staffId)).thenReturn(List.of(assignedBatch));
+
+        StockSummaryResponse summary = stockBatchService.getStockSummaryBySku(tenantId, skuId, staffId);
+
+        assertEquals(12, summary.getTotalQuantity());
+        assertEquals(1, summary.getLocations().size());
+        verify(stockBatchRepository).findBySkuIdInActiveAssignedTenantWarehouses(
+                skuId, tenantId, staffId);
+        verify(stockBatchRepository, never()).findBySkuIdInActiveTenantWarehouses(skuId, tenantId);
     }
 
 

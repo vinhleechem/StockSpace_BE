@@ -160,6 +160,7 @@ class TenantStaffAssignmentTest {
 
         verify(accessService).requireWmsAccess(tenantId, warehouseId);
         assertEquals(AssignmentStatus.REVOKED, assignment.getStatus());
+        assertFalse(assignment.isActive());
         assertNotNull(assignment.getEndDate());
     }
 
@@ -201,6 +202,7 @@ class TenantStaffAssignmentTest {
         assertFalse(member.isActive());
         assertNotNull(member.getResignedAt());
         assertEquals(AssignmentStatus.REVOKED, activeAssignment.getStatus());
+        assertFalse(activeAssignment.isActive());
         assertNotNull(activeAssignment.getEndDate());
 
         verify(memberRepository).save(member);
@@ -231,5 +233,33 @@ class TenantStaffAssignmentTest {
         assertEquals(staffUserId, history.getStaffId());
         assertEquals(1, history.getTenantTenures().size());
         assertEquals(1, history.getWarehouseAssignments().size());
+    }
+
+    @Test
+    void getStaffWorkHistory_keepsRevokedAssignmentForHistory() {
+        when(userRepository.findById(staffUserId)).thenReturn(Optional.of(staffUser));
+        when(memberRepository.findByUserIdOrderByJoinedAtDesc(staffUserId)).thenReturn(List.of(member));
+
+        LocalDateTime endedAt = LocalDateTime.now().minusDays(2);
+        StaffWarehouseAssignment revokedAssignment = StaffWarehouseAssignment.builder()
+                .id(UUID.randomUUID())
+                .staff(staffUser)
+                .tenant(tenantUser)
+                .warehouse(warehouse)
+                .startDate(LocalDateTime.now().minusMonths(2))
+                .endDate(endedAt)
+                .status(AssignmentStatus.REVOKED)
+                .isActive(false)
+                .assignedBy(tenantUser)
+                .build();
+        when(assignmentRepository.findAllCareerAssignmentsByStaffId(staffUserId))
+                .thenReturn(List.of(revokedAssignment));
+
+        StaffWorkHistoryResponse history = staffService.getStaffWorkHistory(staffUserId);
+
+        assertEquals(1, history.getWarehouseAssignments().size());
+        StaffAssignmentResponse assignment = history.getWarehouseAssignments().get(0);
+        assertEquals(AssignmentStatus.REVOKED, assignment.getStatus());
+        assertEquals(endedAt, assignment.getEndDate());
     }
 }

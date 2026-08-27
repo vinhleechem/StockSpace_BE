@@ -637,6 +637,68 @@ class InventoryAuditServiceTest {
     }
 
     @Test
+    void testGetMyAudits_StaffUsesOnlyAssignedContractWarehouses() {
+        UUID staffId = UUID.randomUUID();
+        UUID staffTenantId = UUID.randomUUID();
+        User staff = User.builder()
+                .id(staffId)
+                .roles(Set.of(Role.builder().name(RoleType.ROLE_STAFF.name()).build()))
+                .build();
+        User tenant = User.builder().id(staffTenantId).build();
+        fu.stockspace.stockspace_be.staff.entity.TenantMember membership =
+                fu.stockspace.stockspace_be.staff.entity.TenantMember.builder()
+                        .user(staff)
+                        .tenant(tenant)
+                        .build();
+        Pageable pageable = PageRequest.of(0, 10);
+
+        when(userRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(staffId))
+                .thenReturn(Optional.of(membership));
+        when(accessService.findAccessibleContractWarehouses(staffTenantId, staffId))
+                .thenReturn(List.of(warehouse));
+        when(auditRepository.findAuditsForTenant(
+                isNull(), eq(List.of(warehouseId)), eq(staffId), eq(pageable)))
+                .thenReturn(new PageImpl<>(Collections.emptyList(), pageable, 0));
+
+        PagedResponse<InventoryAuditResponse> response = inventoryAuditService.getMyAudits(staffId, pageable);
+
+        assertNotNull(response);
+        assertTrue(response.getContent().isEmpty());
+        verify(auditRepository).findAuditsForTenant(
+                isNull(), eq(List.of(warehouseId)), eq(staffId), eq(pageable));
+    }
+
+    @Test
+    void testGetMyAudits_StaffWithoutActiveAssignment_DoesNotQueryAudits() {
+        UUID staffId = UUID.randomUUID();
+        UUID staffTenantId = UUID.randomUUID();
+        User staff = User.builder()
+                .id(staffId)
+                .roles(Set.of(Role.builder().name(RoleType.ROLE_STAFF.name()).build()))
+                .build();
+        User tenant = User.builder().id(staffTenantId).build();
+        fu.stockspace.stockspace_be.staff.entity.TenantMember membership =
+                fu.stockspace.stockspace_be.staff.entity.TenantMember.builder()
+                        .user(staff)
+                        .tenant(tenant)
+                        .build();
+        Pageable pageable = PageRequest.of(0, 10);
+
+        when(userRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(staffId))
+                .thenReturn(Optional.of(membership));
+        when(accessService.findAccessibleContractWarehouses(staffTenantId, staffId))
+                .thenReturn(Collections.emptyList());
+
+        PagedResponse<InventoryAuditResponse> response = inventoryAuditService.getMyAudits(staffId, pageable);
+
+        assertNotNull(response);
+        assertTrue(response.getContent().isEmpty());
+        verify(auditRepository, never()).findAuditsForTenant(any(), any(), any(), any());
+    }
+
+    @Test
     void testGetAuditDetail_Success_Requester() {
         when(auditRepository.findById(auditId)).thenReturn(Optional.of(pendingAudit));
 

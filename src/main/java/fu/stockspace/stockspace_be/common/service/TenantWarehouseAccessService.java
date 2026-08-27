@@ -3,6 +3,8 @@ package fu.stockspace.stockspace_be.common.service;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
+import fu.stockspace.stockspace_be.staff.entity.AssignmentStatus;
+import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
 import fu.stockspace.stockspace_be.subscription.entity.SubscriptionStatus;
 import fu.stockspace.stockspace_be.subscription.repository.SubscriptionRepository;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
@@ -27,6 +29,7 @@ public class TenantWarehouseAccessService {
 
     private final RentalContractRepository contractRepository;
     private final SubscriptionRepository subscriptionRepository;
+    private final StaffWarehouseAssignmentRepository assignmentRepository;
 
     @Transactional(readOnly = true)
     public void requireActiveContract(UUID tenantId, UUID warehouseId) {
@@ -65,5 +68,34 @@ public class TenantWarehouseAccessService {
         }
         return contractRepository.findCurrentDirectWarehousesByTenantId(
                 tenantId, LocalDate.now());
+    }
+
+    @Transactional(readOnly = true)
+    public List<Warehouse> findAccessibleContractWarehouses(UUID tenantId, UUID staffId) {
+        List<Warehouse> warehouses = findActiveContractWarehouses(tenantId);
+        if (staffId == null) {
+            return warehouses;
+        }
+
+        return warehouses.stream()
+                .filter(warehouse -> hasActiveStaffAssignment(
+                        staffId, tenantId, warehouse.getId()))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public void requireActiveStaffAssignment(UUID staffId, UUID tenantId, UUID warehouseId) {
+        if (!hasActiveStaffAssignment(staffId, tenantId, warehouseId)) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public boolean hasActiveStaffAssignment(UUID staffId, UUID tenantId, UUID warehouseId) {
+        return staffId != null
+                && tenantId != null
+                && warehouseId != null
+                && assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
+                        staffId, tenantId, warehouseId, AssignmentStatus.ACTIVE);
     }
 }

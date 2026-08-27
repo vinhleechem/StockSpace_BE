@@ -5,8 +5,6 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestExcepti
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
-import fu.stockspace.stockspace_be.staff.entity.AssignmentStatus;
-import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseBin;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseLayout;
@@ -56,7 +54,6 @@ public class PutawaySuggestionService {
     private final StockBatchRepository stockBatchRepository;
     private final ProductSkuRepository productSkuRepository;
     private final TenantWarehouseAccessService accessService;
-    private final StaffWarehouseAssignmentRepository assignmentRepository;
     private final PhysicalLoadCalculator physicalLoadCalculator;
     private final PutawaySuggestionPlanner planner;
 
@@ -225,9 +222,8 @@ public class PutawaySuggestionService {
     }
 
     private void requireStaffAssignment(UUID staffId, UUID tenantId, UUID warehouseId) {
-        if (staffId != null && !assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
-                staffId, tenantId, warehouseId, AssignmentStatus.ACTIVE)) {
-            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        if (staffId != null) {
+            accessService.requireActiveStaffAssignment(staffId, tenantId, warehouseId);
         }
     }
 

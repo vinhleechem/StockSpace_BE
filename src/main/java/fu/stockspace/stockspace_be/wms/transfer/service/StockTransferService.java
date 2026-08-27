@@ -11,8 +11,6 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenExceptio
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
-import fu.stockspace.stockspace_be.staff.entity.AssignmentStatus;
-import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
 import fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseBin;
@@ -86,7 +84,6 @@ public class StockTransferService {
     private final InventoryTransactionRepository transactionRepository;
     private final TenantMemberRepository tenantMemberRepository;
     private final TenantWarehouseAccessService accessService;
-    private final StaffWarehouseAssignmentRepository assignmentRepository;
     private final PhysicalLoadCalculator physicalLoadCalculator;
 
     @Transactional
@@ -604,13 +601,8 @@ public class StockTransferService {
 
     private void requireStaffAssignments(UUID staffId, UUID tenantId,
                                          UUID sourceWarehouseId, UUID destinationWarehouseId) {
-        boolean assignedToSource = assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
-                staffId, tenantId, sourceWarehouseId, AssignmentStatus.ACTIVE);
-        boolean assignedToDestination = assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
-                staffId, tenantId, destinationWarehouseId, AssignmentStatus.ACTIVE);
-        if (!assignedToSource || !assignedToDestination) {
-            throw new ForbiddenException(ErrorCode.FORBIDDEN);
-        }
+        accessService.requireActiveStaffAssignment(staffId, tenantId, sourceWarehouseId);
+        accessService.requireActiveStaffAssignment(staffId, tenantId, destinationWarehouseId);
     }
 
     private Warehouse findActiveWarehouse(UUID warehouseId) {

@@ -149,6 +149,48 @@ class WarehouseLayoutServiceTest {
     }
 
     @Test
+    void testGetStaffLayoutTree_RequiresContractAndActiveAssignment() {
+        UUID staffId = UUID.randomUUID();
+        UUID tenantId = UUID.randomUUID();
+        User tenant = User.builder().id(tenantId).email("tenant@test.com").build();
+        WarehouseLayout tenantLayout = WarehouseLayout.builder()
+                .id(UUID.randomUUID())
+                .warehouse(warehouse)
+                .tenant(tenant)
+                .isDefault(false)
+                .width(new BigDecimal("20"))
+                .length(new BigDecimal("20"))
+                .height(new BigDecimal("5"))
+                .build();
+        when(layoutRepository.findByWarehouseIdAndTenantId(warehouseId, tenantId))
+                .thenReturn(Optional.of(tenantLayout));
+        when(rackRepository.findAllByLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
+        when(binRepository.findAllByRackLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
+
+        WarehouseLayoutResponse response = layoutService.getStaffLayoutTree(warehouseId, staffId, tenantId);
+
+        assertEquals(tenantLayout.getId(), response.getId());
+        verify(tenantWarehouseAccessService).requireActiveContract(tenantId, warehouseId);
+        verify(tenantWarehouseAccessService).requireActiveStaffAssignment(staffId, tenantId, warehouseId);
+        verify(tenantWarehouseAccessService, never()).requireActiveSubscription(any());
+    }
+
+    @Test
+    void testGetStaffLayoutTree_DoesNotReadLayoutWithoutActiveAssignment() {
+        UUID staffId = UUID.randomUUID();
+        UUID tenantId = UUID.randomUUID();
+        doThrow(new fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException(
+                ErrorCode.FORBIDDEN))
+                .when(tenantWarehouseAccessService)
+                .requireActiveStaffAssignment(staffId, tenantId, warehouseId);
+
+        assertThrows(fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException.class,
+                () -> layoutService.getStaffLayoutTree(warehouseId, staffId, tenantId));
+        verify(layoutRepository, never()).findByWarehouseIdAndTenantId(any(), any());
+        verify(layoutRepository, never()).findByWarehouseIdAndIsDefaultTrue(any());
+    }
+
+    @Test
     void testGetLayoutTree_PublicRequiresVisibleWarehouse() {
         when(warehouseRepository.findPublicAvailableById(warehouseId)).thenReturn(Optional.empty());
 
