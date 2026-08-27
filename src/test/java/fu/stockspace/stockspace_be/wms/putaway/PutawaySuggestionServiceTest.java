@@ -1,6 +1,9 @@
 package fu.stockspace.stockspace_be.wms.putaway;
 
 import fu.stockspace.stockspace_be.auth.entity.User;
+import fu.stockspace.stockspace_be.common.exception.ErrorCode;
+import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
@@ -12,6 +15,7 @@ import fu.stockspace.stockspace_be.warehouse.repository.WarehouseLayoutRepositor
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRackRepository;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
 import fu.stockspace.stockspace_be.wms.capacity.PhysicalLoadCalculator;
+import fu.stockspace.stockspace_be.wms.capacity.PhysicalLoadLine;
 import fu.stockspace.stockspace_be.wms.product.entity.ProductSku;
 import fu.stockspace.stockspace_be.wms.product.repository.ProductSkuRepository;
 import fu.stockspace.stockspace_be.wms.stock.repository.StockBatchRepository;
@@ -30,8 +34,10 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -144,14 +150,100 @@ class PutawaySuggestionServiceTest {
         assertEquals("Insufficient physical capacity for the requested quantity", item.warning());
     }
 
+    @Test
+    void suggestRejectsMissingSkuPhysicalMetadata() {
+        sku.setUnitVolumeM3(null);
+        stubReadModel();
+
+        assertThrows(BadRequestException.class, () -> suggestionService.suggest(
+                tenantId, null, warehouseId, List.of(new PutawayInputItem(skuId, 1))));
+    }
+
+    @Test
+    void suggestRejectsSkuOwnedByAnotherTenant() {
+        sku.setTenant(User.builder().id(UUID.randomUUID()).build());
+        stubLocationAndSkuModel();
+
+        assertThrows(fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException.class,
+                () -> suggestionService.suggest(
+                        tenantId, null, warehouseId, List.of(new PutawayInputItem(skuId, 1))));
+    }
+
+    @Test
+    void suggestRejectsExpiredAccessBeforeLoadingLayoutOrStock() {
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        doThrow(new ForbiddenException(ErrorCode.FORBIDDEN))
+                .when(accessService).requireWmsAccess(tenantId, warehouseId);
+
+        assertThrows(ForbiddenException.class, () -> suggestionService.suggest(
+                tenantId, null, warehouseId, List.of(new PutawayInputItem(skuId, 1))));
+        verify(layoutRepository, never()).findByWarehouseIdAndTenantId(any(), any());
+        verify(stockBatchRepository, never())
+                .findActivePhysicalLoadsByWarehouseIdAndTenantId(any(), any());
+    }
+
+    @Test
+    void suggestRejectsStaffWithoutActiveWarehouseAssignment() {
+        UUID staffId = UUID.randomUUID();
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
+                staffId, tenantId, warehouseId,
+                fu.stockspace.stockspace_be.staff.entity.AssignmentStatus.ACTIVE)).thenReturn(false);
+
+        assertThrows(ForbiddenException.class, () -> suggestionService.suggest(
+                tenantId, staffId, warehouseId, List.of(new PutawayInputItem(skuId, 1))));
+        verify(layoutRepository, never()).findByWarehouseIdAndTenantId(any(), any());
+    }
+
+    @Test
+    void suggestIsReproducibleForTheSameSnapshot() {
+        stubReadModel();
+
+        PutawaySuggestionResult first = suggestionService.suggest(
+                tenantId, null, warehouseId, List.of(new PutawayInputItem(skuId, 5)));
+        PutawaySuggestionResult second = suggestionService.suggest(
+                tenantId, null, warehouseId, List.of(new PutawayInputItem(skuId, 5)));
+
+        assertEquals(first, second);
+    }
+
+    @Test
+    void suggestReadsFreshStockAndDoesNotReserveCapacity() {
+        stubReadModel();
+        PhysicalLoadLine newlyStored = new PhysicalLoadLine(
+                rack.getId(), firstBin.getId(), skuId, sku.getSkuCode(), sku.getName(),
+                sku.getUnitWeightKg(), sku.getUnitVolumeM3(), 2);
+        when(stockBatchRepository.findActivePhysicalLoadsByWarehouseIdAndTenantId(warehouseId, tenantId))
+                .thenReturn(List.of(), List.of(newlyStored));
+
+        PutawaySuggestionItem first = suggestionService.suggest(
+                        tenantId, null, warehouseId, List.of(new PutawayInputItem(skuId, 3)))
+                .items().get(0);
+        PutawaySuggestionItem second = suggestionService.suggest(
+                        tenantId, null, warehouseId, List.of(new PutawayInputItem(skuId, 3)))
+                .items().get(0);
+
+        assertEquals(3, first.allocations().get(0).quantity());
+        assertEquals(1, second.allocations().get(0).quantity());
+        assertEquals(2, second.allocations().get(1).quantity());
+        assertEquals(0, second.unallocatedQuantity());
+        verify(stockBatchRepository, org.mockito.Mockito.times(2))
+                .findActivePhysicalLoadsByWarehouseIdAndTenantId(warehouseId, tenantId);
+        verify(stockBatchRepository, never()).save(any());
+    }
+
     private void stubReadModel() {
+        stubLocationAndSkuModel();
+        when(stockBatchRepository.findActivePhysicalLoadsByWarehouseIdAndTenantId(warehouseId, tenantId))
+                .thenReturn(List.of());
+    }
+
+    private void stubLocationAndSkuModel() {
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
         when(layoutRepository.findByWarehouseIdAndTenantId(warehouseId, tenantId))
                 .thenReturn(Optional.of(layout));
         when(rackRepository.findAllByLayoutId(layoutId)).thenReturn(List.of(rack));
         when(binRepository.findAllByRackLayoutId(layoutId)).thenReturn(List.of(firstBin, secondBin));
         when(productSkuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(sku));
-        when(stockBatchRepository.findActivePhysicalLoadsByWarehouseIdAndTenantId(warehouseId, tenantId))
-                .thenReturn(List.of());
     }
 }
