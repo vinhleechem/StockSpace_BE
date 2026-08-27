@@ -1,6 +1,7 @@
 package fu.stockspace.stockspace_be.warehouse.dto;
 
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -26,12 +27,14 @@ public class WarehouseSearchRequest {
 
     private BigDecimal maxRentalPrice;
 
-    /** @deprecated Use minRentalPrice. */
+    /** @deprecated Use minRentalPrice. Kept for one compatibility release. */
     @Deprecated
+    @Schema(deprecated = true, description = "Legacy alias for minRentalPrice")
     private BigDecimal minPrice;
 
-    /** @deprecated Use maxRentalPrice. */
+    /** @deprecated Use maxRentalPrice. Kept for one compatibility release. */
     @Deprecated
+    @Schema(deprecated = true, description = "Legacy alias for maxRentalPrice")
     private BigDecimal maxPrice;
 
     public BigDecimal getEffectiveMinRentalPrice() {

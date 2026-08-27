@@ -108,6 +108,37 @@ class PublicWarehouseSearchTest {
     }
 
     @Test
+    void prefersCurrentPriceFieldsWhenLegacyAndCurrentAliasesDiffer() {
+        when(warehouseService.searchWarehouses(any(WarehouseSearchRequest.class), eq(0), eq(10),
+                eq("createdAt"), eq("desc"))).thenReturn(emptyPage(0, 10));
+
+        controller().search(
+                null,
+                new BigDecimal("100"),
+                new BigDecimal("200"),
+                new BigDecimal("150"),
+                new BigDecimal("250"),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                10,
+                "createdAt",
+                "desc"
+        );
+
+        ArgumentCaptor<WarehouseSearchRequest> requestCaptor =
+                ArgumentCaptor.forClass(WarehouseSearchRequest.class);
+        verify(warehouseService).searchWarehouses(requestCaptor.capture(), eq(0), eq(10),
+                eq("createdAt"), eq("desc"));
+        assertEquals(new BigDecimal("150"), requestCaptor.getValue().getMinRentalPrice());
+        assertEquals(new BigDecimal("250"), requestCaptor.getValue().getMaxRentalPrice());
+    }
+
+    @Test
     void rejectsInvertedPriceRangeBeforeQueryingService() {
         assertThrows(BadRequestException.class, () -> controller().search(
                 null,

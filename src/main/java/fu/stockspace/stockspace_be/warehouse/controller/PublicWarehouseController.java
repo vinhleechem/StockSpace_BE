@@ -138,12 +138,12 @@ public class PublicWarehouseController {
         if (keyword != null && keyword.length() > MAX_KEYWORD_LENGTH) {
             throw new BadRequestException("Keyword must not exceed " + MAX_KEYWORD_LENGTH + " characters");
         }
-        validateFilterAmount("minPrice", minPrice);
-        validateFilterAmount("maxPrice", maxPrice);
+        validateFilterAmount("minRentalPrice", minPrice);
+        validateFilterAmount("maxRentalPrice", maxPrice);
         validateFilterAmount("minCapacity", minCapacity);
         validateFilterAmount("maxCapacity", maxCapacity);
         if (minPrice != null && maxPrice != null && minPrice.compareTo(maxPrice) > 0) {
-            throw new BadRequestException("minPrice must not be greater than maxPrice");
+            throw new BadRequestException("minRentalPrice must not be greater than maxRentalPrice");
         }
         if (minCapacity != null && maxCapacity != null && minCapacity.compareTo(maxCapacity) > 0) {
             throw new BadRequestException("minCapacity must not be greater than maxCapacity");
@@ -184,10 +184,8 @@ public class PublicWarehouseController {
 
     private BigDecimal coalescePriceFilter(String legacyName, BigDecimal legacyValue,
                                            String currentName, BigDecimal currentValue) {
-        if (legacyValue != null && currentValue != null
-                && legacyValue.compareTo(currentValue) != 0) {
-            throw new BadRequestException(legacyName + " and " + currentName + " must match when both are provided");
-        }
+        // Keep the old alias during the compatibility window. The explicitly
+        // named current field is authoritative when both are sent.
         return currentValue != null ? currentValue : legacyValue;
     }
 
