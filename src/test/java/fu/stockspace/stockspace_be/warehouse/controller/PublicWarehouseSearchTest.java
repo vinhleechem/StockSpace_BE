@@ -51,6 +51,11 @@ class PublicWarehouseSearchTest {
                 new BigDecimal("1000000"),
                 new BigDecimal("5000000"),
                 new BigDecimal("50"),
+                null,
+                null,
+                null,
+                null,
+                null,
                 2,
                 20,
                 "capacity",
@@ -83,6 +88,11 @@ class PublicWarehouseSearchTest {
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 0,
                 10,
                 "createdAt",
@@ -105,6 +115,72 @@ class PublicWarehouseSearchTest {
                 null,
                 new BigDecimal("200"),
                 new BigDecimal("100"),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                10,
+                "createdAt",
+                "desc"
+        ));
+
+        verifyNoInteractions(warehouseService);
+    }
+
+    @Test
+    void forwardsLocationTypeAndCapacityRangeFilters() {
+        when(warehouseService.searchWarehouses(any(WarehouseSearchRequest.class), eq(0), eq(10),
+                eq("createdAt"), eq("desc"))).thenReturn(emptyPage(0, 10));
+
+        java.util.UUID warehouseTypeId = java.util.UUID.randomUUID();
+        controller().search(
+                null,
+                null,
+                null,
+                null,
+                null,
+                new BigDecimal("50"),
+                new BigDecimal("200"),
+                " 79 ",
+                "760",
+                warehouseTypeId,
+                true,
+                0,
+                10,
+                "createdAt",
+                "desc"
+        );
+
+        ArgumentCaptor<WarehouseSearchRequest> requestCaptor =
+                ArgumentCaptor.forClass(WarehouseSearchRequest.class);
+        verify(warehouseService).searchWarehouses(requestCaptor.capture(), eq(0), eq(10),
+                eq("createdAt"), eq("desc"));
+
+        WarehouseSearchRequest request = requestCaptor.getValue();
+        assertEquals(new BigDecimal("50"), request.getMinCapacity());
+        assertEquals(new BigDecimal("200"), request.getMaxCapacity());
+        assertEquals("79", request.getProvinceCode());
+        assertEquals("760", request.getDistrictCode());
+        assertEquals(warehouseTypeId, request.getWarehouseTypeId());
+        assertEquals(true, request.getIsVerified());
+    }
+
+    @Test
+    void rejectsInvertedCapacityRangeBeforeQueryingService() {
+        assertThrows(BadRequestException.class, () -> controller().search(
+                null,
+                null,
+                null,
+                null,
+                null,
+                new BigDecimal("200"),
+                new BigDecimal("100"),
+                null,
+                null,
+                null,
                 null,
                 0,
                 10,

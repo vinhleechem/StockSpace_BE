@@ -69,6 +69,11 @@ public class SearchWarehousesTool implements ChatTool {
                     minPrice,
                     maxPrice,
                     minArea,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
                     PageRequest.of(0, 5)
             );
 
@@ -82,6 +87,11 @@ public class SearchWarehousesTool implements ChatTool {
                             minPrice,
                             maxPrice,
                             minArea,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
                             PageRequest.of(0, 5)
                     );
                 }
@@ -97,6 +107,11 @@ public class SearchWarehousesTool implements ChatTool {
                         minPrice,
                         maxPrice,
                         minArea,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
                         PageRequest.of(0, 8)
                 );
 

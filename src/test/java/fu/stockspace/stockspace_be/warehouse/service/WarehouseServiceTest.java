@@ -2,12 +2,14 @@ package fu.stockspace.stockspace_be.warehouse.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fu.stockspace.stockspace_be.auth.entity.User;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.warehouse.dto.WarehouseResponse;
 import fu.stockspace.stockspace_be.warehouse.dto.WarehouseOwnerContactResponse;
+import fu.stockspace.stockspace_be.warehouse.dto.WarehouseSearchRequest;
 import fu.stockspace.stockspace_be.warehouse.dto.UpdateWarehouseRequest;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.RentalPricingType;
@@ -211,6 +213,53 @@ class WarehouseServiceTest {
         assertNull(warehouse.getProvinceName());
         assertNull(warehouse.getDistrictCode());
         assertNull(warehouse.getDistrictName());
+    }
+
+    @Test
+    void searchWarehousesForwardsStructuredFiltersToPublicQuery() {
+        UUID warehouseTypeId = UUID.randomUUID();
+        WarehouseSearchRequest request = new WarehouseSearchRequest();
+        request.setKeyword("Kho khô");
+        request.setMinRentalPrice(new BigDecimal("1000000"));
+        request.setMaxRentalPrice(new BigDecimal("5000000"));
+        request.setMinCapacity(new BigDecimal("50"));
+        request.setMaxCapacity(new BigDecimal("200"));
+        request.setProvinceCode("79");
+        request.setDistrictCode("760");
+        request.setWarehouseTypeId(warehouseTypeId);
+        request.setIsVerified(true);
+
+        when(warehouseRepository.searchPublic(
+                eq("%kho khô%"),
+                eq(WarehouseStatus.AVAILABLE),
+                eq(new BigDecimal("1000000")),
+                eq(new BigDecimal("5000000")),
+                eq(new BigDecimal("50")),
+                eq(new BigDecimal("200")),
+                eq("79"),
+                eq("760"),
+                eq(warehouseTypeId),
+                eq(true),
+                any()
+        )).thenReturn(new PageImpl<>(List.of(warehouse)));
+
+        PagedResponse<WarehouseResponse> result = warehouseService
+                .searchWarehouses(request, 0, 10, "createdAt", "desc");
+
+        assertEquals(1, result.getTotalElements());
+        verify(warehouseRepository).searchPublic(
+                eq("%kho khô%"),
+                eq(WarehouseStatus.AVAILABLE),
+                eq(new BigDecimal("1000000")),
+                eq(new BigDecimal("5000000")),
+                eq(new BigDecimal("50")),
+                eq(new BigDecimal("200")),
+                eq("79"),
+                eq("760"),
+                eq(warehouseTypeId),
+                eq(true),
+                any()
+        );
     }
 
     @Test

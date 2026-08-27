@@ -75,6 +75,11 @@ public class PublicWarehouseController {
             @RequestParam(required = false) BigDecimal minRentalPrice,
             @RequestParam(required = false) BigDecimal maxRentalPrice,
             @RequestParam(required = false) BigDecimal minCapacity,
+            @RequestParam(required = false) BigDecimal maxCapacity,
+            @RequestParam(required = false) String provinceCode,
+            @RequestParam(required = false) String districtCode,
+            @RequestParam(required = false) UUID warehouseTypeId,
+            @RequestParam(required = false) Boolean isVerified,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "createdAt") String sortBy,
@@ -84,14 +89,22 @@ public class PublicWarehouseController {
                 "minRentalPrice", minRentalPrice);
         BigDecimal effectiveMaxRentalPrice = coalescePriceFilter("maxPrice", maxPrice,
                 "maxRentalPrice", maxRentalPrice);
+        String normalizedProvinceCode = normalizeFilterText(provinceCode);
+        String normalizedDistrictCode = normalizeFilterText(districtCode);
         validateSearchParameters(keyword, effectiveMinRentalPrice, effectiveMaxRentalPrice,
-                minCapacity, page, size, sortBy, sortDir);
+                minCapacity, maxCapacity, normalizedProvinceCode, normalizedDistrictCode,
+                page, size, sortBy, sortDir);
 
         WarehouseSearchRequest request = new WarehouseSearchRequest();
         request.setKeyword(keyword);
         request.setMinRentalPrice(effectiveMinRentalPrice);
         request.setMaxRentalPrice(effectiveMaxRentalPrice);
         request.setMinCapacity(minCapacity);
+        request.setMaxCapacity(maxCapacity);
+        request.setProvinceCode(normalizedProvinceCode);
+        request.setDistrictCode(normalizedDistrictCode);
+        request.setWarehouseTypeId(warehouseTypeId);
+        request.setIsVerified(isVerified);
 
         PagedResponse<WarehouseResponse> result = warehouseService.searchWarehouses(request, page, size, sortBy, sortDir);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách kho thành công", result));
@@ -108,6 +121,9 @@ public class PublicWarehouseController {
             BigDecimal minPrice,
             BigDecimal maxPrice,
             BigDecimal minCapacity,
+            BigDecimal maxCapacity,
+            String provinceCode,
+            String districtCode,
             int page,
             int size,
             String sortBy,
@@ -125,9 +141,15 @@ public class PublicWarehouseController {
         validateFilterAmount("minPrice", minPrice);
         validateFilterAmount("maxPrice", maxPrice);
         validateFilterAmount("minCapacity", minCapacity);
+        validateFilterAmount("maxCapacity", maxCapacity);
         if (minPrice != null && maxPrice != null && minPrice.compareTo(maxPrice) > 0) {
             throw new BadRequestException("minPrice must not be greater than maxPrice");
         }
+        if (minCapacity != null && maxCapacity != null && minCapacity.compareTo(maxCapacity) > 0) {
+            throw new BadRequestException("minCapacity must not be greater than maxCapacity");
+        }
+        validateLocationCode("provinceCode", provinceCode);
+        validateLocationCode("districtCode", districtCode);
         if (!ALLOWED_SORT_FIELDS.contains(sortBy)) {
             throw new BadRequestException("Unsupported sortBy value");
         }
@@ -144,6 +166,20 @@ public class PublicWarehouseController {
             throw new BadRequestException(field + " must be between 0 and "
                     + MAX_FILTER_AMOUNT.toPlainString() + " with at most 2 decimal places");
         }
+    }
+
+    private void validateLocationCode(String field, String value) {
+        if (value != null && value.length() > 50) {
+            throw new BadRequestException(field + " must not exceed 50 characters");
+        }
+    }
+
+    private String normalizeFilterText(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
     }
 
     private BigDecimal coalescePriceFilter(String legacyName, BigDecimal legacyValue,

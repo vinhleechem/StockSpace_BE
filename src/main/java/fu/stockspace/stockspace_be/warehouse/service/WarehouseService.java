@@ -324,6 +324,11 @@ public class WarehouseService {
                 request.getEffectiveMinRentalPrice(),
                 request.getEffectiveMaxRentalPrice(),
                 request.getMinCapacity(),
+                request.getMaxCapacity(),
+                request.getProvinceCode(),
+                request.getDistrictCode(),
+                request.getWarehouseTypeId(),
+                request.getIsVerified(),
                 pageable
         );
 

@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 
 
@@ -44,6 +45,13 @@ public class WarehouseSearchRequest {
 
     private BigDecimal minCapacity;
 
+    private BigDecimal maxCapacity;
+
+    private String provinceCode;
+
+    private String districtCode;
+
+    private UUID warehouseTypeId;
 
 
 
