@@ -25,9 +25,6 @@ import org.springframework.util.StringUtils;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
 
 import fu.stockspace.stockspace_be.auth.util.SecurityUtil;
-import fu.stockspace.stockspace_be.staff.entity.AssignmentStatus;
-import fu.stockspace.stockspace_be.staff.entity.StaffWarehouseAssignment;
-import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -58,7 +55,6 @@ public class WarehouseService {
     private final SystemPolicyRepository systemPolicyRepository;
     private final NotificationService notificationService;
     private final TenantWarehouseAccessService tenantWarehouseAccessService;
-    private final StaffWarehouseAssignmentRepository staffWarehouseAssignmentRepository;
 
     @Transactional(readOnly = true)
     public List<WarehouseResponse> getActiveContractWarehouses(UUID tenantId) {
@@ -72,14 +68,8 @@ public class WarehouseService {
 
         if (isStaff) {
             UUID currentUserId = SecurityUtil.getCurrentUserId();
-            List<StaffWarehouseAssignment> activeAssignments = staffWarehouseAssignmentRepository
-                    .findByStaffIdAndTenantIdAndStatus(currentUserId, tenantId, AssignmentStatus.ACTIVE);
-            Set<UUID> assignedWarehouseIds = activeAssignments.stream()
-                    .map(a -> a.getWarehouse().getId())
-                    .collect(Collectors.toSet());
-            warehouses = warehouses.stream()
-                    .filter(w -> assignedWarehouseIds.contains(w.getId()))
-                    .collect(Collectors.toList());
+            warehouses = tenantWarehouseAccessService
+                    .findAccessibleContractWarehouses(tenantId, currentUserId);
         }
 
         return warehouses.stream()

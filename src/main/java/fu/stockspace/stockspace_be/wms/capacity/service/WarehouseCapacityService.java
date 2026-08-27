@@ -5,8 +5,6 @@ import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
-import fu.stockspace.stockspace_be.staff.entity.AssignmentStatus;
-import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseBin;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseLayout;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseRack;
@@ -50,7 +48,6 @@ public class WarehouseCapacityService {
     private final WarehouseBinRepository binRepository;
     private final StockBatchRepository stockBatchRepository;
     private final TenantWarehouseAccessService accessService;
-    private final StaffWarehouseAssignmentRepository assignmentRepository;
     private final PhysicalLoadCalculator physicalLoadCalculator;
 
     @Transactional(readOnly = true)
@@ -98,10 +95,8 @@ public class WarehouseCapacityService {
 
     private void requireObservationAccess(UUID tenantId, UUID warehouseId, UUID staffId) {
         accessService.requireActiveContract(tenantId, warehouseId);
-        if (staffId != null
-                && !assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
-                staffId, tenantId, warehouseId, AssignmentStatus.ACTIVE)) {
-            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        if (staffId != null) {
+            accessService.requireActiveStaffAssignment(staffId, tenantId, warehouseId);
         }
     }
 

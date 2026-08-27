@@ -655,11 +655,8 @@ class InventoryAuditServiceTest {
         when(userRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(staffId))
                 .thenReturn(Optional.of(membership));
-        when(accessService.findActiveContractWarehouses(staffTenantId)).thenReturn(List.of(warehouse));
-        when(assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
-                staffId, staffTenantId, warehouseId,
-                fu.stockspace.stockspace_be.staff.entity.AssignmentStatus.ACTIVE))
-                .thenReturn(true);
+        when(accessService.findAccessibleContractWarehouses(staffTenantId, staffId))
+                .thenReturn(List.of(warehouse));
         when(auditRepository.findAuditsForTenant(
                 isNull(), eq(List.of(warehouseId)), eq(staffId), eq(pageable)))
                 .thenReturn(new PageImpl<>(Collections.emptyList(), pageable, 0));
@@ -691,11 +688,8 @@ class InventoryAuditServiceTest {
         when(userRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(staffId))
                 .thenReturn(Optional.of(membership));
-        when(accessService.findActiveContractWarehouses(staffTenantId)).thenReturn(List.of(warehouse));
-        when(assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
-                staffId, staffTenantId, warehouseId,
-                fu.stockspace.stockspace_be.staff.entity.AssignmentStatus.ACTIVE))
-                .thenReturn(false);
+        when(accessService.findAccessibleContractWarehouses(staffTenantId, staffId))
+                .thenReturn(Collections.emptyList());
 
         PagedResponse<InventoryAuditResponse> response = inventoryAuditService.getMyAudits(staffId, pageable);
 

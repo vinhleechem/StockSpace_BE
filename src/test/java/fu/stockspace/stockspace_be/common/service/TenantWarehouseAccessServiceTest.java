@@ -6,6 +6,8 @@ import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.subscription.entity.Subscription;
 import fu.stockspace.stockspace_be.subscription.entity.SubscriptionStatus;
 import fu.stockspace.stockspace_be.subscription.repository.SubscriptionRepository;
+import fu.stockspace.stockspace_be.staff.entity.AssignmentStatus;
+import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,6 +41,9 @@ class TenantWarehouseAccessServiceTest {
 
     @Mock
     private SubscriptionRepository subscriptionRepository;
+
+    @Mock
+    private StaffWarehouseAssignmentRepository assignmentRepository;
 
     @InjectMocks
     private TenantWarehouseAccessService accessService;
@@ -112,5 +117,44 @@ class TenantWarehouseAccessServiceTest {
         assertFalse(accessService.canObserveWarehouse(null, warehouseId));
         assertFalse(accessService.canObserveWarehouse(tenantId, null));
         verifyNoInteractions(contractRepository, subscriptionRepository);
+    }
+
+    @Test
+    void activeStaffAssignmentAllowsWarehouseAccess() {
+        UUID staffId = UUID.randomUUID();
+        when(assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
+                staffId, tenantId, warehouseId, AssignmentStatus.ACTIVE)).thenReturn(true);
+
+        assertDoesNotThrow(() -> accessService.requireActiveStaffAssignment(
+                staffId, tenantId, warehouseId));
+    }
+
+    @Test
+    void missingStaffAssignmentBlocksWarehouseAccess() {
+        UUID staffId = UUID.randomUUID();
+        when(assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
+                staffId, tenantId, warehouseId, AssignmentStatus.ACTIVE)).thenReturn(false);
+
+        assertThrows(ForbiddenException.class, () -> accessService.requireActiveStaffAssignment(
+                staffId, tenantId, warehouseId));
+    }
+
+    @Test
+    void accessibleContractWarehousesAreFilteredByStaffAssignment() {
+        UUID staffId = UUID.randomUUID();
+        Warehouse assigned = mock(Warehouse.class);
+        Warehouse notAssigned = mock(Warehouse.class);
+        UUID assignedId = UUID.randomUUID();
+        UUID notAssignedId = UUID.randomUUID();
+        when(assigned.getId()).thenReturn(assignedId);
+        when(notAssigned.getId()).thenReturn(notAssignedId);
+        when(contractRepository.findCurrentDirectWarehousesByTenantId(
+                eq(tenantId), any(LocalDate.class))).thenReturn(List.of(assigned, notAssigned));
+        when(assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
+                staffId, tenantId, assignedId, AssignmentStatus.ACTIVE)).thenReturn(true);
+        when(assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
+                staffId, tenantId, notAssignedId, AssignmentStatus.ACTIVE)).thenReturn(false);
+
+        assertEquals(List.of(assigned), accessService.findAccessibleContractWarehouses(tenantId, staffId));
     }
 }

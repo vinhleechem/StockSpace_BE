@@ -11,8 +11,6 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundE
 import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import fu.stockspace.stockspace_be.staff.entity.TenantMember;
-import fu.stockspace.stockspace_be.staff.entity.AssignmentStatus;
-import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
 import fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
@@ -54,7 +52,6 @@ public class InventoryAuditService {
     private final InventoryReceiptService inventoryReceiptService;
     private final NotificationService notificationService;
     private final TenantMemberRepository tenantMemberRepository;
-    private final StaffWarehouseAssignmentRepository assignmentRepository;
     private final TenantWarehouseAccessService accessService;
 
     @Transactional
@@ -262,11 +259,11 @@ public class InventoryAuditService {
         User actor = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
         UUID tenantId = resolveTenantId(userId);
-        List<UUID> accessibleWarehouseIds = accessService.findActiveContractWarehouses(tenantId)
+        List<UUID> accessibleWarehouseIds = (isStaff(actor)
+                ? accessService.findAccessibleContractWarehouses(tenantId, userId)
+                : accessService.findActiveContractWarehouses(tenantId))
                 .stream()
                 .map(Warehouse::getId)
-                .filter(id -> !isStaff(actor) || assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
-                        userId, tenantId, id, AssignmentStatus.ACTIVE))
                 .toList();
 
         Page<InventoryAudit> page;
@@ -318,9 +315,8 @@ public class InventoryAuditService {
 
     private void requireWarehouseObservationAccess(User actor, UUID tenantId, UUID warehouseId) {
         accessService.requireActiveContract(tenantId, warehouseId);
-        if (isStaff(actor) && !assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
-                actor.getId(), tenantId, warehouseId, AssignmentStatus.ACTIVE)) {
-            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        if (isStaff(actor)) {
+            accessService.requireActiveStaffAssignment(actor.getId(), tenantId, warehouseId);
         }
     }
 

@@ -120,16 +120,14 @@ class WarehouseCapacityServiceTest {
         UUID staffId = UUID.randomUUID();
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
         doNothing().when(accessService).requireActiveContract(tenantId, warehouseId);
-        when(assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
-                staffId, tenantId, warehouseId, AssignmentStatus.ACTIVE)).thenReturn(true);
+        doNothing().when(accessService).requireActiveStaffAssignment(staffId, tenantId, warehouseId);
         stubLayoutAndLocations();
         when(stockBatchRepository.findActivePhysicalLoadsByWarehouseIdAndTenantId(warehouseId, tenantId))
                 .thenReturn(List.of());
 
         capacityService.getCapacity(tenantId, warehouseId, staffId);
 
-        verify(assignmentRepository).existsActiveByStaffAndTenantAndWarehouse(
-                staffId, tenantId, warehouseId, AssignmentStatus.ACTIVE);
+        verify(accessService).requireActiveStaffAssignment(staffId, tenantId, warehouseId);
     }
 
     @Test
@@ -137,8 +135,8 @@ class WarehouseCapacityServiceTest {
         UUID staffId = UUID.randomUUID();
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
         doNothing().when(accessService).requireActiveContract(tenantId, warehouseId);
-        when(assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
-                staffId, tenantId, warehouseId, AssignmentStatus.ACTIVE)).thenReturn(false);
+        doThrow(new ForbiddenException(ErrorCode.FORBIDDEN))
+                .when(accessService).requireActiveStaffAssignment(staffId, tenantId, warehouseId);
 
         assertThrows(ForbiddenException.class,
                 () -> capacityService.getCapacity(tenantId, warehouseId, staffId));

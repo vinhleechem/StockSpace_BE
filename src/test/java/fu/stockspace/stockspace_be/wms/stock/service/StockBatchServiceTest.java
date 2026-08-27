@@ -114,10 +114,7 @@ class StockBatchServiceTest {
     void testGetStockByWarehouse_StaffWithActiveAssignment_AllowsRead() {
         UUID staffId = UUID.randomUUID();
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
-        when(assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
-                staffId, tenantId, warehouseId,
-                fu.stockspace.stockspace_be.staff.entity.AssignmentStatus.ACTIVE))
-                .thenReturn(true);
+        doNothing().when(accessService).requireActiveStaffAssignment(staffId, tenantId, warehouseId);
         when(stockBatchRepository.findByWarehouseIdAndTenantId(eq(warehouseId), eq(tenantId), any()))
                 .thenReturn(Page.empty());
 
@@ -126,19 +123,15 @@ class StockBatchServiceTest {
 
         assertNotNull(response);
         assertTrue(response.getContent().isEmpty());
-        verify(assignmentRepository).existsActiveByStaffAndTenantAndWarehouse(
-                staffId, tenantId, warehouseId,
-                fu.stockspace.stockspace_be.staff.entity.AssignmentStatus.ACTIVE);
+        verify(accessService).requireActiveStaffAssignment(staffId, tenantId, warehouseId);
         verify(stockBatchRepository).findByWarehouseIdAndTenantId(eq(warehouseId), eq(tenantId), any());
     }
 
     @Test
     void testGetStockByWarehouse_StaffWithoutActiveAssignment_IsForbidden() {
         UUID staffId = UUID.randomUUID();
-        when(assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
-                staffId, tenantId, warehouseId,
-                fu.stockspace.stockspace_be.staff.entity.AssignmentStatus.ACTIVE))
-                .thenReturn(false);
+        doThrow(new ForbiddenException(ErrorCode.FORBIDDEN))
+                .when(accessService).requireActiveStaffAssignment(staffId, tenantId, warehouseId);
 
         assertThrows(ForbiddenException.class,
                 () -> stockBatchService.getStockByWarehouse(

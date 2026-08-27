@@ -186,9 +186,8 @@ class PutawaySuggestionServiceTest {
     void suggestRejectsStaffWithoutActiveWarehouseAssignment() {
         UUID staffId = UUID.randomUUID();
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
-        when(assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
-                staffId, tenantId, warehouseId,
-                fu.stockspace.stockspace_be.staff.entity.AssignmentStatus.ACTIVE)).thenReturn(false);
+        doThrow(new ForbiddenException(ErrorCode.FORBIDDEN))
+                .when(accessService).requireActiveStaffAssignment(staffId, tenantId, warehouseId);
 
         assertThrows(ForbiddenException.class, () -> suggestionService.suggest(
                 tenantId, staffId, warehouseId, List.of(new PutawayInputItem(skuId, 1))));

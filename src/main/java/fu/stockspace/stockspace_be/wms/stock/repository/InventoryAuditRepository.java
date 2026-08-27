@@ -28,7 +28,7 @@ public interface InventoryAuditRepository extends JpaRepository<InventoryAudit, 
             WHERE a.isDeleted = false
               AND (
                 (:warehouseId IS NOT NULL AND a.warehouse.id = :warehouseId)
-                OR (:warehouseId IS NULL AND (a.warehouse.id IN :warehouseIds OR a.requestedBy.id = :userId))
+                OR (:warehouseId IS NULL AND a.warehouse.id IN :warehouseIds)
               )
             """)
     Page<InventoryAudit> findAuditsForTenant(

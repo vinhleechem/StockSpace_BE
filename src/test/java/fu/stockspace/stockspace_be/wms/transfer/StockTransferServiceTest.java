@@ -28,6 +28,7 @@ import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferStatus;
 import fu.stockspace.stockspace_be.wms.transfer.repository.StockTransferRepository;
 import fu.stockspace.stockspace_be.wms.transfer.service.StockTransferService;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
+import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -48,6 +49,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -245,10 +247,10 @@ class StockTransferServiceTest {
         doNothing().when(accessService).requireActiveContract(tenantId, sourceWarehouseId);
         doNothing().when(accessService).requireActiveContract(tenantId, destinationWarehouseId);
         doNothing().when(accessService).requireActiveSubscription(tenantId);
-        when(assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
-                staffId, tenantId, sourceWarehouseId, AssignmentStatus.ACTIVE)).thenReturn(true);
-        when(assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
-                staffId, tenantId, destinationWarehouseId, AssignmentStatus.ACTIVE)).thenReturn(false);
+        doNothing().when(accessService)
+                .requireActiveStaffAssignment(staffId, tenantId, sourceWarehouseId);
+        doThrow(new ForbiddenException(ErrorCode.FORBIDDEN)).when(accessService)
+                .requireActiveStaffAssignment(staffId, tenantId, destinationWarehouseId);
 
         assertThrows(ForbiddenException.class,
                 () -> transferService.createTransfer(staffId, request(10, 10)));

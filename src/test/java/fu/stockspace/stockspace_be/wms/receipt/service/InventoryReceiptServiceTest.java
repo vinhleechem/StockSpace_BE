@@ -92,7 +92,8 @@ class InventoryReceiptServiceTest {
         binId = UUID.randomUUID();
         bin = WarehouseBin.builder().id(binId).rack(rack).name("Bin 1").build();
 
-        lenient().when(assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(any(), any(), any(), any())).thenReturn(true);
+        lenient().doNothing().when(accessService)
+                .requireActiveStaffAssignment(any(), any(), any());
     }
 
     @Test
@@ -443,9 +444,8 @@ class InventoryReceiptServiceTest {
         when(tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(staffId))
                 .thenReturn(Optional.of(membership));
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
-        when(assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
-                staffId, userId, warehouseId,
-                fu.stockspace.stockspace_be.staff.entity.AssignmentStatus.ACTIVE)).thenReturn(false);
+        doThrow(new ForbiddenException(ErrorCode.FORBIDDEN))
+                .when(accessService).requireActiveStaffAssignment(staffId, userId, warehouseId);
 
         CreateInventoryReceiptRequest request = CreateInventoryReceiptRequest.builder()
                 .warehouseId(warehouseId)
