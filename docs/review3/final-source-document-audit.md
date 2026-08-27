@@ -6,7 +6,7 @@
 |---|---|
 | Backend source baseline audited | `5e7bf68` (`dev`, after Plan 08) |
 | Documentation branch | `docs/review3-remediation` |
-| Documentation commits | `d1b67c1`, `e018937`, `46c2054`, `8ebe254`, `47e3ab1` |
+| Documentation commits | `d1b67c1`, `e018937`, `46c2054`, `8ebe254`, `47e3ab1`, `45a8ab0` |
 | Frontend source inspected | `main` at `cda9324`; no frontend source modified |
 | Audit date | 2026-08-27 |
 
