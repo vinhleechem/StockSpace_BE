@@ -36,6 +36,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.*;
 
+import java.time.LocalDateTime;
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -321,6 +322,55 @@ class InventoryAuditServiceTest {
                 () -> inventoryAuditService.submitAudit(userId, auditId, request));
 
         assertEquals(ErrorCode.AUDIT_INVALID_STATUS.getMessage(), ex.getMessage());
+    }
+
+    @Test
+    void testAuditWorkflow_CreateSubmitApprove_PreservesStateAndActors() {
+        LocalDateTime createdAt = LocalDateTime.of(2026, 8, 27, 9, 0);
+        LocalDateTime updatedAt = LocalDateTime.of(2026, 8, 27, 10, 0);
+        pendingAudit.setCreatedAt(createdAt);
+        pendingAudit.setUpdatedAt(updatedAt);
+
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(auditRepository.save(any(InventoryAudit.class))).thenReturn(pendingAudit);
+        when(stockBatchRepository.findByWarehouseIdAndIsDeletedFalse(eq(warehouseId), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(stockBatch)));
+        when(auditItemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(productSkuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(productSku));
+
+        InventoryAuditResponse created = inventoryAuditService.createAudit(
+                userId,
+                CreateInventoryAuditRequest.builder().warehouseId(warehouseId).note("Demo audit").build());
+
+        assertEquals(AuditStatus.PENDING, created.getStatus());
+        assertEquals(userId, created.getRequestedById());
+        assertEquals(createdAt, created.getCreatedAt());
+        assertEquals(100, created.getItems().get(0).getExpectedQuantity());
+
+        when(auditRepository.findById(auditId)).thenReturn(Optional.of(pendingAudit));
+        when(auditItemRepository.findByAuditId(auditId)).thenReturn(List.of(auditItem));
+        SubmitAuditRequest submitRequest = SubmitAuditRequest.builder()
+                .items(List.of(SubmitAuditItemRequest.builder()
+                        .batchId(batchId)
+                        .actualQuantity(85)
+                        .note("Short by fifteen")
+                        .build()))
+                .build();
+
+        InventoryAuditResponse submitted = inventoryAuditService.submitAudit(userId, auditId, submitRequest);
+
+        assertEquals(AuditStatus.SUBMITTED, submitted.getStatus());
+        assertEquals(85, submitted.getItems().get(0).getActualQuantity());
+        assertEquals(-15, submitted.getItems().get(0).getDiscrepancy());
+
+        InventoryAuditResponse approved = inventoryAuditService.approveAudit(approverId, auditId);
+
+        assertEquals(AuditStatus.APPROVED, approved.getStatus());
+        assertEquals(userId, approved.getRequestedById());
+        assertEquals(approverId, approved.getApprovedById());
+        assertEquals(-15, approved.getItems().get(0).getDiscrepancy());
+        verify(inventoryReceiptService).createAdjustmentReceipt(
+                approverId, auditId, warehouseId, DocumentType.OUTBOUND, batchId, 15);
     }
 
     @Test
