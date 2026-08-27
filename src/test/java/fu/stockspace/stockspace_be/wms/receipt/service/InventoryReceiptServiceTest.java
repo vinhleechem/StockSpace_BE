@@ -261,6 +261,84 @@ class InventoryReceiptServiceTest {
     }
 
     @Test
+    void testCreateReceipt_InboundAggregatesActiveBatchesAndSkipsDeletedOrZeroQuantity() {
+        WarehouseBin limitedBin = WarehouseBin.builder()
+                .id(binId)
+                .rack(rack)
+                .name("Aggregated Bin")
+                .maxWeight(new java.math.BigDecimal("10"))
+                .maxVolume(new java.math.BigDecimal("100"))
+                .build();
+        UUID secondSkuId = UUID.randomUUID();
+        ProductSku secondSku = ProductSku.builder()
+                .id(secondSkuId)
+                .skuCode("SKU456")
+                .name("Product 2")
+                .unitWeightKg(new java.math.BigDecimal("2"))
+                .unitVolumeM3(java.math.BigDecimal.ONE)
+                .build();
+        productSku.setUnitWeightKg(java.math.BigDecimal.ONE);
+        productSku.setUnitVolumeM3(java.math.BigDecimal.ONE);
+
+        StockBatch firstBatch = StockBatch.builder().skuId(skuId).bin(limitedBin).rack(rack).quantity(2).build();
+        StockBatch secondBatch = StockBatch.builder().skuId(skuId).bin(limitedBin).rack(rack).quantity(3).build();
+        StockBatch thirdBatch = StockBatch.builder().skuId(secondSkuId).bin(limitedBin).rack(rack).quantity(1).build();
+        StockBatch deletedBatch = StockBatch.builder().skuId(secondSkuId).bin(limitedBin).rack(rack).quantity(100).build();
+        deletedBatch.setDeleted(true);
+        StockBatch zeroQuantityBatch = StockBatch.builder().skuId(secondSkuId).bin(limitedBin).rack(rack).quantity(0).build();
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(receiptRepository.save(any(InventoryReceipt.class))).thenAnswer(i -> i.getArgument(0));
+        when(receiptItemRepository.save(any(InventoryReceiptItem.class))).thenAnswer(i -> i.getArgument(0));
+        when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(secondSkuId, userId))
+                .thenReturn(Optional.of(secondSku));
+        when(productSkuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(productSku));
+        when(productSkuRepository.findByIdAndIsDeletedFalse(secondSkuId)).thenReturn(Optional.of(secondSku));
+        when(rackRepository.findByIdAndIsDeletedFalse(rackId)).thenReturn(Optional.of(rack));
+        when(binRepository.findByIdAndIsDeletedFalse(binId)).thenReturn(Optional.of(limitedBin));
+        when(stockBatchRepository.findByBinId(binId))
+                .thenReturn(List.of(firstBatch, secondBatch, thirdBatch, deletedBatch, zeroQuantityBatch));
+
+        ReceiptItemRequest item = ReceiptItemRequest.builder()
+                .skuId(secondSkuId).quantity(2).rackId(rackId).binId(binId).build();
+        CreateInventoryReceiptRequest request = CreateInventoryReceiptRequest.builder()
+                .warehouseId(warehouseId).type(DocumentType.INBOUND).items(List.of(item)).build();
+
+        BadRequestException exception = assertThrows(BadRequestException.class,
+                () -> receiptService.createReceipt(userId, request));
+
+        assertTrue(exception.getMessage().contains("weight capacity exceeded"));
+    }
+
+    @Test
+    void testCreateReceipt_InboundTreatsZeroCapacityAsUnlimited() {
+        WarehouseBin unlimitedBin = WarehouseBin.builder()
+                .id(binId)
+                .rack(rack)
+                .name("Unlimited Bin")
+                .maxWeight(java.math.BigDecimal.ZERO)
+                .maxVolume(java.math.BigDecimal.ZERO)
+                .build();
+        when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(receiptRepository.save(any(InventoryReceipt.class))).thenAnswer(i -> i.getArgument(0));
+        when(receiptItemRepository.save(any(InventoryReceiptItem.class))).thenAnswer(i -> i.getArgument(0));
+        when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, userId))
+                .thenReturn(Optional.of(productSku));
+        when(rackRepository.findByIdAndIsDeletedFalse(rackId)).thenReturn(Optional.of(rack));
+        when(binRepository.findByIdAndIsDeletedFalse(binId)).thenReturn(Optional.of(unlimitedBin));
+
+        ReceiptItemRequest item = ReceiptItemRequest.builder()
+                .skuId(skuId).quantity(100).rackId(rackId).binId(binId).build();
+        CreateInventoryReceiptRequest request = CreateInventoryReceiptRequest.builder()
+                .warehouseId(warehouseId).type(DocumentType.INBOUND).items(List.of(item)).build();
+
+        assertDoesNotThrow(() -> receiptService.createReceipt(userId, request));
+        verify(stockBatchRepository, never()).findByBinId(binId);
+    }
+
+    @Test
     void testCreateReceipt_SubscriptionRequired() {
         when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
