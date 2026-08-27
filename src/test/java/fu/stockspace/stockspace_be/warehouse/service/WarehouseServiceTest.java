@@ -2,12 +2,14 @@ package fu.stockspace.stockspace_be.warehouse.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fu.stockspace.stockspace_be.auth.entity.User;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.warehouse.dto.WarehouseResponse;
 import fu.stockspace.stockspace_be.warehouse.dto.WarehouseOwnerContactResponse;
+import fu.stockspace.stockspace_be.warehouse.dto.WarehouseSearchRequest;
 import fu.stockspace.stockspace_be.warehouse.dto.UpdateWarehouseRequest;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.RentalPricingType;
@@ -152,6 +154,112 @@ class WarehouseServiceTest {
         assertThrows(BadRequestException.class,
                 () -> warehouseService.updateWarehouse(ownerId, warehouseId, request));
         verify(warehouseRepository, never()).save(any(Warehouse.class));
+    }
+
+    @Test
+    void updateWarehouseRejectsIncompleteStructuredLocation() {
+        UpdateWarehouseRequest request = new UpdateWarehouseRequest();
+        request.setProvinceCode("79");
+
+        when(warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId))
+                .thenReturn(Optional.of(warehouse));
+
+        assertThrows(BadRequestException.class,
+                () -> warehouseService.updateWarehouse(ownerId, warehouseId, request));
+        verify(warehouseRepository, never()).save(any(Warehouse.class));
+    }
+
+    @Test
+    void updateWarehouseStoresCompleteStructuredLocation() {
+        UpdateWarehouseRequest request = new UpdateWarehouseRequest();
+        request.setProvinceCode("79");
+        request.setProvinceName("Thành phố Hồ Chí Minh");
+        request.setDistrictCode("760");
+        request.setDistrictName("Quận 9");
+
+        when(warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId))
+                .thenReturn(Optional.of(warehouse));
+        when(warehouseRepository.save(any(Warehouse.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        WarehouseResponse response = warehouseService.updateWarehouse(ownerId, warehouseId, request);
+
+        assertEquals("79", warehouse.getProvinceCode());
+        assertEquals("Thành phố Hồ Chí Minh", warehouse.getProvinceName());
+        assertEquals("760", warehouse.getDistrictCode());
+        assertEquals("Quận 9", warehouse.getDistrictName());
+        assertEquals("79", response.getProvinceCode());
+        assertEquals("760", response.getDistrictCode());
+    }
+
+    @Test
+    void updateWarehouseClearsNormalizedLocationWhenAddressChangesWithoutStructuredLocation() {
+        warehouse.setProvinceCode("79");
+        warehouse.setProvinceName("Thành phố Hồ Chí Minh");
+        warehouse.setDistrictCode("760");
+        warehouse.setDistrictName("Quận 9");
+
+        UpdateWarehouseRequest request = new UpdateWarehouseRequest();
+        request.setAddress("Địa chỉ mới");
+
+        when(warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId))
+                .thenReturn(Optional.of(warehouse));
+        when(warehouseRepository.save(any(Warehouse.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        warehouseService.updateWarehouse(ownerId, warehouseId, request);
+
+        assertNull(warehouse.getProvinceCode());
+        assertNull(warehouse.getProvinceName());
+        assertNull(warehouse.getDistrictCode());
+        assertNull(warehouse.getDistrictName());
+    }
+
+    @Test
+    void searchWarehousesForwardsStructuredFiltersToPublicQuery() {
+        UUID warehouseTypeId = UUID.randomUUID();
+        WarehouseSearchRequest request = new WarehouseSearchRequest();
+        request.setKeyword("Kho khô");
+        request.setMinRentalPrice(new BigDecimal("1000000"));
+        request.setMaxRentalPrice(new BigDecimal("5000000"));
+        request.setMinCapacity(new BigDecimal("50"));
+        request.setMaxCapacity(new BigDecimal("200"));
+        request.setProvinceCode("79");
+        request.setDistrictCode("760");
+        request.setWarehouseTypeId(warehouseTypeId);
+        request.setIsVerified(true);
+
+        when(warehouseRepository.searchPublic(
+                eq("%kho khô%"),
+                eq(WarehouseStatus.AVAILABLE),
+                eq(new BigDecimal("1000000")),
+                eq(new BigDecimal("5000000")),
+                eq(new BigDecimal("50")),
+                eq(new BigDecimal("200")),
+                eq("79"),
+                eq("760"),
+                eq(warehouseTypeId),
+                eq(true),
+                any()
+        )).thenReturn(new PageImpl<>(List.of(warehouse)));
+
+        PagedResponse<WarehouseResponse> result = warehouseService
+                .searchWarehouses(request, 0, 10, "createdAt", "desc");
+
+        assertEquals(1, result.getTotalElements());
+        verify(warehouseRepository).searchPublic(
+                eq("%kho khô%"),
+                eq(WarehouseStatus.AVAILABLE),
+                eq(new BigDecimal("1000000")),
+                eq(new BigDecimal("5000000")),
+                eq(new BigDecimal("50")),
+                eq(new BigDecimal("200")),
+                eq("79"),
+                eq("760"),
+                eq(warehouseTypeId),
+                eq(true),
+                any()
+        );
     }
 
     @Test

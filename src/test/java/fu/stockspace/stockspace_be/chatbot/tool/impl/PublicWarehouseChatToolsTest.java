@@ -131,6 +131,11 @@ class PublicWarehouseChatToolsTest {
                 eq(new BigDecimal("100")),
                 eq(new BigDecimal("200")),
                 eq(new BigDecimal("50")),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
                 any(Pageable.class)
         )).thenReturn(new PageImpl<>(List.of(warehouse)));
 
@@ -152,6 +157,11 @@ class PublicWarehouseChatToolsTest {
                 eq(new BigDecimal("100")),
                 eq(new BigDecimal("200")),
                 eq(new BigDecimal("50")),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
                 any(Pageable.class)
         );
     }
@@ -173,6 +183,11 @@ class PublicWarehouseChatToolsTest {
                 eq(null),
                 eq(null),
                 eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
                 any(Pageable.class)
         )).thenReturn(new PageImpl<>(List.of(warehouse)));
 
@@ -184,6 +199,11 @@ class PublicWarehouseChatToolsTest {
         verify(warehouseRepository).searchPublic(
                 eq(null),
                 eq(WarehouseStatus.AVAILABLE),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
                 eq(null),
                 eq(null),
                 eq(null),

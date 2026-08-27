@@ -61,9 +61,14 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
                    OR LOWER(w.address) LIKE :keyword
                    OR LOWER(w.description) LIKE :keyword
                    OR LOWER(w.type.name) LIKE :keyword)
-              AND (:minPrice IS NULL OR w.rentalPrice >= :minPrice)
-              AND (:maxPrice IS NULL OR w.rentalPrice <= :maxPrice)
+              AND (:provinceCode IS NULL OR w.provinceCode = :provinceCode)
+              AND (:districtCode IS NULL OR w.districtCode = :districtCode)
+              AND (:warehouseTypeId IS NULL OR w.type.id = :warehouseTypeId)
+              AND (:minPrice IS NULL OR (w.rentalPrice IS NOT NULL AND w.rentalPrice >= :minPrice))
+              AND (:maxPrice IS NULL OR (w.rentalPrice IS NOT NULL AND w.rentalPrice <= :maxPrice))
               AND (:minCapacity IS NULL OR w.capacity >= :minCapacity)
+              AND (:maxCapacity IS NULL OR w.capacity <= :maxCapacity)
+              AND (:isVerified IS NULL OR w.isVerified = :isVerified)
             """)
     Page<Warehouse> searchPublic(
             @Param("keyword") String keyword,
@@ -71,6 +76,11 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
             @Param("minPrice") BigDecimal minPrice,
             @Param("maxPrice") BigDecimal maxPrice,
             @Param("minCapacity") BigDecimal minCapacity,
+            @Param("maxCapacity") BigDecimal maxCapacity,
+            @Param("provinceCode") String provinceCode,
+            @Param("districtCode") String districtCode,
+            @Param("warehouseTypeId") UUID warehouseTypeId,
+            @Param("isVerified") Boolean isVerified,
             Pageable pageable
     );
 

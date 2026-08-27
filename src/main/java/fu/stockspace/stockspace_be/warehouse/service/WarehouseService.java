@@ -117,6 +117,10 @@ public class WarehouseService {
                 .type(type)
                 .name(request.getName())
                 .address(request.getAddress())
+                .provinceCode(normalizeOptionalText(request.getProvinceCode()))
+                .provinceName(normalizeOptionalText(request.getProvinceName()))
+                .districtCode(normalizeOptionalText(request.getDistrictCode()))
+                .districtName(normalizeOptionalText(request.getDistrictName()))
                 .description(request.getDescription())
                 .capacity(request.getCapacity())
                 .rentalPricingType(pricingType)
@@ -125,6 +129,13 @@ public class WarehouseService {
                 .isVerified(false)
                 .policy(policy)
                 .build();
+
+        validateLocationFields(
+                warehouse.getProvinceCode(),
+                warehouse.getProvinceName(),
+                warehouse.getDistrictCode(),
+                warehouse.getDistrictName()
+        );
 
         warehouse = warehouseRepository.save(warehouse);
 
@@ -158,11 +169,19 @@ public class WarehouseService {
     public WarehouseResponse updateWarehouse(UUID ownerId, UUID warehouseId, UpdateWarehouseRequest request) {
         Warehouse warehouse = getOwnedWarehouse(ownerId, warehouseId);
 
+        boolean addressChanged = StringUtils.hasText(request.getAddress());
+        boolean structuredLocationProvided = hasStructuredLocation(request);
+
         if (StringUtils.hasText(request.getName())) {
             warehouse.setName(request.getName().trim());
         }
-        if (StringUtils.hasText(request.getAddress())) {
+        if (addressChanged) {
             warehouse.setAddress(request.getAddress().trim());
+        }
+        if (addressChanged && !structuredLocationProvided) {
+            clearNormalizedLocation(warehouse);
+        } else if (structuredLocationProvided) {
+            applyUpdatedLocation(warehouse, request);
         }
         if (request.getDescription() != null) {
             warehouse.setDescription(request.getDescription().trim());
@@ -305,6 +324,11 @@ public class WarehouseService {
                 request.getEffectiveMinRentalPrice(),
                 request.getEffectiveMaxRentalPrice(),
                 request.getMinCapacity(),
+                request.getMaxCapacity(),
+                request.getProvinceCode(),
+                request.getDistrictCode(),
+                request.getWarehouseTypeId(),
+                request.getIsVerified(),
                 pageable
         );
 
@@ -536,6 +560,10 @@ public class WarehouseService {
                 .id(w.getId())
                 .name(w.getName())
                 .address(w.getAddress())
+                .provinceCode(w.getProvinceCode())
+                .provinceName(w.getProvinceName())
+                .districtCode(w.getDistrictCode())
+                .districtName(w.getDistrictName())
                 .description(w.getDescription())
                 .capacity(w.getCapacity())
                 .rentalPrice(rentalPrice)
@@ -561,6 +589,59 @@ public class WarehouseService {
                 .createdAt(w.getCreatedAt())
                 .updatedAt(w.getUpdatedAt())
                 .build();
+    }
+
+    private boolean hasStructuredLocation(UpdateWarehouseRequest request) {
+        return StringUtils.hasText(request.getProvinceCode())
+                || StringUtils.hasText(request.getProvinceName())
+                || StringUtils.hasText(request.getDistrictCode())
+                || StringUtils.hasText(request.getDistrictName());
+    }
+
+    private void applyUpdatedLocation(Warehouse warehouse, UpdateWarehouseRequest request) {
+        String provinceCode = StringUtils.hasText(request.getProvinceCode())
+                ? normalizeOptionalText(request.getProvinceCode()) : warehouse.getProvinceCode();
+        String provinceName = StringUtils.hasText(request.getProvinceName())
+                ? normalizeOptionalText(request.getProvinceName()) : warehouse.getProvinceName();
+        String districtCode = StringUtils.hasText(request.getDistrictCode())
+                ? normalizeOptionalText(request.getDistrictCode()) : warehouse.getDistrictCode();
+        String districtName = StringUtils.hasText(request.getDistrictName())
+                ? normalizeOptionalText(request.getDistrictName()) : warehouse.getDistrictName();
+
+        validateLocationFields(provinceCode, provinceName, districtCode, districtName);
+        warehouse.setProvinceCode(provinceCode);
+        warehouse.setProvinceName(provinceName);
+        warehouse.setDistrictCode(districtCode);
+        warehouse.setDistrictName(districtName);
+    }
+
+    private void validateLocationFields(String provinceCode, String provinceName,
+                                        String districtCode, String districtName) {
+        boolean hasProvinceCode = StringUtils.hasText(provinceCode);
+        boolean hasProvinceName = StringUtils.hasText(provinceName);
+        boolean hasDistrictCode = StringUtils.hasText(districtCode);
+        boolean hasDistrictName = StringUtils.hasText(districtName);
+
+        if (hasProvinceCode != hasProvinceName) {
+            throw new BadRequestException("Province code and province name must be provided together");
+        }
+        if (hasDistrictCode != hasDistrictName) {
+            throw new BadRequestException("District code and district name must be provided together");
+        }
+        if (hasDistrictCode && !hasProvinceCode) {
+            throw new BadRequestException("Province must be provided when district is provided");
+        }
+    }
+
+    private void clearNormalizedLocation(Warehouse warehouse) {
+        warehouse.setProvinceCode(null);
+        warehouse.setProvinceName(null);
+        warehouse.setDistrictCode(null);
+        warehouse.setDistrictName(null);
+    }
+
+    private String normalizeOptionalText(String value) {
+        return StringUtils.hasText(value) ? value.trim() : null;
     }
 
     private String resolvePublicationStatus(Warehouse warehouse) {

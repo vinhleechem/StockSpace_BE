@@ -26,7 +26,10 @@ import java.util.UUID;
 @Table(name = "warehouses", indexes = {
         @Index(name = "idx_warehouses_owner_id", columnList = "owner_id"),
         @Index(name = "idx_warehouses_status",   columnList = "status"),
-        @Index(name = "idx_warehouses_visible_until", columnList = "visible_until")
+        @Index(name = "idx_warehouses_visible_until", columnList = "visible_until"),
+        @Index(name = "idx_warehouses_province_code", columnList = "province_code"),
+        @Index(name = "idx_warehouses_district_code", columnList = "district_code"),
+        @Index(name = "idx_warehouses_province_district", columnList = "province_code, district_code")
 })
 @Getter
 @Setter
@@ -57,6 +60,18 @@ public class Warehouse extends BaseEntity {
 
     @Column(name = "address", nullable = false, columnDefinition = "TEXT")
     private String address;
+
+    @Column(name = "province_code", length = 50)
+    private String provinceCode;
+
+    @Column(name = "province_name", length = 255)
+    private String provinceName;
+
+    @Column(name = "district_code", length = 50)
+    private String districtCode;
+
+    @Column(name = "district_name", length = 255)
+    private String districtName;
 
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
