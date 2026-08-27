@@ -5,6 +5,7 @@ import fu.stockspace.stockspace_be.common.dto.ApiResponse;
 import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.wms.transfer.dto.CreateStockTransferRequest;
 import fu.stockspace.stockspace_be.wms.transfer.dto.ReceiveStockTransferRequest;
+import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferDecisionRequest;
 import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferResponse;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferStatus;
 import fu.stockspace.stockspace_be.wms.transfer.service.StockTransferService;
@@ -87,5 +88,27 @@ public class StockTransferController {
         StockTransferResponse response = transferService.receiveTransfer(
                 SecurityUtil.getCurrentUserId(), id, request);
         return ResponseEntity.ok(ApiResponse.success("Nhận chuyển kho thành công", response));
+    }
+
+    @PatchMapping("/{id}/reject")
+    @PreAuthorize("@rbac.hasPermission('INVENTORY_UPDATE')")
+    @Operation(summary = "Từ chối yêu cầu chuyển kho đang PENDING")
+    public ResponseEntity<ApiResponse<StockTransferResponse>> rejectTransfer(
+            @PathVariable UUID id,
+            @Valid @RequestBody StockTransferDecisionRequest request) {
+        StockTransferResponse response = transferService.rejectTransfer(
+                SecurityUtil.getCurrentUserId(), id, request);
+        return ResponseEntity.ok(ApiResponse.success("Từ chối yêu cầu chuyển kho thành công", response));
+    }
+
+    @PatchMapping("/{id}/cancel")
+    @PreAuthorize("@rbac.hasPermission('INVENTORY_UPDATE')")
+    @Operation(summary = "Hủy yêu cầu chuyển kho đang PENDING")
+    public ResponseEntity<ApiResponse<StockTransferResponse>> cancelTransfer(
+            @PathVariable UUID id,
+            @Valid @RequestBody StockTransferDecisionRequest request) {
+        StockTransferResponse response = transferService.cancelTransfer(
+                SecurityUtil.getCurrentUserId(), id, request);
+        return ResponseEntity.ok(ApiResponse.success("Hủy yêu cầu chuyển kho thành công", response));
     }
 }

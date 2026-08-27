@@ -40,6 +40,7 @@ import fu.stockspace.stockspace_be.wms.transfer.dto.CreateStockTransferRequest;
 import fu.stockspace.stockspace_be.wms.transfer.dto.ReceiveStockTransferRequest;
 import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferDestinationAllocationRequest;
 import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferDestinationAllocationResponse;
+import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferDecisionRequest;
 import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferItemRequest;
 import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferItemResponse;
 import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferResponse;
@@ -322,6 +323,55 @@ public class StockTransferService {
         transfer.setInboundReceipt(inboundReceipt);
         transfer.setStatus(StockTransferStatus.COMPLETED);
         return mapToResponse(transferRepository.save(transfer));
+    }
+
+    @Transactional
+    public StockTransferResponse rejectTransfer(UUID userId, UUID transferId,
+                                                StockTransferDecisionRequest request) {
+        return decidePendingTransfer(userId, transferId, request, StockTransferStatus.REJECTED);
+    }
+
+    @Transactional
+    public StockTransferResponse cancelTransfer(UUID userId, UUID transferId,
+                                                StockTransferDecisionRequest request) {
+        return decidePendingTransfer(userId, transferId, request, StockTransferStatus.CANCELLED);
+    }
+
+    private StockTransferResponse decidePendingTransfer(UUID userId, UUID transferId,
+                                                        StockTransferDecisionRequest request,
+                                                        StockTransferStatus decision) {
+        User actor = findUser(userId);
+        if (isStaff(actor) || !hasRole(actor, RoleType.ROLE_TENANT)) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        }
+        UUID tenantId = resolveTenantId(actor);
+        StockTransfer transfer = transferRepository.findByIdForUpdate(transferId)
+                .filter(candidate -> candidate.getTenant() != null
+                        && tenantId.equals(candidate.getTenant().getId()))
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STOCK_TRANSFER_NOT_FOUND));
+        if (transfer.getStatus() != StockTransferStatus.PENDING) {
+            throw new ResourceConflictException(ErrorCode.STOCK_TRANSFER_INVALID_STATUS);
+        }
+
+        requireTenantMutationAccess(tenantId, transfer);
+        String reason = normalizeDecisionReason(request);
+        transfer.setDecisionReason(reason);
+        if (decision == StockTransferStatus.REJECTED) {
+            transfer.setRejectedBy(actor);
+            transfer.setRejectedAt(java.time.LocalDateTime.now());
+        } else {
+            transfer.setCancelledBy(actor);
+            transfer.setCancelledAt(java.time.LocalDateTime.now());
+        }
+        transfer.setStatus(decision);
+        return mapToResponse(transferRepository.save(transfer));
+    }
+
+    private String normalizeDecisionReason(StockTransferDecisionRequest request) {
+        if (request == null || request.getReason() == null || request.getReason().isBlank()) {
+            throw new BadRequestException(ErrorCode.STOCK_TRANSFER_DECISION_REASON_REQUIRED);
+        }
+        return request.getReason().trim();
     }
 
     private void validateSourceAllocation(StockBatch batch, ProductSku sku,
