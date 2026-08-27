@@ -6,11 +6,13 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.springframework.stereotype.Component;
 
 /**
  * Deterministic, side-effect-free planner used after physical capacity has
  * been calculated for every candidate bin.
  */
+@Component
 public class PutawaySuggestionPlanner {
 
     private static final long MAX_SCORE = 1_000L;
