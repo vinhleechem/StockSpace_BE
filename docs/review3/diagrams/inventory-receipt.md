@@ -13,18 +13,18 @@ hide empty members
 left to right direction
 
 class InventoryReceiptController {
-  +createReceipt(request: CreateInventoryReceiptRequest): ApiResponse<InventoryReceiptResponse>
-  +approveReceipt(id: UUID): ApiResponse<InventoryReceiptResponse>
-  +rejectReceipt(id: UUID, request: RejectReceiptRequest): ApiResponse<InventoryReceiptResponse>
-  +getReceipts(warehouseId: UUID, type: DocumentType, page: int, size: int): PagedResponse<InventoryReceiptResponse>
-  +getReceiptDetail(id: UUID): ApiResponse<InventoryReceiptResponse>
+  +createReceipt()
+  +approveReceipt()
+  +rejectReceipt()
+  +getReceipts()
+  +getReceiptDetail()
 }
 
 class InventoryReceiptService {
-  +createReceipt(userId: UUID, request: CreateInventoryReceiptRequest): InventoryReceiptResponse
-  +approveReceipt(approverId: UUID, receiptId: UUID): InventoryReceiptResponse
-  +rejectReceipt(approverId: UUID, receiptId: UUID, reason: String): InventoryReceiptResponse
-  +getReceiptsByWarehouse(userId: UUID, warehouseId: UUID, type: DocumentType, pageable: Pageable): PagedResponse<InventoryReceiptResponse>
+  +createReceipt()
+  +approveReceipt()
+  +rejectReceipt()
+  +getReceiptsByWarehouse()
 }
 
 interface InventoryReceiptRepository

@@ -17,32 +17,32 @@ hide empty members
 left to right direction
 
 class TenantLayoutController {
-  +getLayout(warehouseId: UUID): ApiResponse<WarehouseLayoutResponse>
-  +saveLayout(warehouseId: UUID, request: BulkLayoutSaveRequest): ApiResponse<WarehouseLayoutResponse>
+  +getLayout()
+  +saveLayout()
 }
 
 class StaffWarehouseLayoutController {
-  +getLayout(warehouseId: UUID): ApiResponse<WarehouseLayoutResponse>
+  +getLayout()
 }
 
 class WarehouseCapacityController {
-  +getCapacity(warehouseId: UUID): ApiResponse<WarehouseLayoutCapacityResponse>
+  +getCapacity()
 }
 
 class WarehouseLayoutService {
-  +getLayoutTree(warehouseId: UUID, userId: UUID, role: String): WarehouseLayoutResponse
-  +getStaffLayoutTree(warehouseId: UUID, staffId: UUID, tenantId: UUID): WarehouseLayoutResponse
-  +saveLayoutBulk(warehouseId: UUID, userId: UUID, role: String, request: BulkLayoutSaveRequest): WarehouseLayoutResponse
+  +getLayoutTree()
+  +getStaffLayoutTree()
+  +saveLayoutBulk()
 }
 
 class WarehouseCapacityService {
-  +getCapacity(tenantId: UUID, warehouseId: UUID, staffId: UUID): WarehouseLayoutCapacityResponse
+  +getCapacity()
 }
 
 class PhysicalLoadCalculator {
-  +calculate(lines: Collection<PhysicalLoadLine>, maxWeight: BigDecimal, maxVolume: BigDecimal): PhysicalLoad
-  +summarizeBySku(lines: Collection<PhysicalLoadLine>): List<SkuPhysicalLoad>
-  +assertWithinCapacity(type: String, name: String, load: PhysicalLoad): void
+  +calculate()
+  +summarizeBySku()
+  +assertWithinCapacity()
 }
 
 interface WarehouseLayoutRepository

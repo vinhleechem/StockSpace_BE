@@ -13,31 +13,31 @@ hide empty members
 left to right direction
 
 class TenantStaffController {
-  +inviteStaff(request: InviteStaffRequest): ApiResponse<InvitationSentResponse>
-  +listStaffs(keyword: String, page: int, size: int): Page<StaffMemberResponse>
-  +removeStaff(memberId: UUID): ApiResponse<Void>
-  +assignWarehouse(staffUserId: UUID, request: AssignWarehouseRequest): ApiResponse<StaffAssignmentResponse>
-  +getStaffAssignments(staffUserId: UUID): List<StaffAssignmentResponse>
-  +revokeAssignment(assignmentId: UUID): ApiResponse<Void>
+  +inviteStaff()
+  +listStaffs()
+  +removeStaff()
+  +assignWarehouse()
+  +getStaffAssignments()
+  +revokeAssignment()
 }
 
 class StaffSelfController {
-  +getMyWorkHistory(): ApiResponse<StaffWorkHistoryResponse>
-  +getOperations(warehouseId: UUID, type: String, status: String, page: int, size: int): PagedResponse<StaffOperationResponse>
+  +getMyWorkHistory()
+  +getOperations()
 }
 
 class TenantStaffService {
-  +sendInvitation(tenantId: UUID, request: InviteStaffRequest): InvitationSentResponse
-  +listStaffs(tenantId: UUID, keyword: String, pageable: Pageable): Page<StaffMemberResponse>
-  +removeStaff(tenantId: UUID, memberId: UUID): void
-  +assignWarehouseToStaff(tenantId: UUID, staffUserId: UUID, request: AssignWarehouseRequest): StaffAssignmentResponse
-  +revokeWarehouseAssignment(tenantId: UUID, assignmentId: UUID): void
-  +getStaffAssignments(tenantId: UUID, staffUserId: UUID): List<StaffAssignmentResponse>
-  +getStaffWorkHistory(staffUserId: UUID): StaffWorkHistoryResponse
+  +sendInvitation()
+  +listStaffs()
+  +removeStaff()
+  +assignWarehouseToStaff()
+  +revokeWarehouseAssignment()
+  +getStaffAssignments()
+  +getStaffWorkHistory()
 }
 
 class StaffOperationsService {
-  +getOperations(staffId: UUID, tenantId: UUID, warehouseId: UUID, type: String, status: String, pageable: Pageable): PagedResponse<StaffOperationResponse>
+  +getOperations()
 }
 
 interface StaffWarehouseAssignmentRepository

@@ -13,23 +13,23 @@ hide empty members
 left to right direction
 
 class StockTransferController {
-  +createTransfer(request: CreateStockTransferRequest): ApiResponse<StockTransferResponse>
-  +getTransfers(sourceWarehouseId: UUID, destinationWarehouseId: UUID, status: StockTransferStatus, page: int, size: int): PagedResponse<StockTransferResponse>
-  +getTransfer(id: UUID): ApiResponse<StockTransferResponse>
-  +approveDispatch(id: UUID): ApiResponse<StockTransferResponse>
-  +receiveTransfer(id: UUID, request: ReceiveStockTransferRequest): ApiResponse<StockTransferResponse>
-  +rejectTransfer(id: UUID, request: StockTransferDecisionRequest): ApiResponse<StockTransferResponse>
-  +cancelTransfer(id: UUID, request: StockTransferDecisionRequest): ApiResponse<StockTransferResponse>
+  +createTransfer()
+  +getTransfers()
+  +getTransfer()
+  +approveDispatch()
+  +receiveTransfer()
+  +rejectTransfer()
+  +cancelTransfer()
 }
 
 class StockTransferService {
-  +createTransfer(userId: UUID, request: CreateStockTransferRequest): StockTransferResponse
-  +getTransfers(userId: UUID, sourceWarehouseId: UUID, destinationWarehouseId: UUID, status: StockTransferStatus, pageable: Pageable): PagedResponse<StockTransferResponse>
-  +getTransfer(userId: UUID, transferId: UUID): StockTransferResponse
-  +approveDispatch(userId: UUID, transferId: UUID): StockTransferResponse
-  +receiveTransfer(userId: UUID, transferId: UUID, request: ReceiveStockTransferRequest): StockTransferResponse
-  +rejectTransfer(userId: UUID, transferId: UUID, request: StockTransferDecisionRequest): StockTransferResponse
-  +cancelTransfer(userId: UUID, transferId: UUID, request: StockTransferDecisionRequest): StockTransferResponse
+  +createTransfer()
+  +getTransfers()
+  +getTransfer()
+  +approveDispatch()
+  +receiveTransfer()
+  +rejectTransfer()
+  +cancelTransfer()
 }
 
 interface StockTransferRepository

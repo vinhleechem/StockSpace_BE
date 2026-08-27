@@ -13,21 +13,21 @@ hide empty members
 left to right direction
 
 class InventoryAuditController {
-  +createAudit(request: CreateInventoryAuditRequest): ApiResponse<InventoryAuditResponse>
-  +getMyAudits(warehouseId: UUID, page: int, size: int): PagedResponse<InventoryAuditResponse>
-  +getAuditDetail(id: UUID): ApiResponse<InventoryAuditResponse>
-  +submitAudit(id: UUID, request: SubmitAuditRequest): ApiResponse<InventoryAuditResponse>
-  +approveAudit(id: UUID): ApiResponse<InventoryAuditResponse>
-  +rejectAudit(id: UUID, body: Map<String,String>): ApiResponse<InventoryAuditResponse>
+  +createAudit()
+  +getMyAudits()
+  +getAuditDetail()
+  +submitAudit()
+  +approveAudit()
+  +rejectAudit()
 }
 
 class InventoryAuditService {
-  +createAudit(userId: UUID, request: CreateInventoryAuditRequest): InventoryAuditResponse
-  +submitAudit(userId: UUID, auditId: UUID, request: SubmitAuditRequest): InventoryAuditResponse
-  +approveAudit(approverId: UUID, auditId: UUID): InventoryAuditResponse
-  +rejectAudit(approverId: UUID, auditId: UUID, reason: String): InventoryAuditResponse
-  +getMyAudits(userId: UUID, warehouseId: UUID, pageable: Pageable): PagedResponse<InventoryAuditResponse>
-  +getAuditDetail(userId: UUID, auditId: UUID): InventoryAuditResponse
+  +createAudit()
+  +submitAudit()
+  +approveAudit()
+  +rejectAudit()
+  +getMyAudits()
+  +getAuditDetail()
 }
 
 interface InventoryAuditRepository
