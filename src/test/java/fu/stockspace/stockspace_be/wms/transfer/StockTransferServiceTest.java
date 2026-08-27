@@ -4,8 +4,11 @@ import fu.stockspace.stockspace_be.auth.entity.Role;
 import fu.stockspace.stockspace_be.auth.entity.RoleType;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
+import fu.stockspace.stockspace_be.staff.entity.AssignmentStatus;
+import fu.stockspace.stockspace_be.staff.entity.TenantMember;
 import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
 import fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
@@ -224,6 +227,50 @@ class StockTransferServiceTest {
 
         assertThrows(ResourceNotFoundException.class,
                 () -> transferService.getTransfer(tenantId, transferId));
+    }
+
+    @Test
+    void createTransfer_requiresStaffAssignmentAtBothWarehouses() {
+        UUID staffId = UUID.randomUUID();
+        User staff = User.builder()
+                .id(staffId)
+                .roles(Set.of(Role.builder().name(RoleType.ROLE_STAFF.name()).build()))
+                .build();
+        TenantMember membership = TenantMember.builder().user(staff).tenant(tenant).build();
+        when(userRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(staffId))
+                .thenReturn(Optional.of(membership));
+        when(warehouseRepository.findById(sourceWarehouseId)).thenReturn(Optional.of(sourceWarehouse));
+        when(warehouseRepository.findById(destinationWarehouseId)).thenReturn(Optional.of(destinationWarehouse));
+        doNothing().when(accessService).requireActiveContract(tenantId, sourceWarehouseId);
+        doNothing().when(accessService).requireActiveContract(tenantId, destinationWarehouseId);
+        doNothing().when(accessService).requireActiveSubscription(tenantId);
+        when(assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
+                staffId, tenantId, sourceWarehouseId, AssignmentStatus.ACTIVE)).thenReturn(true);
+        when(assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
+                staffId, tenantId, destinationWarehouseId, AssignmentStatus.ACTIVE)).thenReturn(false);
+
+        assertThrows(ForbiddenException.class,
+                () -> transferService.createTransfer(staffId, request(10, 10)));
+
+        verify(transferRepository, never()).save(any());
+        verify(productSkuRepository, never()).findByIdAndIsDeletedFalse(any());
+    }
+
+    @Test
+    void createTransfer_rejectsExpiredSubscriptionBeforeCreatingDraft() {
+        when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+        when(warehouseRepository.findById(sourceWarehouseId)).thenReturn(Optional.of(sourceWarehouse));
+        when(warehouseRepository.findById(destinationWarehouseId)).thenReturn(Optional.of(destinationWarehouse));
+        doNothing().when(accessService).requireActiveContract(tenantId, sourceWarehouseId);
+        doNothing().when(accessService).requireActiveContract(tenantId, destinationWarehouseId);
+        org.mockito.Mockito.doThrow(new ForbiddenException("Subscription expired"))
+                .when(accessService).requireActiveSubscription(tenantId);
+
+        assertThrows(ForbiddenException.class,
+                () -> transferService.createTransfer(tenantId, request(10, 10)));
+
+        verify(transferRepository, never()).save(any());
     }
 
     private void stubCreateAccess() {

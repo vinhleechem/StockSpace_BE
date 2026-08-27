@@ -4,6 +4,7 @@ import fu.stockspace.stockspace_be.auth.entity.Role;
 import fu.stockspace.stockspace_be.auth.entity.RoleType;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
@@ -43,9 +44,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import org.mockito.InOrder;
 
 @ExtendWith(MockitoExtension.class)
 class StockTransferDispatchServiceTest {
@@ -207,6 +211,82 @@ class StockTransferDispatchServiceTest {
         verify(accessService).requireActiveContract(tenantId, sourceWarehouseId);
         verify(accessService).requireActiveContract(tenantId, destinationWarehouseId);
         verify(accessService).requireActiveSubscription(tenantId);
+    }
+
+    @Test
+    void approveDispatch_locksMultipleSourceBatchesInStableUuidOrder() {
+        stubDispatchAccess();
+        UUID lowerBatchId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID higherBatchId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        sourceBatch.setId(higherBatchId);
+        sourceBatch.setQuantity(3);
+        transfer.getItems().get(0).setRequestedQuantity(3);
+        transfer.getItems().get(0).getSourceAllocations().get(0).setQuantity(3);
+
+        WarehouseRack secondRack = WarehouseRack.builder().id(UUID.randomUUID()).name("Rack 2").build();
+        WarehouseBin secondBin = WarehouseBin.builder().id(UUID.randomUUID()).rack(secondRack).name("Bin 2").build();
+        StockBatch lowerBatch = StockBatch.builder()
+                .id(lowerBatchId)
+                .skuId(skuId)
+                .warehouse(sourceWarehouse)
+                .rack(secondRack)
+                .bin(secondBin)
+                .quantity(2)
+                .build();
+        StockTransferItem secondItem = StockTransferItem.builder()
+                .id(UUID.randomUUID())
+                .sku(sku)
+                .requestedQuantity(2)
+                .build();
+        StockTransferSourceAllocation secondAllocation = StockTransferSourceAllocation.builder()
+                .id(UUID.randomUUID())
+                .item(secondItem)
+                .sourceStockBatch(lowerBatch)
+                .sourceRack(secondRack)
+                .sourceBin(secondBin)
+                .quantity(2)
+                .build();
+        secondItem.setSourceAllocations(List.of(secondAllocation));
+        secondItem.setDestinationAllocations(List.of());
+        secondItem.setTransfer(transfer);
+        transfer.setItems(List.of(transfer.getItems().get(0), secondItem));
+
+        when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+        when(transferRepository.findByIdForUpdate(transfer.getId())).thenReturn(Optional.of(transfer));
+        when(stockBatchRepository.findByIdForUpdate(lowerBatchId)).thenReturn(Optional.of(lowerBatch));
+        when(stockBatchRepository.findByIdForUpdate(higherBatchId)).thenReturn(Optional.of(sourceBatch));
+        when(receiptRepository.save(any(InventoryReceipt.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(receiptItemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(transactionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(transferRepository.save(any(StockTransfer.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        transferService.approveDispatch(tenantId, transfer.getId());
+
+        InOrder order = inOrder(stockBatchRepository);
+        order.verify(stockBatchRepository).findByIdForUpdate(lowerBatchId);
+        order.verify(stockBatchRepository).findByIdForUpdate(higherBatchId);
+        assertEquals(0, lowerBatch.getQuantity());
+        assertEquals(0, sourceBatch.getQuantity());
+        assertEquals(StockTransferStatus.IN_TRANSIT, transfer.getStatus());
+    }
+
+    @Test
+    void approveDispatch_rejectsExpiredSubscriptionBeforeStockMutation() {
+        doNothing().when(accessService).requireActiveContract(tenantId, sourceWarehouseId);
+        doNothing().when(accessService).requireActiveContract(tenantId, destinationWarehouseId);
+        doThrow(new ForbiddenException("Subscription expired"))
+                .when(accessService).requireActiveSubscription(tenantId);
+        when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+        when(transferRepository.findByIdForUpdate(transfer.getId())).thenReturn(Optional.of(transfer));
+
+        assertThrows(ForbiddenException.class,
+                () -> transferService.approveDispatch(tenantId, transfer.getId()));
+
+        verify(stockBatchRepository, never()).findByIdForUpdate(any());
+        verify(stockBatchRepository, never()).save(any());
+        verify(receiptRepository, never()).save(any());
     }
 
     private void stubDispatchAccess() {

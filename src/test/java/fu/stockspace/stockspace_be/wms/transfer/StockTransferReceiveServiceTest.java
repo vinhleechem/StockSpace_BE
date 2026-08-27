@@ -4,7 +4,9 @@ import fu.stockspace.stockspace_be.auth.entity.Role;
 import fu.stockspace.stockspace_be.auth.entity.RoleType;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
 import fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository;
@@ -54,6 +56,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -260,6 +263,54 @@ class StockTransferReceiveServiceTest {
 
         verify(rackRepository, never()).findByIdForUpdate(any());
         verify(binRepository, never()).findByIdForUpdate(any());
+        verify(receiptRepository, never()).save(any());
+    }
+
+    @Test
+    void receiveTransfer_rechecksActiveAccessBeforeDestinationMutation() {
+        when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+        when(transferRepository.findByIdForUpdate(transfer.getId())).thenReturn(Optional.of(transfer));
+        doThrow(new ForbiddenException("Source contract expired"))
+                .when(accessService).requireActiveContract(tenantId, sourceWarehouseId);
+
+        assertThrows(ForbiddenException.class,
+                () -> transferService.receiveTransfer(tenantId, transfer.getId(), receiveRequest(5)));
+
+        verify(layoutRepository, never()).findByWarehouseIdAndTenantId(any(), any());
+        verify(receiptRepository, never()).save(any());
+        verify(stockBatchRepository, never()).save(any());
+    }
+
+    @Test
+    void receiveTransfer_rejectsBinOutsideSelectedRack() {
+        destinationBin.setRack(WarehouseRack.builder()
+                .id(UUID.randomUUID())
+                .layout(tenantLayout)
+                .name("Other Rack")
+                .build());
+        stubDestinationValidationDependencies();
+
+        assertThrows(BadRequestException.class,
+                () -> transferService.receiveTransfer(tenantId, transfer.getId(), receiveRequest(5)));
+
+        verify(rackRepository, never()).findByIdForUpdate(any());
+        verify(receiptRepository, never()).save(any());
+    }
+
+    @Test
+    void receiveTransfer_hidesTransferOwnedByAnotherTenant() {
+        User otherTenant = User.builder()
+                .id(UUID.randomUUID())
+                .roles(Set.of(Role.builder().name(RoleType.ROLE_TENANT.name()).build()))
+                .build();
+        transfer.setTenant(otherTenant);
+        when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+        when(transferRepository.findByIdForUpdate(transfer.getId())).thenReturn(Optional.of(transfer));
+
+        assertThrows(ResourceNotFoundException.class,
+                () -> transferService.receiveTransfer(tenantId, transfer.getId(), receiveRequest(5)));
+
+        verify(accessService, never()).requireActiveSubscription(any());
         verify(receiptRepository, never()).save(any());
     }
 
