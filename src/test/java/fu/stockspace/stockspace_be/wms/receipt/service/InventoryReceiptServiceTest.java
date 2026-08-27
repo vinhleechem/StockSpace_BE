@@ -33,6 +33,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
@@ -638,6 +639,56 @@ class InventoryReceiptServiceTest {
                 skuId, warehouseId, rackId, binId)).thenReturn(Optional.of(existingBatch));
 
         assertThrows(BadRequestException.class, () -> receiptService.approveReceipt(approverId, receipt.getId()));
+    }
+
+    @Test
+    void testCreateAdjustmentReceipt_Outbound_ReconcilesStockAndHistory() {
+        UUID auditId = UUID.randomUUID();
+        UUID receiptId = UUID.randomUUID();
+        StockBatch batch = StockBatch.builder()
+                .id(UUID.randomUUID())
+                .skuId(skuId)
+                .warehouse(warehouse)
+                .rack(rack)
+                .bin(bin)
+                .quantity(100)
+                .build();
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(stockBatchRepository.findByIdAndIsDeletedFalse(batch.getId())).thenReturn(Optional.of(batch));
+        when(productSkuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(productSku));
+        when(receiptRepository.save(any(InventoryReceipt.class))).thenAnswer(invocation -> {
+            InventoryReceipt receipt = invocation.getArgument(0);
+            receipt.setId(receiptId);
+            return receipt;
+        });
+        when(receiptItemRepository.save(any(InventoryReceiptItem.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(transactionRepository.save(any(InventoryTransaction.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        InventoryReceipt receipt = receiptService.createAdjustmentReceipt(
+                userId, auditId, warehouseId, DocumentType.OUTBOUND, batch.getId(), 15);
+
+        assertEquals(receiptId, receipt.getId());
+        assertEquals(auditId, receipt.getReferenceId());
+        assertEquals(DocumentType.OUTBOUND, receipt.getType());
+        assertEquals(85, batch.getQuantity());
+
+        ArgumentCaptor<InventoryReceiptItem> itemCaptor = ArgumentCaptor.forClass(InventoryReceiptItem.class);
+        verify(receiptItemRepository).save(itemCaptor.capture());
+        assertEquals(receipt, itemCaptor.getValue().getReceipt());
+        assertEquals(15, itemCaptor.getValue().getQuantity());
+        assertEquals(batch.getBin(), itemCaptor.getValue().getBin());
+
+        ArgumentCaptor<InventoryTransaction> transactionCaptor =
+                ArgumentCaptor.forClass(InventoryTransaction.class);
+        verify(transactionRepository).save(transactionCaptor.capture());
+        assertEquals(receipt, transactionCaptor.getValue().getReceipt());
+        assertEquals(batch, transactionCaptor.getValue().getBatch());
+        assertEquals(-15, transactionCaptor.getValue().getQuantityChanged());
+        verify(stockBatchRepository).save(batch);
     }
 
     @Test
