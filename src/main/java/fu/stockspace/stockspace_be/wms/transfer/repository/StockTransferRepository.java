@@ -12,6 +12,8 @@ import org.springframework.stereotype.Repository;
 
 import jakarta.persistence.LockModeType;
 import java.util.Optional;
+import java.util.Collection;
+import java.util.List;
 import java.util.UUID;
 
 @Repository
@@ -57,6 +59,19 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, UU
             @Param("status") StockTransferStatus status,
             @Param("staffId") UUID staffId,
             Pageable pageable);
+
+    @Query("""
+            select t from StockTransfer t
+            where t.tenant.id = :tenantId
+              and t.sourceWarehouse.id in :warehouseIds
+              and t.destinationWarehouse.id in :warehouseIds
+              and t.isActive = true
+              and t.isDeleted = false
+            order by t.createdAt desc, t.id desc
+            """)
+    List<StockTransfer> findActiveOperationsForStaff(
+            @Param("tenantId") UUID tenantId,
+            @Param("warehouseIds") Collection<UUID> warehouseIds);
 
     @Query("""
             select t from StockTransfer t
