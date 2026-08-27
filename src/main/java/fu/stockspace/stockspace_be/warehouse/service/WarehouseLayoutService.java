@@ -345,53 +345,78 @@ public class WarehouseLayoutService {
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
 
-        WarehouseLayout layout = null;
         boolean isTenantRole = "TENANT".equalsIgnoreCase(role);
+        WarehouseLayout layout = resolveLayoutForSave(warehouse, warehouseId, userId, role, request);
+        if (isTenantRole) {
+            validateTenantSnapshotDimensions(layout, request);
+        }
 
-        if ("OWNER".equalsIgnoreCase(role)) {
-            if (!warehouse.getOwner().getId().equals(userId)) {
+        layout.setPositions(serializePositions(request.getPositions()));
+        WarehouseLayout savedLayout = layoutRepository.save(layout);
+        if (savedLayout != null) layout = savedLayout;
+
+        return saveLayoutContents(layout, request, isTenantRole);
+    }
+
+    /**
+     * Resolves the only layout a caller is allowed to mutate. Owner writes the
+     * warehouse default layout; Tenant writes only its own active snapshot.
+     */
+    private WarehouseLayout resolveLayoutForSave(Warehouse warehouse,
+                                                  UUID warehouseId,
+                                                  UUID userId,
+                                                  String role,
+                                                  BulkLayoutSaveRequest request) {
+        String normalizedRole = role == null ? "" : role.trim().toUpperCase(Locale.ROOT);
+
+        if ("OWNER".equals(normalizedRole)) {
+            if (warehouse.getOwner() == null || !warehouse.getOwner().getId().equals(userId)) {
                 throw new ForbiddenException(ErrorCode.WAREHOUSE_NOT_OWNED);
             }
-            layout = layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId).orElse(null);
-            if (layout == null) {
-                layout = WarehouseLayout.builder()
-                        .warehouse(warehouse)
-                        .isDefault(true)
-                        .width(request.getWidth())
-                        .length(request.getLength() != null ? request.getLength() : new BigDecimal("100"))
-                        .height(request.getHeight())
-                        .build();
-            } else {
-                layout.setWidth(request.getWidth());
-                if (request.getLength() != null) layout.setLength(request.getLength());
-                layout.setHeight(request.getHeight());
-            }
-            layout.setPositions(serializePositions(request.getPositions()));
-            WarehouseLayout savedOwnerLayout = layoutRepository.save(layout);
-            if (savedOwnerLayout != null) layout = savedOwnerLayout;
 
-        } else if (isTenantRole) {
+            WarehouseLayout layout = layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)
+                    .orElseGet(() -> WarehouseLayout.builder()
+                            .warehouse(warehouse)
+                            .isDefault(true)
+                            .width(request.getWidth())
+                            .length(request.getLength())
+                            .height(request.getHeight())
+                            .build());
+            layout.setWidth(request.getWidth());
+            layout.setLength(request.getLength());
+            layout.setHeight(request.getHeight());
+            return layout;
+        }
+
+        if ("TENANT".equals(normalizedRole)) {
             tenantWarehouseAccessService.requireWmsAccess(userId, warehouseId);
 
-            layout = layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId).orElse(null);
-            if (layout != null && (layout.isDeleted() || !layout.isActive())) {
-                layout = null;
-            }
+            WarehouseLayout layout = layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId)
+                    .filter(existing -> !existing.isDeleted() && existing.isActive())
+                    .orElse(null);
             if (layout == null) {
                 cloneLayout(warehouseId, userId);
                 layout = layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId)
+                        .filter(existing -> !existing.isDeleted() && existing.isActive())
                         .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.LAYOUT_NOT_FOUND));
             }
-            layout.setPositions(serializePositions(request.getPositions()));
-            WarehouseLayout savedTenantLayout = layoutRepository.save(layout);
-            if (savedTenantLayout != null) layout = savedTenantLayout;
-
-        } else {
-            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+            return layout;
         }
 
+        throw new ForbiddenException(ErrorCode.FORBIDDEN);
+    }
 
-        return saveLayoutContents(layout, request, isTenantRole);
+    private void validateTenantSnapshotDimensions(WarehouseLayout layout, BulkLayoutSaveRequest request) {
+        requirePositive("layout.width", request.getWidth());
+        requirePositive("layout.length", request.getLength());
+        requirePositive("layout.height", request.getHeight());
+
+        if (layout.getWidth() == null || layout.getLength() == null || layout.getHeight() == null
+                || layout.getWidth().compareTo(request.getWidth()) != 0
+                || layout.getLength().compareTo(request.getLength()) != 0
+                || layout.getHeight().compareTo(request.getHeight()) != 0) {
+            throw invalidGeometry("Tenant cannot change the dimensions of its layout snapshot");
+        }
     }
 
     private WarehouseLayoutResponse saveLayoutContents(WarehouseLayout layout,
