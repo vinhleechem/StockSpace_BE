@@ -9,6 +9,13 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenExceptio
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
+import fu.stockspace.stockspace_be.listing.entity.ListingOrder;
+import fu.stockspace.stockspace_be.listing.entity.ListingOrderStatus;
+import fu.stockspace.stockspace_be.listing.repository.ListingOrderRepository;
+import fu.stockspace.stockspace_be.wallet.entity.Transaction;
+import fu.stockspace.stockspace_be.wallet.entity.TransactionStatus;
+import fu.stockspace.stockspace_be.wallet.entity.TransactionType;
+import fu.stockspace.stockspace_be.wallet.repository.TransactionRepository;
 import fu.stockspace.stockspace_be.warehouse.dto.*;
 import fu.stockspace.stockspace_be.warehouse.entity.*;
 import fu.stockspace.stockspace_be.warehouse.repository.*;
@@ -55,6 +62,9 @@ public class WarehouseService {
     private final SystemPolicyRepository systemPolicyRepository;
     private final NotificationService notificationService;
     private final TenantWarehouseAccessService tenantWarehouseAccessService;
+    private final ListingOrderRepository listingOrderRepository;
+    private final TransactionRepository transactionRepository;
+    private final WarehouseLayoutRepository warehouseLayoutRepository;
 
     @Transactional(readOnly = true)
     public List<WarehouseResponse> getActiveContractWarehouses(UUID tenantId) {
@@ -230,11 +240,13 @@ public class WarehouseService {
 
     @Transactional
     public WarehouseResponse updateStatus(UUID ownerId, UUID warehouseId, WarehouseStatus newStatus) {
-        if (newStatus == WarehouseStatus.PENDING_APPROVAL) {
+        Warehouse warehouse = getOwnedWarehouse(ownerId, warehouseId);
+        if (newStatus == null
+                || newStatus == WarehouseStatus.PENDING_APPROVAL
+                || (warehouse.getStatus() == WarehouseStatus.PENDING_APPROVAL
+                && newStatus == WarehouseStatus.AVAILABLE)) {
             throw new BadRequestException(ErrorCode.WAREHOUSE_INVALID_STATUS_TRANSITION);
         }
-
-        Warehouse warehouse = getOwnedWarehouse(ownerId, warehouseId);
         warehouse.setStatus(newStatus);
         warehouse = warehouseRepository.save(warehouse);
 
@@ -362,29 +374,69 @@ public class WarehouseService {
 
 
     @Transactional
-    public WarehouseResponse verifyWarehouse(UUID warehouseId) {
-        Warehouse warehouse = warehouseRepository.findById(warehouseId)
+    public WarehouseResponse approveWarehouse(UUID warehouseId) {
+        Warehouse warehouse = warehouseRepository.findByIdForUpdate(warehouseId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
 
         if (warehouse.getStatus() != WarehouseStatus.PENDING_APPROVAL) {
-            throw new BadRequestException("Kho bãi đã được duyệt bài đăng hoặc đang hoạt động");
+            throw new BadRequestException(ErrorCode.WAREHOUSE_INVALID_STATUS_TRANSITION);
         }
+
+        List<ListingOrder> pendingOrders = listingOrderRepository
+                .findPendingByWarehouseIdForUpdate(warehouseId);
+        if (pendingOrders.size() != 1) {
+            throw new ResourceConflictException(ErrorCode.LISTING_PAYMENT_REQUIRED);
+        }
+
+        ListingOrder order = pendingOrders.get(0);
+        transactionRepository
+                .findByListingOrderIdAndTransactionType(order.getId(), TransactionType.LISTING_FEE)
+                .filter(transaction -> transaction.getStatus() == TransactionStatus.SUCCESS)
+                .filter(transaction -> transaction.getAmount() != null
+                        && transaction.getAmount().compareTo(order.getPriceSnapshot()) == 0)
+                .orElseThrow(() -> new ResourceConflictException(ErrorCode.LISTING_PAYMENT_REQUIRED));
+
+        validateDefaultLayoutForApproval(warehouseId);
+
+        LocalDateTime periodStart = LocalDateTime.now();
+        LocalDateTime periodEnd = periodStart.plusDays(order.getDurationDaysSnapshot());
+        order.setPeriodStart(periodStart);
+        order.setPeriodEnd(periodEnd);
+        order.setStatus(ListingOrderStatus.ACTIVATED);
+        listingOrderRepository.save(order);
 
         warehouse.setStatus(WarehouseStatus.AVAILABLE);
         warehouse.setRejectReason(null);
+        warehouse.setPublishedAt(periodStart);
+        warehouse.setVisibleUntil(periodEnd);
         warehouse = warehouseRepository.save(warehouse);
 
         if (warehouse.getOwner() != null) {
             notificationService.push(
                     warehouse.getOwner().getId(),
                     "Bài đăng kho bãi đã được duyệt",
-                    "Chúc mừng! Yêu cầu đăng kho bãi '" + warehouse.getName() + "' của bạn đã được duyệt thành công và hiện đang hiển thị trên hệ thống.",
+                    "Chúc mừng! Bài đăng kho bãi '" + warehouse.getName()
+                            + "' đã được duyệt và đang hiển thị đến " + periodEnd + ".",
                     "SYSTEM"
             );
         }
 
-        log.info("Admin approved listing for warehouse {}", warehouseId);
+        log.info("Admin approved listing order {} for warehouse {}", order.getId(), warehouseId);
         return mapToResponse(warehouse);
+    }
+
+    private void validateDefaultLayoutForApproval(UUID warehouseId) {
+        warehouseLayoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)
+                .filter(layout -> layout.isActive()
+                        && !layout.isDeleted()
+                        && layout.getWidth() != null
+                        && layout.getWidth().signum() > 0
+                        && layout.getLength() != null
+                        && layout.getLength().signum() > 0
+                        && layout.getHeight() != null
+                        && layout.getHeight().signum() > 0)
+                .orElseThrow(() -> new ResourceConflictException(
+                        ErrorCode.WAREHOUSE_DEFAULT_LAYOUT_REQUIRED));
     }
 
 

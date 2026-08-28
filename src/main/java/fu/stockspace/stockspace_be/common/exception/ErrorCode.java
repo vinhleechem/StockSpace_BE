@@ -56,6 +56,7 @@ public enum ErrorCode {
     WAREHOUSE_HAS_ACTIVE_CONTRACTS("Không thể xoá kho đang có hợp đồng thuê hiệu lực", HttpStatus.BAD_REQUEST),
     WAREHOUSE_INVALID_STATUS_TRANSITION("Không thể chuyển sang trạng thái này", HttpStatus.BAD_REQUEST),
     WAREHOUSE_DEFAULT_LAYOUT_REQUIRED("Kho phải có default layout hợp lệ trước khi đăng bài", HttpStatus.CONFLICT),
+    LISTING_PAYMENT_REQUIRED("Kho chưa có khoản thanh toán đăng bài đang chờ duyệt", HttpStatus.CONFLICT),
     WAREHOUSE_IMAGE_LIMIT_EXCEEDED("Số lượng ảnh vượt quá giới hạn tối đa (10 ảnh)", HttpStatus.BAD_REQUEST),
 
 
