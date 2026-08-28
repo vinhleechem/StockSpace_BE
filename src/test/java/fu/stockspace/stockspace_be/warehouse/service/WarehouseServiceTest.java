@@ -218,6 +218,42 @@ class WarehouseServiceTest {
     }
 
     @Test
+    void resubmitRejectedWarehouseReturnsToPendingApprovalWithoutChargingWallet() {
+        warehouse.setStatus(WarehouseStatus.INACTIVE);
+        warehouse.setRejectReason("Thiếu thông tin hồ sơ");
+        warehouse.setPublishedAt(LocalDateTime.now().minusDays(1));
+        warehouse.setVisibleUntil(LocalDateTime.now().plusDays(5));
+
+        ListingOrder refundedOrder = ListingOrder.builder()
+                .id(UUID.randomUUID())
+                .owner(owner)
+                .warehouse(warehouse)
+                .durationDaysSnapshot(10)
+                .priceSnapshot(new BigDecimal("50000"))
+                .status(ListingOrderStatus.REFUNDED)
+                .build();
+
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(listingOrderRepository.findAllByOwnerIdAndWarehouseId(ownerId, warehouseId))
+                .thenReturn(List.of(refundedOrder));
+        when(warehouseRepository.save(any(Warehouse.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        WarehouseResponse response = warehouseService.resubmitWarehouse(ownerId, warehouseId);
+
+        assertEquals(WarehouseStatus.PENDING_APPROVAL.name(), response.getStatus());
+        assertNull(response.getRejectReason());
+        assertNull(warehouse.getPublishedAt());
+        assertNull(warehouse.getVisibleUntil());
+        verify(walletService, never()).refundBalance(any(), any(), any(), any(), any(), any());
+        verify(notificationService).push(
+                eq(ownerId),
+                eq("Warehouse listing resubmitted"),
+                any(String.class),
+                eq("LISTING_RESUBMITTED"));
+    }
+
+    @Test
     void updateWarehouse_AllowsNegotiatedPricingWithoutNumericRentalPrice() {
         warehouse.setRentalPricingType(RentalPricingType.FIXED_MONTHLY);
         warehouse.setRentalPrice(new BigDecimal("15000000"));

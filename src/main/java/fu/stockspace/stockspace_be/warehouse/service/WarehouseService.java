@@ -415,6 +415,40 @@ public class WarehouseService {
         return mapToResponse(warehouse);
     }
 
+    @Transactional
+    public WarehouseResponse resubmitWarehouse(UUID ownerId, UUID warehouseId) {
+        Warehouse warehouse = warehouseRepository.findByIdForUpdate(warehouseId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
+        requireWarehouseOwner(warehouse, ownerId);
+
+        if (warehouse.getStatus() != WarehouseStatus.INACTIVE
+                || !StringUtils.hasText(warehouse.getRejectReason())) {
+            throw new BadRequestException(ErrorCode.WAREHOUSE_INVALID_STATUS_TRANSITION);
+        }
+
+        List<ListingOrder> orders = listingOrderRepository
+                .findAllByOwnerIdAndWarehouseId(ownerId, warehouseId);
+        if (orders.isEmpty() || orders.get(0).getStatus() != ListingOrderStatus.REFUNDED) {
+            throw new BadRequestException(ErrorCode.WAREHOUSE_INVALID_STATUS_TRANSITION);
+        }
+
+        warehouse.setStatus(WarehouseStatus.PENDING_APPROVAL);
+        warehouse.setRejectReason(null);
+        warehouse.setPublishedAt(null);
+        warehouse.setVisibleUntil(null);
+        warehouse = warehouseRepository.save(warehouse);
+
+        notificationService.push(
+                ownerId,
+                "Warehouse listing resubmitted",
+                "Warehouse " + warehouse.getName()
+                        + " has been resubmitted and is waiting for a new listing payment and Admin approval.",
+                "LISTING_RESUBMITTED");
+
+        log.info("Owner {} resubmitted rejected warehouse {}", ownerId, warehouseId);
+        return mapToResponse(warehouse);
+    }
+
     private void validateDefaultLayoutForApproval(UUID warehouseId) {
         warehouseLayoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)
                 .filter(layout -> layout.isActive()
@@ -427,6 +461,12 @@ public class WarehouseService {
                         && layout.getHeight().signum() > 0)
                 .orElseThrow(() -> new ResourceConflictException(
                         ErrorCode.WAREHOUSE_DEFAULT_LAYOUT_REQUIRED));
+    }
+
+    private void requireWarehouseOwner(Warehouse warehouse, UUID ownerId) {
+        if (warehouse.getOwner() == null || !ownerId.equals(warehouse.getOwner().getId())) {
+            throw new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND);
+        }
     }
 
     private ListingOrder findPendingPaidOrder(UUID warehouseId) {
