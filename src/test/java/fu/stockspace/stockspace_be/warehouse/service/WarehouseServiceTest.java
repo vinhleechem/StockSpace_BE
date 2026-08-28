@@ -112,6 +112,17 @@ class WarehouseServiceTest {
     }
 
     @Test
+    void inspectionVerificationDoesNotChangeWarehousePublicationStatus() {
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+
+        warehouseService.markAsVerifiedByInspection(warehouseId);
+
+        assertTrue(warehouse.isVerified());
+        assertEquals(WarehouseStatus.PENDING_APPROVAL, warehouse.getStatus());
+        verify(warehouseRepository).save(warehouse);
+    }
+
+    @Test
     void rejectWarehouse_WithReason_Success() {
         String reason = "Kho không đủ giấy phép PCCC";
         ListingOrder order = ListingOrder.builder()

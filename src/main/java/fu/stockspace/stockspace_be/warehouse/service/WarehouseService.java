@@ -579,7 +579,6 @@ public class WarehouseService {
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
 
         warehouse.setVerified(true);
-        warehouse.setStatus(WarehouseStatus.AVAILABLE);
         warehouseRepository.save(warehouse);
         log.info("Warehouse {} verified via inspection", warehouseId);
     }
