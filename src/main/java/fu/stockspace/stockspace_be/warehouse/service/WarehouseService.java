@@ -53,8 +53,10 @@ public class WarehouseService {
 
     private static final int MAX_IMAGES_PER_WAREHOUSE = 10;
     private static final String PUBLICATION_DRAFT = "DRAFT";
+    private static final String PUBLICATION_PENDING_APPROVAL = "PENDING_APPROVAL";
     private static final String PUBLICATION_PUBLISHED = "PUBLISHED";
     private static final String PUBLICATION_EXPIRED = "EXPIRED";
+    private static final String PUBLICATION_REFUNDED = "REFUNDED";
 
     private final WarehouseRepository warehouseRepository;
     private final WarehouseTypeRepository warehouseTypeRepository;
@@ -268,7 +270,7 @@ public class WarehouseService {
         Pageable pageable = PageRequest.of(page, size, sort);
 
         Page<Warehouse> warehousePage = warehouseRepository.findByOwnerId(ownerId, pageable);
-        return toPagedResponse(warehousePage);
+        return toPagedResponse(warehousePage, true);
     }
 
 
@@ -412,7 +414,7 @@ public class WarehouseService {
         }
 
         log.info("Admin approved listing order {} for warehouse {}", order.getId(), warehouseId);
-        return mapToResponse(warehouse);
+        return mapToResponse(warehouse, order.getId(), order.getStatus());
     }
 
     @Transactional
@@ -446,7 +448,7 @@ public class WarehouseService {
                 "LISTING_RESUBMITTED");
 
         log.info("Owner {} resubmitted rejected warehouse {}", ownerId, warehouseId);
-        return mapToResponse(warehouse);
+        return mapToResponse(warehouse, orders.get(0).getId(), orders.get(0).getStatus());
     }
 
     private void validateDefaultLayoutForApproval(UUID warehouseId) {
@@ -541,7 +543,7 @@ public class WarehouseService {
         }
 
         log.info("Admin rejected warehouse listing {} with reason: {}", warehouseId, reason);
-        return mapToResponse(warehouse);
+        return mapToResponse(warehouse, order.getId(), order.getStatus());
     }
 
 
@@ -564,7 +566,7 @@ public class WarehouseService {
                 pageable
         );
 
-        return toPagedResponse(result);
+        return toPagedResponse(result, true);
     }
 
 
@@ -658,6 +660,14 @@ public class WarehouseService {
     }
 
     private WarehouseResponse mapToResponse(Warehouse w) {
+        return mapToResponse(w, null, null);
+    }
+
+    private WarehouseResponse mapToResponse(
+            Warehouse w,
+            UUID currentListingOrderId,
+            ListingOrderStatus currentListingOrderStatus
+    ) {
         List<String> urls = w.getImages().stream()
                 .map(WarehouseImage::getImageUrl)
                 .collect(Collectors.toList());
@@ -666,8 +676,11 @@ public class WarehouseService {
 
         java.math.BigDecimal rentalPrice = w.getRentalPrice();
         RentalPricingType pricingType = effectivePricingType(w);
-        String publicationStatus = resolvePublicationStatus(w);
-        boolean publishableWarehouse = w.isActive()
+        String publicationStatus = resolvePublicationStatus(w, currentListingOrderStatus);
+        boolean canStartPublication = w.isActive()
+                && !w.isDeleted()
+                && w.getStatus() != WarehouseStatus.INACTIVE;
+        boolean canRenewPublication = w.isActive()
                 && !w.isDeleted()
                 && w.getStatus() == WarehouseStatus.AVAILABLE;
 
@@ -697,10 +710,14 @@ public class WarehouseService {
                 .publishedAt(w.getPublishedAt())
                 .visibleUntil(w.getVisibleUntil())
                 .publicationStatus(publicationStatus)
-                .canPublish(publishableWarehouse && PUBLICATION_DRAFT.equals(publicationStatus))
-                .canRenew(publishableWarehouse
+                .canPublish(canStartPublication
+                        && PUBLICATION_DRAFT.equals(publicationStatus)
+                        && currentListingOrderStatus != ListingOrderStatus.PENDING_APPROVAL)
+                .canRenew(canRenewPublication
                         && (PUBLICATION_PUBLISHED.equals(publicationStatus)
                         || PUBLICATION_EXPIRED.equals(publicationStatus)))
+                .currentListingOrderId(currentListingOrderId)
+                .currentListingOrderStatus(currentListingOrderStatus)
                 .createdAt(w.getCreatedAt())
                 .updatedAt(w.getUpdatedAt())
                 .build();
@@ -759,7 +776,20 @@ public class WarehouseService {
         return StringUtils.hasText(value) ? value.trim() : null;
     }
 
-    private String resolvePublicationStatus(Warehouse warehouse) {
+    private String resolvePublicationStatus(
+            Warehouse warehouse,
+            ListingOrderStatus currentListingOrderStatus
+    ) {
+        if (currentListingOrderStatus == ListingOrderStatus.PENDING_APPROVAL) {
+            return PUBLICATION_PENDING_APPROVAL;
+        }
+        if (currentListingOrderStatus == ListingOrderStatus.REFUNDED
+                && warehouse.getStatus() == WarehouseStatus.INACTIVE) {
+            return PUBLICATION_REFUNDED;
+        }
+        if (warehouse.getStatus() != WarehouseStatus.AVAILABLE) {
+            return PUBLICATION_DRAFT;
+        }
         if (warehouse.getPublishedAt() == null || warehouse.getVisibleUntil() == null) {
             return PUBLICATION_DRAFT;
         }
@@ -769,8 +799,20 @@ public class WarehouseService {
     }
 
     private PagedResponse<WarehouseResponse> toPagedResponse(Page<Warehouse> page) {
+        return toPagedResponse(page, false);
+    }
+
+    private PagedResponse<WarehouseResponse> toPagedResponse(Page<Warehouse> page, boolean includeListingOrderState) {
+        Map<UUID, ListingOrderRepository.LatestListingOrderState> latestStates = includeListingOrderState
+                ? findLatestListingOrderStates(page.getContent())
+                : Collections.emptyMap();
         List<WarehouseResponse> content = page.getContent().stream()
-                .map(this::mapToResponse)
+                .map(warehouse -> {
+                    ListingOrderRepository.LatestListingOrderState latest = latestStates.get(warehouse.getId());
+                    return latest == null
+                            ? mapToResponse(warehouse)
+                            : mapToResponse(warehouse, latest.getOrderId(), latest.getStatus());
+                })
                 .collect(Collectors.toList());
 
         return PagedResponse.<WarehouseResponse>builder()
@@ -781,5 +823,24 @@ public class WarehouseService {
                 .totalPages(page.getTotalPages())
                 .last(page.isLast())
                 .build();
+    }
+
+    private Map<UUID, ListingOrderRepository.LatestListingOrderState> findLatestListingOrderStates(
+            List<Warehouse> warehouses
+    ) {
+        List<UUID> warehouseIds = warehouses.stream()
+                .map(Warehouse::getId)
+                .filter(Objects::nonNull)
+                .toList();
+        if (warehouseIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        return listingOrderRepository.findLatestStateByWarehouseIds(warehouseIds).stream()
+                .collect(Collectors.toMap(
+                        ListingOrderRepository.LatestListingOrderState::getWarehouseId,
+                        state -> state,
+                        (first, ignored) -> first
+                ));
     }
 }

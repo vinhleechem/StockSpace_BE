@@ -38,4 +38,29 @@ public interface ListingOrderRepository extends JpaRepository<ListingOrder, UUID
             @Param("ownerId") UUID ownerId,
             @Param("warehouseId") UUID warehouseId
     );
+
+    @Query("""
+            SELECT o.id AS orderId, o.warehouse.id AS warehouseId, o.status AS status
+            FROM ListingOrder o
+            WHERE o.warehouse.id IN :warehouseIds
+              AND o.isDeleted = false
+              AND o.createdAt = (
+                    SELECT MAX(latest.createdAt)
+                    FROM ListingOrder latest
+                    WHERE latest.warehouse.id = o.warehouse.id
+                      AND latest.isDeleted = false
+              )
+            ORDER BY o.createdAt DESC
+            """)
+    List<LatestListingOrderState> findLatestStateByWarehouseIds(
+            @Param("warehouseIds") List<UUID> warehouseIds
+    );
+
+    interface LatestListingOrderState {
+        UUID getOrderId();
+
+        UUID getWarehouseId();
+
+        ListingOrderStatus getStatus();
+    }
 }

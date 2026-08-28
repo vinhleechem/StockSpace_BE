@@ -1,6 +1,7 @@
 package fu.stockspace.stockspace_be.warehouse.dto;
 
 import fu.stockspace.stockspace_be.warehouse.entity.RentalPricingType;
+import fu.stockspace.stockspace_be.listing.entity.ListingOrderStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.Getter;
@@ -43,10 +44,14 @@ public class WarehouseResponse {
     private String policyVersion;
     private LocalDateTime publishedAt;
     private LocalDateTime visibleUntil;
-    @Schema(description = "Current publication state", allowableValues = {"DRAFT", "PUBLISHED", "EXPIRED"})
+    @Schema(description = "Current publication state", allowableValues = {"DRAFT", "PENDING_APPROVAL", "PUBLISHED", "EXPIRED", "REFUNDED"})
     private String publicationStatus;
     private boolean canPublish;
     private boolean canRenew;
+    @Schema(description = "Latest listing order ID for owner/admin views")
+    private UUID currentListingOrderId;
+    @Schema(description = "Latest listing order status for owner/admin views", allowableValues = {"PENDING_APPROVAL", "ACTIVATED", "REFUNDED"})
+    private ListingOrderStatus currentListingOrderStatus;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

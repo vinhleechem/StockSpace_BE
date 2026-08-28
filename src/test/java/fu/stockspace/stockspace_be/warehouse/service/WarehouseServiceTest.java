@@ -540,6 +540,59 @@ class WarehouseServiceTest {
     }
 
     @Test
+    void pendingPaidListingExposesPendingStateAndDisablesActions() {
+        warehouse.setStatus(WarehouseStatus.PENDING_APPROVAL);
+        ListingOrderRepository.LatestListingOrderState state = mock(ListingOrderRepository.LatestListingOrderState.class);
+        UUID orderId = UUID.randomUUID();
+
+        when(warehouseRepository.findByOwnerId(eq(ownerId), any()))
+                .thenReturn(new PageImpl<>(List.of(warehouse)));
+        when(listingOrderRepository.findLatestStateByWarehouseIds(List.of(warehouseId)))
+                .thenReturn(List.of(state));
+        when(state.getWarehouseId()).thenReturn(warehouseId);
+        when(state.getOrderId()).thenReturn(orderId);
+        when(state.getStatus()).thenReturn(ListingOrderStatus.PENDING_APPROVAL);
+
+        WarehouseResponse response = warehouseService
+                .getMyWarehouses(ownerId, 0, 10, "createdAt", "desc")
+                .getContent()
+                .get(0);
+
+        assertEquals("PENDING_APPROVAL", response.getPublicationStatus());
+        assertEquals(orderId, response.getCurrentListingOrderId());
+        assertEquals(ListingOrderStatus.PENDING_APPROVAL, response.getCurrentListingOrderStatus());
+        assertFalse(response.isCanPublish());
+        assertFalse(response.isCanRenew());
+    }
+
+    @Test
+    void rejectedRefundedListingExposesRefundedStateUntilResubmission() {
+        warehouse.setStatus(WarehouseStatus.INACTIVE);
+        warehouse.setRejectReason("Thiếu giấy tờ");
+        ListingOrderRepository.LatestListingOrderState state = mock(ListingOrderRepository.LatestListingOrderState.class);
+        UUID orderId = UUID.randomUUID();
+
+        when(warehouseRepository.findByOwnerId(eq(ownerId), any()))
+                .thenReturn(new PageImpl<>(List.of(warehouse)));
+        when(listingOrderRepository.findLatestStateByWarehouseIds(List.of(warehouseId)))
+                .thenReturn(List.of(state));
+        when(state.getWarehouseId()).thenReturn(warehouseId);
+        when(state.getOrderId()).thenReturn(orderId);
+        when(state.getStatus()).thenReturn(ListingOrderStatus.REFUNDED);
+
+        WarehouseResponse response = warehouseService
+                .getMyWarehouses(ownerId, 0, 10, "createdAt", "desc")
+                .getContent()
+                .get(0);
+
+        assertEquals("REFUNDED", response.getPublicationStatus());
+        assertEquals(orderId, response.getCurrentListingOrderId());
+        assertEquals(ListingOrderStatus.REFUNDED, response.getCurrentListingOrderStatus());
+        assertFalse(response.isCanPublish());
+        assertFalse(response.isCanRenew());
+    }
+
+    @Test
     void deleteWarehouseIsBlockedByAnActiveContractInsteadOfListingStatus() {
         warehouse.setStatus(WarehouseStatus.AVAILABLE);
         when(warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId))

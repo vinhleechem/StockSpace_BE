@@ -358,17 +358,29 @@ class ListingOrderServiceTest {
                 .periodStart(LocalDateTime.now())
                 .periodEnd(LocalDateTime.now().plusDays(10))
                 .build();
-        Transaction transaction = Transaction.builder().id(UUID.randomUUID()).build();
+        Transaction transaction = Transaction.builder()
+                .id(UUID.randomUUID())
+                .listingOrderId(order.getId())
+                .build();
+        Transaction refund = Transaction.builder()
+                .id(UUID.randomUUID())
+                .listingOrderId(order.getId())
+                .build();
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
         when(listingOrderRepository.findAllByOwnerIdAndWarehouseId(ownerId, warehouseId))
                 .thenReturn(java.util.List.of(order));
-        when(transactionRepository.findByListingOrderIdAndTransactionType(order.getId(), TransactionType.LISTING_FEE))
-                .thenReturn(Optional.of(transaction));
+        when(transactionRepository.findAllByListingOrderIdInAndTransactionType(
+                eq(java.util.List.of(order.getId())), eq(TransactionType.LISTING_FEE)))
+                .thenReturn(java.util.List.of(transaction));
+        when(transactionRepository.findAllByListingOrderIdInAndTransactionType(
+                eq(java.util.List.of(order.getId())), eq(TransactionType.LISTING_REFUND)))
+                .thenReturn(java.util.List.of(refund));
 
         var response = listingOrderService.getPublicationHistory(ownerId, warehouseId);
 
         assertEquals(1, response.size());
         assertEquals(transaction.getId(), response.get(0).getTransactionId());
+        assertEquals(refund.getId(), response.get(0).getRefundTransactionId());
         assertEquals(10, response.get(0).getDurationDays());
     }
 

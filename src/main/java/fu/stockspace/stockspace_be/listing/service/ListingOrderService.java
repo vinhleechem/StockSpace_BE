@@ -30,8 +30,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.Map;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -124,7 +127,7 @@ public class ListingOrderService {
 
         log.info("Owner {} purchased {}-day listing package for warehouse {} with status {} until {}",
                 ownerId, listingPackage.getDurationDays(), warehouseId, order.getStatus(), periodEnd);
-        return mapToResponse(order, transaction.getId());
+        return mapToResponse(order, transaction.getId(), null);
     }
 
     private void notifyPublication(UUID ownerId, Warehouse warehouse, LocalDateTime periodEnd, boolean renewed) {
@@ -160,12 +163,38 @@ public class ListingOrderService {
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
         requireWarehouseOwner(warehouse, ownerId);
 
-        return listingOrderRepository.findAllByOwnerIdAndWarehouseId(ownerId, warehouseId)
+        List<ListingOrder> orders = listingOrderRepository.findAllByOwnerIdAndWarehouseId(ownerId, warehouseId);
+        if (orders.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<UUID> orderIds = orders.stream()
+                .map(ListingOrder::getId)
+                .toList();
+        Map<UUID, UUID> paymentTransactionIds = transactionRepository
+                .findAllByListingOrderIdInAndTransactionType(orderIds, TransactionType.LISTING_FEE)
                 .stream()
-                .map(order -> transactionRepository.findByListingOrderIdAndTransactionType(
-                                order.getId(), TransactionType.LISTING_FEE)
-                        .map(transaction -> mapToResponse(order, transaction.getId()))
-                        .orElseGet(() -> mapToResponse(order, null)))
+                .filter(transaction -> transaction.getListingOrderId() != null)
+                .collect(Collectors.toMap(
+                        Transaction::getListingOrderId,
+                        Transaction::getId,
+                        (first, ignored) -> first
+                ));
+        Map<UUID, UUID> refundTransactionIds = transactionRepository
+                .findAllByListingOrderIdInAndTransactionType(orderIds, TransactionType.LISTING_REFUND)
+                .stream()
+                .filter(transaction -> transaction.getListingOrderId() != null)
+                .collect(Collectors.toMap(
+                        Transaction::getListingOrderId,
+                        Transaction::getId,
+                        (first, ignored) -> first
+                ));
+
+        return orders.stream()
+                .map(order -> mapToResponse(
+                        order,
+                        paymentTransactionIds.get(order.getId()),
+                        refundTransactionIds.get(order.getId())))
                 .toList();
     }
 
@@ -212,14 +241,18 @@ public class ListingOrderService {
         }
     }
 
-    private ListingOrderResponse mapToResponse(ListingOrder order, UUID transactionId) {
+    private ListingOrderResponse mapToResponse(
+            ListingOrder order,
+            UUID transactionId,
+            UUID refundTransactionId
+    ) {
         return ListingOrderResponse.builder()
                 .id(order.getId())
                 .warehouseId(order.getWarehouse().getId())
                 .listingPackageId(order.getListingPackage().getId())
                 .listingPackageName(order.getListingPackage().getName())
                 .transactionId(transactionId)
-                .refundTransactionId(null)
+                .refundTransactionId(refundTransactionId)
                 .status(order.getStatus())
                 .durationDays(order.getDurationDaysSnapshot())
                 .price(order.getPriceSnapshot())
