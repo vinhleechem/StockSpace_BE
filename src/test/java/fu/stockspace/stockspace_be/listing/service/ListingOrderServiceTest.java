@@ -4,6 +4,7 @@ import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.listing.dto.PurchaseListingPackageRequest;
 import fu.stockspace.stockspace_be.listing.entity.ListingOrder;
 import fu.stockspace.stockspace_be.listing.entity.ListingOrderStatus;
@@ -310,6 +311,23 @@ class ListingOrderServiceTest {
                         ownerId, warehouseId, new PurchaseListingPackageRequest(packageId)));
 
         assertEquals(ErrorCode.WAREHOUSE_DEFAULT_LAYOUT_REQUIRED, exception.getErrorCode());
+        verify(walletService, never()).deductBalance(any(), any(), any(), any(), any(), any());
+        verify(listingOrderRepository, never()).save(any(ListingOrder.class));
+    }
+
+    @Test
+    void purchaseRejectsDuplicatePendingPublicationBeforeChargingWallet() {
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(listingOrderRepository.existsByWarehouseIdAndStatusAndIsDeletedFalse(
+                warehouseId, ListingOrderStatus.PENDING_APPROVAL)).thenReturn(true);
+
+        ResourceConflictException exception = assertThrows(
+                ResourceConflictException.class,
+                () -> listingOrderService.purchaseOrRenew(
+                        ownerId, warehouseId, new PurchaseListingPackageRequest(packageId)));
+
+        assertEquals(ErrorCode.LISTING_PUBLICATION_PENDING, exception.getErrorCode());
+        verify(listingPackageRepository, never()).findById(any());
         verify(walletService, never()).deductBalance(any(), any(), any(), any(), any(), any());
         verify(listingOrderRepository, never()).save(any(ListingOrder.class));
     }

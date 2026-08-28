@@ -9,6 +9,7 @@ import fu.stockspace.stockspace_be.listing.entity.ListingOrderStatus;
 import fu.stockspace.stockspace_be.listing.repository.ListingOrderRepository;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.warehouse.dto.WarehouseResponse;
 import fu.stockspace.stockspace_be.warehouse.dto.WarehouseOwnerContactResponse;
@@ -218,6 +219,33 @@ class WarehouseServiceTest {
     }
 
     @Test
+    void approveWarehouseRejectsPendingOrderWithoutSuccessfulListingPayment() {
+        ListingOrder order = ListingOrder.builder()
+                .id(UUID.randomUUID())
+                .owner(owner)
+                .warehouse(warehouse)
+                .durationDaysSnapshot(10)
+                .priceSnapshot(new BigDecimal("50000"))
+                .status(ListingOrderStatus.PENDING_APPROVAL)
+                .build();
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(listingOrderRepository.findPendingByWarehouseIdForUpdate(warehouseId))
+                .thenReturn(List.of(order));
+        when(transactionRepository.findByListingOrderIdAndTransactionType(
+                order.getId(), TransactionType.LISTING_FEE)).thenReturn(Optional.empty());
+
+        ResourceConflictException exception = assertThrows(
+                ResourceConflictException.class,
+                () -> warehouseService.approveWarehouse(warehouseId));
+
+        assertEquals(fu.stockspace.stockspace_be.common.exception.ErrorCode.LISTING_PAYMENT_REQUIRED,
+                exception.getErrorCode());
+        assertEquals(ListingOrderStatus.PENDING_APPROVAL, order.getStatus());
+        verify(listingOrderRepository, never()).save(any(ListingOrder.class));
+        verify(warehouseRepository, never()).save(any(Warehouse.class));
+    }
+
+    @Test
     void resubmitRejectedWarehouseReturnsToPendingApprovalWithoutChargingWallet() {
         warehouse.setStatus(WarehouseStatus.INACTIVE);
         warehouse.setRejectReason("Thiếu thông tin hồ sơ");
@@ -251,6 +279,20 @@ class WarehouseServiceTest {
                 eq("Warehouse listing resubmitted"),
                 any(String.class),
                 eq("LISTING_RESUBMITTED"));
+    }
+
+    @Test
+    void ownerCannotBypassAdminApprovalThroughStatusEndpoint() {
+        when(warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId))
+                .thenReturn(Optional.of(warehouse));
+
+        BadRequestException exception = assertThrows(
+                BadRequestException.class,
+                () -> warehouseService.updateStatus(ownerId, warehouseId, WarehouseStatus.AVAILABLE));
+
+        assertEquals(fu.stockspace.stockspace_be.common.exception.ErrorCode.WAREHOUSE_INVALID_STATUS_TRANSITION,
+                exception.getErrorCode());
+        verify(warehouseRepository, never()).save(any(Warehouse.class));
     }
 
     @Test
