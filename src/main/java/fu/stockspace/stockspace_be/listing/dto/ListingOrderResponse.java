@@ -1,5 +1,6 @@
 package fu.stockspace.stockspace_be.listing.dto;
 
+import fu.stockspace.stockspace_be.listing.entity.ListingOrderStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -22,6 +23,8 @@ public class ListingOrderResponse {
     private UUID listingPackageId;
     private String listingPackageName;
     private UUID transactionId;
+    private UUID refundTransactionId;
+    private ListingOrderStatus status;
     private Integer durationDays;
     private BigDecimal price;
     private LocalDateTime periodStart;

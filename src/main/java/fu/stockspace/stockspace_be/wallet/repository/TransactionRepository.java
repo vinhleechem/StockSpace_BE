@@ -1,5 +1,6 @@
 package fu.stockspace.stockspace_be.wallet.repository;
 import fu.stockspace.stockspace_be.wallet.entity.Transaction;
+import fu.stockspace.stockspace_be.wallet.entity.TransactionType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -12,7 +13,7 @@ import java.util.UUID;
 
 public interface TransactionRepository extends JpaRepository<Transaction, UUID> {
     Optional<Transaction> findByPaymentCode(String paymentCode);
-    Optional<Transaction> findByListingOrderId(UUID listingOrderId);
+    Optional<Transaction> findByListingOrderIdAndTransactionType(UUID listingOrderId, TransactionType transactionType);
     boolean existsByReferenceId(String referenceId);
     Page<Transaction> findByWalletId(UUID walletId, Pageable pageable);
 

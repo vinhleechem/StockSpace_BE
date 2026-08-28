@@ -127,7 +127,8 @@ public class ListingOrderService {
 
         return listingOrderRepository.findAllByOwnerIdAndWarehouseId(ownerId, warehouseId)
                 .stream()
-                .map(order -> transactionRepository.findByListingOrderId(order.getId())
+                .map(order -> transactionRepository.findByListingOrderIdAndTransactionType(
+                                order.getId(), TransactionType.LISTING_FEE)
                         .map(transaction -> mapToResponse(order, transaction.getId()))
                         .orElseGet(() -> mapToResponse(order, null)))
                 .toList();
@@ -169,6 +170,8 @@ public class ListingOrderService {
                 .listingPackageId(order.getListingPackage().getId())
                 .listingPackageName(order.getListingPackage().getName())
                 .transactionId(transactionId)
+                .refundTransactionId(null)
+                .status(order.getStatus())
                 .durationDays(order.getDurationDaysSnapshot())
                 .price(order.getPriceSnapshot())
                 .periodStart(order.getPeriodStart())

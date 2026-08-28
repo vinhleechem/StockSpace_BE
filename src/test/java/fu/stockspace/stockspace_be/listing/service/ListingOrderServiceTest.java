@@ -6,6 +6,7 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestExcepti
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.listing.dto.PurchaseListingPackageRequest;
 import fu.stockspace.stockspace_be.listing.entity.ListingOrder;
+import fu.stockspace.stockspace_be.listing.entity.ListingOrderStatus;
 import fu.stockspace.stockspace_be.listing.entity.ListingPackage;
 import fu.stockspace.stockspace_be.listing.repository.ListingOrderRepository;
 import fu.stockspace.stockspace_be.listing.repository.ListingPackageRepository;
@@ -118,6 +119,7 @@ class ListingOrderServiceTest {
         assertEquals(warehouseId, response.getWarehouseId());
         assertEquals(packageId, response.getListingPackageId());
         assertEquals(transaction.getId(), response.getTransactionId());
+        assertEquals(ListingOrderStatus.ACTIVATED, response.getStatus());
         assertEquals(response.getPeriodStart().plusDays(10), response.getPeriodEnd());
         assertEquals(response.getPeriodStart(), warehouse.getPublishedAt());
         assertEquals(response.getPeriodEnd(), warehouse.getVisibleUntil());
@@ -303,7 +305,7 @@ class ListingOrderServiceTest {
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
         when(listingOrderRepository.findAllByOwnerIdAndWarehouseId(ownerId, warehouseId))
                 .thenReturn(java.util.List.of(order));
-        when(transactionRepository.findByListingOrderId(order.getId()))
+        when(transactionRepository.findByListingOrderIdAndTransactionType(order.getId(), TransactionType.LISTING_FEE))
                 .thenReturn(Optional.of(transaction));
 
         var response = listingOrderService.getPublicationHistory(ownerId, warehouseId);
