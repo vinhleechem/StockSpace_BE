@@ -383,13 +383,17 @@ class WarehouseServiceTest {
     }
 
     @Test
-    void contactRequestRejectsUnverifiedWarehouse() {
+    void contactRequestAllowsUnverifiedPublishedWarehouse() {
         warehouse.setStatus(WarehouseStatus.AVAILABLE);
         warehouse.setVerified(false);
-        when(warehouseRepository.findPublicAvailableById(warehouseId)).thenReturn(Optional.empty());
+        warehouse.setPublishedAt(LocalDateTime.now().minusDays(1));
+        warehouse.setVisibleUntil(LocalDateTime.now().plusDays(10));
+        when(warehouseRepository.findPublicAvailableById(warehouseId)).thenReturn(Optional.of(warehouse));
 
-        assertThrows(ResourceNotFoundException.class,
-                () -> warehouseService.getOwnerContact(warehouseId));
+        WarehouseOwnerContactResponse response = warehouseService.getOwnerContact(warehouseId);
+
+        assertEquals(warehouseId, response.getWarehouseId());
+        assertEquals(ownerId, response.getOwnerId());
     }
 
     @Test

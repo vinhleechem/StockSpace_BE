@@ -629,7 +629,6 @@ public class WarehouseService {
         String publicationStatus = resolvePublicationStatus(w);
         boolean publishableWarehouse = w.isActive()
                 && !w.isDeleted()
-                && w.isVerified()
                 && w.getStatus() == WarehouseStatus.AVAILABLE;
 
         return WarehouseResponse.builder()

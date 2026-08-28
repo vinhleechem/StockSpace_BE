@@ -35,7 +35,8 @@ class WarehouseSearchQueryContractTest {
 
         assertTrue(query.contains("w.isActive = true"));
         assertTrue(query.contains("w.isDeleted = false"));
-        assertTrue(query.contains("w.isVerified = true"));
+        assertFalse(query.contains("w.isVerified = true"));
+        assertTrue(query.contains(":isVerified IS NULL OR w.isVerified = :isVerified"));
         assertTrue(query.contains("w.status = fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus.AVAILABLE"));
         assertTrue(query.contains("w.publishedAt IS NOT NULL"));
         assertTrue(query.contains("w.visibleUntil >= CURRENT_TIMESTAMP"));

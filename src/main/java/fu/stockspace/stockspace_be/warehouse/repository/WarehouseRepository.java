@@ -39,7 +39,6 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
             WHERE w.id = :id
               AND w.isActive = true
               AND w.isDeleted = false
-              AND w.isVerified = true
               AND w.status = fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus.AVAILABLE
               AND w.publishedAt IS NOT NULL
               AND w.visibleUntil IS NOT NULL
@@ -50,10 +49,9 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
     @EntityGraph(attributePaths = "type")
     @Query("""
             SELECT w FROM Warehouse w
-            WHERE w.isActive = true
-              AND w.isDeleted = false
-              AND w.isVerified = true
-              AND ((:status IS NULL AND w.status = fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus.AVAILABLE) OR (:status IS NOT NULL AND w.status = :status))
+              WHERE w.isActive = true
+                AND w.isDeleted = false
+                AND ((:status IS NULL AND w.status = fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus.AVAILABLE) OR (:status IS NOT NULL AND w.status = :status))
               AND w.publishedAt IS NOT NULL
               AND w.visibleUntil IS NOT NULL
               AND w.visibleUntil >= CURRENT_TIMESTAMP
