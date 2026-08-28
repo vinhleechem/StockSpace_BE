@@ -4,8 +4,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
+import fu.stockspace.stockspace_be.listing.entity.ListingOrder;
+import fu.stockspace.stockspace_be.listing.entity.ListingOrderStatus;
+import fu.stockspace.stockspace_be.listing.repository.ListingOrderRepository;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.warehouse.dto.WarehouseResponse;
 import fu.stockspace.stockspace_be.warehouse.dto.WarehouseOwnerContactResponse;
@@ -14,7 +18,14 @@ import fu.stockspace.stockspace_be.warehouse.dto.UpdateWarehouseRequest;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.RentalPricingType;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
+import fu.stockspace.stockspace_be.warehouse.entity.WarehouseLayout;
+import fu.stockspace.stockspace_be.warehouse.repository.WarehouseLayoutRepository;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
+import fu.stockspace.stockspace_be.wallet.entity.Transaction;
+import fu.stockspace.stockspace_be.wallet.entity.TransactionStatus;
+import fu.stockspace.stockspace_be.wallet.entity.TransactionType;
+import fu.stockspace.stockspace_be.wallet.repository.TransactionRepository;
+import fu.stockspace.stockspace_be.wallet.service.WalletService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -47,6 +58,18 @@ class WarehouseServiceTest {
 
     @Mock
     private TenantWarehouseAccessService tenantWarehouseAccessService;
+
+    @Mock
+    private ListingOrderRepository listingOrderRepository;
+
+    @Mock
+    private TransactionRepository transactionRepository;
+
+    @Mock
+    private WarehouseLayoutRepository warehouseLayoutRepository;
+
+    @Mock
+    private WalletService walletService;
 
     @InjectMocks
     private WarehouseService warehouseService;
@@ -89,9 +112,51 @@ class WarehouseServiceTest {
     }
 
     @Test
+    void inspectionVerificationDoesNotChangeWarehousePublicationStatus() {
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+
+        warehouseService.markAsVerifiedByInspection(warehouseId);
+
+        assertTrue(warehouse.isVerified());
+        assertEquals(WarehouseStatus.PENDING_APPROVAL, warehouse.getStatus());
+        verify(warehouseRepository).save(warehouse);
+    }
+
+    @Test
     void rejectWarehouse_WithReason_Success() {
         String reason = "Kho không đủ giấy phép PCCC";
-        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        ListingOrder order = ListingOrder.builder()
+                .id(UUID.randomUUID())
+                .owner(owner)
+                .warehouse(warehouse)
+                .durationDaysSnapshot(10)
+                .priceSnapshot(new BigDecimal("50000"))
+                .status(ListingOrderStatus.PENDING_APPROVAL)
+                .build();
+        Transaction payment = Transaction.builder()
+                .id(UUID.randomUUID())
+                .amount(new BigDecimal("50000"))
+                .transactionType(TransactionType.LISTING_FEE)
+                .status(TransactionStatus.SUCCESS)
+                .listingOrderId(order.getId())
+                .build();
+        Transaction refund = Transaction.builder()
+                .id(UUID.randomUUID())
+                .amount(new BigDecimal("50000"))
+                .transactionType(TransactionType.LISTING_REFUND)
+                .status(TransactionStatus.SUCCESS)
+                .build();
+
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(listingOrderRepository.findPendingByWarehouseIdForUpdate(warehouseId))
+                .thenReturn(List.of(order));
+        when(transactionRepository.findByListingOrderIdAndTransactionType(
+                order.getId(), TransactionType.LISTING_FEE)).thenReturn(Optional.of(payment));
+        when(walletService.refundBalance(
+                eq(ownerId), eq(new BigDecimal("50000")), eq(TransactionType.LISTING_REFUND),
+                any(String.class), eq(null), eq(null))).thenReturn(refund);
+        when(listingOrderRepository.save(any(ListingOrder.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         when(warehouseRepository.save(any(Warehouse.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         WarehouseResponse response = warehouseService.rejectWarehouse(warehouseId, reason);
@@ -99,6 +164,12 @@ class WarehouseServiceTest {
         assertNotNull(response);
         assertEquals(WarehouseStatus.INACTIVE.name(), response.getStatus());
         assertEquals(reason, response.getRejectReason());
+        assertEquals(ListingOrderStatus.REFUNDED, order.getStatus());
+        assertNull(warehouse.getPublishedAt());
+        assertNull(warehouse.getVisibleUntil());
+        verify(walletService).refundBalance(
+                eq(ownerId), eq(new BigDecimal("50000")), eq(TransactionType.LISTING_REFUND),
+                any(String.class), eq(null), eq(null));
 
         verify(notificationService).push(
                 eq(ownerId),
@@ -109,18 +180,130 @@ class WarehouseServiceTest {
     }
 
     @Test
-    void verifyWarehouse_ClearsRejectReason_Success() {
+    void approveWarehouse_ClearsRejectReasonAndActivatesPaidPublication() {
         warehouse.setStatus(WarehouseStatus.PENDING_APPROVAL);
         warehouse.setRejectReason("Lý do cũ");
+        ListingOrder order = ListingOrder.builder()
+                .id(UUID.randomUUID())
+                .owner(owner)
+                .warehouse(warehouse)
+                .durationDaysSnapshot(10)
+                .priceSnapshot(new BigDecimal("50000"))
+                .status(ListingOrderStatus.PENDING_APPROVAL)
+                .build();
+        Transaction payment = Transaction.builder()
+                .id(UUID.randomUUID())
+                .amount(new BigDecimal("50000"))
+                .transactionType(TransactionType.LISTING_FEE)
+                .status(TransactionStatus.SUCCESS)
+                .listingOrderId(order.getId())
+                .build();
+        WarehouseLayout defaultLayout = WarehouseLayout.builder()
+                .warehouse(warehouse)
+                .isDefault(true)
+                .width(new BigDecimal("10"))
+                .length(new BigDecimal("10"))
+                .height(new BigDecimal("5"))
+                .build();
 
-        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(listingOrderRepository.findPendingByWarehouseIdForUpdate(warehouseId))
+                .thenReturn(List.of(order));
+        when(transactionRepository.findByListingOrderIdAndTransactionType(
+                order.getId(), TransactionType.LISTING_FEE)).thenReturn(Optional.of(payment));
+        when(warehouseLayoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId))
+                .thenReturn(Optional.of(defaultLayout));
+        when(listingOrderRepository.save(any(ListingOrder.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         when(warehouseRepository.save(any(Warehouse.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        WarehouseResponse response = warehouseService.verifyWarehouse(warehouseId);
+        WarehouseResponse response = warehouseService.approveWarehouse(warehouseId);
 
         assertNotNull(response);
         assertEquals(WarehouseStatus.AVAILABLE.name(), response.getStatus());
         assertNull(response.getRejectReason());
+        assertEquals(ListingOrderStatus.ACTIVATED, order.getStatus());
+        assertNotNull(order.getPeriodStart());
+        assertNotNull(order.getPeriodEnd());
+        assertNotNull(warehouse.getPublishedAt());
+        assertNotNull(warehouse.getVisibleUntil());
+    }
+
+    @Test
+    void approveWarehouseRejectsPendingOrderWithoutSuccessfulListingPayment() {
+        ListingOrder order = ListingOrder.builder()
+                .id(UUID.randomUUID())
+                .owner(owner)
+                .warehouse(warehouse)
+                .durationDaysSnapshot(10)
+                .priceSnapshot(new BigDecimal("50000"))
+                .status(ListingOrderStatus.PENDING_APPROVAL)
+                .build();
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(listingOrderRepository.findPendingByWarehouseIdForUpdate(warehouseId))
+                .thenReturn(List.of(order));
+        when(transactionRepository.findByListingOrderIdAndTransactionType(
+                order.getId(), TransactionType.LISTING_FEE)).thenReturn(Optional.empty());
+
+        ResourceConflictException exception = assertThrows(
+                ResourceConflictException.class,
+                () -> warehouseService.approveWarehouse(warehouseId));
+
+        assertEquals(fu.stockspace.stockspace_be.common.exception.ErrorCode.LISTING_PAYMENT_REQUIRED,
+                exception.getErrorCode());
+        assertEquals(ListingOrderStatus.PENDING_APPROVAL, order.getStatus());
+        verify(listingOrderRepository, never()).save(any(ListingOrder.class));
+        verify(warehouseRepository, never()).save(any(Warehouse.class));
+    }
+
+    @Test
+    void resubmitRejectedWarehouseReturnsToPendingApprovalWithoutChargingWallet() {
+        warehouse.setStatus(WarehouseStatus.INACTIVE);
+        warehouse.setRejectReason("Thiếu thông tin hồ sơ");
+        warehouse.setPublishedAt(LocalDateTime.now().minusDays(1));
+        warehouse.setVisibleUntil(LocalDateTime.now().plusDays(5));
+
+        ListingOrder refundedOrder = ListingOrder.builder()
+                .id(UUID.randomUUID())
+                .owner(owner)
+                .warehouse(warehouse)
+                .durationDaysSnapshot(10)
+                .priceSnapshot(new BigDecimal("50000"))
+                .status(ListingOrderStatus.REFUNDED)
+                .build();
+
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(listingOrderRepository.findAllByOwnerIdAndWarehouseId(ownerId, warehouseId))
+                .thenReturn(List.of(refundedOrder));
+        when(warehouseRepository.save(any(Warehouse.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        WarehouseResponse response = warehouseService.resubmitWarehouse(ownerId, warehouseId);
+
+        assertEquals(WarehouseStatus.PENDING_APPROVAL.name(), response.getStatus());
+        assertNull(response.getRejectReason());
+        assertNull(warehouse.getPublishedAt());
+        assertNull(warehouse.getVisibleUntil());
+        verify(walletService, never()).refundBalance(any(), any(), any(), any(), any(), any());
+        verify(notificationService).push(
+                eq(ownerId),
+                eq("Warehouse listing resubmitted"),
+                any(String.class),
+                eq("LISTING_RESUBMITTED"));
+    }
+
+    @Test
+    void ownerCannotBypassAdminApprovalThroughStatusEndpoint() {
+        when(warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId))
+                .thenReturn(Optional.of(warehouse));
+
+        BadRequestException exception = assertThrows(
+                BadRequestException.class,
+                () -> warehouseService.updateStatus(ownerId, warehouseId, WarehouseStatus.AVAILABLE));
+
+        assertEquals(fu.stockspace.stockspace_be.common.exception.ErrorCode.WAREHOUSE_INVALID_STATUS_TRANSITION,
+                exception.getErrorCode());
+        verify(warehouseRepository, never()).save(any(Warehouse.class));
     }
 
     @Test
@@ -289,13 +472,17 @@ class WarehouseServiceTest {
     }
 
     @Test
-    void contactRequestRejectsUnverifiedWarehouse() {
+    void contactRequestAllowsUnverifiedPublishedWarehouse() {
         warehouse.setStatus(WarehouseStatus.AVAILABLE);
         warehouse.setVerified(false);
-        when(warehouseRepository.findPublicAvailableById(warehouseId)).thenReturn(Optional.empty());
+        warehouse.setPublishedAt(LocalDateTime.now().minusDays(1));
+        warehouse.setVisibleUntil(LocalDateTime.now().plusDays(10));
+        when(warehouseRepository.findPublicAvailableById(warehouseId)).thenReturn(Optional.of(warehouse));
 
-        assertThrows(ResourceNotFoundException.class,
-                () -> warehouseService.getOwnerContact(warehouseId));
+        WarehouseOwnerContactResponse response = warehouseService.getOwnerContact(warehouseId);
+
+        assertEquals(warehouseId, response.getWarehouseId());
+        assertEquals(ownerId, response.getOwnerId());
     }
 
     @Test
@@ -402,6 +589,59 @@ class WarehouseServiceTest {
 
         assertEquals("DRAFT", response.getPublicationStatus());
         assertTrue(response.isCanPublish());
+        assertFalse(response.isCanRenew());
+    }
+
+    @Test
+    void pendingPaidListingExposesPendingStateAndDisablesActions() {
+        warehouse.setStatus(WarehouseStatus.PENDING_APPROVAL);
+        ListingOrderRepository.LatestListingOrderState state = mock(ListingOrderRepository.LatestListingOrderState.class);
+        UUID orderId = UUID.randomUUID();
+
+        when(warehouseRepository.findByOwnerId(eq(ownerId), any()))
+                .thenReturn(new PageImpl<>(List.of(warehouse)));
+        when(listingOrderRepository.findLatestStateByWarehouseIds(List.of(warehouseId)))
+                .thenReturn(List.of(state));
+        when(state.getWarehouseId()).thenReturn(warehouseId);
+        when(state.getOrderId()).thenReturn(orderId);
+        when(state.getStatus()).thenReturn(ListingOrderStatus.PENDING_APPROVAL);
+
+        WarehouseResponse response = warehouseService
+                .getMyWarehouses(ownerId, 0, 10, "createdAt", "desc")
+                .getContent()
+                .get(0);
+
+        assertEquals("PENDING_APPROVAL", response.getPublicationStatus());
+        assertEquals(orderId, response.getCurrentListingOrderId());
+        assertEquals(ListingOrderStatus.PENDING_APPROVAL, response.getCurrentListingOrderStatus());
+        assertFalse(response.isCanPublish());
+        assertFalse(response.isCanRenew());
+    }
+
+    @Test
+    void rejectedRefundedListingExposesRefundedStateUntilResubmission() {
+        warehouse.setStatus(WarehouseStatus.INACTIVE);
+        warehouse.setRejectReason("Thiếu giấy tờ");
+        ListingOrderRepository.LatestListingOrderState state = mock(ListingOrderRepository.LatestListingOrderState.class);
+        UUID orderId = UUID.randomUUID();
+
+        when(warehouseRepository.findByOwnerId(eq(ownerId), any()))
+                .thenReturn(new PageImpl<>(List.of(warehouse)));
+        when(listingOrderRepository.findLatestStateByWarehouseIds(List.of(warehouseId)))
+                .thenReturn(List.of(state));
+        when(state.getWarehouseId()).thenReturn(warehouseId);
+        when(state.getOrderId()).thenReturn(orderId);
+        when(state.getStatus()).thenReturn(ListingOrderStatus.REFUNDED);
+
+        WarehouseResponse response = warehouseService
+                .getMyWarehouses(ownerId, 0, 10, "createdAt", "desc")
+                .getContent()
+                .get(0);
+
+        assertEquals("REFUNDED", response.getPublicationStatus());
+        assertEquals(orderId, response.getCurrentListingOrderId());
+        assertEquals(ListingOrderStatus.REFUNDED, response.getCurrentListingOrderStatus());
+        assertFalse(response.isCanPublish());
         assertFalse(response.isCanRenew());
     }
 

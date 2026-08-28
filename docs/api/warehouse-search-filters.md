@@ -13,8 +13,9 @@ GET /api/warehouses
 ```
 
 All parameters are optional unless stated otherwise. The endpoint is public
-and returns only warehouses that are active, not deleted, verified, in
-`AVAILABLE` listing status, published and not past `visibleUntil`.
+and returns only warehouses that are active, not deleted, in `AVAILABLE`
+listing status, published and not past `visibleUntil`. Verification is an
+optional filter, not a public visibility gate.
 
 ### Query parameters
 
@@ -28,7 +29,7 @@ and returns only warehouses that are active, not deleted, verified, in
 | `maxCapacity` | decimal | Inclusive upper bound for `capacity`. |
 | `minRentalPrice` | decimal | Inclusive lower bound for the published `rentalPrice`. |
 | `maxRentalPrice` | decimal | Inclusive upper bound for the published `rentalPrice`. |
-| `isVerified` | boolean | Optional compatibility filter. Public results still always require `isVerified = true`; sending `false` cannot expose unverified data. |
+| `isVerified` | boolean | Optional verification filter. Omit it for both verified and unverified public results; send `true` or `false` to filter explicitly. |
 | `minPrice` | decimal | Deprecated compatibility alias for `minRentalPrice`. |
 | `maxPrice` | decimal | Deprecated compatibility alias for `maxRentalPrice`. |
 | `page` | integer | Zero-based page number. Default `0`, maximum `10000`. |
@@ -96,6 +97,8 @@ Successful responses use the standard envelope:
 
 The actual response also contains the existing warehouse image, policy and
 publication fields. The new location properties are nullable for legacy rows.
+An approved unverified warehouse may therefore have `isVerified: false` in a
+public response.
 
 ## Pricing display rules
 
@@ -183,7 +186,6 @@ SELECT w.id
 FROM warehouses w
 WHERE w.is_active = true
   AND w.is_deleted = false
-  AND w.is_verified = true
   AND w.status = 'AVAILABLE'
   AND w.published_at IS NOT NULL
   AND w.visible_until IS NOT NULL

@@ -10,5 +10,6 @@ public enum TransactionType {
     DEPOSIT_REFUND,
     PACKAGE_PAYMENT,
     COMMISSION,
-    LISTING_FEE
+    LISTING_FEE,
+    LISTING_REFUND
 }

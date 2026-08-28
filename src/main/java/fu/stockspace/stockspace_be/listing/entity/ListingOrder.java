@@ -13,6 +13,8 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.EnumType;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -59,9 +61,14 @@ public class ListingOrder extends BaseEntity {
     @Column(name = "price_snapshot", nullable = false, precision = 15, scale = 2)
     private BigDecimal priceSnapshot;
 
-    @Column(name = "period_start", nullable = false)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 30)
+    @lombok.Builder.Default
+    private ListingOrderStatus status = ListingOrderStatus.ACTIVATED;
+
+    @Column(name = "period_start")
     private LocalDateTime periodStart;
 
-    @Column(name = "period_end", nullable = false)
+    @Column(name = "period_end")
     private LocalDateTime periodEnd;
 }
