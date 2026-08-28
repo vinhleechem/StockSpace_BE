@@ -24,6 +24,7 @@ import fu.stockspace.stockspace_be.wallet.entity.Transaction;
 import fu.stockspace.stockspace_be.wallet.entity.TransactionStatus;
 import fu.stockspace.stockspace_be.wallet.entity.TransactionType;
 import fu.stockspace.stockspace_be.wallet.repository.TransactionRepository;
+import fu.stockspace.stockspace_be.wallet.service.WalletService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -65,6 +66,9 @@ class WarehouseServiceTest {
 
     @Mock
     private WarehouseLayoutRepository warehouseLayoutRepository;
+
+    @Mock
+    private WalletService walletService;
 
     @InjectMocks
     private WarehouseService warehouseService;
@@ -109,7 +113,38 @@ class WarehouseServiceTest {
     @Test
     void rejectWarehouse_WithReason_Success() {
         String reason = "Kho không đủ giấy phép PCCC";
-        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        ListingOrder order = ListingOrder.builder()
+                .id(UUID.randomUUID())
+                .owner(owner)
+                .warehouse(warehouse)
+                .durationDaysSnapshot(10)
+                .priceSnapshot(new BigDecimal("50000"))
+                .status(ListingOrderStatus.PENDING_APPROVAL)
+                .build();
+        Transaction payment = Transaction.builder()
+                .id(UUID.randomUUID())
+                .amount(new BigDecimal("50000"))
+                .transactionType(TransactionType.LISTING_FEE)
+                .status(TransactionStatus.SUCCESS)
+                .listingOrderId(order.getId())
+                .build();
+        Transaction refund = Transaction.builder()
+                .id(UUID.randomUUID())
+                .amount(new BigDecimal("50000"))
+                .transactionType(TransactionType.LISTING_REFUND)
+                .status(TransactionStatus.SUCCESS)
+                .build();
+
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(listingOrderRepository.findPendingByWarehouseIdForUpdate(warehouseId))
+                .thenReturn(List.of(order));
+        when(transactionRepository.findByListingOrderIdAndTransactionType(
+                order.getId(), TransactionType.LISTING_FEE)).thenReturn(Optional.of(payment));
+        when(walletService.refundBalance(
+                eq(ownerId), eq(new BigDecimal("50000")), eq(TransactionType.LISTING_REFUND),
+                any(String.class), eq(null), eq(null))).thenReturn(refund);
+        when(listingOrderRepository.save(any(ListingOrder.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         when(warehouseRepository.save(any(Warehouse.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         WarehouseResponse response = warehouseService.rejectWarehouse(warehouseId, reason);
@@ -117,6 +152,12 @@ class WarehouseServiceTest {
         assertNotNull(response);
         assertEquals(WarehouseStatus.INACTIVE.name(), response.getStatus());
         assertEquals(reason, response.getRejectReason());
+        assertEquals(ListingOrderStatus.REFUNDED, order.getStatus());
+        assertNull(warehouse.getPublishedAt());
+        assertNull(warehouse.getVisibleUntil());
+        verify(walletService).refundBalance(
+                eq(ownerId), eq(new BigDecimal("50000")), eq(TransactionType.LISTING_REFUND),
+                any(String.class), eq(null), eq(null));
 
         verify(notificationService).push(
                 eq(ownerId),

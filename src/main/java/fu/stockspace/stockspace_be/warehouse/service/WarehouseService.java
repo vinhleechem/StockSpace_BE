@@ -16,6 +16,7 @@ import fu.stockspace.stockspace_be.wallet.entity.Transaction;
 import fu.stockspace.stockspace_be.wallet.entity.TransactionStatus;
 import fu.stockspace.stockspace_be.wallet.entity.TransactionType;
 import fu.stockspace.stockspace_be.wallet.repository.TransactionRepository;
+import fu.stockspace.stockspace_be.wallet.service.WalletService;
 import fu.stockspace.stockspace_be.warehouse.dto.*;
 import fu.stockspace.stockspace_be.warehouse.entity.*;
 import fu.stockspace.stockspace_be.warehouse.repository.*;
@@ -65,6 +66,7 @@ public class WarehouseService {
     private final ListingOrderRepository listingOrderRepository;
     private final TransactionRepository transactionRepository;
     private final WarehouseLayoutRepository warehouseLayoutRepository;
+    private final WalletService walletService;
 
     @Transactional(readOnly = true)
     public List<WarehouseResponse> getActiveContractWarehouses(UUID tenantId) {
@@ -382,19 +384,7 @@ public class WarehouseService {
             throw new BadRequestException(ErrorCode.WAREHOUSE_INVALID_STATUS_TRANSITION);
         }
 
-        List<ListingOrder> pendingOrders = listingOrderRepository
-                .findPendingByWarehouseIdForUpdate(warehouseId);
-        if (pendingOrders.size() != 1) {
-            throw new ResourceConflictException(ErrorCode.LISTING_PAYMENT_REQUIRED);
-        }
-
-        ListingOrder order = pendingOrders.get(0);
-        transactionRepository
-                .findByListingOrderIdAndTransactionType(order.getId(), TransactionType.LISTING_FEE)
-                .filter(transaction -> transaction.getStatus() == TransactionStatus.SUCCESS)
-                .filter(transaction -> transaction.getAmount() != null
-                        && transaction.getAmount().compareTo(order.getPriceSnapshot()) == 0)
-                .orElseThrow(() -> new ResourceConflictException(ErrorCode.LISTING_PAYMENT_REQUIRED));
+        ListingOrder order = findPendingPaidOrder(warehouseId);
 
         validateDefaultLayoutForApproval(warehouseId);
 
@@ -439,24 +429,68 @@ public class WarehouseService {
                         ErrorCode.WAREHOUSE_DEFAULT_LAYOUT_REQUIRED));
     }
 
+    private ListingOrder findPendingPaidOrder(UUID warehouseId) {
+        List<ListingOrder> pendingOrders = listingOrderRepository
+                .findPendingByWarehouseIdForUpdate(warehouseId);
+        if (pendingOrders.size() != 1) {
+            throw new ResourceConflictException(ErrorCode.LISTING_PAYMENT_REQUIRED);
+        }
+
+        ListingOrder order = pendingOrders.get(0);
+        transactionRepository
+                .findByListingOrderIdAndTransactionType(order.getId(), TransactionType.LISTING_FEE)
+                .filter(transaction -> transaction.getStatus() == TransactionStatus.SUCCESS)
+                .filter(transaction -> transaction.getAmount() != null
+                        && transaction.getAmount().compareTo(order.getPriceSnapshot()) == 0)
+                .orElseThrow(() -> new ResourceConflictException(ErrorCode.LISTING_PAYMENT_REQUIRED));
+        return order;
+    }
+
 
 
 
     @Transactional
     public WarehouseResponse rejectWarehouse(UUID warehouseId, String reason) {
-        Warehouse warehouse = warehouseRepository.findById(warehouseId)
+        Warehouse warehouse = warehouseRepository.findByIdForUpdate(warehouseId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
+
+        if (warehouse.getStatus() != WarehouseStatus.PENDING_APPROVAL) {
+            throw new BadRequestException(ErrorCode.WAREHOUSE_INVALID_STATUS_TRANSITION);
+        }
+
+        ListingOrder order = findPendingPaidOrder(warehouseId);
+        Transaction refund = walletService.refundBalance(
+                warehouse.getOwner().getId(),
+                order.getPriceSnapshot(),
+                TransactionType.LISTING_REFUND,
+                "Refund for rejected warehouse listing: " + warehouse.getName(),
+                null,
+                null
+        );
+        refund.setListingOrderId(order.getId());
+        transactionRepository.save(refund);
+
+        order.setStatus(ListingOrderStatus.REFUNDED);
+        order.setPeriodStart(null);
+        order.setPeriodEnd(null);
+        listingOrderRepository.save(order);
 
         warehouse.setStatus(WarehouseStatus.INACTIVE);
         if (StringUtils.hasText(reason)) {
             warehouse.setRejectReason(reason.trim());
         }
+        warehouse.setPublishedAt(null);
+        warehouse.setVisibleUntil(null);
         warehouse = warehouseRepository.save(warehouse);
 
         if (warehouse.getOwner() != null) {
             String message = StringUtils.hasText(reason)
-                    ? "Yêu cầu đăng kho bãi '" + warehouse.getName() + "' của bạn không được phê duyệt. Lý do từ chối: " + reason.trim()
-                    : "Yêu cầu đăng kho bãi '" + warehouse.getName() + "' của bạn không được phê duyệt. Vui lòng kiểm tra lại thông tin.";
+                    ? "Yêu cầu đăng kho bãi '" + warehouse.getName()
+                            + "' của bạn không được phê duyệt. Lý do từ chối: " + reason.trim()
+                            + ". Phí đăng bài " + order.getPriceSnapshot() + " đã được hoàn vào ví."
+                    : "Yêu cầu đăng kho bãi '" + warehouse.getName()
+                            + "' của bạn không được phê duyệt. Vui lòng kiểm tra lại thông tin. Phí đăng bài "
+                            + order.getPriceSnapshot() + " đã được hoàn vào ví.";
 
             notificationService.push(
                     warehouse.getOwner().getId(),
