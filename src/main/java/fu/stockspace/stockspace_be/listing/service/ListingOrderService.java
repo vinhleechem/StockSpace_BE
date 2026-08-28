@@ -5,9 +5,11 @@ import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.listing.dto.ListingOrderResponse;
 import fu.stockspace.stockspace_be.listing.dto.PurchaseListingPackageRequest;
 import fu.stockspace.stockspace_be.listing.entity.ListingOrder;
+import fu.stockspace.stockspace_be.listing.entity.ListingOrderStatus;
 import fu.stockspace.stockspace_be.listing.entity.ListingPackage;
 import fu.stockspace.stockspace_be.listing.repository.ListingOrderRepository;
 import fu.stockspace.stockspace_be.listing.repository.ListingPackageRepository;
@@ -17,7 +19,9 @@ import fu.stockspace.stockspace_be.wallet.entity.TransactionType;
 import fu.stockspace.stockspace_be.wallet.repository.TransactionRepository;
 import fu.stockspace.stockspace_be.wallet.service.WalletService;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
+import fu.stockspace.stockspace_be.warehouse.entity.WarehouseLayout;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
+import fu.stockspace.stockspace_be.warehouse.repository.WarehouseLayoutRepository;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +42,7 @@ public class ListingOrderService {
     private final ListingPackageRepository listingPackageRepository;
     private final WarehouseRepository warehouseRepository;
     private final TransactionRepository transactionRepository;
+    private final WarehouseLayoutRepository warehouseLayoutRepository;
     private final WalletService walletService;
     private final NotificationService notificationService;
 
@@ -56,17 +61,27 @@ public class ListingOrderService {
         requireWarehouseOwner(warehouse, ownerId);
         validatePublishableWarehouse(warehouse);
 
+        if (listingOrderRepository.existsByWarehouseIdAndStatusAndIsDeletedFalse(
+                warehouseId, ListingOrderStatus.PENDING_APPROVAL)) {
+            throw new ResourceConflictException(ErrorCode.LISTING_PUBLICATION_PENDING);
+        }
+
         ListingPackage listingPackage = listingPackageRepository.findById(request.getListingPackageId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.PACKAGE_NOT_FOUND));
         validateListingPackage(listingPackage);
+        validateDefaultLayout(warehouseId);
 
         LocalDateTime now = LocalDateTime.now();
-        boolean extendingActivePublication = warehouse.getVisibleUntil() != null
+        boolean requiresAdminApproval = warehouse.getStatus() == WarehouseStatus.PENDING_APPROVAL;
+        boolean extendingActivePublication = warehouse.getStatus() == WarehouseStatus.AVAILABLE
+                && warehouse.getVisibleUntil() != null
                 && warehouse.getVisibleUntil().isAfter(now);
         LocalDateTime periodStart = extendingActivePublication
                 ? warehouse.getVisibleUntil()
                 : now;
-        LocalDateTime periodEnd = periodStart.plusDays(listingPackage.getDurationDays());
+        LocalDateTime periodEnd = requiresAdminApproval
+                ? null
+                : periodStart.plusDays(listingPackage.getDurationDays());
 
         User owner = warehouse.getOwner();
         ListingOrder order = ListingOrder.builder()
@@ -75,7 +90,10 @@ public class ListingOrderService {
                 .listingPackage(listingPackage)
                 .durationDaysSnapshot(listingPackage.getDurationDays())
                 .priceSnapshot(listingPackage.getPrice())
-                .periodStart(periodStart)
+                .status(requiresAdminApproval
+                        ? ListingOrderStatus.PENDING_APPROVAL
+                        : ListingOrderStatus.ACTIVATED)
+                .periodStart(requiresAdminApproval ? null : periodStart)
                 .periodEnd(periodEnd)
                 .isActive(true)
                 .isDeleted(false)
@@ -93,16 +111,19 @@ public class ListingOrderService {
         transaction.setListingOrderId(order.getId());
         transactionRepository.save(transaction);
 
-        if (!extendingActivePublication || warehouse.getPublishedAt() == null) {
-            warehouse.setPublishedAt(periodStart);
+        if (!requiresAdminApproval) {
+            if (!extendingActivePublication || warehouse.getPublishedAt() == null) {
+                warehouse.setPublishedAt(periodStart);
+            }
+            warehouse.setVisibleUntil(periodEnd);
+            warehouseRepository.save(warehouse);
+            notifyPublication(ownerId, warehouse, periodEnd, extendingActivePublication);
+        } else {
+            notifyPendingApproval(ownerId, warehouse);
         }
-        warehouse.setVisibleUntil(periodEnd);
-        warehouseRepository.save(warehouse);
 
-        notifyPublication(ownerId, warehouse, periodEnd, extendingActivePublication);
-
-        log.info("Owner {} purchased {}-day listing package for warehouse {} until {}",
-                ownerId, listingPackage.getDurationDays(), warehouseId, periodEnd);
+        log.info("Owner {} purchased {}-day listing package for warehouse {} with status {} until {}",
+                ownerId, listingPackage.getDurationDays(), warehouseId, order.getStatus(), periodEnd);
         return mapToResponse(order, transaction.getId());
     }
 
@@ -115,6 +136,20 @@ public class ListingOrderService {
                     renewed ? "LISTING_RENEWED" : "LISTING_PUBLISHED");
         } catch (Exception exception) {
             log.warn("Failed to push listing publication notification for warehouse {}: {}",
+                    warehouse.getId(), exception.getMessage());
+        }
+    }
+
+    private void notifyPendingApproval(UUID ownerId, Warehouse warehouse) {
+        try {
+            notificationService.push(
+                    ownerId,
+                    "Warehouse publication awaiting approval",
+                    "Warehouse " + warehouse.getName()
+                            + " has been paid and is waiting for Admin approval.",
+                    "LISTING_PENDING_APPROVAL");
+        } catch (Exception exception) {
+            log.warn("Failed to push pending listing notification for warehouse {}: {}",
                     warehouse.getId(), exception.getMessage());
         }
     }
@@ -143,11 +178,25 @@ public class ListingOrderService {
     private void validatePublishableWarehouse(Warehouse warehouse) {
         if (!warehouse.isActive()
                 || warehouse.isDeleted()
-                || !warehouse.isVerified()
                 || warehouse.getStatus() == null
                 || warehouse.getStatus() == WarehouseStatus.INACTIVE) {
             throw new BadRequestException(ErrorCode.WAREHOUSE_NOT_AVAILABLE);
         }
+    }
+
+    private void validateDefaultLayout(UUID warehouseId) {
+        WarehouseLayout layout = warehouseLayoutRepository
+                .findByWarehouseIdAndIsDefaultTrue(warehouseId)
+                .filter(candidate -> candidate.isActive()
+                        && !candidate.isDeleted()
+                        && candidate.getWidth() != null
+                        && candidate.getWidth().signum() > 0
+                        && candidate.getLength() != null
+                        && candidate.getLength().signum() > 0
+                        && candidate.getHeight() != null
+                        && candidate.getHeight().signum() > 0)
+                .orElseThrow(() -> new ResourceConflictException(
+                        ErrorCode.WAREHOUSE_DEFAULT_LAYOUT_REQUIRED));
     }
 
     private void validateListingPackage(ListingPackage listingPackage) {

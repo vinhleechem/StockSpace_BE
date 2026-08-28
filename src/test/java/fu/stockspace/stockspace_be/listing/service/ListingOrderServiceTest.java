@@ -8,6 +8,8 @@ import fu.stockspace.stockspace_be.listing.dto.PurchaseListingPackageRequest;
 import fu.stockspace.stockspace_be.listing.entity.ListingOrder;
 import fu.stockspace.stockspace_be.listing.entity.ListingOrderStatus;
 import fu.stockspace.stockspace_be.listing.entity.ListingPackage;
+import fu.stockspace.stockspace_be.warehouse.entity.WarehouseLayout;
+import fu.stockspace.stockspace_be.warehouse.repository.WarehouseLayoutRepository;
 import fu.stockspace.stockspace_be.listing.repository.ListingOrderRepository;
 import fu.stockspace.stockspace_be.listing.repository.ListingPackageRepository;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
@@ -34,9 +36,11 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -58,6 +62,9 @@ class ListingOrderServiceTest {
     private fu.stockspace.stockspace_be.wallet.repository.TransactionRepository transactionRepository;
 
     @Mock
+    private WarehouseLayoutRepository warehouseLayoutRepository;
+
+    @Mock
     private WalletService walletService;
 
     @Mock
@@ -72,6 +79,7 @@ class ListingOrderServiceTest {
     private User owner;
     private Warehouse warehouse;
     private ListingPackage listingPackage;
+    private WarehouseLayout defaultLayout;
 
     @BeforeEach
     void setUp() {
@@ -95,6 +103,19 @@ class ListingOrderServiceTest {
                 .isActive(true)
                 .isDeleted(false)
                 .build();
+        defaultLayout = WarehouseLayout.builder()
+                .warehouse(warehouse)
+                .isDefault(true)
+                .width(new BigDecimal("10"))
+                .length(new BigDecimal("10"))
+                .height(new BigDecimal("5"))
+                .isActive(true)
+                .isDeleted(false)
+                .build();
+        lenient().when(warehouseLayoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId))
+                .thenReturn(Optional.of(defaultLayout));
+        lenient().when(listingOrderRepository.existsByWarehouseIdAndStatusAndIsDeletedFalse(
+                warehouseId, ListingOrderStatus.PENDING_APPROVAL)).thenReturn(false);
     }
 
     @Test
@@ -248,13 +269,49 @@ class ListingOrderServiceTest {
     }
 
     @Test
-    void purchaseRejectsUnverifiedWarehouse() {
+    void purchaseAcceptsUnverifiedWarehouseWhileAwaitingAdminApproval() {
         warehouse.setVerified(false);
+        warehouse.setStatus(WarehouseStatus.PENDING_APPROVAL);
         when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(listingPackageRepository.findById(packageId)).thenReturn(Optional.of(listingPackage));
+        when(listingOrderRepository.save(any(ListingOrder.class))).thenAnswer(invocation -> {
+            ListingOrder order = invocation.getArgument(0);
+            order.setId(UUID.randomUUID());
+            return order;
+        });
+        Transaction transaction = Transaction.builder().id(UUID.randomUUID()).build();
+        when(walletService.deductBalance(
+                eq(ownerId), eq(listingPackage.getPrice()), eq(TransactionType.LISTING_FEE),
+                any(String.class), eq(null), eq(null)
+        )).thenReturn(transaction);
 
-        assertThrows(BadRequestException.class, () -> listingOrderService.purchaseOrRenew(
-                ownerId, warehouseId, new PurchaseListingPackageRequest(packageId)));
-        verify(listingPackageRepository, never()).findById(any());
+        var response = listingOrderService.purchaseOrRenew(
+                ownerId, warehouseId, new PurchaseListingPackageRequest(packageId));
+
+        assertEquals(ListingOrderStatus.PENDING_APPROVAL, response.getStatus());
+        assertNull(response.getPeriodStart());
+        assertNull(response.getPeriodEnd());
+        verify(warehouseRepository, never()).save(warehouse);
+        verify(notificationService).push(eq(ownerId),
+                eq("Warehouse publication awaiting approval"), any(String.class),
+                eq("LISTING_PENDING_APPROVAL"));
+    }
+
+    @Test
+    void purchaseRejectsWhenDefaultLayoutIsMissingBeforeChargingWallet() {
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(listingPackageRepository.findById(packageId)).thenReturn(Optional.of(listingPackage));
+        when(warehouseLayoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId))
+                .thenReturn(Optional.empty());
+
+        var exception = assertThrows(
+                fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException.class,
+                () -> listingOrderService.purchaseOrRenew(
+                        ownerId, warehouseId, new PurchaseListingPackageRequest(packageId)));
+
+        assertEquals(ErrorCode.WAREHOUSE_DEFAULT_LAYOUT_REQUIRED, exception.getErrorCode());
+        verify(walletService, never()).deductBalance(any(), any(), any(), any(), any(), any());
+        verify(listingOrderRepository, never()).save(any(ListingOrder.class));
     }
 
     @Test

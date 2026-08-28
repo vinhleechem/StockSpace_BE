@@ -55,6 +55,7 @@ public enum ErrorCode {
     WAREHOUSE_TYPE_IN_USE("Loại kho đang được sử dụng bởi một hoặc nhiều kho bãi, không thể xóa", HttpStatus.BAD_REQUEST),
     WAREHOUSE_HAS_ACTIVE_CONTRACTS("Không thể xoá kho đang có hợp đồng thuê hiệu lực", HttpStatus.BAD_REQUEST),
     WAREHOUSE_INVALID_STATUS_TRANSITION("Không thể chuyển sang trạng thái này", HttpStatus.BAD_REQUEST),
+    WAREHOUSE_DEFAULT_LAYOUT_REQUIRED("Kho phải có default layout hợp lệ trước khi đăng bài", HttpStatus.CONFLICT),
     WAREHOUSE_IMAGE_LIMIT_EXCEEDED("Số lượng ảnh vượt quá giới hạn tối đa (10 ảnh)", HttpStatus.BAD_REQUEST),
 
 
@@ -80,6 +81,7 @@ public enum ErrorCode {
 
     PACKAGE_NOT_FOUND("Gói dịch vụ không tồn tại", HttpStatus.NOT_FOUND),
     LISTING_PACKAGE_INACTIVE("Gói đăng tin hiện không hoạt động", HttpStatus.BAD_REQUEST),
+    LISTING_PUBLICATION_PENDING("Kho đang có yêu cầu đăng bài chờ Admin duyệt", HttpStatus.CONFLICT),
     SUBSCRIPTION_ALREADY_ACTIVE("Bạn đã có gói dịch vụ đang hoạt động", HttpStatus.CONFLICT),
     SUBSCRIPTION_NOT_FOUND("Subscription không tồn tại", HttpStatus.NOT_FOUND),
 

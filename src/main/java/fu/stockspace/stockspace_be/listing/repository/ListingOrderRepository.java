@@ -1,6 +1,7 @@
 package fu.stockspace.stockspace_be.listing.repository;
 
 import fu.stockspace.stockspace_be.listing.entity.ListingOrder;
+import fu.stockspace.stockspace_be.listing.entity.ListingOrderStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -11,6 +12,8 @@ import java.util.UUID;
 
 @Repository
 public interface ListingOrderRepository extends JpaRepository<ListingOrder, UUID> {
+
+    boolean existsByWarehouseIdAndStatusAndIsDeletedFalse(UUID warehouseId, ListingOrderStatus status);
 
     @Query("""
             SELECT o FROM ListingOrder o
