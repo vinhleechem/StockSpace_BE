@@ -194,6 +194,42 @@ backup_db() {
     ls -lh "$BACKUP_DIR"
 }
 
+purge_database_backups() {
+    if [ "${CONFIRM_PRODUCTION_BACKUP_PURGE:-}" != "PURGE_STOCKSPACE_DATABASE_BACKUPS" ]; then
+        log_error "Từ chối xóa backup: thiếu xác nhận PURGE_STOCKSPACE_DATABASE_BACKUPS."
+    fi
+
+    EXPECTED_BACKUP_DIR="$APP_DIR/backups"
+    if [ ! -d "$EXPECTED_BACKUP_DIR" ]; then
+        log_success "Không có thư mục backup database để xóa."
+        return
+    fi
+
+    RESOLVED_APP_DIR="$(realpath "$APP_DIR")"
+    RESOLVED_BACKUP_DIR="$(realpath "$EXPECTED_BACKUP_DIR")"
+    if [ "$RESOLVED_BACKUP_DIR" != "$RESOLVED_APP_DIR/backups" ]; then
+        log_error "Đường dẫn backup không hợp lệ; từ chối xóa: $RESOLVED_BACKUP_DIR"
+    fi
+
+    mapfile -d '' BACKUP_FILES < <(
+        find "$RESOLVED_BACKUP_DIR" -maxdepth 1 -type f -print0
+    )
+    if [ ${#BACKUP_FILES[@]} -eq 0 ]; then
+        log_success "Không còn file backup database nào trên VPS."
+        return
+    fi
+
+    log_warn "Xóa vĩnh viễn ${#BACKUP_FILES[@]} file trong $RESOLVED_BACKUP_DIR..."
+    for BACKUP_FILE in "${BACKUP_FILES[@]}"; do
+        rm -- "$BACKUP_FILE"
+    done
+
+    if find "$RESOLVED_BACKUP_DIR" -maxdepth 1 -type f -print -quit | grep -q .; then
+        log_error "Vẫn còn file backup sau khi purge."
+    fi
+    log_success "Toàn bộ file backup database trên VPS đã được xóa vĩnh viễn."
+}
+
 reset_database() {
     if [ "${CONFIRM_PRODUCTION_DB_RESET:-}" != "RESET_STOCKSPACE_PRODUCTION" ]; then
         log_error "Từ chối xóa dữ liệu: đặt CONFIRM_PRODUCTION_DB_RESET=RESET_STOCKSPACE_PRODUCTION để xác nhận."
@@ -325,6 +361,7 @@ print_usage() {
     echo "    stop      — Dừng toàn bộ services"
     echo "    status    — Xem trạng thái containers"
     echo "    backup    — Backup database PostgreSQL"
+    echo "    purge-db-backups — Xóa vĩnh viễn toàn bộ file backup database"
     echo "    reset-db  — Backup, xóa toàn bộ dữ liệu production và deploy lại"
     echo ""
 }
@@ -339,6 +376,7 @@ case "$COMMAND" in
     stop)    stop_all ;;
     status)  show_status ;;
     backup)  backup_db ;;
+    purge-db-backups) purge_database_backups ;;
     reset-db) reset_database ;;
     *)       print_usage ;;
 esac

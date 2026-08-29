@@ -14,6 +14,14 @@ on:
         options:
           - 'no'
           - 'RESET_STOCKSPACE_PRODUCTION'
+      purge_database_backups:
+        description: 'Permanently delete all database backup files on the VPS'
+        required: true
+        default: 'no'
+        type: choice
+        options:
+          - 'no'
+          - 'PURGE_STOCKSPACE_DATABASE_BACKUPS'
 
 permissions:
   contents: read
@@ -59,11 +67,14 @@ jobs:
           VPS_PORT: ${{ secrets.VPS_PORT }}
           VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
           RESET_DATABASE: ${{ github.event.inputs.reset_database || 'no' }}
+          PURGE_DATABASE_BACKUPS: ${{ github.event.inputs.purge_database_backups || 'no' }}
         run: |
           PORT="${VPS_PORT:-22}"
           REMOTE_COMMAND='bash /opt/stockspace/deploy.sh deploy'
           if [ "$RESET_DATABASE" = 'RESET_STOCKSPACE_PRODUCTION' ]; then
             REMOTE_COMMAND='CONFIRM_PRODUCTION_DB_RESET=RESET_STOCKSPACE_PRODUCTION bash /opt/stockspace/deploy.sh reset-db'
+          elif [ "$PURGE_DATABASE_BACKUPS" = 'PURGE_STOCKSPACE_DATABASE_BACKUPS' ]; then
+            REMOTE_COMMAND='CONFIRM_PRODUCTION_BACKUP_PURGE=PURGE_STOCKSPACE_DATABASE_BACKUPS bash /opt/stockspace/deploy.sh purge-db-backups'
           fi
           ssh \
             -i ~/.ssh/id_ed25519 \
