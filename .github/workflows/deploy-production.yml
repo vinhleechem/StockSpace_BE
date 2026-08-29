@@ -5,6 +5,15 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      reset_database:
+        description: 'Reset all production business data after a verified backup'
+        required: true
+        default: 'no'
+        type: choice
+        options:
+          - 'no'
+          - 'RESET_STOCKSPACE_PRODUCTION'
 
 permissions:
   contents: read
@@ -49,8 +58,13 @@ jobs:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_PORT: ${{ secrets.VPS_PORT }}
           VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
+          RESET_DATABASE: ${{ github.event.inputs.reset_database || 'no' }}
         run: |
           PORT="${VPS_PORT:-22}"
+          REMOTE_COMMAND='bash /opt/stockspace/deploy.sh deploy'
+          if [ "$RESET_DATABASE" = 'RESET_STOCKSPACE_PRODUCTION' ]; then
+            REMOTE_COMMAND='CONFIRM_PRODUCTION_DB_RESET=RESET_STOCKSPACE_PRODUCTION bash /opt/stockspace/deploy.sh reset-db'
+          fi
           ssh \
             -i ~/.ssh/id_ed25519 \
             -o BatchMode=yes \
@@ -58,4 +72,4 @@ jobs:
             -o ConnectTimeout=15 \
             -p "$PORT" \
             "$VPS_USERNAME@$VPS_HOST" \
-            'bash /opt/stockspace/deploy.sh deploy'
+            "$REMOTE_COMMAND"
