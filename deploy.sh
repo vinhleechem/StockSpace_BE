@@ -106,7 +106,19 @@ deploy() {
     if [ "$DB_READY" != "true" ]; then
         log_error "PostgreSQL chưa sẵn sàng để chạy migration."
     fi
-    bash "$APP_DIR/ops/run-migrations.sh" --docker
+    if ! bash "$APP_DIR/ops/run-migrations.sh" --docker; then
+        log_warn "Migration failed; running the read-only rental-contract preflight for diagnostics..."
+        if [ -f "$APP_DIR/ops/maintenance/rental_contract_refactor_preflight.sql" ]; then
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+                exec -T postgres psql \
+                -X -v ON_ERROR_STOP=1 \
+                -U "${DB_USERNAME:-postgres}" \
+                -d "${DB_NAME:-stockspace}" \
+                < "$APP_DIR/ops/maintenance/rental_contract_refactor_preflight.sql" \
+                || log_warn "Rental-contract diagnostic query could not be completed."
+        fi
+        log_error "Production migration failed; application containers were left unchanged."
+    fi
     log_success "Production migrations completed."
 
     log_info "Build image và khởi động containers..."
