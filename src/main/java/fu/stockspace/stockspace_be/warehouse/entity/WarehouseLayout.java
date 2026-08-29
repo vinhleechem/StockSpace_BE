@@ -8,13 +8,14 @@ import lombok.experimental.SuperBuilder;
 
 
 import java.util.UUID;
+import java.math.BigDecimal;
 
 
-/**
- * Entity WarehouseLayout — bản đồ layout kho, có thể là layout mặc định của Owner
- * hoặc layout tuỳ chỉnh của Tenant sau khi thuê.
- * Map với bảng: warehouse_layouts
- */
+
+
+
+
+
 @Entity
 @Table(name = "warehouse_layouts")
 @Getter
@@ -33,7 +34,7 @@ public class WarehouseLayout extends BaseEntity {
     @JoinColumn(name = "warehouse_id", nullable = false)
     private Warehouse warehouse;
 
-    /** null = layout mặc định của Owner; có giá trị = layout riêng của Tenant */
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tenant_id")
     private User tenant;
@@ -44,9 +45,17 @@ public class WarehouseLayout extends BaseEntity {
 
     @Column(name = "width", nullable = false)
     @Builder.Default
-    private Integer width = 100;
+    private BigDecimal width = new BigDecimal("100.000000");
+
+    @Column(name = "length", nullable = false)
+    @Builder.Default
+    private BigDecimal length = new BigDecimal("100.000000");
 
     @Column(name = "height", nullable = false)
     @Builder.Default
-    private Integer height = 100;
+    private BigDecimal height = new BigDecimal("100.000000");
+
+
+    @Column(name = "positions", columnDefinition = "TEXT")
+    private String positions;
 }

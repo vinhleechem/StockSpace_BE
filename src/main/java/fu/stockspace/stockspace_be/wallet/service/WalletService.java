@@ -31,9 +31,9 @@ public class WalletService {
     private final NotificationService notificationService;
     private final VnPayService vnPayService;
 
-    /**
-     * Lấy ví của người dùng, tự động tạo nếu chưa tồn tại.
-     */
+
+
+
     @Transactional
     public Wallet getOrCreateWallet(UUID userId) {
         return walletRepository.findByUserId(userId)
@@ -46,13 +46,13 @@ public class WalletService {
                             .isActive(true)
                             .build();
                     log.info("Lazy-creating wallet for user: {}", userId);
-                    return walletRepository.save(newWallet);
+                    return walletRepository.saveAndFlush(newWallet);
                 });
     }
 
-    /**
-     * Lấy thông tin ví của người dùng.
-     */
+
+
+
     @Transactional(readOnly = true)
     public WalletResponse getWalletInfo(UUID userId) {
         Wallet wallet = walletRepository.findByUserId(userId)
@@ -60,9 +60,9 @@ public class WalletService {
         return mapToWalletResponse(wallet);
     }
 
-    /**
-     * Tạo yêu cầu nạp tiền, lưu transaction PENDING và trả về thông tin thanh toán VNPAY.
-     */
+
+
+
     @Transactional
     public TopUpResponse createTopUpRequest(UUID userId, TopUpRequest request, String ipAddress) {
         Wallet wallet = getOrCreateWallet(userId);
@@ -78,7 +78,7 @@ public class WalletService {
                 .build();
         transaction = transactionRepository.save(transaction);
 
-        // Sinh link thanh toán VNPAY
+
         String paymentUrl = vnPayService.createPaymentUrl(paymentCode, request.getAmount(), ipAddress);
 
         return TopUpResponse.builder()
@@ -88,14 +88,14 @@ public class WalletService {
                 .build();
     }
 
-    /**
-     * Xử lý callback/IPN từ VNPAY gửi về để cập nhật số dư ví.
-     */
+
+
+
     @Transactional
     public void processVnPayPayment(Map<String, String> params) {
         log.info("Processing VNPAY payment callback: {}", params);
 
-        // 1. Xác thực chữ ký bảo mật từ VNPAY
+
         boolean isSignatureValid = vnPayService.verifySignature(params);
         if (!isSignatureValid) {
             throw new BadRequestException("Chữ ký bảo mật VNPAY không hợp lệ");
@@ -105,24 +105,24 @@ public class WalletService {
         String vnpResponseCode = params.get("vnp_ResponseCode");
         String transactionNo = params.get("vnp_TransactionNo");
 
-        // 2. Tìm giao dịch trong DB
+
         Transaction transaction = transactionRepository.findByPaymentCode(paymentCode)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.SYSTEM_ERROR, "Không tìm thấy mã giao dịch: " + paymentCode));
 
-        // 3. Nếu giao dịch đã xử lý xong rồi thì bỏ qua (tránh trùng lặp giữa IPN và Callback)
+
         if (transaction.getStatus() != TransactionStatus.PENDING) {
             log.info("Transaction {} already processed. Status: {}", paymentCode, transaction.getStatus());
             return;
         }
 
-        // 4. Kiểm tra trạng thái thanh toán từ VNPAY
+
         if ("00".equals(vnpResponseCode)) {
-            // Thanh toán thành công -> Cộng tiền ví
+
             UUID userId = transaction.getWallet().getUser().getId();
             Wallet wallet = walletRepository.findByUserIdWithLock(userId)
                     .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WALLET_NOT_FOUND));
 
-            // Số tiền VNPAY gửi về nhân với 100, cần chia lại cho 100
+
             BigDecimal rawAmount = new BigDecimal(params.get("vnp_Amount"));
             BigDecimal actualAmount = rawAmount.divide(new BigDecimal(100));
 
@@ -136,7 +136,7 @@ public class WalletService {
 
             log.info("Successfully credited {} VND to user {} (txnRef: {})", actualAmount, userId, paymentCode);
 
-            // Gửi thông báo
+
             notificationService.push(
                     userId,
                     "Nạp tiền thành công",
@@ -144,7 +144,7 @@ public class WalletService {
                     "PAYMENT"
             );
         } else {
-            // Thanh toán thất bại
+
             transaction.setStatus(TransactionStatus.FAILED);
             transaction.setReferenceId(transactionNo);
             transactionRepository.save(transaction);
@@ -152,17 +152,20 @@ public class WalletService {
         }
     }
 
-    /**
-     * Khấu trừ số dư ví người dùng (dùng cho thanh toán cọc hoặc gói dịch vụ).
-     * Yêu cầu phương thức gọi phải có @Transactional và nên gọi trong service có lock.
-     */
+
+
+
+
     @Transactional
     public Transaction deductBalance(UUID userId, BigDecimal amount, TransactionType type, String description, UUID bookingId, UUID subscriptionId) {
+        if (amount == null) {
+            amount = BigDecimal.ZERO;
+        }
         getOrCreateWallet(userId);
         Wallet wallet = walletRepository.findByUserIdWithLock(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WALLET_NOT_FOUND));
         if (wallet.getBalance().compareTo(amount) < 0) {
-            throw new BadRequestException(ErrorCode.WALLET_INSUFFICIENT_BALANCE);
+            throw new BadRequestException(ErrorCode.INSUFFICIENT_BALANCE);
         }
         wallet.setBalance(wallet.getBalance().subtract(amount));
         walletRepository.save(wallet);
@@ -180,12 +183,15 @@ public class WalletService {
         return transactionRepository.save(transaction);
     }
 
-    /**
-     * Hoàn tiền hoặc cộng số dư vào ví người dùng (dùng cho hoàn cọc, phân xử tranh chấp).
-     * Yêu cầu phương thức gọi phải có @Transactional và nên gọi trong service có lock.
-     */
+
+
+
+
     @Transactional
     public Transaction refundBalance(UUID userId, BigDecimal amount, TransactionType type, String description, UUID bookingId, UUID subscriptionId) {
+        if (amount == null) {
+            amount = BigDecimal.ZERO;
+        }
         getOrCreateWallet(userId);
         Wallet wallet = walletRepository.findByUserIdWithLock(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WALLET_NOT_FOUND));
@@ -206,7 +212,7 @@ public class WalletService {
         return transactionRepository.save(transaction);
     }
 
-    // ==================== Private Helpers ====================
+
     private String generatePaymentCode() {
         String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         Random rnd = new Random();

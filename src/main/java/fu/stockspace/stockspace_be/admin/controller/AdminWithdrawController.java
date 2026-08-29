@@ -1,5 +1,5 @@
 package fu.stockspace.stockspace_be.admin.controller;
-import fu.stockspace.stockspace_be.booking.entity.ApprovalStatus;
+import fu.stockspace.stockspace_be.common.entity.ApprovalStatus;
 import fu.stockspace.stockspace_be.common.dto.ApiResponse;
 import fu.stockspace.stockspace_be.wallet.dto.WithdrawResponse;
 import fu.stockspace.stockspace_be.wallet.service.WithdrawService;
@@ -21,7 +21,7 @@ import java.util.UUID;
 @RequestMapping("/api/admin/withdrawals")
 @RequiredArgsConstructor
 @Tag(name = "Admin — Withdrawals", description = "Các API phê duyệt yêu cầu rút tiền dành cho Admin")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("@rbac.hasPermission('ADMIN_WITHDRAWAL_MANAGE')")
 public class AdminWithdrawController {
     private final WithdrawService withdrawService;
     @GetMapping

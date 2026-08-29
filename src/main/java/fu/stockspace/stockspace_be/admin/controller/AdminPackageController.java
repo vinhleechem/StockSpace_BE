@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
 @Tag(name = "Admin — Packages & Subscriptions", description = "Các API quản lý gói dịch vụ và theo dõi lịch sử đăng ký dành cho Admin")
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("@rbac.hasPermission('ADMIN_PACKAGE_MANAGE')")
 public class AdminPackageController {
     private final ServicePackageService packageService;
     private final SubscriptionService subscriptionService;

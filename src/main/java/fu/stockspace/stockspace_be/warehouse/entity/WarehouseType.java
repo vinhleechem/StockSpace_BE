@@ -5,10 +5,10 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 
-/**
- * Entity WarehouseType — phân loại kho (kho lạnh, kho thường, kho hàng nguy hiểm, v.v.)
- * Map với bảng: warehouse_types
- */
+
+
+
+
 @Entity
 @Table(name = "warehouse_types")
 @Getter

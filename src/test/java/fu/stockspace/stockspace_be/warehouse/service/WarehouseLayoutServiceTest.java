@@ -4,8 +4,8 @@ import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
-import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
+import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.warehouse.dto.*;
 import fu.stockspace.stockspace_be.warehouse.entity.*;
@@ -18,8 +18,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.math.BigDecimal;
 import java.util.*;
+import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -31,8 +31,6 @@ class WarehouseLayoutServiceTest {
     @Mock
     private WarehouseLayoutRepository layoutRepository;
     @Mock
-    private WarehouseZoneRepository zoneRepository;
-    @Mock
     private WarehouseRackRepository rackRepository;
     @Mock
     private WarehouseBinRepository binRepository;
@@ -42,6 +40,8 @@ class WarehouseLayoutServiceTest {
     private UserRepository userRepository;
     @Mock
     private RentalContractRepository contractRepository;
+    @Mock
+    private TenantWarehouseAccessService tenantWarehouseAccessService;
     @Mock
     private StockBatchRepository stockBatchRepository;
 
@@ -61,29 +61,142 @@ class WarehouseLayoutServiceTest {
 
         owner = User.builder().id(userId).email("owner@test.com").build();
         warehouse = Warehouse.builder().id(warehouseId).owner(owner).name("Main Warehouse").build();
-        defaultLayout = WarehouseLayout.builder().id(UUID.randomUUID()).warehouse(warehouse).isDefault(true).width(100).height(100).build();
+        defaultLayout = WarehouseLayout.builder()
+                .id(UUID.randomUUID())
+                .warehouse(warehouse)
+                .isDefault(true)
+                .width(new BigDecimal("100"))
+                .length(new BigDecimal("100"))
+                .height(new BigDecimal("10"))
+                .build();
     }
 
     @Test
     void testGetLayoutTree_Success() {
         when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)).thenReturn(Optional.of(defaultLayout));
 
-        WarehouseZone zone = WarehouseZone.builder().id(UUID.randomUUID()).layout(defaultLayout).name("Zone A").coordinateX(0).coordinateY(0).width(50).height(50).build();
-        WarehouseRack rack = WarehouseRack.builder().id(UUID.randomUUID()).zone(zone).name("Rack A1").coordinateX(0).coordinateY(0).width(10).height(10).build();
-        WarehouseBin bin = WarehouseBin.builder().id(UUID.randomUUID()).rack(rack).name("Bin A1-1").coordinateX(0).coordinateY(0).width(2).height(2).build();
+        WarehouseRack rack = WarehouseRack.builder()
+                .id(UUID.randomUUID())
+                .layout(defaultLayout)
+                .name("Rack A1")
+                .coordinateX(new BigDecimal("0"))
+                .coordinateY(new BigDecimal("0"))
+                .width(new BigDecimal("10"))
+                .length(new BigDecimal("10"))
+                .height(new BigDecimal("5"))
+                .build();
 
-        when(zoneRepository.findAllByLayoutId(defaultLayout.getId())).thenReturn(List.of(zone));
-        when(rackRepository.findAllByZoneLayoutId(defaultLayout.getId())).thenReturn(List.of(rack));
-        when(binRepository.findAllByRackZoneLayoutId(defaultLayout.getId())).thenReturn(List.of(bin));
+        WarehouseBin bin = WarehouseBin.builder()
+                .id(UUID.randomUUID())
+                .rack(rack)
+                .name("Bin A1-1")
+                .coordinateX(new BigDecimal("0"))
+                .coordinateY(new BigDecimal("0"))
+                .width(new BigDecimal("2"))
+                .length(new BigDecimal("2"))
+                .height(new BigDecimal("1"))
+                .build();
+
+        when(rackRepository.findAllByLayoutId(defaultLayout.getId())).thenReturn(List.of(rack));
+        when(binRepository.findAllByRackLayoutId(defaultLayout.getId())).thenReturn(List.of(bin));
+        when(stockBatchRepository.existsByBinIdAndQuantityGreaterThanAndIsDeletedFalse(bin.getId(), 0)).thenReturn(false);
 
         WarehouseLayoutResponse response = layoutService.getLayoutTree(warehouseId, userId, "OWNER");
 
         assertNotNull(response);
         assertEquals(defaultLayout.getId(), response.getId());
-        assertEquals(1, response.getZones().size());
-        assertEquals("Zone A", response.getZones().get(0).getName());
-        assertEquals("Rack A1", response.getZones().get(0).getRacks().get(0).getName());
-        assertEquals("Bin A1-1", response.getZones().get(0).getRacks().get(0).getBins().get(0).getName());
+        assertEquals(1, response.getTotalRacks());
+        assertEquals(1, response.getTotalBins());
+        assertEquals(0, response.getOccupiedBins());
+        assertEquals(1, response.getEmptyBins());
+        assertEquals("Rack A1", response.getRacks().get(0).getName());
+        assertNotNull(response.getRacks().get(0).getOccupiedPositions());
+        assertEquals(100, response.getRacks().get(0).getOccupiedPositions().size());
+        assertTrue(response.getRacks().get(0).getOccupiedPositions().contains("0:0"));
+        assertTrue(response.getRacks().get(0).getOccupiedPositions().contains("9:9"));
+
+        assertEquals("Bin A1-1", response.getRacks().get(0).getBins().get(0).getName());
+        assertNotNull(response.getRacks().get(0).getBins().get(0).getOccupiedPositions());
+        assertEquals(4, response.getRacks().get(0).getBins().get(0).getOccupiedPositions().size());
+        assertTrue(response.getRacks().get(0).getBins().get(0).getOccupiedPositions().contains("0:0"));
+        assertTrue(response.getRacks().get(0).getBins().get(0).getOccupiedPositions().contains("1:1"));
+    }
+
+    @Test
+    void testGetLayoutTree_TenantRequiresContractButNotSubscription() {
+        User tenant = User.builder().id(userId).email("tenant@test.com").build();
+        WarehouseLayout tenantLayout = WarehouseLayout.builder()
+                .id(UUID.randomUUID())
+                .warehouse(warehouse)
+                .tenant(tenant)
+                .isDefault(false)
+                .width(new BigDecimal("20"))
+                .length(new BigDecimal("20"))
+                .height(new BigDecimal("5"))
+                .build();
+        when(layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId))
+                .thenReturn(Optional.of(tenantLayout));
+        when(rackRepository.findAllByLayoutId(tenantLayout.getId()))
+                .thenReturn(Collections.emptyList());
+        when(binRepository.findAllByRackLayoutId(tenantLayout.getId()))
+                .thenReturn(Collections.emptyList());
+
+        WarehouseLayoutResponse response = layoutService.getLayoutTree(warehouseId, userId, "TENANT");
+
+        assertEquals(tenantLayout.getId(), response.getId());
+        verify(tenantWarehouseAccessService).requireActiveContract(userId, warehouseId);
+        verify(tenantWarehouseAccessService, never()).requireWmsAccess(userId, warehouseId);
+    }
+
+    @Test
+    void testGetStaffLayoutTree_RequiresContractAndActiveAssignment() {
+        UUID staffId = UUID.randomUUID();
+        UUID tenantId = UUID.randomUUID();
+        User tenant = User.builder().id(tenantId).email("tenant@test.com").build();
+        WarehouseLayout tenantLayout = WarehouseLayout.builder()
+                .id(UUID.randomUUID())
+                .warehouse(warehouse)
+                .tenant(tenant)
+                .isDefault(false)
+                .width(new BigDecimal("20"))
+                .length(new BigDecimal("20"))
+                .height(new BigDecimal("5"))
+                .build();
+        when(layoutRepository.findByWarehouseIdAndTenantId(warehouseId, tenantId))
+                .thenReturn(Optional.of(tenantLayout));
+        when(rackRepository.findAllByLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
+        when(binRepository.findAllByRackLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
+
+        WarehouseLayoutResponse response = layoutService.getStaffLayoutTree(warehouseId, staffId, tenantId);
+
+        assertEquals(tenantLayout.getId(), response.getId());
+        verify(tenantWarehouseAccessService).requireActiveContract(tenantId, warehouseId);
+        verify(tenantWarehouseAccessService).requireActiveStaffAssignment(staffId, tenantId, warehouseId);
+        verify(tenantWarehouseAccessService, never()).requireActiveSubscription(any());
+    }
+
+    @Test
+    void testGetStaffLayoutTree_DoesNotReadLayoutWithoutActiveAssignment() {
+        UUID staffId = UUID.randomUUID();
+        UUID tenantId = UUID.randomUUID();
+        doThrow(new fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException(
+                ErrorCode.FORBIDDEN))
+                .when(tenantWarehouseAccessService)
+                .requireActiveStaffAssignment(staffId, tenantId, warehouseId);
+
+        assertThrows(fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException.class,
+                () -> layoutService.getStaffLayoutTree(warehouseId, staffId, tenantId));
+        verify(layoutRepository, never()).findByWarehouseIdAndTenantId(any(), any());
+        verify(layoutRepository, never()).findByWarehouseIdAndIsDefaultTrue(any());
+    }
+
+    @Test
+    void testGetLayoutTree_PublicRequiresVisibleWarehouse() {
+        when(warehouseRepository.findPublicAvailableById(warehouseId)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class,
+                () -> layoutService.getLayoutTree(warehouseId, null, "PUBLIC"));
+        verify(layoutRepository, never()).findByWarehouseIdAndIsDefaultTrue(warehouseId);
     }
 
     @Test
@@ -95,27 +208,119 @@ class WarehouseLayoutServiceTest {
         when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)).thenReturn(Optional.of(defaultLayout));
         when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenantUser));
 
-        WarehouseLayout clonedLayout = WarehouseLayout.builder().id(UUID.randomUUID()).warehouse(warehouse).tenant(tenantUser).isDefault(false).width(100).height(100).build();
+        WarehouseLayout clonedLayout = WarehouseLayout.builder()
+                .id(UUID.randomUUID())
+                .warehouse(warehouse)
+                .tenant(tenantUser)
+                .isDefault(false)
+                .width(new BigDecimal("100"))
+                .length(new BigDecimal("100"))
+                .height(new BigDecimal("10"))
+                .build();
         when(layoutRepository.save(any(WarehouseLayout.class))).thenReturn(clonedLayout);
 
-        WarehouseZone zone = WarehouseZone.builder().id(UUID.randomUUID()).layout(defaultLayout).name("Zone A").coordinateX(0).coordinateY(0).width(50).height(50).build();
-        WarehouseRack rack = WarehouseRack.builder().id(UUID.randomUUID()).zone(zone).name("Rack A1").coordinateX(0).coordinateY(0).width(10).height(10).build();
-        WarehouseBin bin = WarehouseBin.builder().id(UUID.randomUUID()).rack(rack).name("Bin A1-1").coordinateX(0).coordinateY(0).width(2).height(2).build();
+        WarehouseRack rack = WarehouseRack.builder()
+                .id(UUID.randomUUID())
+                .layout(defaultLayout)
+                .name("Rack A1")
+                .coordinateX(new BigDecimal("0"))
+                .coordinateY(new BigDecimal("0"))
+                .width(new BigDecimal("10"))
+                .length(new BigDecimal("10"))
+                .height(new BigDecimal("5"))
+                .build();
 
-        when(zoneRepository.findAllByLayoutId(defaultLayout.getId())).thenReturn(List.of(zone));
-        when(rackRepository.findAllByZoneLayoutId(defaultLayout.getId())).thenReturn(List.of(rack));
-        when(binRepository.findAllByRackZoneLayoutId(defaultLayout.getId())).thenReturn(List.of(bin));
+        WarehouseBin bin = WarehouseBin.builder()
+                .id(UUID.randomUUID())
+                .rack(rack)
+                .name("Bin A1-1")
+                .coordinateX(new BigDecimal("0"))
+                .coordinateY(new BigDecimal("0"))
+                .width(new BigDecimal("2"))
+                .length(new BigDecimal("2"))
+                .height(new BigDecimal("1"))
+                .build();
 
-        when(zoneRepository.save(any(WarehouseZone.class))).thenAnswer(i -> i.getArguments()[0]);
+        when(rackRepository.findAllByLayoutId(defaultLayout.getId())).thenReturn(List.of(rack));
+        when(binRepository.findAllByRackLayoutId(defaultLayout.getId())).thenReturn(List.of(bin));
+
         when(rackRepository.save(any(WarehouseRack.class))).thenAnswer(i -> i.getArguments()[0]);
         when(binRepository.save(any(WarehouseBin.class))).thenAnswer(i -> i.getArguments()[0]);
 
         assertDoesNotThrow(() -> layoutService.cloneLayout(warehouseId, tenantId));
 
         verify(layoutRepository, times(1)).save(any(WarehouseLayout.class));
-        verify(zoneRepository, times(1)).save(any(WarehouseZone.class));
         verify(rackRepository, times(1)).save(any(WarehouseRack.class));
         verify(binRepository, times(1)).save(any(WarehouseBin.class));
+    }
+
+    @Test
+    void testCloneLayout_RestoresDeletedCloneFromCurrentDefault() {
+        UUID tenantId = UUID.randomUUID();
+        User tenantUser = User.builder().id(tenantId).email("tenant@test.com").build();
+        UUID tenantLayoutId = UUID.randomUUID();
+
+        WarehouseLayout deletedTenantLayout = WarehouseLayout.builder()
+                .id(tenantLayoutId)
+                .warehouse(warehouse)
+                .tenant(tenantUser)
+                .isDefault(false)
+                .isActive(false)
+                .isDeleted(true)
+                .width(new BigDecimal("10"))
+                .length(new BigDecimal("10"))
+                .height(new BigDecimal("5"))
+                .build();
+
+        WarehouseRack oldRack = WarehouseRack.builder()
+                .id(UUID.randomUUID())
+                .layout(deletedTenantLayout)
+                .name("Old Rack")
+                .build();
+        WarehouseBin oldBin = WarehouseBin.builder()
+                .id(UUID.randomUUID())
+                .rack(oldRack)
+                .name("Old Bin")
+                .build();
+
+        WarehouseRack defaultRack = WarehouseRack.builder()
+                .id(UUID.randomUUID())
+                .layout(defaultLayout)
+                .name("Current Rack")
+                .coordinateX(BigDecimal.ZERO)
+                .coordinateY(BigDecimal.ZERO)
+                .width(new BigDecimal("20"))
+                .length(new BigDecimal("10"))
+                .height(new BigDecimal("5"))
+                .build();
+
+        when(layoutRepository.findByWarehouseIdAndTenantId(warehouseId, tenantId))
+                .thenReturn(Optional.of(deletedTenantLayout));
+        when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId))
+                .thenReturn(Optional.of(defaultLayout));
+        when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenantUser));
+        when(binRepository.findAllByRackLayoutId(tenantLayoutId)).thenReturn(List.of(oldBin));
+        when(rackRepository.findAllByLayoutId(tenantLayoutId)).thenReturn(List.of(oldRack));
+        when(rackRepository.findAllByLayoutId(defaultLayout.getId())).thenReturn(List.of(defaultRack));
+        when(binRepository.findAllByRackLayoutId(defaultLayout.getId())).thenReturn(Collections.emptyList());
+        when(layoutRepository.save(any(WarehouseLayout.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(rackRepository.save(any(WarehouseRack.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        layoutService.cloneLayout(warehouseId, tenantId);
+
+        assertTrue(deletedTenantLayout.isActive());
+        assertFalse(deletedTenantLayout.isDeleted());
+        assertEquals(defaultLayout.getWidth(), deletedTenantLayout.getWidth());
+        assertEquals(defaultLayout.getLength(), deletedTenantLayout.getLength());
+        assertEquals(defaultLayout.getHeight(), deletedTenantLayout.getHeight());
+        assertFalse(oldRack.isActive());
+        assertTrue(oldRack.isDeleted());
+        assertFalse(oldBin.isActive());
+        assertTrue(oldBin.isDeleted());
+        verify(layoutRepository).save(deletedTenantLayout);
+        verify(rackRepository).saveAll(List.of(oldRack));
+        verify(binRepository).saveAll(List.of(oldBin));
+        verify(rackRepository).save(any(WarehouseRack.class));
     }
 
     @Test
@@ -124,27 +329,61 @@ class WarehouseLayoutServiceTest {
         when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)).thenReturn(Optional.of(defaultLayout));
         when(layoutRepository.save(any(WarehouseLayout.class))).thenReturn(defaultLayout);
 
-        // Zone width + coordinateX = 110 > Layout width (100)
-        ZoneSaveRequest zoneReq = ZoneSaveRequest.builder()
-                .name("Zone Out")
-                .code("Z_OUT")
-                .coordinateX(60)
-                .coordinateY(10)
-                .width(50)
-                .height(20)
+
+        RackSaveRequest rackReq = RackSaveRequest.builder()
+                .name("Rack Out")
+                .code("R_OUT")
+                .coordinateX(new BigDecimal("60"))
+                .coordinateY(new BigDecimal("10"))
+                .width(new BigDecimal("50"))
+                .length(new BigDecimal("10"))
+                .height(new BigDecimal("5"))
                 .build();
 
         BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
-                .width(100)
-                .height(100)
-                .zones(List.of(zoneReq))
+                .width(new BigDecimal("100"))
+                .length(new BigDecimal("100"))
+                .height(new BigDecimal("10"))
+                .racks(List.of(rackReq))
                 .build();
 
         BadRequestException ex = assertThrows(BadRequestException.class, () ->
                 layoutService.saveLayoutBulk(warehouseId, userId, "OWNER", request));
 
-        assertEquals(ErrorCode.LAYOUT_INVALID_COORDINATES, ErrorCode.LAYOUT_INVALID_COORDINATES);
-        assertTrue(ex.getMessage().contains("vượt quá biên giới hạn"));
+        assertTrue(ex.getMessage().contains("parent bounds"));
+    }
+
+    @Test
+    void testSaveLayoutBulk_AllowsDecimalMeters() {
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)).thenReturn(Optional.of(defaultLayout));
+        when(layoutRepository.save(any(WarehouseLayout.class))).thenReturn(defaultLayout);
+        when(rackRepository.findAllByLayoutId(defaultLayout.getId())).thenReturn(Collections.emptyList());
+        when(binRepository.findAllByRackLayoutId(defaultLayout.getId())).thenReturn(Collections.emptyList());
+        when(rackRepository.save(any(WarehouseRack.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        RackSaveRequest rackReq = RackSaveRequest.builder()
+                .name("Decimal Rack")
+                .code("R_DECIMAL")
+                .coordinateX(new BigDecimal("1.25"))
+                .coordinateY(new BigDecimal("2.50"))
+                .positionZ(new BigDecimal("0.75"))
+                .width(new BigDecimal("3.50"))
+                .length(new BigDecimal("4.25"))
+                .height(new BigDecimal("2.80"))
+                .build();
+
+        BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
+                .width(new BigDecimal("20.50"))
+                .length(new BigDecimal("30.50"))
+                .height(new BigDecimal("10.00"))
+                .racks(List.of(rackReq))
+                .build();
+
+        assertDoesNotThrow(() -> layoutService.saveLayoutBulk(warehouseId, userId, "OWNER", request));
+        verify(rackRepository).save(argThat(rack ->
+                new BigDecimal("1.25").compareTo(rack.getCoordinateX()) == 0
+                        && new BigDecimal("3.50").compareTo(rack.getWidth()) == 0));
     }
 
     @Test
@@ -153,27 +392,22 @@ class WarehouseLayoutServiceTest {
         when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)).thenReturn(Optional.of(defaultLayout));
         when(layoutRepository.save(any(WarehouseLayout.class))).thenReturn(defaultLayout);
 
-        // Giả sử DB đang có 1 zone, 1 rack, 1 bin
-        UUID zoneId = UUID.randomUUID();
         UUID rackId = UUID.randomUUID();
         UUID binId = UUID.randomUUID();
 
-        WarehouseZone zone = WarehouseZone.builder().id(zoneId).layout(defaultLayout).name("Zone A").coordinateX(0).coordinateY(0).width(50).height(50).build();
-        WarehouseRack rack = WarehouseRack.builder().id(rackId).zone(zone).name("Rack A1").coordinateX(0).coordinateY(0).width(10).height(10).build();
-        WarehouseBin bin = WarehouseBin.builder().id(binId).rack(rack).name("Bin A1-1").coordinateX(0).coordinateY(0).width(2).height(2).build();
+        WarehouseRack rack = WarehouseRack.builder().id(rackId).layout(defaultLayout).name("Rack A1").coordinateX(new BigDecimal("0")).coordinateY(new BigDecimal("0")).width(new BigDecimal("10")).length(new BigDecimal("10")).height(new BigDecimal("5")).build();
+        WarehouseBin bin = WarehouseBin.builder().id(binId).rack(rack).name("Bin A1-1").coordinateX(new BigDecimal("0")).coordinateY(new BigDecimal("0")).width(new BigDecimal("2")).length(new BigDecimal("2")).height(new BigDecimal("1")).build();
 
-        when(zoneRepository.findAllByLayoutId(defaultLayout.getId())).thenReturn(List.of(zone));
-        when(rackRepository.findAllByZoneLayoutId(defaultLayout.getId())).thenReturn(List.of(rack));
-        when(binRepository.findAllByRackZoneLayoutId(defaultLayout.getId())).thenReturn(List.of(bin));
+        when(rackRepository.findAllByLayoutId(defaultLayout.getId())).thenReturn(List.of(rack));
+        when(binRepository.findAllByRackLayoutId(defaultLayout.getId())).thenReturn(List.of(bin));
 
-        // Request gửi lên không có bin này (yêu cầu xoá)
         BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
-                .width(100)
-                .height(100)
-                .zones(Collections.emptyList()) // Xoá hết
+                .width(new BigDecimal("100"))
+                .length(new BigDecimal("100"))
+                .height(new BigDecimal("10"))
+                .racks(Collections.emptyList())
                 .build();
 
-        // Giả lập tồn kho trong bin còn hàng (quantity = 5)
         when(stockBatchRepository.existsByBinIdAndQuantityGreaterThanAndIsDeletedFalse(binId, 0)).thenReturn(true);
 
         BadRequestException ex = assertThrows(BadRequestException.class, () ->
@@ -182,4 +416,364 @@ class WarehouseLayoutServiceTest {
         assertEquals("Không thể xóa ô chứa Bin A1-1 vì vẫn còn hàng tồn kho", ex.getMessage());
         verify(binRepository, never()).deleteById(any());
     }
+
+    @Test
+    void testSaveLayoutBulk_TenantCanAddRackAndBinWithinTenantSnapshot() {
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        doNothing().when(tenantWarehouseAccessService).requireWmsAccess(userId, warehouseId);
+        WarehouseLayout tenantLayout = WarehouseLayout.builder()
+                .id(UUID.randomUUID())
+                .warehouse(warehouse)
+                .tenant(User.builder().id(userId).email("tenant@test.com").build())
+                .isDefault(false)
+                .width(new BigDecimal("100"))
+                .length(new BigDecimal("100"))
+                .height(new BigDecimal("10"))
+                .build();
+        when(layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId)).thenReturn(Optional.of(tenantLayout));
+        when(layoutRepository.save(tenantLayout)).thenReturn(tenantLayout);
+
+        when(rackRepository.findAllByLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
+        when(binRepository.findAllByRackLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
+
+
+        RackSaveRequest newRack = RackSaveRequest.builder()
+                .name("New Rack").code("R_NEW")
+                .coordinateX(new BigDecimal("0")).coordinateY(new BigDecimal("0"))
+                .width(new BigDecimal("5")).length(new BigDecimal("5")).height(new BigDecimal("3"))
+                .bins(List.of(BinSaveRequest.builder()
+                        .name("New Bin").code("B_NEW")
+                        .coordinateX(new BigDecimal("0")).coordinateY(new BigDecimal("0"))
+                        .width(new BigDecimal("2")).length(new BigDecimal("2")).height(new BigDecimal("1"))
+                        .build()))
+                .build();
+        BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder().width(new BigDecimal("100")).length(new BigDecimal("100")).height(new BigDecimal("10")).racks(List.of(newRack)).build();
+
+        when(rackRepository.save(any(WarehouseRack.class))).thenAnswer(invocation -> {
+            WarehouseRack rack = invocation.getArgument(0);
+            if (rack.getId() == null) rack.setId(UUID.randomUUID());
+            return rack;
+        });
+        when(binRepository.save(any(WarehouseBin.class))).thenAnswer(invocation -> {
+            WarehouseBin bin = invocation.getArgument(0);
+            if (bin.getId() == null) bin.setId(UUID.randomUUID());
+            return bin;
+        });
+
+        assertDoesNotThrow(() -> layoutService.saveLayoutBulk(warehouseId, userId, "TENANT", request));
+        verify(tenantWarehouseAccessService).requireWmsAccess(userId, warehouseId);
+        verify(rackRepository).save(argThat(rack -> "R_NEW".equals(rack.getCode())));
+        verify(binRepository).save(argThat(bin -> "B_NEW".equals(bin.getCode())));
+    }
+
+    @Test
+    void testSaveLayoutBulk_TenantCannotChangeSnapshotDimensions() {
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        doNothing().when(tenantWarehouseAccessService).requireWmsAccess(userId, warehouseId);
+        WarehouseLayout tenantLayout = WarehouseLayout.builder()
+                .id(UUID.randomUUID()).warehouse(warehouse).tenant(User.builder().id(userId).build())
+                .isDefault(false).width(new BigDecimal("100")).length(new BigDecimal("100"))
+                .height(new BigDecimal("10")).build();
+        when(layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId)).thenReturn(Optional.of(tenantLayout));
+
+        BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
+                .width(new BigDecimal("99")).length(new BigDecimal("100")).height(new BigDecimal("10"))
+                .racks(Collections.emptyList()).build();
+
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> layoutService.saveLayoutBulk(warehouseId, userId, "TENANT", request));
+
+        assertTrue(ex.getMessage().toLowerCase(Locale.ROOT).contains("dimension"));
+        verify(layoutRepository, never()).save(any(WarehouseLayout.class));
+    }
+
+    @Test
+    void testSaveLayoutBulk_TenantCanDeleteEmptyRackAndBin() {
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        doNothing().when(tenantWarehouseAccessService).requireWmsAccess(userId, warehouseId);
+        WarehouseLayout tenantLayout = WarehouseLayout.builder()
+                .id(UUID.randomUUID()).warehouse(warehouse).tenant(User.builder().id(userId).build())
+                .isDefault(false).width(new BigDecimal("100")).length(new BigDecimal("100"))
+                .height(new BigDecimal("10")).build();
+        when(layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId)).thenReturn(Optional.of(tenantLayout));
+        UUID rackId = UUID.randomUUID();
+        UUID binId = UUID.randomUUID();
+        WarehouseRack rack = WarehouseRack.builder().id(rackId).layout(tenantLayout).name("Rack A")
+                .code("R_A").coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
+                .width(new BigDecimal("10")).length(new BigDecimal("10")).height(new BigDecimal("5")).build();
+        WarehouseBin bin = WarehouseBin.builder().id(binId).rack(rack).name("Bin A")
+                .code("B_A").coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
+                .width(new BigDecimal("2")).length(new BigDecimal("2")).height(BigDecimal.ONE).build();
+        when(rackRepository.findAllByLayoutId(tenantLayout.getId())).thenReturn(List.of(rack));
+        when(binRepository.findAllByRackLayoutId(tenantLayout.getId())).thenReturn(List.of(bin));
+        when(stockBatchRepository.existsByBinIdAndQuantityGreaterThanAndIsDeletedFalse(binId, 0)).thenReturn(false);
+        when(stockBatchRepository.existsByRackIdAndQuantityGreaterThanAndIsDeletedFalse(rackId, 0)).thenReturn(false);
+        BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
+                .width(new BigDecimal("100")).length(new BigDecimal("100")).height(new BigDecimal("10"))
+                .racks(Collections.emptyList()).build();
+
+        assertDoesNotThrow(() -> layoutService.saveLayoutBulk(warehouseId, userId, "TENANT", request));
+        verify(binRepository).deleteById(binId);
+        verify(rackRepository).deleteById(rackId);
+    }
+
+    @Test
+    void testSaveLayoutBulk_TenantCannotDeleteOccupiedBin() {
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        doNothing().when(tenantWarehouseAccessService).requireWmsAccess(userId, warehouseId);
+        WarehouseLayout tenantLayout = WarehouseLayout.builder()
+                .id(UUID.randomUUID()).warehouse(warehouse).tenant(User.builder().id(userId).build())
+                .isDefault(false).width(new BigDecimal("100")).length(new BigDecimal("100"))
+                .height(new BigDecimal("10")).build();
+        when(layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId)).thenReturn(Optional.of(tenantLayout));
+        UUID rackId = UUID.randomUUID();
+        UUID binId = UUID.randomUUID();
+        WarehouseRack rack = WarehouseRack.builder().id(rackId).layout(tenantLayout).name("Rack A")
+                .code("R_A").coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
+                .width(new BigDecimal("10")).length(new BigDecimal("10")).height(new BigDecimal("5")).build();
+        WarehouseBin bin = WarehouseBin.builder().id(binId).rack(rack).name("Bin A")
+                .code("B_A").coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
+                .width(new BigDecimal("2")).length(new BigDecimal("2")).height(BigDecimal.ONE).build();
+        when(rackRepository.findAllByLayoutId(tenantLayout.getId())).thenReturn(List.of(rack));
+        when(binRepository.findAllByRackLayoutId(tenantLayout.getId())).thenReturn(List.of(bin));
+        when(stockBatchRepository.existsByBinIdAndQuantityGreaterThanAndIsDeletedFalse(binId, 0)).thenReturn(true);
+        BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
+                .width(new BigDecimal("100")).length(new BigDecimal("100")).height(new BigDecimal("10"))
+                .racks(Collections.emptyList()).build();
+
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> layoutService.saveLayoutBulk(warehouseId, userId, "TENANT", request));
+
+        assertTrue(ex.getMessage().contains("vẫn còn hàng tồn kho"));
+        verify(binRepository, never()).deleteById(any());
+    }
+
+    @Test
+    void testSaveLayoutBulk_TenantRackOutOfBoundsStillRejected() {
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        doNothing().when(tenantWarehouseAccessService).requireWmsAccess(userId, warehouseId);
+        WarehouseLayout tenantLayout = WarehouseLayout.builder()
+                .id(UUID.randomUUID()).warehouse(warehouse).tenant(User.builder().id(userId).build())
+                .isDefault(false).width(new BigDecimal("10")).length(new BigDecimal("10"))
+                .height(new BigDecimal("5")).build();
+        when(layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId)).thenReturn(Optional.of(tenantLayout));
+        when(rackRepository.findAllByLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
+        when(binRepository.findAllByRackLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
+
+        RackSaveRequest rack = RackSaveRequest.builder()
+                .name("Out of bounds").code("R_OUT")
+                .coordinateX(new BigDecimal("8")).coordinateY(BigDecimal.ZERO)
+                .width(new BigDecimal("3")).length(new BigDecimal("2")).height(new BigDecimal("2"))
+                .build();
+        BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
+                .width(new BigDecimal("10")).length(new BigDecimal("10")).height(new BigDecimal("5"))
+                .racks(List.of(rack)).build();
+
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> layoutService.saveLayoutBulk(warehouseId, userId, "TENANT", request));
+
+        assertTrue(ex.getMessage().contains("parent bounds"));
+        verify(rackRepository, never()).save(any(WarehouseRack.class));
+    }
+
+    @Test
+    void testSaveLayoutBulk_TenantOverlappingRacksStillRejected() {
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        doNothing().when(tenantWarehouseAccessService).requireWmsAccess(userId, warehouseId);
+        WarehouseLayout tenantLayout = WarehouseLayout.builder()
+                .id(UUID.randomUUID()).warehouse(warehouse).tenant(User.builder().id(userId).build())
+                .isDefault(false).width(new BigDecimal("20")).length(new BigDecimal("20"))
+                .height(new BigDecimal("5")).build();
+        when(layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId)).thenReturn(Optional.of(tenantLayout));
+        when(rackRepository.findAllByLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
+        when(binRepository.findAllByRackLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
+
+        RackSaveRequest first = RackSaveRequest.builder()
+                .name("Rack 1").code("R_1").coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
+                .width(new BigDecimal("6")).length(new BigDecimal("6")).height(new BigDecimal("3")).build();
+        RackSaveRequest second = RackSaveRequest.builder()
+                .name("Rack 2").code("R_2").coordinateX(new BigDecimal("5")).coordinateY(BigDecimal.ZERO)
+                .width(new BigDecimal("6")).length(new BigDecimal("6")).height(new BigDecimal("3")).build();
+        BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
+                .width(new BigDecimal("20")).length(new BigDecimal("20")).height(new BigDecimal("5"))
+                .racks(List.of(first, second)).build();
+
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> layoutService.saveLayoutBulk(warehouseId, userId, "TENANT", request));
+
+        assertTrue(ex.getMessage().contains("overlaps"));
+        verify(rackRepository, never()).save(any(WarehouseRack.class));
+    }
+
+    @Test
+    void testSaveLayoutBulk_TenantQuarterTurnRackUsesEffectiveBounds() {
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        doNothing().when(tenantWarehouseAccessService).requireWmsAccess(userId, warehouseId);
+        WarehouseLayout tenantLayout = WarehouseLayout.builder()
+                .id(UUID.randomUUID()).warehouse(warehouse).tenant(User.builder().id(userId).build())
+                .isDefault(false).width(new BigDecimal("10")).length(new BigDecimal("20"))
+                .height(new BigDecimal("5")).build();
+        when(layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId)).thenReturn(Optional.of(tenantLayout));
+        when(layoutRepository.save(tenantLayout)).thenReturn(tenantLayout);
+        when(rackRepository.findAllByLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
+        when(binRepository.findAllByRackLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
+        when(rackRepository.save(any(WarehouseRack.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        RackSaveRequest rotatedRack = RackSaveRequest.builder()
+                .name("Rotated Rack").code("R_ROTATED")
+                .coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
+                .rotation(90)
+                .width(new BigDecimal("15")).length(new BigDecimal("10")).height(new BigDecimal("2"))
+                .build();
+        BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
+                .width(new BigDecimal("10")).length(new BigDecimal("20")).height(new BigDecimal("5"))
+                .racks(List.of(rotatedRack)).build();
+
+        assertDoesNotThrow(() -> layoutService.saveLayoutBulk(warehouseId, userId, "TENANT", request));
+        verify(rackRepository).save(argThat(rack -> rack.getRotation() == 90
+                && "R_ROTATED".equals(rack.getCode())));
+    }
+
+    @Test
+    void testSaveLayoutBulk_TenantRejectsRackMaxVolumeBeyondGeometry() {
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        doNothing().when(tenantWarehouseAccessService).requireWmsAccess(userId, warehouseId);
+        WarehouseLayout tenantLayout = WarehouseLayout.builder()
+                .id(UUID.randomUUID()).warehouse(warehouse).tenant(User.builder().id(userId).build())
+                .isDefault(false).width(new BigDecimal("20")).length(new BigDecimal("20"))
+                .height(new BigDecimal("5")).build();
+        when(layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId)).thenReturn(Optional.of(tenantLayout));
+        when(layoutRepository.save(tenantLayout)).thenReturn(tenantLayout);
+        when(rackRepository.findAllByLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
+        when(binRepository.findAllByRackLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
+
+        RackSaveRequest oversizedCapacityRack = RackSaveRequest.builder()
+                .name("Oversized Capacity Rack").code("R_CAPACITY")
+                .coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
+                .width(new BigDecimal("2")).length(new BigDecimal("2")).height(new BigDecimal("2"))
+                .maxVolume(new BigDecimal("9"))
+                .build();
+        BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
+                .width(new BigDecimal("20")).length(new BigDecimal("20")).height(new BigDecimal("5"))
+                .racks(List.of(oversizedCapacityRack)).build();
+
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> layoutService.saveLayoutBulk(warehouseId, userId, "TENANT", request));
+
+        assertTrue(ex.getMessage().contains("maxVolume cannot exceed"));
+        verify(rackRepository, never()).save(any(WarehouseRack.class));
+    }
+
+    @Test
+    void testSaveLayoutBulk_TenantCannotUseRackIdOutsideItsSnapshot() {
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        doNothing().when(tenantWarehouseAccessService).requireWmsAccess(userId, warehouseId);
+        WarehouseLayout tenantLayout = WarehouseLayout.builder()
+                .id(UUID.randomUUID()).warehouse(warehouse).tenant(User.builder().id(userId).build())
+                .isDefault(false).width(new BigDecimal("20")).length(new BigDecimal("20"))
+                .height(new BigDecimal("5")).build();
+        when(layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId)).thenReturn(Optional.of(tenantLayout));
+        when(rackRepository.findAllByLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
+        when(binRepository.findAllByRackLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
+
+        RackSaveRequest foreignRack = RackSaveRequest.builder()
+                .id(UUID.randomUUID()).name("Foreign Rack").code("R_FOREIGN")
+                .coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
+                .width(new BigDecimal("5")).length(new BigDecimal("5")).height(new BigDecimal("3"))
+                .build();
+        BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
+                .width(new BigDecimal("20")).length(new BigDecimal("20")).height(new BigDecimal("5"))
+                .racks(List.of(foreignRack)).build();
+
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> layoutService.saveLayoutBulk(warehouseId, userId, "TENANT", request));
+
+        assertTrue(ex.getMessage().contains("does not belong to this layout"));
+        verify(rackRepository, never()).save(any(WarehouseRack.class));
+    }
+
+    @Test
+    void testSaveLayoutBulk_OwnerCanModifyDefaultLayoutIndependentlyFromTenancy() {
+        warehouse.setStatus(WarehouseStatus.AVAILABLE);
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)).thenReturn(Optional.of(defaultLayout));
+        when(rackRepository.findAllByLayoutId(defaultLayout.getId())).thenReturn(Collections.emptyList());
+        when(binRepository.findAllByRackLayoutId(defaultLayout.getId())).thenReturn(Collections.emptyList());
+        when(layoutRepository.save(any(WarehouseLayout.class))).thenReturn(defaultLayout);
+
+        BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
+                .width(new BigDecimal("100"))
+                .length(new BigDecimal("100"))
+                .height(new BigDecimal("10"))
+                .racks(Collections.emptyList())
+                .build();
+
+        assertDoesNotThrow(() ->
+                layoutService.saveLayoutBulk(warehouseId, userId, "OWNER", request));
+    }
+
+    @Test
+    void testSaveContractLayoutUsesTheExistingTenantLayoutAndSharedGeometryValidation() {
+        WarehouseLayout tenantLayout = WarehouseLayout.builder()
+                .id(UUID.randomUUID())
+                .warehouse(warehouse)
+                .tenant(owner)
+                .isDefault(false)
+                .width(new BigDecimal("100"))
+                .length(new BigDecimal("100"))
+                .height(new BigDecimal("10"))
+                .build();
+        when(layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId))
+                .thenReturn(Optional.of(tenantLayout));
+        when(rackRepository.findAllByLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
+        when(binRepository.findAllByRackLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
+
+        RackSaveRequest rack = RackSaveRequest.builder()
+                .name("Contract Rack")
+                .code("CONTRACT_RACK")
+                .coordinateX(new BigDecimal("60"))
+                .coordinateY(new BigDecimal("0"))
+                .width(new BigDecimal("50"))
+                .length(new BigDecimal("10"))
+                .height(new BigDecimal("5"))
+                .build();
+        BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
+                .width(new BigDecimal("100"))
+                .length(new BigDecimal("100"))
+                .height(new BigDecimal("10"))
+                .racks(List.of(rack))
+                .build();
+
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> layoutService.saveContractLayout(warehouseId, userId, request));
+
+        assertTrue(ex.getMessage().contains("parent bounds"));
+        verify(layoutRepository, never()).save(any(WarehouseLayout.class));
+    }
+
+    @Test
+    void testStableLayoutSnapshotSortsRacksBinsAndPositions() {
+        WarehouseBinResponse binB = WarehouseBinResponse.builder()
+                .id(UUID.randomUUID()).code("BIN-B").occupiedPositions(List.of("2:0", "1:0")).build();
+        WarehouseBinResponse binA = WarehouseBinResponse.builder()
+                .id(UUID.randomUUID()).code("BIN-A").occupiedPositions(List.of("1:0", "0:0")).build();
+        RackResponse rackB = RackResponse.builder().id(UUID.randomUUID()).code("RACK-B")
+                .bins(List.of(binB)).build();
+        RackResponse rackA = RackResponse.builder().id(UUID.randomUUID()).code("RACK-A")
+                .bins(List.of(binA)).build();
+        WarehouseLayoutResponse source = WarehouseLayoutResponse.builder()
+                .warehouseId(warehouseId)
+                .racks(List.of(rackB, rackA))
+                .positions(List.of("2:0", "0:0", "1:0"))
+                .build();
+
+        WarehouseLayoutResponse stable = layoutService.stabilizeLayoutSnapshot(source);
+
+        assertEquals(List.of("RACK-A", "RACK-B"),
+                stable.getRacks().stream().map(RackResponse::getCode).toList());
+        assertEquals(List.of("BIN-A"), stable.getRacks().get(0).getBins().stream()
+                .map(WarehouseBinResponse::getCode).toList());
+        assertEquals(List.of("0:0", "1:0", "2:0"), stable.getPositions());
+    }
 }
+

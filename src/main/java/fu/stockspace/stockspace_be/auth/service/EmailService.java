@@ -10,10 +10,12 @@ import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
-/**
- * Service gửi email thông báo.
- * Dùng @Async để không block luồng chính khi gửi mail.
- */
+import java.time.LocalDate;
+
+
+
+
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -27,12 +29,12 @@ public class EmailService {
     @Value("${app.frontend.url:http://localhost:5173}")
     private String frontendUrl;
 
-    // ==================== Welcome Email ====================
 
-    /**
-     * Gửi email chào mừng sau khi đăng ký thành công.
-     * Chạy bất đồng bộ để không làm chậm response đăng ký.
-     */
+
+
+
+
+
     @Async
     public void sendWelcomeEmail(String toEmail, String fullName) {
         try {
@@ -41,17 +43,17 @@ public class EmailService {
             sendHtmlEmail(toEmail, subject, content);
             log.info("Welcome email sent to: {}", toEmail);
         } catch (Exception e) {
-            // Email thất bại không nên làm hỏng luồng đăng ký
+
             log.error("Failed to send welcome email to {}: {}", toEmail, e.getMessage());
         }
     }
 
-    // ==================== Password Reset Token ====================
 
-    /**
-     * Gửi email chứa đường dẫn đặt lại mật khẩu.
-     * Chạy bất đồng bộ.
-     */
+
+
+
+
+
     @Async
     public void sendPasswordResetEmail(String toEmail, String fullName, String token) {
         try {
@@ -64,7 +66,7 @@ public class EmailService {
         }
     }
 
-    // ==================== Private helpers ====================
+
 
     private void sendHtmlEmail(String to, String subject, String htmlContent) throws MessagingException {
         MimeMessage message = mailSender.createMimeMessage();
@@ -72,7 +74,7 @@ public class EmailService {
         helper.setFrom(fromAddress);
         helper.setTo(to);
         helper.setSubject(subject);
-        helper.setText(htmlContent, true); // true = HTML
+        helper.setText(htmlContent, true);
         mailSender.send(message);
     }
 
@@ -166,17 +168,17 @@ public class EmailService {
                 </html>
                 """.formatted(fullName, resetLink, resetLink);
     }
-    // ==================== Staff Invitation ====================
 
-    /**
-     * Gửi email mời nhân viên kho.
-     * Chạy bất đồng bộ — thất bại email không ảnh hưởng luồng chính.
-     *
-     * @param toEmail     Email nhân viên nhận lời mời
-     * @param staffName   Tên nhân viên (Tenant nhập khi mời)
-     * @param tenantName  Tên doanh nghiệp / tên Tenant mời
-     * @param token       Token dùng một lần (UUID random, hết hạn sau 48h)
-     */
+
+
+
+
+
+
+
+
+
+
     @Async
     public void sendStaffInvitationEmail(String toEmail, String staffName, String tenantName, String token) {
         try {
@@ -187,6 +189,57 @@ public class EmailService {
         } catch (Exception e) {
             log.error("Failed to send staff invitation email to {}: {}", toEmail, e.getMessage());
         }
+    }
+
+    @Async
+    public void sendContractExpiryReminderEmail(
+            String toEmail, String fullName, String warehouseName, LocalDate endDate) {
+        if (toEmail == null || toEmail.isBlank()) {
+            return;
+        }
+
+        try {
+            String subject = "[StockSpace] Your warehouse rental contract is nearing expiration";
+            String content = buildContractExpiryReminderEmailContent(fullName, warehouseName, endDate);
+            sendHtmlEmail(toEmail, subject, content);
+            log.info("Contract expiry reminder email sent to: {} (warehouse: {})", toEmail, warehouseName);
+        } catch (Exception e) {
+            log.error("Failed to send contract expiry reminder email to {}: {}", toEmail, e.getMessage());
+        }
+    }
+
+    private String buildContractExpiryReminderEmailContent(
+            String fullName, String warehouseName, LocalDate endDate) {
+        return """
+                <!DOCTYPE html>
+                <html lang="en">
+                <head><meta charset="UTF-8"></head>
+                <body style="font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px;">
+                  <div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; padding: 40px;">
+                    <h1 style="color: #2563EB;">StockSpace</h1>
+                    <h2 style="color: #1F2937;">Warehouse contract expiry reminder</h2>
+                    <p style="color: #374151; line-height: 1.6;">Hello %s,</p>
+                    <p style="color: #374151; line-height: 1.6;">
+                      The rental contract for <strong>%s</strong> is scheduled to expire on
+                      <strong>%s</strong>.
+                    </p>
+                    <p style="color: #374151; line-height: 1.6;">
+                      Please review your warehouse plan and complete any required inventory actions before the expiry date.
+                    </p>
+                    <div style="text-align: center; margin: 30px 0;">
+                      <a href="%s" style="background-color: #2563EB; color: white; padding: 12px 30px; border-radius: 6px; text-decoration: none; font-weight: bold;">
+                        Open StockSpace
+                      </a>
+                    </div>
+                  </div>
+                </body>
+                </html>
+                """.formatted(
+                fullName != null ? fullName : "there",
+                warehouseName != null ? warehouseName : "your warehouse",
+                endDate,
+                frontendUrl
+        );
     }
 
     private String buildStaffInvitationEmailContent(String staffName, String tenantName, String email, String token) {

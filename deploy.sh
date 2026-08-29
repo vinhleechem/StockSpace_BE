@@ -1,13 +1,7 @@
 #!/bin/bash
-# =============================================================================
-# StockSpace — VPS Deploy Script
-# Chạy lần đầu: bash deploy.sh setup
-# Các lần sau:  bash deploy.sh deploy
-# =============================================================================
 
 set -e  # exit ngay khi có lỗi
 
-# ── Màu sắc terminal ──────────────────────────────────────────────────────────
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -19,22 +13,16 @@ log_success() { echo -e "${GREEN}[OK]${NC}    $1"; }
 log_warn()    { echo -e "${YELLOW}[WARN]${NC}  $1"; }
 log_error()   { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 
-# ── Cấu hình ──────────────────────────────────────────────────────────────────
 APP_DIR="/opt/stockspace"           # Thư mục chứa project trên VPS
 REPO_URL="https://github.com/vinhleechem/StockSpace_BE.git"   # Repository URL
 BRANCH="main"                       # Branch muốn deploy
 
-# =============================================================================
-# COMMAND: setup — Cài đặt môi trường lần đầu
-# =============================================================================
 setup() {
     log_info "=== Bắt đầu setup môi trường VPS ==="
 
-    # 1. Cập nhật hệ thống
     log_info "Cập nhật package list..."
     apt-get update -y && apt-get upgrade -y
 
-    # 2. Cài Docker
     if ! command -v docker &> /dev/null; then
         log_info "Cài Docker..."
         curl -fsSL https://get.docker.com | sh
@@ -45,7 +33,6 @@ setup() {
         log_success "Docker đã có: $(docker --version)"
     fi
 
-    # 3. Cài Docker Compose plugin
     if ! docker compose version &> /dev/null; then
         log_info "Cài Docker Compose plugin..."
         apt-get install -y docker-compose-plugin
@@ -54,17 +41,14 @@ setup() {
         log_success "Docker Compose đã có: $(docker compose version)"
     fi
 
-    # 4. Cài Git
     if ! command -v git &> /dev/null; then
         log_info "Cài Git..."
         apt-get install -y git
     fi
 
-    # 5. Tạo thư mục project
     log_info "Tạo thư mục $APP_DIR..."
     mkdir -p "$APP_DIR"
 
-    # 6. Clone repo
     if [ ! -d "$APP_DIR/.git" ]; then
         log_info "Clone repository..."
         git clone -b "$BRANCH" "$REPO_URL" "$APP_DIR"
@@ -73,7 +57,6 @@ setup() {
         log_warn "Repo đã tồn tại, bỏ qua clone."
     fi
 
-    # 7. Tạo file .env
     if [ ! -f "$APP_DIR/.env" ]; then
         log_warn "Chưa có file .env — copy từ .env.example..."
         cp "$APP_DIR/.env.example" "$APP_DIR/.env"
@@ -83,7 +66,6 @@ setup() {
         log_success "File .env đã tồn tại."
     fi
 
-    # 8. Tạo thư mục ssl (chứa cert nếu dùng HTTPS)
     mkdir -p "$APP_DIR/nginx/ssl"
 
     log_success "=== Setup hoàn tất! ==="
@@ -92,34 +74,45 @@ setup() {
     log_info "  2. Deploy:    bash $APP_DIR/deploy.sh deploy"
 }
 
-# =============================================================================
-# COMMAND: deploy — Pull code mới và restart service
-# =============================================================================
 deploy() {
     log_info "=== Bắt đầu deploy StockSpace ==="
 
     cd "$APP_DIR"
 
-    # Kiểm tra file .env
     if [ ! -f ".env" ]; then
         log_error "Không tìm thấy .env! Chạy 'bash deploy.sh setup' trước."
     fi
 
-    # Kiểm tra các biến bắt buộc
     check_env
 
-    # 1. Pull code mới
     log_info "Pull code từ branch $BRANCH..."
     git fetch origin
     git reset --hard "origin/$BRANCH"
     log_success "Code đã cập nhật."
 
-    # 2. Build và restart với Docker Compose
+    log_info "Khởi động PostgreSQL và chạy migration runner..."
+    docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d postgres
+    DB_READY=false
+    for ATTEMPT in $(seq 1 30); do
+        if docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+            exec -T postgres pg_isready \
+            -U "${DB_USERNAME:-postgres}" \
+            -d "${DB_NAME:-stockspace}" > /dev/null 2>&1; then
+            DB_READY=true
+            break
+        fi
+        sleep 2
+    done
+    if [ "$DB_READY" != "true" ]; then
+        log_error "PostgreSQL chưa sẵn sàng để chạy migration."
+    fi
+    bash "$APP_DIR/ops/run-migrations.sh" --docker
+    log_success "Production migrations completed."
+
     log_info "Build image và khởi động containers..."
     docker compose pull postgres nginx 2>/dev/null || true  # Pull image mới nhất từ registry
     docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build --remove-orphans
 
-    # 3. Đợi app healthy
     log_info "Đợi ứng dụng khởi động (tối đa 120s)..."
     TIMEOUT=120
     ELAPSED=0
@@ -133,7 +126,6 @@ deploy() {
     done
     echo ""
 
-    # 4. Dọn dẹp image cũ
     log_info "Dọn dẹp Docker images không dùng..."
     docker image prune -f
 
@@ -141,9 +133,6 @@ deploy() {
     docker compose ps
 }
 
-# =============================================================================
-# COMMAND: logs — Xem log realtime
-# =============================================================================
 show_logs() {
     cd "$APP_DIR"
     SERVICE=${2:-app}  # Mặc định xem log của app, truyền 'postgres'/'nginx' để xem service khác
@@ -151,9 +140,6 @@ show_logs() {
     docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f "$SERVICE"
 }
 
-# =============================================================================
-# COMMAND: restart — Restart service
-# =============================================================================
 restart_service() {
     cd "$APP_DIR"
     SERVICE=${2:-app}
@@ -162,9 +148,6 @@ restart_service() {
     log_success "Đã restart $SERVICE"
 }
 
-# =============================================================================
-# COMMAND: stop — Dừng toàn bộ service
-# =============================================================================
 stop_all() {
     cd "$APP_DIR"
     log_warn "Dừng toàn bộ services..."
@@ -172,9 +155,6 @@ stop_all() {
     log_success "Đã dừng tất cả services."
 }
 
-# =============================================================================
-# COMMAND: status — Xem trạng thái
-# =============================================================================
 show_status() {
     cd "$APP_DIR"
     log_info "=== Trạng thái containers ==="
@@ -184,9 +164,6 @@ show_status() {
     docker system df
 }
 
-# =============================================================================
-# COMMAND: backup — Backup database
-# =============================================================================
 backup_db() {
     cd "$APP_DIR"
     source .env
@@ -205,14 +182,11 @@ backup_db() {
     ls -lh "$BACKUP_DIR"
 }
 
-# =============================================================================
-# Kiểm tra các biến .env bắt buộc
-# =============================================================================
 check_env() {
     log_info "Kiểm tra biến môi trường..."
     source .env
 
-    REQUIRED_VARS=("DB_PASSWORD" "JWT_SECRET" "CLOUDINARY_CLOUD_NAME" "CLOUDINARY_API_KEY" "CLOUDINARY_API_SECRET")
+    REQUIRED_VARS=("DB_PASSWORD" "JWT_SECRET" "CLOUDINARY_CLOUD_NAME" "CLOUDINARY_API_KEY" "CLOUDINARY_API_SECRET" "OPENROUTER_API_KEY" "OPENROUTER_MODEL")
     MISSING=()
 
     for VAR in "${REQUIRED_VARS[@]}"; do
@@ -225,13 +199,16 @@ check_env() {
     if [ ${#MISSING[@]} -gt 0 ]; then
         log_error "Các biến sau chưa được điền trong .env: ${MISSING[*]}"
     fi
+    if [ "${PUBLIC_HTTPS_READY:-false}" != "true" ]; then
+        if [ "${ALLOW_INSECURE_HTTP:-false}" != "true" ]; then
+            log_error "Production phải có HTTPS trước khi deploy (PUBLIC_HTTPS_READY=true). Chỉ dùng ALLOW_INSECURE_HTTP=true cho môi trường test tạm thời."
+        fi
+        log_warn "Đang deploy HTTP không mã hóa vì ALLOW_INSECURE_HTTP=true. Không dùng cấu hình này cho production public."
+    fi
 
     log_success "Tất cả biến bắt buộc đã có."
 }
 
-# =============================================================================
-# ENTRYPOINT
-# =============================================================================
 print_usage() {
     echo ""
     echo "  StockSpace Deploy Script"

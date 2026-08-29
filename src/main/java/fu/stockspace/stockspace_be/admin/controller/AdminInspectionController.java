@@ -14,22 +14,22 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-/**
- * Controller dành riêng cho Administrator để quản lý và phân công kiểm định kho bãi.
- */
+
+
+
 @Tag(name = "Admin — Inspections Management", description = "Các API phân công và quản lý kiểm định kho bãi của Admin")
 @RestController
 @RequestMapping("/api/admin/inspections")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ADMIN')")
+@PreAuthorize("@rbac.hasPermission('INSPECTION_ASSIGN')")
 public class AdminInspectionController {
 
     private final InspectionService inspectionService;
 
-    /**
-     * POST /api/admin/inspections/{id}/assign?inspectorId=...
-     * Admin gán Inspector cho yêu cầu kiểm định kho bãi.
-     */
+
+
+
+
     @PostMapping("/{id}/assign")
     @Operation(summary = "Phân công Inspector kiểm định kho bãi (Admin)")
     public ResponseEntity<ApiResponse<InspectionReportResponse>> assignInspector(
@@ -41,10 +41,10 @@ public class AdminInspectionController {
         return ResponseEntity.ok(ApiResponse.success("Phân công Inspector thành công. Trạng thái kiểm định chuyển sang Đang thực hiện.", response));
     }
 
-    /**
-     * GET /api/admin/inspections
-     * Admin xem danh sách tất cả các yêu cầu kiểm định (có lọc trạng thái và phân trang).
-     */
+
+
+
+
     @GetMapping
     @Operation(summary = "Xem tất cả danh sách yêu cầu kiểm định (Admin)")
     public ResponseEntity<ApiResponse<PagedResponse<InspectionReportResponse>>> getAllInspections(

@@ -12,7 +12,9 @@ import fu.stockspace.stockspace_be.warehouse.service.WarehouseService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -34,23 +36,30 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-/**
- * Controller xử lý các API Quản lý Kho của Warehouse Owner.
- *
- * Endpoints:
- *   POST   /api/owner/warehouses                       — Tạo kho mới
- *   PUT    /api/owner/warehouses/{id}                  — Cập nhật thông tin kho
- *   DELETE /api/owner/warehouses/{id}                  — Xoá kho
- *   PATCH  /api/owner/warehouses/{id}/status           — Đổi trạng thái (AVAILABLE/INACTIVE)
- *   GET    /api/owner/warehouses                       — Danh sách kho của mình (phân trang)
- *   POST   /api/owner/warehouses/{id}/images           — Thêm ảnh
- *   PUT    /api/owner/warehouses/{id}/images           — Thay thế toàn bộ ảnh
- */
+
+
+
+
+
+
+
+
+
+
+
+
 @Tag(name = "Owner — Warehouse Management", description = "Quản lý kho bãi của Owner")
 @RestController
 @RequestMapping("/api/owner/warehouses")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+@ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Warehouse is not owned by the caller",
+                content = @Content(schema = @Schema(implementation = ApiResponse.class),
+                        examples = @ExampleObject(value = "{\"success\":false,\"code\":\"WAREHOUSE_NOT_OWNED\",\"message\":\"You are not the warehouse owner\"}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Warehouse not found",
+                content = @Content(schema = @Schema(implementation = ApiResponse.class),
+                        examples = @ExampleObject(value = "{\"success\":false,\"code\":\"WAREHOUSE_NOT_FOUND\",\"message\":\"Warehouse not found\"}")))
+})
 public class OwnerWarehouseController {
 
     private final WarehouseService warehouseService;
@@ -58,14 +67,15 @@ public class OwnerWarehouseController {
     private final ObjectMapper objectMapper;
     private final Validator validator;
 
-    // ==================== Create ====================
 
-    /**
-     * POST /api/owner/warehouses
-     * Tạo mới một Warehouse listing.
-     * Status ban đầu sẽ là PENDING_APPROVAL.
-     */
+
+
+
+
+
+
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@rbac.hasPermission('WAREHOUSE_CREATE')")
     @Operation(summary = "Tạo warehouse mới (Owner)")
     public ResponseEntity<ApiResponse<WarehouseResponse>> create(
             @Parameter(
@@ -104,13 +114,14 @@ public class OwnerWarehouseController {
                 .body(ApiResponse.success("Tạo kho thành công. Đang chờ Admin xét duyệt.", response));
     }
 
-    // ==================== Read ====================
 
-    /**
-     * GET /api/owner/warehouses
-     * Danh sách kho của Owner hiện tại, có phân trang và sắp xếp.
-     */
+
+
+
+
+
     @GetMapping
+    @PreAuthorize("@rbac.hasPermission('WAREHOUSE_READ')")
     @Operation(summary = "Danh sách kho của Owner (phân trang)")
     public ResponseEntity<ApiResponse<PagedResponse<WarehouseResponse>>> getMyWarehouses(
             @RequestParam(defaultValue = "0") int page,
@@ -123,13 +134,14 @@ public class OwnerWarehouseController {
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách kho thành công", result));
     }
 
-    // ==================== Update ====================
 
-    /**
-     * PUT /api/owner/warehouses/{id}
-     * Cập nhật thông tin kho (name, address, description, price, capacity, type).
-     */
+
+
+
+
+
     @PutMapping("/{id}")
+    @PreAuthorize("@rbac.hasPermission('WAREHOUSE_UPDATE')")
     @Operation(summary = "Cập nhật thông tin warehouse (Owner)")
     public ResponseEntity<ApiResponse<WarehouseResponse>> update(
             @PathVariable UUID id,
@@ -140,14 +152,15 @@ public class OwnerWarehouseController {
         return ResponseEntity.ok(ApiResponse.success("Cập nhật kho thành công", response));
     }
 
-    // ==================== Status ====================
 
-    /**
-     * PATCH /api/owner/warehouses/{id}/status?status=INACTIVE
-     * Owner tắt/mở listing (AVAILABLE hoặc INACTIVE).
-     * Không thể tự set RENTED.
-     */
+
+
+
+
+
+
     @PatchMapping("/{id}/status")
+    @PreAuthorize("@rbac.hasPermission('WAREHOUSE_UPDATE')")
     @Operation(summary = "Cập nhật trạng thái warehouse (AVAILABLE / INACTIVE)")
     public ResponseEntity<ApiResponse<WarehouseResponse>> updateStatus(
             @PathVariable UUID id,
@@ -158,13 +171,24 @@ public class OwnerWarehouseController {
         return ResponseEntity.ok(ApiResponse.success("Cập nhật trạng thái kho thành công", response));
     }
 
-    // ==================== Delete ====================
+    @PostMapping("/{id}/resubmit")
+    @PreAuthorize("@rbac.hasPermission('WAREHOUSE_UPDATE')")
+    @Operation(summary = "Gửi lại bài đăng warehouse sau khi bị từ chối")
+    public ResponseEntity<ApiResponse<WarehouseResponse>> resubmit(@PathVariable UUID id) {
+        UUID ownerId = getCurrentUserId();
+        WarehouseResponse response = warehouseService.resubmitWarehouse(ownerId, id);
+        return ResponseEntity.ok(ApiResponse.success(
+                "Gửi lại bài đăng thành công. Vui lòng chọn gói và thanh toán lại.", response));
+    }
 
-    /**
-     * DELETE /api/owner/warehouses/{id}
-     * Xoá warehouse. Không xoá được khi đang có Tenant thuê.
-     */
+
+
+
+
+
+
     @DeleteMapping("/{id}")
+    @PreAuthorize("@rbac.hasPermission('WAREHOUSE_DELETE')")
     @Operation(summary = "Xoá warehouse (Owner)")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable UUID id) {
         UUID ownerId = getCurrentUserId();
@@ -172,14 +196,15 @@ public class OwnerWarehouseController {
         return ResponseEntity.ok(ApiResponse.success("Xoá kho thành công", null));
     }
 
-    // ==================== Images ====================
 
-    /**
-     * POST /api/owner/warehouses/{id}/images
-     * Thêm ảnh vào warehouse (tối đa 10 ảnh).
-     * Body: { "imageUrls": ["url1", "url2"] }
-     */
+
+
+
+
+
+
     @PostMapping(value = "/{id}/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@rbac.hasPermission('WAREHOUSE_UPDATE')")
     @Operation(summary = "Thêm ảnh vào warehouse")
     public ResponseEntity<ApiResponse<List<String>>> addImages(
             @PathVariable UUID id,
@@ -192,11 +217,12 @@ public class OwnerWarehouseController {
                 .body(ApiResponse.success("Thêm ảnh thành công", saved));
     }
 
-    /**
-     * PUT /api/owner/warehouses/{id}/images
-     * Thay thế toàn bộ ảnh bằng danh sách mới.
-     */
+
+
+
+
     @PutMapping(value = "/{id}/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@rbac.hasPermission('WAREHOUSE_UPDATE')")
     @Operation(summary = "Thay thế toàn bộ ảnh warehouse")
     public ResponseEntity<ApiResponse<List<String>>> replaceImages(
             @PathVariable UUID id,
@@ -208,7 +234,7 @@ public class OwnerWarehouseController {
         return ResponseEntity.ok(ApiResponse.success("Cập nhật ảnh thành công", saved));
     }
 
-    // ==================== Private helpers ====================
+
 
     private UUID getCurrentUserId() {
         return SecurityUtil.getCurrentUser()

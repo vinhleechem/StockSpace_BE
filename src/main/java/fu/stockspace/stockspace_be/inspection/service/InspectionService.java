@@ -2,11 +2,13 @@ package fu.stockspace.stockspace_be.inspection.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import fu.stockspace.stockspace_be.auth.entity.RoleType;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.inspection.dto.InspectionReportResponse;
 import fu.stockspace.stockspace_be.inspection.dto.SubmitInspectionRequest;
@@ -26,14 +28,14 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-/**
- * Service xử lý nghiệp vụ Inspection (Kiểm định kho).
- *
- * Luồng:
- *   1. Owner gửi yêu cầu kiểm định → PENDING
- *   2. Admin gán Inspector → IN_PROGRESS
- *   3. Inspector nộp báo cáo → PASSED (verify kho) | FAILED
- */
+
+
+
+
+
+
+
+
 import java.util.UUID;
 import fu.stockspace.stockspace_be.wallet.service.WalletService;
 import fu.stockspace.stockspace_be.common.service.SystemConfigService;
@@ -54,23 +56,26 @@ public class InspectionService {
     private final SystemConfigService systemConfigService;
     private final NotificationService notificationService;
 
-    // ==================== Owner ====================
 
-    /**
-     * Owner gửi yêu cầu kiểm định cho kho.
-     * Mỗi kho chỉ có 1 yêu cầu PENDING tại một thời điểm.
-     */
+
+
+
+
+
     @Transactional
     public InspectionReportResponse requestInspection(UUID ownerId, UUID warehouseId) {
         Warehouse warehouse = warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId)
                 .orElseThrow(() -> new ForbiddenException(ErrorCode.WAREHOUSE_NOT_OWNED));
 
-        // Không cho phép gửi yêu cầu kiểm định khi kho đang được thuê
-        if (warehouse.getStatus() == WarehouseStatus.RENTED) {
-            throw new BadRequestException(ErrorCode.INSPECTION_CANNOT_BE_REQUESTED_WHEN_RENTED);
+        if (warehouse.getStatus() != WarehouseStatus.AVAILABLE) {
+            throw new BadRequestException(ErrorCode.INSPECTION_WAREHOUSE_NOT_AVAILABLE);
         }
 
-        // Kiểm tra đã có PENDING inspection chưa
+        if (warehouse.isVerified()) {
+            throw new ResourceConflictException(ErrorCode.WAREHOUSE_ALREADY_VERIFIED);
+        }
+
+
         boolean hasPending = inspectionRepository.findByWarehouseId(warehouseId).stream()
                 .anyMatch(r -> r.getStatus() == InspectionStatus.PENDING
                         || r.getStatus() == InspectionStatus.IN_PROGRESS);
@@ -78,7 +83,7 @@ public class InspectionService {
             throw new BadRequestException(ErrorCode.INSPECTION_ALREADY_SUBMITTED);
         }
 
-        // Khấu trừ phí gửi yêu cầu kiểm định
+
         BigDecimal fee = systemConfigService.getBigDecimalValue("inspection_fee", new BigDecimal("40000"));
         if (fee.compareTo(BigDecimal.ZERO) > 0) {
             walletService.deductBalance(
@@ -98,12 +103,26 @@ public class InspectionService {
 
         report = inspectionRepository.save(report);
         log.info("Owner {} requested inspection for warehouse {} with fee {}", ownerId, warehouseId, fee);
+
+        try {
+            final String whName = warehouse.getName();
+            userRepository.findFirstByRoles_Name(RoleType.ROLE_ADMIN.name())
+                    .ifPresent(admin -> notificationService.push(
+                            admin.getId(),
+                            "Yêu cầu kiểm định kho mới",
+                            "Chủ kho vừa gửi yêu cầu kiểm định cho kho '" + whName + "'. Vui lòng phân công thanh tra viên.",
+                            "INSPECTION"
+                    ));
+        } catch (Exception e) {
+            log.warn("Failed to push inspection request notification to admin: {}", e.getMessage());
+        }
+
         return mapToResponse(report);
     }
 
-    /**
-     * Owner xem lịch sử kiểm định kho của mình.
-     */
+
+
+
     @Transactional(readOnly = true)
     public Page<InspectionReportResponse> getMyInspections(UUID ownerId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
@@ -111,11 +130,11 @@ public class InspectionService {
                 .map(this::mapToResponse);
     }
 
-    // ==================== Inspector ====================
 
-    /**
-     * Inspector xem danh sách inspection được gán (phân trang).
-     */
+
+
+
+
     @Transactional(readOnly = true)
     public Page<InspectionReportResponse> getAssignedInspections(UUID inspectorId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
@@ -123,33 +142,33 @@ public class InspectionService {
                 .map(this::mapToResponse);
     }
 
-    /**
-     * Nếu PASSED → Warehouse.isVerified = true (đã kiểm định)
-     * Nếu FAILED → Warehouse.isVerified = false (chưa/không đạt kiểm định)
-     */
+
+
+
+
     @Transactional
     public InspectionReportResponse submitReport(UUID inspectorId, UUID inspectionId,
                                                   SubmitInspectionRequest request) {
         InspectionReport report = inspectionRepository.findById(inspectionId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.INSPECTION_NOT_FOUND));
 
-        // Inspector chỉ nộp được báo cáo của mình
+
         if (report.getInspector() == null || !report.getInspector().getId().equals(inspectorId)) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
 
-        // Chỉ submit được khi IN_PROGRESS
+
         if (report.getStatus() != InspectionStatus.IN_PROGRESS) {
             throw new BadRequestException(ErrorCode.INSPECTION_ALREADY_SUBMITTED);
         }
 
-        // Validate chỉ PASSED hoặc FAILED
+
         if (request.getStatus() != InspectionStatus.PASSED
                 && request.getStatus() != InspectionStatus.FAILED) {
             throw new BadRequestException(ErrorCode.INSPECTION_ALREADY_SUBMITTED);
         }
 
-        // Chuyển checklist thành JSON string
+
         String checklistJson = null;
         if (request.getChecklistData() != null) {
             try {
@@ -169,7 +188,7 @@ public class InspectionService {
         report.setInspectedAt(LocalDateTime.now());
         report = inspectionRepository.save(report);
 
-        // Nếu PASSED → verify kho
+
         if (request.getStatus() == InspectionStatus.PASSED) {
             warehouseService.markAsVerifiedByInspection(report.getWarehouse().getId());
             log.info("Inspector {} submitted PASSED report for warehouse {}",
@@ -202,12 +221,12 @@ public class InspectionService {
         return mapToResponse(report);
     }
 
-    // ==================== Admin (internal) ====================
 
-    /**
-     * Admin gán Inspector cho yêu cầu kiểm định.
-     * Đổi status → IN_PROGRESS.
-     */
+
+
+
+
+
     @Transactional
     public InspectionReportResponse assignInspector(UUID inspectionId, UUID inspectorId) {
         InspectionReport report = inspectionRepository.findById(inspectionId)
@@ -237,9 +256,9 @@ public class InspectionService {
         return mapToResponse(report);
     }
 
-    /**
-     * Admin xem tất cả inspections (filter theo status).
-     */
+
+
+
     @Transactional(readOnly = true)
     public Page<InspectionReportResponse> getAllInspections(InspectionStatus status, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
@@ -247,7 +266,15 @@ public class InspectionService {
                 .map(this::mapToResponse);
     }
 
-    // ==================== Private helpers ====================
+    @Transactional(readOnly = true)
+    public InspectionReportResponse getInspectionById(UUID inspectionId) {
+        InspectionReport report = inspectionRepository.findById(inspectionId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.INSPECTION_NOT_FOUND));
+        return mapToResponse(report);
+    }
+
+
+
 
     private InspectionReportResponse mapToResponse(InspectionReport r) {
         var warehouse = r.getWarehouse();

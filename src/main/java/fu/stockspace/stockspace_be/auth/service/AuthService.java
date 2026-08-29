@@ -11,6 +11,7 @@ import fu.stockspace.stockspace_be.auth.security.JwtUtil;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.UnauthorizedException;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,10 +30,10 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-/**
- * Service xử lý logic đăng ký, đăng nhập, refresh token, logout,
- * quên mật khẩu và đăng nhập Google OAuth.
- */
+
+
+
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -49,6 +50,7 @@ public class AuthService {
     private final OutboundAuthClient outboundAuthClient;
     private final OutboundUserClient outboundUserClient;
     private final fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository tenantMemberRepository;
+    private final fu.stockspace.stockspace_be.wallet.service.WalletService walletService;
 
     @Value("${app.google.client-id}")
     private String googleClientId;
@@ -59,7 +61,7 @@ public class AuthService {
     @Value("${app.google.redirect-uri}")
     private String googleRedirectUri;
 
-    // Chỉ OWNER và TENANT được tự register
+
     private static final Set<RoleType> SELF_REGISTER_ROLES = Set.of(RoleType.ROLE_OWNER, RoleType.ROLE_TENANT);
 
     private static final String GOOGLE_GRANT_TYPE = "authorization_code";
@@ -68,12 +70,12 @@ public class AuthService {
 
     private final SecureRandom secureRandom = new SecureRandom();
 
-    // ==================== Register ====================
 
-    /**
-     * Đăng ký tài khoản mới (chỉ OWNER và TENANT).
-     * Gửi email chào mừng bất đồng bộ sau khi tạo thành công.
-     */
+
+
+
+
+
     @Transactional
     public AuthResult register(RegisterRequest request) {
         if (!SELF_REGISTER_ROLES.contains(request.getRole())) {
@@ -100,20 +102,23 @@ public class AuthService {
         user = userRepository.save(user);
         log.info("New user registered: {} with role {}", user.getEmail(), dbRole.getName());
 
-        // Gửi email chào mừng (bất đồng bộ — không block response)
+
+        walletService.getOrCreateWallet(user.getId());
+
+
         emailService.sendWelcomeEmail(user.getEmail(), user.getFullName());
 
         return buildAuthResult(user);
     }
 
-    // ==================== Login ====================
 
-    /**
-     * Đăng nhập — trả về accessToken trong body + refreshToken qua cookie.
-     */
+
+
+
+
     @Transactional
     public AuthResult login(LoginRequest request) {
-        // Kiểm tra xem user có dùng Google account không
+
         userRepository.findByEmail(request.getEmail()).ifPresent(user -> {
             if (user.getProvider() == AuthProvider.GOOGLE) {
                 throw new ResourceConflictException(ErrorCode.CANNOT_LOGIN_GOOGLE_WITH_PASSWORD);
@@ -134,22 +139,22 @@ public class AuthService {
         return buildAuthResult(user);
     }
 
-    // ==================== Google OAuth ====================
 
-    /**
-     * Đăng nhập / Đăng ký bằng Google OAuth authorization code.
-     * Flow:
-     *  1. Exchange code → Google access token (OutboundAuthClient)
-     *  2. Dùng access token → lấy Google user info (OutboundUserClient)
-     *  3. Tìm user theo email:
-     *     - Đã tồn tại (LOCAL): ném lỗi → "dùng email/password"
-     *     - Đã tồn tại (GOOGLE): login bình thường
-     *     - Chưa có: tạo mới với role do FE truyền lên (OWNER hoặc TENANT), mặc định TENANT
-     */
+
+
+
+
+
+
+
+
+
+
+
     @Transactional
     public AuthResult loginWithGoogle(String code, String requestedRole) {
         try {
-            // Bước 1: Exchange code → access token
+
             MultiValueMap<String, String> tokenRequest = new LinkedMultiValueMap<>();
             tokenRequest.add("code", code);
             tokenRequest.add("client_id", googleClientId);
@@ -159,26 +164,26 @@ public class AuthService {
 
             ExchangeTokenResponse tokenResponse = outboundAuthClient.exchangeToken(tokenRequest);
 
-            // Bước 2: Lấy thông tin user từ Google
+
             GoogleUserInfo userInfo = outboundUserClient.getUserInfo(GOOGLE_RESPONSE_FORMAT, tokenResponse.getAccessToken());
             log.info("Google OAuth: user info retrieved for email: {}", userInfo.getEmail());
 
-            // Bước 3: Xử lý user
+
             User user = userRepository.findByEmail(userInfo.getEmail())
                     .map(existing -> {
                         if (!existing.isActive()) {
                             throw new ResourceConflictException(ErrorCode.USER_LOCKED);
                         }
-                        // Nếu là tài khoản LOCAL → không cho login bằng Google
+
                         if (existing.getProvider() == AuthProvider.LOCAL) {
                             throw new ResourceConflictException(ErrorCode.CANNOT_LOGIN_PASSWORD_WITH_GOOGLE);
                         }
-                        // Tài khoản GOOGLE → cập nhật avatar (có thể thay đổi)
+
                         existing.setAvatarUrl(userInfo.getPicture());
                         return userRepository.save(existing);
                     })
                     .orElseGet(() -> {
-                        // Xác định role: FE truyền lên ROLE_OWNER hoặc ROLE_TENANT; mặc định ROLE_TENANT
+
                         RoleType roleType = RoleType.ROLE_OWNER.name().equals(requestedRole)
                                 ? RoleType.ROLE_OWNER
                                 : RoleType.ROLE_TENANT;
@@ -186,7 +191,7 @@ public class AuthService {
                                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.ROLE_NOT_FOUND));
                         log.info("Google OAuth: assigning role [{}] to new user", roleType.name());
 
-                        // Build fullName từ givenName + familyName hoặc dùng name
+
                         String fullName = userInfo.getName() != null ? userInfo.getName()
                                 : ((userInfo.getGivenName() != null ? userInfo.getGivenName() : "")
                                 + " " + (userInfo.getFamilyName() != null ? userInfo.getFamilyName() : "")).trim();
@@ -204,7 +209,9 @@ public class AuthService {
 
                         User saved = userRepository.save(newUser);
                         log.info("New Google user registered: {}", saved.getEmail());
-                        // Gửi email chào mừng
+
+                        walletService.getOrCreateWallet(saved.getId());
+
                         emailService.sendWelcomeEmail(saved.getEmail(), saved.getFullName());
                         return saved;
                     });
@@ -212,32 +219,32 @@ public class AuthService {
             return buildAuthResult(user);
 
         } catch (ResourceConflictException | ResourceNotFoundException e) {
-            throw e; // Re-throw business exceptions
+            throw e;
         } catch (Exception e) {
             log.error("Google OAuth login failed: {}", e.getMessage(), e);
             throw new BadRequestException(ErrorCode.GOOGLE_AUTH_FAILED);
         }
     }
 
-    // ==================== Forgot Password ====================
 
-    /**
-     * Gửi đường dẫn đặt lại mật khẩu về email.
-     * Luôn trả về thành công dù email không tồn tại (bảo mật — tránh leak email).
-     */
+
+
+
+
+
     @Transactional
     public void forgotPassword(String email) {
         userRepository.findByEmail(email).ifPresent(user -> {
             if (user.getProvider() == AuthProvider.GOOGLE) {
-                // Google account không có mật khẩu để reset
+
                 log.warn("Forgot password attempted for Google account: {}", email);
                 return;
             }
 
-            // Xóa token cũ (nếu có)
+
             passwordResetTokenRepository.deleteAllByUser(user);
 
-            // Sinh UUID token
+
             String token = UUID.randomUUID().toString();
 
             PasswordResetToken resetToken = PasswordResetToken.builder()
@@ -247,15 +254,15 @@ public class AuthService {
                     .build();
             passwordResetTokenRepository.save(resetToken);
 
-            // Gửi email đặt lại mật khẩu (bất đồng bộ)
+
             emailService.sendPasswordResetEmail(user.getEmail(), user.getFullName(), token);
             log.info("Password reset token sent for user: {}", email);
         });
     }
 
-    /**
-     * Xác thực token và đặt lại mật khẩu mới.
-     */
+
+
+
     @Transactional
     public void resetPassword(ResetPasswordRequest request) {
         User user = userRepository.findByEmail(request.getEmail())
@@ -274,28 +281,32 @@ public class AuthService {
             throw new BadRequestException(ErrorCode.RESET_TOKEN_EXPIRED);
         }
 
-        // Đặt lại mật khẩu
+
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
 
-        // Xóa token đã dùng
+
         passwordResetTokenRepository.delete(resetToken);
 
-        // Logout tất cả thiết bị (vì mật khẩu đã đổi)
+
         refreshTokenService.deleteAllTokensForUser(user);
 
         log.info("Password reset successfully for user: {}", user.getEmail());
     }
 
-    // ==================== Refresh Token ====================
 
-    /**
-     * Dùng refresh token (từ cookie) để lấy access token mới.
-     */
-    @Transactional
+
+
+
+
+    @Transactional(noRollbackFor = UnauthorizedException.class)
     public AuthResult refresh(String refreshTokenValue) {
         RefreshToken oldRefreshToken = refreshTokenService.validateRefreshToken(refreshTokenValue);
         User user = oldRefreshToken.getUser();
+        if (!user.isEnabled() || user.isDeleted()) {
+            refreshTokenService.deleteAllTokensForUser(user);
+            throw new UnauthorizedException(ErrorCode.USER_LOCKED);
+        }
 
         refreshTokenService.deleteToken(refreshTokenValue);
 
@@ -303,7 +314,7 @@ public class AuthService {
         return buildAuthResult(user);
     }
 
-    // ==================== Logout ====================
+
 
     @Transactional
     public void logout(String refreshTokenValue) {
@@ -317,10 +328,10 @@ public class AuthService {
         refreshTokenService.deleteAllTokensForUser(user);
     }
 
-    // ==================== Private helpers ====================
+
 
     private AuthResult buildAuthResult(User user) {
-        // Resolve active tenantId if user is STAFF
+
         UUID tenantId = null;
         boolean isStaff = user.getRoles().stream()
                 .anyMatch(role -> role.getName().equals(fu.stockspace.stockspace_be.auth.entity.RoleType.ROLE_STAFF.name()));
@@ -353,7 +364,7 @@ public class AuthService {
         return new AuthResult(loginResponse, refreshToken.getToken());
     }
 
-    /** Sinh mật khẩu ngẫu nhiên cho tài khoản Google (không dùng để login) */
+
     private String generateRandomPassword() {
         return UUID.randomUUID().toString();
     }

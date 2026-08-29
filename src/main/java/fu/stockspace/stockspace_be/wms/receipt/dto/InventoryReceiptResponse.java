@@ -1,6 +1,6 @@
 package fu.stockspace.stockspace_be.wms.receipt.dto;
 
-import fu.stockspace.stockspace_be.booking.entity.ApprovalStatus;
+import fu.stockspace.stockspace_be.common.entity.ApprovalStatus;
 import fu.stockspace.stockspace_be.wms.receipt.entity.DocumentType;
 import lombok.*;
 
@@ -22,6 +22,7 @@ public class InventoryReceiptResponse {
     private DocumentType type;
     private String signatureData;
     private ApprovalStatus status;
+    private String rejectReason;
     private List<ReceiptItemResponse> items;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

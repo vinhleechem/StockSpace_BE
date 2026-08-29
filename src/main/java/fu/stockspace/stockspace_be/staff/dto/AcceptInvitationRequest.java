@@ -6,10 +6,10 @@ import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
-/**
- * Request body khi Staff click link lời mời và thiết lập mật khẩu.
- * POST /api/auth/staff/accept
- */
+
+
+
+
 @Getter
 @Setter
 public class AcceptInvitationRequest {

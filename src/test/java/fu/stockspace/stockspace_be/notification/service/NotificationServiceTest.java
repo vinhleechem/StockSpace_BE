@@ -2,17 +2,21 @@ package fu.stockspace.stockspace_be.notification.service;
 
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
-import fu.stockspace.stockspace_be.notification.dto.PagedNotificationResponse;
+import fu.stockspace.stockspace_be.notification.dto.NotificationResponse;
 import fu.stockspace.stockspace_be.notification.entity.Notification;
+
 import fu.stockspace.stockspace_be.notification.repository.NotificationRepository;
+import fu.stockspace.stockspace_be.notification.websocket.NotificationCreatedEvent;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -36,6 +40,9 @@ class NotificationServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private ApplicationEventPublisher applicationEventPublisher;
+
     @InjectMocks
     private NotificationService notificationService;
 
@@ -43,8 +50,10 @@ class NotificationServiceTest {
     void testPush_Success() {
         UUID userId = UUID.randomUUID();
         User user = User.builder().id(userId).email("user@test.com").build();
-        
+
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         notificationService.push(userId, "Test Title", "Test Message", "SYSTEM");
 
@@ -57,6 +66,10 @@ class NotificationServiceTest {
         assertEquals("Test Message", saved.getMessage());
         assertEquals("SYSTEM", saved.getType());
         assertFalse(saved.isRead());
+        verify(applicationEventPublisher).publishEvent((Object) argThat(
+                (NotificationCreatedEvent event) -> "user@test.com".equals(event.recipientEmail())
+                        && "Test Title".equals(event.notification().getTitle())
+        ));
     }
 
     @Test
@@ -64,7 +77,7 @@ class NotificationServiceTest {
         UUID userId = UUID.randomUUID();
         when(userRepository.findById(userId)).thenReturn(Optional.empty());
 
-        assertThrows(ResourceNotFoundException.class, () -> 
+        assertThrows(ResourceNotFoundException.class, () ->
                 notificationService.push(userId, "Title", "Message", "SYSTEM")
         );
         verify(notificationRepository, never()).save(any(Notification.class));
@@ -89,7 +102,7 @@ class NotificationServiceTest {
         Page<Notification> page = new PageImpl<>(List.of(n1), pageable, 1);
         when(notificationRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable)).thenReturn(page);
 
-        PagedNotificationResponse response = notificationService.getMyNotifications(userId, pageable);
+        PagedResponse<NotificationResponse> response = notificationService.getMyNotifications(userId, pageable);
 
         assertNotNull(response);
         assertEquals(1, response.getContent().size());
@@ -98,6 +111,7 @@ class NotificationServiceTest {
         assertEquals(0, response.getPage());
         assertEquals(1, response.getTotalElements());
     }
+
 
     @Test
     void testMarkAsRead_Success() {
@@ -132,7 +146,7 @@ class NotificationServiceTest {
 
         when(notificationRepository.findById(notificationId)).thenReturn(Optional.of(notification));
 
-        assertThrows(ForbiddenException.class, () -> 
+        assertThrows(ForbiddenException.class, () ->
                 notificationService.markAsRead(userId, notificationId)
         );
         assertFalse(notification.isRead());
@@ -145,7 +159,7 @@ class NotificationServiceTest {
         UUID notificationId = UUID.randomUUID();
         when(notificationRepository.findById(notificationId)).thenReturn(Optional.empty());
 
-        assertThrows(ResourceNotFoundException.class, () -> 
+        assertThrows(ResourceNotFoundException.class, () ->
                 notificationService.markAsRead(userId, notificationId)
         );
         verify(notificationRepository, never()).save(any(Notification.class));

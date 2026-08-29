@@ -1,35 +1,62 @@
 package fu.stockspace.stockspace_be.warehouse.dto;
 
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Getter;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
-/**
- * DTO nhận tham số tìm kiếm kho — dùng cho cả Public và Admin search.
- */
+
+
+
 @Getter
 @Setter
 public class WarehouseSearchRequest {
 
-    /** Từ khoá tìm theo tên hoặc địa chỉ */
+
     private String keyword;
 
-    /** Lọc theo trạng thái (null = tất cả) */
+
     private WarehouseStatus status;
 
-    /** Lọc giá thuê tối thiểu (VNĐ/tháng) */
+
+    private BigDecimal minRentalPrice;
+
+
+    private BigDecimal maxRentalPrice;
+
+    /** @deprecated Use minRentalPrice. Kept for one compatibility release. */
+    @Deprecated
+    @Schema(deprecated = true, description = "Legacy alias for minRentalPrice")
     private BigDecimal minPrice;
 
-    /** Lọc giá thuê tối đa */
+    /** @deprecated Use maxRentalPrice. Kept for one compatibility release. */
+    @Deprecated
+    @Schema(deprecated = true, description = "Legacy alias for maxRentalPrice")
     private BigDecimal maxPrice;
 
-    /** Lọc sức chứa tối thiểu (m²) */
+    public BigDecimal getEffectiveMinRentalPrice() {
+        return minRentalPrice != null ? minRentalPrice : minPrice;
+    }
+
+    public BigDecimal getEffectiveMaxRentalPrice() {
+        return maxRentalPrice != null ? maxRentalPrice : maxPrice;
+    }
+
+
     private BigDecimal minCapacity;
 
-    // ==================== Admin only ====================
+    private BigDecimal maxCapacity;
 
-    /** Admin: lọc theo trạng thái xác minh */
+    private String provinceCode;
+
+    private String districtCode;
+
+    private UUID warehouseTypeId;
+
+
+
     private Boolean isVerified;
 }

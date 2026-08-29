@@ -20,26 +20,26 @@ import org.springframework.web.bind.annotation.*;
 
 
 
-/**
- * Controller xử lý các API Kiểm định cho Inspector.
- *
- * Endpoints:
- *   GET  /api/inspector/inspections                  — Xem danh sách được phân công
- *   POST /api/inspector/inspections/{id}/report      — Nộp báo cáo kiểm định
- */
+
+
+
+
+
+
+
 @Tag(name = "Inspector — Inspection", description = "API kiểm định kho của Inspector")
 @RestController
 @RequestMapping("/api/inspector/inspections")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('INSPECTOR', 'ADMIN')")
+@PreAuthorize("@rbac.hasPermission('INSPECTION_EXECUTE')")
 public class InspectorController {
 
     private final InspectionService inspectionService;
 
-    /**
-     * GET /api/inspector/inspections
-     * Xem danh sách yêu cầu kiểm định được gán (phân trang).
-     */
+
+
+
+
     @GetMapping
     @Operation(summary = "Xem danh sách kiểm định được phân công")
     public ResponseEntity<ApiResponse<PagedResponse<InspectionReportResponse>>> getAssigned(
@@ -51,11 +51,11 @@ public class InspectorController {
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách kiểm định thành công", PagedResponse.fromPage(result)));
     }
 
-    /**
-     * POST /api/inspector/inspections/{id}/report
-     * Inspector nộp kết quả kiểm định.
-     * Status PASSED → kho được verify và AVAILABLE.
-     */
+
+
+
+
+
     @PostMapping("/{id}/report")
     @Operation(summary = "Nộp báo cáo kết quả kiểm định")
     public ResponseEntity<ApiResponse<InspectionReportResponse>> submitReport(

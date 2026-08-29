@@ -7,12 +7,12 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
-/**
- * Implement UserDetailsService để Spring Security biết cách load user từ DB.
- * Dùng email làm "username".
- *
- * Chỉ Dev 1 sửa file này.
- */
+
+
+
+
+
+
 @Service
 @RequiredArgsConstructor
 public class UserDetailsServiceImpl implements UserDetailsService {

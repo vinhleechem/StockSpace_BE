@@ -8,10 +8,10 @@ import java.math.BigDecimal;
 
 import java.util.UUID;
 
-/**
- * Entity WarehouseRack — kệ hàng trong một Zone.
- * Map với bảng: warehouse_racks
- */
+
+
+
+
 @Entity
 @Table(name = "warehouse_racks")
 @Getter
@@ -27,8 +27,8 @@ public class WarehouseRack extends BaseEntity {
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "zone_id", nullable = false)
-    private WarehouseZone zone;
+    @JoinColumn(name = "layout_id", nullable = false)
+    private WarehouseLayout layout;
 
     @Column(name = "name", nullable = false, length = 100)
     private String name;
@@ -36,21 +36,32 @@ public class WarehouseRack extends BaseEntity {
     @Column(name = "code", nullable = false, length = 50)
     private String code;
 
-    @Column(name = "max_weight", precision = 10, scale = 2)
+    @Column(name = "max_weight", precision = 14, scale = 6)
     private BigDecimal maxWeight;
 
-    @Column(name = "max_volume", precision = 10, scale = 2)
+    @Column(name = "max_volume", precision = 14, scale = 6)
     private BigDecimal maxVolume;
 
     @Column(name = "coordinate_x")
-    private Integer coordinateX;
+    private BigDecimal coordinateX;
 
     @Column(name = "coordinate_y")
-    private Integer coordinateY;
+    private BigDecimal coordinateY;
+
+    @Column(name = "position_z")
+    @Builder.Default
+    private BigDecimal positionZ = BigDecimal.ZERO;
+
+    @Column(name = "rotation")
+    @Builder.Default
+    private Integer rotation = 0;
 
     @Column(name = "width")
-    private Integer width;
+    private BigDecimal width;
+
+    @Column(name = "length")
+    private BigDecimal length;
 
     @Column(name = "height")
-    private Integer height;
+    private BigDecimal height;
 }

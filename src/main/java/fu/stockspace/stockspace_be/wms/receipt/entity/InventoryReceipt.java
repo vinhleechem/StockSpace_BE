@@ -1,7 +1,7 @@
 package fu.stockspace.stockspace_be.wms.receipt.entity;
 
 import fu.stockspace.stockspace_be.auth.entity.User;
-import fu.stockspace.stockspace_be.booking.entity.ApprovalStatus;
+import fu.stockspace.stockspace_be.common.entity.ApprovalStatus;
 import fu.stockspace.stockspace_be.common.entity.BaseEntity;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import jakarta.persistence.*;
@@ -46,4 +46,7 @@ public class InventoryReceipt extends BaseEntity {
 
     @Column(name = "reference_id")
     private UUID referenceId;
+
+    @Column(name = "reject_reason", columnDefinition = "TEXT")
+    private String rejectReason;
 }

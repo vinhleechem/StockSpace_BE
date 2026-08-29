@@ -1,32 +1,29 @@
-version: '3.8'
-
-# =============================================================================
-# PRODUCTION — Chạy trên VPS
-# Lệnh:
-#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
-#
-# Hoặc dùng script:
-#   bash deploy.sh deploy
-#
-# Khác với dev:
-#   - Nginx làm reverse proxy (port 80/443 → app:8080)
-#   - Port 8080 và 5432 KHÔNG expose ra ngoài
-#   - restart: unless-stopped (auto-restart khi VPS reboot)
-#   - JVM heap lớn hơn (-Xmx768m)
-# =============================================================================
 
 services:
   postgres:
     restart: unless-stopped
-    # ⛔ Không expose port 5432 ra ngoài — chỉ internal network
 
   app:
     restart: unless-stopped
     environment:
-      - JAVA_OPTS=-Xmx768m -Xms256m -XX:+UseContainerSupport
-    # ⛔ Không expose port 8080 — Nginx sẽ proxy vào
+      - SPRING_PROFILES_ACTIVE=prod
+      - SERVER_FORWARD_HEADERS_STRATEGY=framework
+      - SEED_DEMO_USERS=false
+      - CHATBOT_RAG_INDEXER_ENABLED=${CHATBOT_RAG_INDEXER_ENABLED:-true}
+      - JAVA_TOOL_OPTIONS=-Xmx1536m -Xms512m -XX:+UseContainerSupport -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+ExitOnOutOfMemoryError
 
-  # ─── Nginx Reverse Proxy ───────────────────────────────────────────────────
+  adminer:
+    image: adminer:4.8.1-standalone
+    container_name: stockspace-adminer
+    environment:
+      - ADMINER_DEFAULT_SERVER=postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - stockspace-net
+    restart: unless-stopped
+
   nginx:
     image: nginx:alpine
     container_name: stockspace-nginx
@@ -34,24 +31,26 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
+      # Keep HTTP active until the first certificate is issued. Set
+      # NGINX_CONFIG=nginx.conf in the production .env to enable HTTPS.
+      - ./nginx/${NGINX_CONFIG:-nginx.http.conf}:/etc/nginx/nginx.conf:ro
+      - ./nginx/includes:/etc/nginx/includes:ro
+      - ./certbot/www:/var/www/certbot:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
       - nginx_logs:/var/log/nginx
     depends_on:
       - app
+      - adminer
     networks:
       - stockspace-net
     restart: unless-stopped
 
-  # ─── Adminer Web DB Management ─────────────────────────────────────────────
-  adminer:
-    image: adminer:latest
-    container_name: stockspace-adminer
-    environment:
-      ADMINER_DEFAULT_SERVER: postgres
-    networks:
-      - stockspace-net
-    restart: unless-stopped
+  certbot:
+    image: certbot/certbot:latest
+    profiles: ["certbot"]
+    volumes:
+      - ./certbot/www:/var/www/certbot
+      - ./certbot/conf:/etc/letsencrypt
 
 volumes:
   nginx_logs:

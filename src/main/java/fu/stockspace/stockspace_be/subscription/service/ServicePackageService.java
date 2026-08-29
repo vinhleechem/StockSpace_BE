@@ -20,13 +20,13 @@ public class ServicePackageService {
     private final ServicePackageRepository packageRepository;
     @Transactional(readOnly = true)
     public List<ServicePackageResponse> getAllPackages() {
-        return packageRepository.findAll().stream()
+        return packageRepository.findAllByIsActiveTrueAndIsDeletedFalse().stream()
                 .map(this::mapToResponse)
                 .toList();
     }
     @Transactional(readOnly = true)
     public ServicePackageResponse getPackageById(java.util.UUID id) {
-        ServicePackage servicePackage = packageRepository.findById(id)
+        ServicePackage servicePackage = packageRepository.findByIdAndIsActiveTrueAndIsDeletedFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.PACKAGE_NOT_FOUND));
         return mapToResponse(servicePackage);
     }
@@ -40,10 +40,11 @@ public class ServicePackageService {
                 .features(request.getFeatures())
                 .price(request.getPrice())
                 .durationDays(request.getDurationDays())
+                .maxStaff(request.getMaxStaff())
                 .isActive(true)
                 .build();
         servicePackage = packageRepository.save(servicePackage);
-        log.info("Subscription Service: Created service package: {}", servicePackage.getName());
+        log.info("Subscription Service: Created service package: {} with maxStaff: {}", servicePackage.getName(), servicePackage.getMaxStaff());
         return mapToResponse(servicePackage);
     }
     @Transactional
@@ -65,27 +66,33 @@ public class ServicePackageService {
         if (request.getDurationDays() != null) {
             servicePackage.setDurationDays(request.getDurationDays());
         }
+        if (request.getMaxStaff() != null) {
+            servicePackage.setMaxStaff(request.getMaxStaff());
+        }
         servicePackage = packageRepository.save(servicePackage);
         log.info("Subscription Service: Updated service package ID: {}", id);
         return mapToResponse(servicePackage);
     }
+
     @Transactional
     public void deletePackage(java.util.UUID id) {
         ServicePackage servicePackage = packageRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.PACKAGE_NOT_FOUND));
-        // Soft delete bằng cách set isActive = false
+
         servicePackage.setActive(false);
         packageRepository.save(servicePackage);
         log.info("Subscription Service: Soft-deleted service package ID: {}", id);
     }
     public ServicePackageResponse mapToResponse(ServicePackage p) {
+        if (p == null) return null;
         return ServicePackageResponse.builder()
                 .id(p.getId())
                 .name(p.getName())
                 .features(p.getFeatures())
                 .price(p.getPrice())
                 .durationDays(p.getDurationDays())
-                .maxStaff(p.getMaxStaff())
+                .maxStaff(p.getMaxStaff() != null ? p.getMaxStaff() : 0)
                 .build();
     }
+
 }

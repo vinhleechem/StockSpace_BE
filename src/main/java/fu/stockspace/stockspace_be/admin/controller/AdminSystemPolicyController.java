@@ -15,22 +15,22 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-/**
- * Controller dành riêng cho Administrator quản lý chính sách hệ thống (Cam kết ràng buộc).
- */
+
+
+
 @Tag(name = "Admin — System Policies Management", description = "Các API quản lý chính sách/cam kết ràng buộc hệ thống của Admin")
 @RestController
 @RequestMapping("/api/admin/system-policies")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ADMIN')")
+@PreAuthorize("@rbac.hasPermission('ADMIN_SYSTEM_POLICY_MANAGE')")
 public class AdminSystemPolicyController {
 
     private final SystemPolicyService systemPolicyService;
 
-    /**
-     * POST /api/admin/system-policies
-     * Admin tạo mới một chính sách hệ thống (phiên bản mới sẽ được active, các bản cũ sẽ tự động deactivate).
-     */
+
+
+
+
     @PostMapping
     @Operation(summary = "Tạo phiên bản cam kết ràng buộc mới (Admin)")
     public ResponseEntity<ApiResponse<SystemPolicyResponse>> createPolicy(
@@ -41,10 +41,10 @@ public class AdminSystemPolicyController {
                 .body(ApiResponse.success("Tạo phiên bản chính sách mới thành công. Bản này hiện đã được đặt làm mặc định hiệu lực.", response));
     }
 
-    /**
-     * GET /api/admin/system-policies
-     * Admin lấy danh sách lịch sử tất cả các phiên bản chính sách (phân trang).
-     */
+
+
+
+
     @GetMapping
     @Operation(summary = "Xem lịch sử tất cả các phiên bản cam kết ràng buộc (Admin)")
     public ResponseEntity<ApiResponse<PagedResponse<SystemPolicyResponse>>> getAllPolicies(

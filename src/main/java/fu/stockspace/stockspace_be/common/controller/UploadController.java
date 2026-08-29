@@ -7,15 +7,16 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.List;
 
-/**
- * Controller xử lý các yêu cầu upload tài nguyên hình ảnh.
- */
+
+
+
 @Tag(name = "Upload — Media Upload Controller", description = "Các API phục vụ cho việc upload hình ảnh lên Cloudinary")
 @RestController
 @RequestMapping("/api/upload")
@@ -24,11 +25,12 @@ public class UploadController {
 
     private final CloudinaryService cloudinaryService;
 
-    /**
-     * POST /api/upload/image
-     * Upload single image.
-     */
+
+
+
+
     @PostMapping(value = "/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@rbac.hasPermission('MEDIA_UPLOAD')")
     @Operation(summary = "Upload một hình ảnh (Yêu cầu đăng nhập)")
     public ResponseEntity<ApiResponse<String>> uploadSingleImage(
             @RequestParam("file") MultipartFile file
@@ -45,11 +47,12 @@ public class UploadController {
         }
     }
 
-    /**
-     * POST /api/upload/images
-     * Upload multiple images.
-     */
+
+
+
+
     @PostMapping(value = "/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("@rbac.hasPermission('MEDIA_UPLOAD')")
     @Operation(summary = "Upload nhiều hình ảnh cùng lúc (Yêu cầu đăng nhập)")
     public ResponseEntity<ApiResponse<List<String>>> uploadMultipleImages(
             @RequestParam("files") List<MultipartFile> files

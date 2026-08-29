@@ -6,9 +6,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * DTO dùng để gán Role cho User.
- */
+
+
+
 @Data
 @Builder
 @NoArgsConstructor

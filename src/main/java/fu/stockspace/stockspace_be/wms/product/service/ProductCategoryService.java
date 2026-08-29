@@ -5,6 +5,7 @@ import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
+import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.wms.product.dto.CreateCategoryRequest;
 import fu.stockspace.stockspace_be.wms.product.dto.ProductCategoryResponse;
 import fu.stockspace.stockspace_be.wms.product.entity.ProductCategory;
@@ -26,6 +27,7 @@ public class ProductCategoryService {
     private final ProductCategoryRepository categoryRepository;
     private final ProductSkuRepository skuRepository;
     private final UserRepository userRepository;
+    private final TenantWarehouseAccessService accessService;
 
     public List<ProductCategoryResponse> getMyCategories(UUID tenantId) {
         List<ProductCategory> categories = categoryRepository.findAllActiveByTenantOrSystem(tenantId);
@@ -36,6 +38,7 @@ public class ProductCategoryService {
 
     @Transactional
     public ProductCategoryResponse createCategory(UUID tenantId, CreateCategoryRequest request) {
+        accessService.requireActiveSubscription(tenantId);
         User tenant = userRepository.findById(tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
 
@@ -51,20 +54,21 @@ public class ProductCategoryService {
 
     @Transactional
     public void deleteCategory(UUID tenantId, UUID categoryId) {
+        accessService.requireActiveSubscription(tenantId);
         ProductCategory category = categoryRepository.findByIdAndIsDeletedFalse(categoryId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.PRODUCT_CATEGORY_NOT_FOUND));
 
-        // System categories cannot be deleted by tenants
+
         if (category.getTenant() == null) {
             throw new BadRequestException(ErrorCode.FORBIDDEN);
         }
 
-        // Must own the category
+
         if (!category.getTenant().getId().equals(tenantId)) {
             throw new BadRequestException(ErrorCode.FORBIDDEN);
         }
 
-        // Cannot delete if there are active SKUs linked to this category
+
         if (skuRepository.existsByCategoryIdAndIsDeletedFalse(categoryId)) {
             throw new BadRequestException(ErrorCode.PRODUCT_CATEGORY_IN_USE);
         }

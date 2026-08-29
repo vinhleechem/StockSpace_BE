@@ -8,9 +8,9 @@ import org.springframework.context.annotation.Configuration;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Cấu hình khởi tạo Bean Cloudinary lấy thông số từ application.properties.
- */
+
+
+
 @Configuration
 public class CloudinaryConfig {
 

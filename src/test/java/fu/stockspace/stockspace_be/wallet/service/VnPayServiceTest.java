@@ -19,7 +19,7 @@ class VnPayServiceTest {
     @BeforeEach
     void setUp() {
         vnPayService = new VnPayService();
-        // Cấu hình các thuộc tính @Value bằng ReflectionTestUtils
+
         ReflectionTestUtils.setField(vnPayService, "payUrl", "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html");
         ReflectionTestUtils.setField(vnPayService, "tmnCode", "2QXUIOJY");
         ReflectionTestUtils.setField(vnPayService, "hashSecret", "THCJDMMYVXPZNJTXHUPXKWJZXPEQJQUR");
@@ -38,14 +38,14 @@ class VnPayServiceTest {
         assertTrue(url.startsWith("https://sandbox.vnpayment.vn/paymentv2/vpcpay.html"));
         assertTrue(url.contains("vnp_TmnCode=2QXUIOJY"));
         assertTrue(url.contains("vnp_TxnRef=" + txnRef));
-        
-        // 500000 * 100 = 50000000
+
+
         assertTrue(url.contains("vnp_Amount=50000000"));
         assertTrue(url.contains("vnp_OrderInfo=Nap%20tien%20vi%20StockSpace%20" + txnRef));
         assertFalse(url.contains("vnp_OrderInfo=Nap+tien+vi+StockSpace+" + txnRef));
         assertTrue(url.contains("vnp_SecureHash="));
 
-        // Phân tích ngược các tham số từ URL
+
         String queryStr = url.substring(url.indexOf("?") + 1);
         String[] pairs = queryStr.split("&");
         Map<String, String> queryParams = new HashMap<>();
@@ -56,7 +56,7 @@ class VnPayServiceTest {
             queryParams.put(key, value);
         }
 
-        // Kiểm tra xem verifySignature có trả về true cho chính URL được sinh ra không
+
         assertTrue(vnPayService.verifySignature(queryParams));
     }
 

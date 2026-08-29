@@ -7,10 +7,10 @@ import lombok.experimental.SuperBuilder;
 import java.math.BigDecimal;
 import java.util.UUID;
 
-/**
- * Entity WarehouseBin — ô chứa nhỏ nhất/tầng kệ trong một kệ hàng (Rack).
- * Map với bảng: warehouse_bins
- */
+
+
+
+
 @Entity
 @Table(name = "warehouse_bins")
 @Getter
@@ -35,21 +35,32 @@ public class WarehouseBin extends BaseEntity {
     @Column(name = "code", nullable = false, length = 50)
     private String code;
 
-    @Column(name = "max_weight", precision = 10, scale = 2)
+    @Column(name = "max_weight", precision = 14, scale = 6)
     private BigDecimal maxWeight;
 
-    @Column(name = "max_volume", precision = 10, scale = 2)
+    @Column(name = "max_volume", precision = 14, scale = 6)
     private BigDecimal maxVolume;
 
+    @Column(name = "shelf_level")
+    @Builder.Default
+    private Integer shelfLevel = 1;
+
     @Column(name = "coordinate_x")
-    private Integer coordinateX;
+    private BigDecimal coordinateX;
 
     @Column(name = "coordinate_y")
-    private Integer coordinateY;
+    private BigDecimal coordinateY;
+
+    @Column(name = "position_z")
+    @Builder.Default
+    private BigDecimal positionZ = BigDecimal.ZERO;
 
     @Column(name = "width")
-    private Integer width;
+    private BigDecimal width;
+
+    @Column(name = "length")
+    private BigDecimal length;
 
     @Column(name = "height")
-    private Integer height;
+    private BigDecimal height;
 }

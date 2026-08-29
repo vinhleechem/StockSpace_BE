@@ -15,22 +15,22 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-/**
- * Controller xử lý các API quản lý Quyền hạn (Permissions) của Admin.
- */
+
+
+
 @Tag(name = "Admin Permission Management", description = "Các API quản lý Quyền hạn của Admin")
 @RestController
 @RequestMapping("/api/admin/permissions")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
+@PreAuthorize("@rbac.hasPermission('ADMIN_PERMISSION_MANAGE')")
 public class AdminPermissionController {
 
     private final PermissionManagementService permissionManagementService;
 
-    /**
-     * GET /api/admin/permissions
-     * Xem tất cả Permissions hiện có.
-     */
+
+
+
+
     @GetMapping
     @Operation(summary = "Xem danh sách tất cả các quyền hạn (Permissions) hiện có")
     public ResponseEntity<ApiResponse<List<PermissionResponse>>> getAllPermissions() {
@@ -38,10 +38,10 @@ public class AdminPermissionController {
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách quyền hạn thành công", permissions));
     }
 
-    /**
-     * POST /api/admin/permissions
-     * Tạo mới một Permission.
-     */
+
+
+
+
     @PostMapping
     @Operation(summary = "Tạo mới một quyền hạn (Permission)")
     public ResponseEntity<ApiResponse<PermissionResponse>> createPermission(

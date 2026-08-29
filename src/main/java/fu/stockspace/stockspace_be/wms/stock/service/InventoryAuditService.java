@@ -1,14 +1,17 @@
 package fu.stockspace.stockspace_be.wms.stock.service;
 
+import fu.stockspace.stockspace_be.auth.entity.RoleType;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
+import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
+import fu.stockspace.stockspace_be.staff.entity.TenantMember;
 import fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository;
-import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
 import fu.stockspace.stockspace_be.wms.product.entity.ProductSku;
@@ -48,24 +51,17 @@ public class InventoryAuditService {
     private final ProductSkuRepository productSkuRepository;
     private final InventoryReceiptService inventoryReceiptService;
     private final NotificationService notificationService;
-    private final SubscriptionService subscriptionService;
     private final TenantMemberRepository tenantMemberRepository;
+    private final TenantWarehouseAccessService accessService;
 
-    // ==================== Tenant / Staff ====================
-
-    /**
-     * Tạo phiếu kiểm kê mới với status PENDING.
-     * Tự động snapshot expectedQuantity từ StockBatch.quantity hiện tại
-     * cho từng lô hàng trong kho.
-     */
     @Transactional
     public InventoryAuditResponse createAudit(UUID userId, CreateInventoryAuditRequest request) {
-        checkSubscription(userId);
-
         User requestedBy = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
         Warehouse warehouse = warehouseRepository.findById(request.getWarehouseId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
+        UUID tenantId = resolveTenantId(userId);
+        requireWarehouseMutationAccess(requestedBy, tenantId, warehouse.getId());
 
         InventoryAudit audit = InventoryAudit.builder()
                 .warehouse(warehouse)
@@ -75,9 +71,8 @@ public class InventoryAuditService {
                 .build();
         audit = auditRepository.save(audit);
 
-        // Snapshot tồn kho hiện tại
-        List<StockBatch> batches = stockBatchRepository.findByWarehouseIdAndIsDeletedFalse(
-                warehouse.getId(), Pageable.unpaged()).getContent();
+        List<StockBatch> batches = stockBatchRepository.findByWarehouseIdAndTenantId(
+                warehouse.getId(), tenantId, Pageable.unpaged()).getContent();
 
         final InventoryAudit savedAudit = audit;
         List<InventoryAuditItem> items = batches.stream()
@@ -91,18 +86,46 @@ public class InventoryAuditService {
                 .collect(Collectors.toList());
         auditItemRepository.saveAll(items);
 
+        try {
+            final String whName = warehouse.getName();
+            if (userId.equals(tenantId)) {
+                // Tenant tạo phiếu -> thông báo cho các Staff
+                List<TenantMember> staffList = tenantMemberRepository.findActiveStaffsOrderByJoinedAtAsc(tenantId);
+                for (TenantMember staff : staffList) {
+                    if (staff.getUser() != null) {
+                        notificationService.push(
+                                staff.getUser().getId(),
+                                "Lệnh kiểm kê kho mới",
+                                "Có phiếu kiểm kê mới cho kho '" + whName + "'. Vui lòng tiến hành kiểm đếm hàng hóa.",
+                                "AUDIT"
+                        );
+                    }
+                }
+            } else {
+                // Staff tạo phiếu -> thông báo cho Tenant
+                String creatorName = requestedBy.getFullName() != null ? requestedBy.getFullName() : requestedBy.getEmail();
+                notificationService.push(
+                        tenantId,
+                        "Phiếu kiểm kê kho mới",
+                        "Nhân viên '" + creatorName + "' vừa tạo phiếu kiểm kê cho kho '" + whName + "'.",
+                        "AUDIT"
+                );
+            }
+        } catch (Exception e) {
+            log.warn("Failed to push create audit notification: {}", e.getMessage());
+        }
+
         log.info("InventoryAudit: Created audit {} for warehouse {} ({} batch lines snapshotted)",
                 audit.getId(), warehouse.getId(), items.size());
         return mapToResponse(audit, items);
     }
 
-    /**
-     * Người dùng điền số lượng thực tế và tính discrepancy cho từng dòng.
-     * Chuyển status từ PENDING → SUBMITTED.
-     */
     @Transactional
     public InventoryAuditResponse submitAudit(UUID userId, UUID auditId, SubmitAuditRequest request) {
-        InventoryAudit audit = getAuditForUser(auditId, userId);
+        InventoryAudit audit = getAuditForUserForUpdate(auditId, userId);
+        User actor = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+        requireWarehouseMutationAccess(actor, resolveTenantId(userId), audit.getWarehouse().getId());
 
         if (audit.getStatus() != AuditStatus.PENDING) {
             throw new BadRequestException(ErrorCode.AUDIT_INVALID_STATUS);
@@ -125,20 +148,30 @@ public class InventoryAuditService {
         audit.setStatus(AuditStatus.SUBMITTED);
         audit = auditRepository.save(audit);
 
-        // Re-fetch updated items
+        try {
+            final String whName = audit.getWarehouse().getName();
+            UUID tenantId = tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(userId)
+                    .map(member -> member.getTenant().getId())
+                    .orElse(userId);
+
+            notificationService.push(
+                    tenantId,
+                    "Kết quả kiểm kê đã được nộp",
+                    "Kết quả kiểm đếm cho kho '" + whName + "' đã được nộp. Vui lòng kiểm tra đối soát và phê duyệt.",
+                    "AUDIT"
+            );
+        } catch (Exception e) {
+            log.warn("Failed to push submit audit notification: {}", e.getMessage());
+        }
+
         List<InventoryAuditItem> updatedItems = auditItemRepository.findByAuditId(auditId);
         log.info("InventoryAudit: Audit {} submitted by user {}", auditId, userId);
         return mapToResponse(audit, updatedItems);
     }
 
-    /**
-     * Duyệt phiếu kiểm kê — tự động sinh phiếu INBOUND/OUTBOUND điều chỉnh
-     * cho mỗi dòng có discrepancy != 0, cập nhật StockBatch và ghi InventoryTransaction.
-     * Chuyển status → APPROVED.
-     */
     @Transactional
     public InventoryAuditResponse approveAudit(UUID approverId, UUID auditId) {
-        InventoryAudit audit = auditRepository.findById(auditId)
+        InventoryAudit audit = auditRepository.findByIdForUpdate(auditId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.AUDIT_NOT_FOUND));
 
         if (audit.getStatus() != AuditStatus.SUBMITTED) {
@@ -147,46 +180,44 @@ public class InventoryAuditService {
 
         User approver = userRepository.findById(approverId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+        ensureApproverIsTenant(approver);
+        UUID tenantId = resolveTenantId(approverId);
+        requireAuditTenantAccess(audit, tenantId);
+        requireWarehouseMutationAccess(approver, tenantId, audit.getWarehouse().getId());
 
         List<InventoryAuditItem> items = auditItemRepository.findByAuditId(auditId);
         UUID warehouseId = audit.getWarehouse().getId();
 
         for (InventoryAuditItem item : items) {
-            if (item.getDiscrepancy() == null || item.getDiscrepancy() == 0) continue;
+            if (item.getDiscrepancy() == null || item.getDiscrepancy() == 0)
+                continue;
 
             int absDiscrepancy = Math.abs(item.getDiscrepancy());
             DocumentType type = item.getDiscrepancy() > 0 ? DocumentType.INBOUND : DocumentType.OUTBOUND;
 
-            // Tạo phiếu điều chỉnh tự động (internal call)
             inventoryReceiptService.createAdjustmentReceipt(
                     approverId, auditId, warehouseId,
-                    type, item.getBatch().getId(), absDiscrepancy
-            );
+                    type, item.getBatch().getId(), absDiscrepancy);
         }
 
         audit.setApprovedBy(approver);
         audit.setStatus(AuditStatus.APPROVED);
         audit = auditRepository.save(audit);
 
-        // Push notification cho người yêu cầu kiểm kê
         String warehouseName = audit.getWarehouse().getName();
         notificationService.push(
                 audit.getRequestedBy().getId(),
                 "Phiếu kiểm kê đã được duyệt",
                 "Phiếu kiểm kê kho " + warehouseName + " đã được duyệt. Tồn kho đã được điều chỉnh tự động.",
-                "AUDIT"
-        );
+                "AUDIT");
 
         log.info("InventoryAudit: Audit {} approved by user {}", auditId, approverId);
         return mapToResponse(audit, items);
     }
 
-    /**
-     * Từ chối phiếu kiểm kê — chuyển status → REJECTED.
-     */
     @Transactional
     public InventoryAuditResponse rejectAudit(UUID approverId, UUID auditId, String reason) {
-        InventoryAudit audit = auditRepository.findById(auditId)
+        InventoryAudit audit = auditRepository.findByIdForUpdate(auditId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.AUDIT_NOT_FOUND));
 
         if (audit.getStatus() != AuditStatus.SUBMITTED && audit.getStatus() != AuditStatus.PENDING) {
@@ -195,6 +226,10 @@ public class InventoryAuditService {
 
         User approver = userRepository.findById(approverId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+        ensureApproverIsTenant(approver);
+        UUID tenantId = resolveTenantId(approverId);
+        requireAuditTenantAccess(audit, tenantId);
+        requireWarehouseMutationAccess(approver, tenantId, audit.getWarehouse().getId());
 
         audit.setApprovedBy(approver);
         audit.setStatus(AuditStatus.REJECTED);
@@ -205,46 +240,53 @@ public class InventoryAuditService {
         }
         audit = auditRepository.save(audit);
 
-        // Push notification cho người yêu cầu
         String warehouseName = audit.getWarehouse().getName();
         notificationService.push(
                 audit.getRequestedBy().getId(),
                 "Phiếu kiểm kê bị từ chối",
-                "Phiếu kiểm kê kho " + warehouseName + " bị từ chối. Lý do: " + (reason != null ? reason : "Không có lý do cụ thể"),
-                "AUDIT"
-        );
+                "Phiếu kiểm kê kho " + warehouseName + " bị từ chối. Lý do: "
+                        + (reason != null ? reason : "Không có lý do cụ thể"),
+                "AUDIT");
 
         log.info("InventoryAudit: Audit {} rejected by user {} (reason: {})", auditId, approverId, reason);
         List<InventoryAuditItem> items = auditItemRepository.findByAuditId(auditId);
         return mapToResponse(audit, items);
     }
 
-    /**
-     * Lấy danh sách phiếu kiểm kê của người dùng hiện tại (phân trang).
-     */
     @Transactional(readOnly = true)
-    public PagedAuditResponse getMyAudits(UUID userId, Pageable pageable) {
-        Page<InventoryAudit> page = auditRepository.findByRequestedByIdAndIsDeletedFalse(userId, pageable);
-        List<InventoryAuditResponse> content = page.getContent().stream()
-                .map(audit -> {
-                    List<InventoryAuditItem> items = auditItemRepository.findByAuditId(audit.getId());
-                    return mapToResponse(audit, items);
-                })
-                .collect(Collectors.toList());
-
-        return PagedAuditResponse.builder()
-                .content(content)
-                .pageNo(page.getNumber())
-                .pageSize(page.getSize())
-                .totalElements(page.getTotalElements())
-                .totalPages(page.getTotalPages())
-                .last(page.isLast())
-                .build();
+    public PagedResponse<InventoryAuditResponse> getMyAudits(UUID userId, Pageable pageable) {
+        return getMyAudits(userId, null, pageable);
     }
 
-    /**
-     * Xem chi tiết phiếu kiểm kê — kiểm tra quyền truy cập.
-     */
+    @Transactional(readOnly = true)
+    public PagedResponse<InventoryAuditResponse> getMyAudits(UUID userId, UUID warehouseId, Pageable pageable) {
+        User actor = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+        UUID tenantId = resolveTenantId(userId);
+        List<UUID> accessibleWarehouseIds = (isStaff(actor)
+                ? accessService.findAccessibleContractWarehouses(tenantId, userId)
+                : accessService.findActiveContractWarehouses(tenantId))
+                .stream()
+                .map(Warehouse::getId)
+                .toList();
+
+        Page<InventoryAudit> page;
+        if (warehouseId != null) {
+            requireWarehouseObservationAccess(actor, tenantId, warehouseId);
+            page = auditRepository.findAuditsForTenant(
+                    warehouseId, List.of(warehouseId), tenantId, pageable);
+        } else if (!accessibleWarehouseIds.isEmpty()) {
+            page = auditRepository.findAuditsForTenant(null, accessibleWarehouseIds, tenantId, pageable);
+        } else {
+            page = Page.empty(pageable);
+        }
+
+        return PagedResponse.fromPage(page, audit -> {
+            List<InventoryAuditItem> items = auditItemRepository.findByAuditId(audit.getId());
+            return mapToResponse(audit, items);
+        });
+    }
+
     @Transactional(readOnly = true)
     public InventoryAuditResponse getAuditDetail(UUID userId, UUID auditId) {
         InventoryAudit audit = getAuditForUser(auditId, userId);
@@ -252,52 +294,79 @@ public class InventoryAuditService {
         return mapToResponse(audit, items);
     }
 
-    // ==================== Admin ====================
-
-    /**
-     * Admin xem toàn bộ phiếu kiểm kê hệ thống (phân trang).
-     */
     @Transactional(readOnly = true)
-    public PagedAuditResponse getAllAudits(Pageable pageable) {
+    public PagedResponse<InventoryAuditResponse> getAllAudits(Pageable pageable) {
         Page<InventoryAudit> page = auditRepository.findByIsDeletedFalse(pageable);
-        List<InventoryAuditResponse> content = page.getContent().stream()
-                .map(audit -> {
-                    List<InventoryAuditItem> items = auditItemRepository.findByAuditId(audit.getId());
-                    return mapToResponse(audit, items);
-                })
-                .collect(Collectors.toList());
-        return PagedAuditResponse.builder()
-                .content(content)
-                .pageNo(page.getNumber())
-                .pageSize(page.getSize())
-                .totalElements(page.getTotalElements())
-                .totalPages(page.getTotalPages())
-                .last(page.isLast())
-                .build();
+        return PagedResponse.fromPage(page, audit -> {
+            List<InventoryAuditItem> items = auditItemRepository.findByAuditId(audit.getId());
+            return mapToResponse(audit, items);
+        });
     }
-
-    // ==================== Private Helpers ====================
 
     private InventoryAudit getAuditForUser(UUID auditId, UUID userId) {
         InventoryAudit audit = auditRepository.findById(auditId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.AUDIT_NOT_FOUND));
-        // Cho phép: người tạo phiếu hoặc approver
-        boolean isRequester = audit.getRequestedBy().getId().equals(userId);
-        boolean isApprover = audit.getApprovedBy() != null && audit.getApprovedBy().getId().equals(userId);
-        if (!isRequester && !isApprover) {
-            throw new ForbiddenException(ErrorCode.FORBIDDEN);
-        }
+        User actor = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+        UUID tenantId = resolveTenantId(userId);
+        requireAuditTenantAccess(audit, tenantId);
+        requireWarehouseObservationAccess(actor, tenantId, audit.getWarehouse().getId());
         return audit;
     }
 
-    private void checkSubscription(UUID userId) {
-        User user = userRepository.findById(userId)
+    private InventoryAudit getAuditForUserForUpdate(UUID auditId, UUID userId) {
+        InventoryAudit audit = auditRepository.findByIdForUpdate(auditId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.AUDIT_NOT_FOUND));
+        User actor = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
-        UUID tenantId = tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(userId)
+        UUID tenantId = resolveTenantId(userId);
+        requireAuditTenantAccess(audit, tenantId);
+        requireWarehouseObservationAccess(actor, tenantId, audit.getWarehouse().getId());
+        return audit;
+    }
+
+    private void requireAuditTenantAccess(InventoryAudit audit, UUID tenantId) {
+        UUID requesterId = audit.getRequestedBy().getId();
+        boolean requestedByTenant = requesterId.equals(tenantId);
+        boolean requestedByStaffOfTenant = tenantMemberRepository
+                .findByUserIdOrderByJoinedAtDesc(requesterId)
+                .stream()
+                .anyMatch(member -> member.getTenant() != null
+                        && tenantId.equals(member.getTenant().getId()));
+        if (!requestedByTenant && !requestedByStaffOfTenant) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        }
+    }
+
+    private UUID resolveTenantId(UUID userId) {
+        return tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(userId)
                 .map(member -> member.getTenant().getId())
                 .orElse(userId);
-        if (!subscriptionService.hasActiveSubscription(tenantId)) {
-            throw new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED);
+    }
+
+    private void requireWarehouseObservationAccess(User actor, UUID tenantId, UUID warehouseId) {
+        accessService.requireActiveContract(tenantId, warehouseId);
+        if (isStaff(actor)) {
+            accessService.requireActiveStaffAssignment(actor.getId(), tenantId, warehouseId);
+        }
+    }
+
+    private void requireWarehouseMutationAccess(User actor, UUID tenantId, UUID warehouseId) {
+        requireWarehouseObservationAccess(actor, tenantId, warehouseId);
+        accessService.requireActiveSubscription(tenantId);
+    }
+
+    private boolean isStaff(User user) {
+        return user.getRoles() != null && user.getRoles().stream()
+                .anyMatch(role -> RoleType.ROLE_STAFF.name().equals(role.getName()));
+    }
+
+    private void ensureApproverIsTenant(User approver) {
+        boolean isTenant = approver.getRoles() != null && approver.getRoles().stream()
+                .anyMatch(role -> RoleType.ROLE_TENANT.name().equals(role.getName()));
+        if (!isTenant) {
+            throw new ForbiddenException(
+                    "Chỉ Doanh nghiệp (Tenant) có quyền duyệt hoặc từ chối phiếu kiểm kê.");
         }
     }
 
@@ -312,7 +381,6 @@ public class InventoryAuditService {
                 .skuCode(sku != null ? sku.getSkuCode() : null)
                 .skuName(sku != null ? sku.getName() : null)
                 .uomSymbol(uom != null ? uom.getCode() : null)
-                .zoneName(batch.getZone() != null ? batch.getZone().getName() : null)
                 .rackName(batch.getRack() != null ? batch.getRack().getName() : null)
                 .binName(batch.getBin() != null ? batch.getBin().getName() : null)
                 .expectedQuantity(item.getExpectedQuantity())

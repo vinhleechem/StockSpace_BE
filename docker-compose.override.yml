@@ -1,16 +1,3 @@
-version: '3.8'
-
-# =============================================================================
-# DEV LOCAL — Tự động merge với docker-compose.yml khi chạy `docker compose up`
-# Không cần chỉ định file, Docker Compose tự load file này.
-#
-# Khác với prod:
-#   - Expose port 8080 trực tiếp (không qua Nginx)
-#   - Expose port 5432 để kết nối DB bằng DBeaver/pgAdmin
-#   - Không có Nginx
-#   - Không restart tự động
-#   - DDL_AUTO=update (Hibernate tự tạo/migrate schema)
-# =============================================================================
 
 services:
   postgres:
@@ -22,6 +9,7 @@ services:
     ports:
       - "8080:8080"   # Truy cập trực tiếp, không qua Nginx
     environment:
+      - SPRING_PROFILES_ACTIVE=dev
       - SPRING_JPA_HIBERNATE_DDL_AUTO=update
-      - JAVA_OPTS=-Xmx512m -Xms256m
+      - JAVA_TOOL_OPTIONS=-Xmx512m -Xms256m
     restart: "no"

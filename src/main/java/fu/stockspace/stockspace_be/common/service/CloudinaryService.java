@@ -12,9 +12,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Service xử lý upload ảnh lên Cloudinary.
- */
+
+
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -22,10 +22,10 @@ public class CloudinaryService {
 
     private final Cloudinary cloudinary;
 
-    /**
-     * Upload một hình ảnh lên Cloudinary.
-     * Trả về secure URL dẫn tới ảnh đã upload.
-     */
+
+
+
+
     public String uploadImage(MultipartFile file) throws IOException {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("File không được trống");
@@ -36,16 +36,16 @@ public class CloudinaryService {
                 "folder", "stockspace/images",
                 "resource_type", "image"
         ));
-        
+
         String url = (String) uploadResult.get("secure_url");
         log.info("Upload successful. Secure URL: {}", url);
         return url;
     }
 
-    /**
-     * Upload danh sách nhiều hình ảnh lên Cloudinary.
-     * Trả về danh sách secure URLs dẫn tới các ảnh đã upload.
-     */
+
+
+
+
     public List<String> uploadImages(List<MultipartFile> files) throws IOException {
         if (files == null || files.isEmpty()) {
             return List.of();

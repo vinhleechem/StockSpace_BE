@@ -6,9 +6,9 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 import java.time.LocalDate;
 import java.util.UUID;
-/**
- * Entity Subscription - Đăng ký sử dụng gói dịch vụ của Tenant.
- */
+
+
+
 @Entity
 @Table(name = "subscriptions", indexes = {
         @Index(name = "idx_subscriptions_tenant_id", columnList = "tenant_id"),
@@ -38,4 +38,25 @@ public class Subscription extends BaseEntity {
     @Column(name = "status", nullable = false, length = 20)
     @Builder.Default
     private SubscriptionStatus status = SubscriptionStatus.ACTIVE;
+
+
+
+    @Column(name = "snapshot_max_staff")
+    private Integer snapshotMaxStaff;
+
+
+    @Column(name = "snapshot_duration_days")
+    private Integer snapshotDurationDays;
+
+
+    @Column(name = "snapshot_price", precision = 15, scale = 2)
+    private java.math.BigDecimal snapshotPrice;
+
+
+    @Column(name = "snapshot_features", columnDefinition = "TEXT")
+    private String snapshotFeatures;
+
+
+    @Column(name = "snapshot_package_name", length = 150)
+    private String snapshotPackageName;
 }

@@ -10,6 +10,7 @@ import org.hibernate.type.SqlTypes;
 
 import java.util.Map;
 import java.util.UUID;
+import java.math.BigDecimal;
 
 @Entity
 @Table(name = "product_skus", indexes = {
@@ -30,7 +31,7 @@ public class ProductSku extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tenant_id")
-    private User tenant; // null if system-wide recommended SKU
+    private User tenant;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id")
@@ -45,6 +46,12 @@ public class ProductSku extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "uom_id", nullable = false)
     private UnitOfMeasure uom;
+
+    @Column(name = "unit_weight_kg", precision = 14, scale = 6)
+    private BigDecimal unitWeightKg;
+
+    @Column(name = "unit_volume_m3", precision = 14, scale = 6)
+    private BigDecimal unitVolumeM3;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "specifications", columnDefinition = "jsonb")

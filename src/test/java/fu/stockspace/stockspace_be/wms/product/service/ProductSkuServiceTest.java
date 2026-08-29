@@ -2,11 +2,15 @@ package fu.stockspace.stockspace_be.wms.product.service;
 
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
+import fu.stockspace.stockspace_be.common.exception.ErrorCode;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
+import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.wms.product.dto.CreateSkuRequest;
-import fu.stockspace.stockspace_be.wms.product.dto.PagedSkuResponse;
 import fu.stockspace.stockspace_be.wms.product.dto.ProductSkuResponse;
+
 import fu.stockspace.stockspace_be.wms.product.dto.UpdateSkuRequest;
 import fu.stockspace.stockspace_be.wms.product.entity.ProductCategory;
 import fu.stockspace.stockspace_be.wms.product.entity.ProductSku;
@@ -25,6 +29,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
 import java.util.Collections;
+import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -50,6 +55,9 @@ class ProductSkuServiceTest {
     @Mock
     private UnitOfMeasureRepository uomRepository;
 
+    @Mock
+    private TenantWarehouseAccessService accessService;
+
     @InjectMocks
     private ProductSkuService skuService;
 
@@ -62,6 +70,17 @@ class ProductSkuServiceTest {
                 .code("PCS")
                 .name("Cái")
                 .build();
+    }
+
+    @Test
+    void createSkuRequiresActiveSubscriptionInService() {
+        UUID tenantId = UUID.randomUUID();
+        doThrow(new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED))
+                .when(accessService).requireActiveSubscription(tenantId);
+
+        assertThrows(ForbiddenException.class,
+                () -> skuService.createSku(tenantId, CreateSkuRequest.builder().build()));
+        verifyNoInteractions(userRepository);
     }
 
     @Test
@@ -79,13 +98,14 @@ class ProductSkuServiceTest {
         when(skuRepository.findAllActiveByTenantOrSystem(tenantId, pageRequest))
                 .thenReturn(new PageImpl<>(Collections.singletonList(sku), pageRequest, 1));
 
-        PagedSkuResponse response = skuService.getMySKUs(tenantId, pageRequest);
+        PagedResponse<ProductSkuResponse> response = skuService.getMySKUs(tenantId, pageRequest);
 
         assertNotNull(response);
         assertEquals(1, response.getContent().size());
         assertEquals("SKU123", response.getContent().get(0).getSkuCode());
         assertEquals(1, response.getTotalElements());
     }
+
 
     @Test
     void testGetSkuDetail_Success() {
@@ -134,6 +154,8 @@ class ProductSkuServiceTest {
                 .skuCode("NEW-SKU")
                 .name("New product")
                 .uomId(defaultUom.getId())
+                .unitWeightKg(new BigDecimal("2.5"))
+                .unitVolumeM3(new BigDecimal("0.08"))
                 .specifications(Collections.singletonMap("weight", "1kg"))
                 .build();
 
@@ -153,6 +175,8 @@ class ProductSkuServiceTest {
         assertEquals("NEW-SKU", response.getSkuCode());
         assertEquals("New product", response.getName());
         assertEquals(defaultUom.getId(), response.getUomId());
+        assertEquals(new BigDecimal("2.5"), response.getUnitWeightKg());
+        assertEquals(new BigDecimal("0.08"), response.getUnitVolumeM3());
         assertEquals("PCS", response.getUomCode());
         assertEquals("1kg", response.getSpecifications().get("weight"));
         verify(skuRepository, times(1)).save(any(ProductSku.class));
@@ -198,6 +222,8 @@ class ProductSkuServiceTest {
         UpdateSkuRequest request = UpdateSkuRequest.builder()
                 .name("New Name")
                 .uomId(newUom.getId())
+                .unitWeightKg(new BigDecimal("1.25"))
+                .unitVolumeM3(new BigDecimal("0.05"))
                 .build();
 
         when(skuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(sku));
@@ -219,7 +245,7 @@ class ProductSkuServiceTest {
         ProductSku systemSku = ProductSku.builder()
                 .id(skuId)
                 .skuCode("SYS-SKU")
-                .tenant(null) // System SKU
+                .tenant(null)
                 .name("System Sku Name")
                 .uom(defaultUom)
                 .build();
@@ -268,7 +294,7 @@ class ProductSkuServiceTest {
                 .build();
 
         when(skuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(sku));
-        when(stockBatchRepository.existsBySkuIdAndIsDeletedFalse(skuId)).thenReturn(true); // Linked to stock batches
+        when(stockBatchRepository.existsBySkuIdAndIsDeletedFalse(skuId)).thenReturn(true);
 
         assertThrows(BadRequestException.class, () -> skuService.deleteSku(tenantId, skuId));
         verify(skuRepository, never()).save(any(ProductSku.class));

@@ -3,7 +3,7 @@ package fu.stockspace.stockspace_be.auth.dto;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.*;
 
-/** Response từ Google OAuth token endpoint */
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

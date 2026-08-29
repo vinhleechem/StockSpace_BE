@@ -2,6 +2,7 @@ package fu.stockspace.stockspace_be.wms.product.dto;
 
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.util.Map;
 import java.util.UUID;
 
@@ -12,7 +13,7 @@ import java.util.UUID;
 @Builder
 public class ProductSkuResponse {
     private UUID id;
-    private UUID tenantId; // null if system recommended SKU
+    private UUID tenantId;
     private UUID categoryId;
     private String categoryName;
     private String skuCode;
@@ -20,5 +21,7 @@ public class ProductSkuResponse {
     private UUID uomId;
     private String uomCode;
     private String uomName;
+    private BigDecimal unitWeightKg;
+    private BigDecimal unitVolumeM3;
     private Map<String, Object> specifications;
 }

@@ -25,9 +25,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/**
- * Service xử lý các nghiệp vụ liên quan đến Role và quản lý vai trò của User cho Admin.
- */
+
+
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -45,9 +45,9 @@ public class RoleManagementService {
             RoleType.ROLE_INSPECTOR.name()
     );
 
-    /**
-     * Lấy danh sách tất cả các vai trò trong hệ thống.
-     */
+
+
+
     @Transactional(readOnly = true)
     public List<RoleResponse> getAllRoles() {
         log.info("Fetching all roles from database");
@@ -56,9 +56,9 @@ public class RoleManagementService {
                 .collect(Collectors.toList());
     }
 
-    /**
-     * Tạo vai trò mới.
-     */
+
+
+
     @Transactional
     public RoleResponse createRole(CreateRoleRequest request) {
         String name = request.getName().trim().toUpperCase().replace(" ", "_");
@@ -85,9 +85,9 @@ public class RoleManagementService {
         return mapToRoleResponse(role);
     }
 
-    /**
-     * Cập nhật thông tin vai trò.
-     */
+
+
+
     @Transactional
     public RoleResponse updateRole(java.util.UUID id, CreateRoleRequest request) {
         Role role = roleRepository.findById(id)
@@ -100,13 +100,13 @@ public class RoleManagementService {
 
         log.info("Updating role ID: {} from name '{}' to '{}'", id, role.getName(), newName);
 
-        // Bảo vệ vai trò hệ thống không bị đổi tên
+
         if (SYSTEM_ROLES.contains(role.getName()) && !role.getName().equalsIgnoreCase(newName)) {
             log.warn("Attempt to rename system role: {}", role.getName());
             throw new BadRequestException("Không thể đổi tên các vai trò mặc định của hệ thống");
         }
 
-        // Kiểm tra trùng tên với role khác
+
         if (!role.getName().equalsIgnoreCase(newName)) {
             if (roleRepository.findByName(newName).isPresent()) {
                 log.warn("Target role name already exists: {}", newName);
@@ -123,9 +123,9 @@ public class RoleManagementService {
         return mapToRoleResponse(role);
     }
 
-    /**
-     * Xóa vai trò.
-     */
+
+
+
     @Transactional
     public void deleteRole(java.util.UUID id) {
         Role role = roleRepository.findById(id)
@@ -133,13 +133,13 @@ public class RoleManagementService {
 
         log.info("Deleting role: {}", role.getName());
 
-        // Bảo vệ vai trò hệ thống không bị xóa
+
         if (SYSTEM_ROLES.contains(role.getName())) {
             log.warn("Attempt to delete system role: {}", role.getName());
             throw new BadRequestException("Không thể xóa các vai trò mặc định của hệ thống");
         }
 
-        // Gỡ bỏ role khỏi toàn bộ User trước khi xóa role (tránh Foreign Key Constraint lỗi trên user_roles)
+
         List<User> users = userRepository.findUsersByRoleId(id);
         if (!users.isEmpty()) {
             log.info("Removing role {} from {} users", role.getName(), users.size());
@@ -154,9 +154,9 @@ public class RoleManagementService {
         log.info("Role ID: {} deleted successfully", id);
     }
 
-    /**
-     * Gán thêm một Permission vào Role.
-     */
+
+
+
     @Transactional
     public RoleResponse assignPermissionToRole(java.util.UUID roleId, AssignPermissionRequest request) {
         Role role = roleRepository.findById(roleId)
@@ -173,9 +173,9 @@ public class RoleManagementService {
         return mapToRoleResponse(role);
     }
 
-    /**
-     * Gỡ bỏ Permission khỏi Role.
-     */
+
+
+
     @Transactional
     public RoleResponse removePermissionFromRole(java.util.UUID roleId, java.util.UUID permissionId) {
         Role role = roleRepository.findById(roleId)
@@ -197,9 +197,9 @@ public class RoleManagementService {
         return mapToRoleResponse(role);
     }
 
-    /**
-     * Gán vai trò cho User (thêm vào user_roles).
-     */
+
+
+
     @Transactional
     public void assignRoleToUser(java.util.UUID userId, AssignRoleRequest request) {
         User user = userRepository.findById(userId)
@@ -214,9 +214,9 @@ public class RoleManagementService {
         userRepository.save(user);
     }
 
-    /**
-     * Xóa vai trò khỏi User.
-     */
+
+
+
     @Transactional
     public void removeRoleFromUser(java.util.UUID userId, java.util.UUID roleId) {
         User user = userRepository.findById(userId)
@@ -232,7 +232,7 @@ public class RoleManagementService {
             throw new BadRequestException("Người dùng chưa có vai trò này");
         }
 
-        // Ràng buộc nghiệp vụ: Một user phải có ít nhất 1 role để tránh dữ liệu mồ côi
+
         if (user.getRoles().size() <= 1) {
             log.warn("Attempt to remove last role from user: {}", user.getEmail());
             throw new BadRequestException("Người dùng phải có ít nhất một vai trò hoạt động");

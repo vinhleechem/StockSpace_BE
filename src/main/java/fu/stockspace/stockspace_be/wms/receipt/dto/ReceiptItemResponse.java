@@ -15,8 +15,6 @@ public class ReceiptItemResponse {
     private String skuCode;
     private String skuName;
     private int quantity;
-    private UUID zoneId;
-    private String zoneName;
     private UUID rackId;
     private String rackName;
     private UUID binId;

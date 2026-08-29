@@ -1,0 +1,18 @@
+# Verified historical migrations only.
+# Do not add a migration until the target database preflight proves that its
+# schema/data change is already present. 20260825_* is intentionally excluded.
+20260728_chatbot_production.sql
+20260807_warehouse_layout_length_not_null.sql
+20260811_remove_role_column_from_assignment.sql
+20260813_add_positions_to_warehouse_layouts.sql
+20260813_alter_transactions_type_constraint.sql
+20260815_add_layout_scalar_constraints.sql
+20260815_add_sku_physical_properties.sql
+20260815_add_stock_batch_location_unique_index.sql
+20260815_cleanup_test_layout_records.sql
+20260815_migrate_layout_geometry_to_meters.sql
+20260815_tenant_termination_flow.sql
+20260816_cleanup_package_feature_metadata.sql
+20260816_contract_expiry_cleanup.sql
+20260816_fix_service_package_staff_limits.sql
+20260816_subscription_package_snapshot_duration.sql

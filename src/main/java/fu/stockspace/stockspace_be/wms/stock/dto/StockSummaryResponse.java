@@ -8,9 +8,9 @@ import lombok.NoArgsConstructor;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Tổng hợp tồn kho theo SKU (kèm danh sách vị trí phân tán).
- */
+
+
+
 @Data
 @Builder
 @NoArgsConstructor

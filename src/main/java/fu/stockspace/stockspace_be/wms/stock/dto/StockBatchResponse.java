@@ -15,20 +15,18 @@ import java.util.UUID;
 public class StockBatchResponse {
     private UUID id;
 
-    // SKU info
+
     private UUID skuId;
     private String skuCode;
     private String skuName;
-    private String uomSymbol;   // sku.getUom().getSymbol()
+    private String uomSymbol;
     private String uomName;
 
-    // Warehouse
+
     private UUID warehouseId;
     private String warehouseName;
 
-    // Location
-    private UUID zoneId;
-    private String zoneName;
+
     private UUID rackId;
     private String rackName;
     private UUID binId;

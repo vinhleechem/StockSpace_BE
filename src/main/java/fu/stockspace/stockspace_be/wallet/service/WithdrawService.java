@@ -1,7 +1,7 @@
 package fu.stockspace.stockspace_be.wallet.service;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
-import fu.stockspace.stockspace_be.booking.entity.ApprovalStatus;
+import fu.stockspace.stockspace_be.common.entity.ApprovalStatus;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
@@ -31,20 +31,20 @@ public class WithdrawService {
     private final UserRepository userRepository;
     private final WalletService walletService;
     private final NotificationService notificationService;
-    /**
-     * Tạo yêu cầu rút tiền mới. Khấu trừ số dư ví ngay lập tức để tránh double spending.
-     */
+
+
+
     @Transactional
     public WithdrawResponse submitWithdrawRequest(UUID userId, WithdrawRequestDto dto) {
-        // 1. Khóa ví kiểm tra số dư và trừ tiền
+
         Wallet wallet = walletRepository.findByUserIdWithLock(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WALLET_NOT_FOUND));
         if (wallet.getBalance().compareTo(dto.getAmount()) < 0) {
-            throw new BadRequestException(ErrorCode.WALLET_INSUFFICIENT_BALANCE);
+            throw new BadRequestException(ErrorCode.INSUFFICIENT_BALANCE);
         }
         wallet.setBalance(wallet.getBalance().subtract(dto.getAmount()));
         walletRepository.save(wallet);
-        // 2. Tạo Transaction PENDING loại WITHDRAWAL
+
         Transaction transaction = Transaction.builder()
                 .wallet(wallet)
                 .amount(dto.getAmount())
@@ -54,7 +54,7 @@ public class WithdrawService {
                 .referenceId("SYS-WITHDRAW-PENDING-" + UUID.randomUUID())
                 .build();
         transaction = transactionRepository.save(transaction);
-        // 3. Tạo WithdrawRequest
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
         WithdrawRequest request = WithdrawRequest.builder()
@@ -70,17 +70,17 @@ public class WithdrawService {
         log.info("Withdraw Service: User {} submitted withdraw request of {} VND. Wallet balance deducted.", userId, dto.getAmount());
         return mapToResponse(request);
     }
-    /**
-     * Lấy lịch sử yêu cầu rút tiền của chính user.
-     */
+
+
+
     @Transactional(readOnly = true)
     public Page<WithdrawResponse> getMyWithdrawRequests(UUID userId, Pageable pageable) {
         return withdrawRequestRepository.findByUserId(userId, pageable)
                 .map(this::mapToResponse);
     }
-    /**
-     * Lấy toàn bộ danh sách yêu cầu rút tiền (phục vụ Admin).
-     */
+
+
+
     @Transactional(readOnly = true)
     public Page<WithdrawResponse> getAllWithdrawRequests(ApprovalStatus status, Pageable pageable) {
         if (status != null) {
@@ -90,9 +90,9 @@ public class WithdrawService {
         return withdrawRequestRepository.findAll(pageable)
                 .map(this::mapToResponse);
     }
-    /**
-     * Admin duyệt yêu cầu rút tiền.
-     */
+
+
+
     @Transactional
     public WithdrawResponse approveWithdraw(UUID requestId, String adminNotes) {
         WithdrawRequest request = withdrawRequestRepository.findById(requestId)
@@ -100,10 +100,10 @@ public class WithdrawService {
         if (request.getStatus() != ApprovalStatus.PENDING) {
             throw new BadRequestException(ErrorCode.WITHDRAW_ALREADY_PROCESSED);
         }
-        // Cập nhật trạng thái yêu cầu
+
         request.setStatus(ApprovalStatus.APPROVED);
         request.setAdminNotes(adminNotes);
-        // Cập nhật trạng thái transaction thành SUCCESS
+
         Transaction transaction = request.getTransaction();
         if (transaction != null) {
             transaction.setStatus(TransactionStatus.SUCCESS);
@@ -113,7 +113,7 @@ public class WithdrawService {
         request = withdrawRequestRepository.save(request);
         log.info("Withdraw Service: Admin approved withdraw request ID: {}. Transaction confirmed.", requestId);
 
-        // Push thông báo cho User (Module 8 — Dev B)
+
         try {
             UUID userId = request.getUser().getId();
             String amountStr = request.getAmount().toPlainString();
@@ -129,9 +129,9 @@ public class WithdrawService {
 
         return mapToResponse(request);
     }
-    /**
-     * Admin từ chối yêu cầu rút tiền. Hoàn trả lại tiền vào ví cho user.
-     */
+
+
+
     @Transactional
     public WithdrawResponse rejectWithdraw(UUID requestId, String adminNotes) {
         WithdrawRequest request = withdrawRequestRepository.findById(requestId)
@@ -139,16 +139,16 @@ public class WithdrawService {
         if (request.getStatus() != ApprovalStatus.PENDING) {
             throw new BadRequestException(ErrorCode.WITHDRAW_ALREADY_PROCESSED);
         }
-        // Hoàn trả lại tiền vào ví
+
         UUID userId = request.getUser().getId();
         Wallet wallet = walletRepository.findByUserIdWithLock(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WALLET_NOT_FOUND));
         wallet.setBalance(wallet.getBalance().add(request.getAmount()));
         walletRepository.save(wallet);
-        // Cập nhật trạng thái yêu cầu
+
         request.setStatus(ApprovalStatus.REJECTED);
         request.setAdminNotes(adminNotes);
-        // Cập nhật trạng thái transaction thành FAILED
+
         Transaction transaction = request.getTransaction();
         if (transaction != null) {
             transaction.setStatus(TransactionStatus.FAILED);
