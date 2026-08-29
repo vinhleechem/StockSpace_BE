@@ -5,10 +5,7 @@ import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
-import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
-import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
-import fu.stockspace.stockspace_be.staff.entity.AssignmentStatus;
-import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
+import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseBin;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseRack;
@@ -46,9 +43,7 @@ public class StockBatchService {
     private final ProductSkuRepository productSkuRepository;
     private final WarehouseRackRepository rackRepository;
     private final WarehouseBinRepository binRepository;
-    private final SubscriptionService subscriptionService;
-    private final RentalContractRepository contractRepository;
-    private final StaffWarehouseAssignmentRepository assignmentRepository;
+    private final TenantWarehouseAccessService accessService;
 
 
 
@@ -56,13 +51,9 @@ public class StockBatchService {
 
     @Transactional(readOnly = true)
     public PagedResponse<StockBatchResponse> getStockByWarehouse(UUID tenantId, UUID warehouseId, Pageable pageable) {
-        if (!subscriptionService.hasActiveSubscription(tenantId)) {
-            throw new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED);
-        }
-
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
-        requireActiveWarehouseContract(tenantId, warehouseId);
+        accessService.requireActiveContract(tenantId, warehouseId);
 
         Page<StockBatch> page = stockBatchRepository.findByWarehouseIdAndTenantId(
                 warehouseId, tenantId, pageable);
@@ -89,13 +80,9 @@ public class StockBatchService {
     @Transactional(readOnly = true)
     public PagedResponse<WarehouseStockOverviewResponse> getStockOverviewByWarehouse(
             UUID tenantId, UUID warehouseId, Pageable pageable) {
-        if (!subscriptionService.hasActiveSubscription(tenantId)) {
-            throw new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED);
-        }
-
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
-        requireActiveWarehouseContract(tenantId, warehouseId);
+        accessService.requireActiveContract(tenantId, warehouseId);
 
         Page<ProductSkuRepository.WarehouseStockOverviewProjection> page =
                 productSkuRepository.findWarehouseStockOverview(tenantId, warehouseId, pageable);
@@ -135,13 +122,9 @@ public class StockBatchService {
 
     @Transactional(readOnly = true)
     public WarehouseStockSummary getStockSummaryByWarehouse(UUID tenantId, UUID warehouseId) {
-        if (!subscriptionService.hasActiveSubscription(tenantId)) {
-            throw new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED);
-        }
-
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
-        requireActiveWarehouseContract(tenantId, warehouseId);
+        accessService.requireActiveContract(tenantId, warehouseId);
 
         StockBatchRepository.WarehouseStockSummaryProjection summary =
                 stockBatchRepository.summarizeByWarehouseIdAndTenantId(warehouseId, tenantId);
@@ -169,10 +152,6 @@ public class StockBatchService {
 
     @Transactional(readOnly = true)
     public StockSummaryResponse getStockSummaryBySku(UUID tenantId, UUID skuId, UUID staffId) {
-        if (!subscriptionService.hasActiveSubscription(tenantId)) {
-            throw new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED);
-        }
-
         ProductSku sku = productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.SKU_NOT_FOUND));
 
@@ -204,18 +183,10 @@ public class StockBatchService {
                 .build();
     }
 
-    private void requireActiveWarehouseContract(UUID tenantId, UUID warehouseId) {
-        if (!contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(tenantId, warehouseId)) {
-            throw new ForbiddenException(ErrorCode.FORBIDDEN);
-        }
-    }
-
     private void requireActiveWarehouseAccess(UUID tenantId, UUID warehouseId, UUID staffId) {
-        requireActiveWarehouseContract(tenantId, warehouseId);
-        if (staffId != null
-                && !assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
-                staffId, tenantId, warehouseId, AssignmentStatus.ACTIVE)) {
-            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        accessService.requireActiveContract(tenantId, warehouseId);
+        if (staffId != null) {
+            accessService.requireActiveStaffAssignment(staffId, tenantId, warehouseId);
         }
     }
 

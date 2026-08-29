@@ -69,6 +69,11 @@ public class SearchWarehousesTool implements ChatTool {
                     minPrice,
                     maxPrice,
                     minArea,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
                     PageRequest.of(0, 5)
             );
 
@@ -82,6 +87,11 @@ public class SearchWarehousesTool implements ChatTool {
                             minPrice,
                             maxPrice,
                             minArea,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
                             PageRequest.of(0, 5)
                     );
                 }
@@ -97,6 +107,11 @@ public class SearchWarehousesTool implements ChatTool {
                         minPrice,
                         maxPrice,
                         minArea,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
                         PageRequest.of(0, 8)
                 );
 
@@ -144,7 +159,9 @@ public class SearchWarehousesTool implements ChatTool {
         map.put("name", w.getName());
         map.put("address", w.getAddress());
         map.put("description", w.getDescription());
-        map.put("pricePerMonth", w.getPricePerMonth());
+        map.put("rentalPrice", w.getRentalPrice());
+        map.put("rentalPricingType", w.getRentalPricingType() != null
+                ? w.getRentalPricingType().name() : "FIXED_MONTHLY");
         map.put("capacity", w.getCapacity());
         map.put("type", w.getType() != null ? w.getType().getName() : null);
         map.put("isVerified", w.isVerified());

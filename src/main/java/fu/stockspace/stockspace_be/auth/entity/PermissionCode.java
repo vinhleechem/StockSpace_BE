@@ -23,20 +23,12 @@ public enum PermissionCode {
     WAREHOUSE_UPDATE("Update own warehouse listings"),
     WAREHOUSE_DELETE("Delete own warehouse listings"),
     WAREHOUSE_LAYOUT_OWNER_MANAGE("Manage layouts of own warehouses"),
-    WAREHOUSE_LAYOUT_TENANT_MANAGE("Manage layouts for rented warehouses"),
+    WAREHOUSE_LAYOUT_TENANT_MANAGE("Manage layouts for warehouses covered by active contracts"),
     WAREHOUSE_REVIEW("Review warehouse listings"),
 
-    RENTAL_REQUEST_CREATE("Create rental requests"),
-    RENTAL_REQUEST_READ("View own rental requests"),
-    RENTAL_REQUEST_PROCESS("Process rental requests for own warehouses"),
-
     CONTRACT_READ("View own rental contracts"),
-    CONTRACT_HANDOVER_CONFIRM("Confirm handover on own contracts"),
-    CONTRACT_OWNER_MANAGE("Submit or cancel own owner-side contracts"),
-    CONTRACT_TENANT_MANAGE("Confirm, report, or respond on own tenant-side contracts"),
-    DISPUTE_CREATE("Create disputes for own contracts"),
-    DISPUTE_READ("View own disputes"),
-    DISPUTE_RESOLVE("Resolve disputes"),
+    CONTRACT_OWNER_MANAGE("Create, edit, and submit own owner-side contracts"),
+    CONTRACT_TENANT_MANAGE("Confirm, request changes to, or reject own tenant-side contracts"),
 
     INSPECTION_READ("View inspections"),
     INSPECTION_REQUEST("Request inspection for own warehouse"),

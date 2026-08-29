@@ -53,32 +53,36 @@ public enum ErrorCode {
     WAREHOUSE_TYPE_NOT_FOUND("Loại kho không tồn tại trong hệ thống", HttpStatus.NOT_FOUND),
     WAREHOUSE_TYPE_ALREADY_EXISTS("Loại kho đã tồn tại trong hệ thống", HttpStatus.CONFLICT),
     WAREHOUSE_TYPE_IN_USE("Loại kho đang được sử dụng bởi một hoặc nhiều kho bãi, không thể xóa", HttpStatus.BAD_REQUEST),
-    WAREHOUSE_CANNOT_DELETE_RENTED("Không thể xoá kho đang có Tenant thuê", HttpStatus.BAD_REQUEST),
+    WAREHOUSE_HAS_ACTIVE_CONTRACTS("Không thể xoá kho đang có hợp đồng thuê hiệu lực", HttpStatus.BAD_REQUEST),
     WAREHOUSE_INVALID_STATUS_TRANSITION("Không thể chuyển sang trạng thái này", HttpStatus.BAD_REQUEST),
+    WAREHOUSE_DEFAULT_LAYOUT_REQUIRED("Kho phải có default layout hợp lệ trước khi đăng bài", HttpStatus.CONFLICT),
+    LISTING_PAYMENT_REQUIRED("Kho chưa có khoản thanh toán đăng bài đang chờ duyệt", HttpStatus.CONFLICT),
     WAREHOUSE_IMAGE_LIMIT_EXCEEDED("Số lượng ảnh vượt quá giới hạn tối đa (10 ảnh)", HttpStatus.BAD_REQUEST),
 
 
-    BOOKING_NOT_FOUND("Yêu cầu thuê kho không tồn tại", HttpStatus.NOT_FOUND),
-    BOOKING_ALREADY_PROCESSED("Yêu cầu thuê kho đã được xử lý (Approved/Rejected)", HttpStatus.BAD_REQUEST),
-    BOOKING_DUPLICATE_PENDING("Bạn đã có một yêu cầu thuê kho đang chờ duyệt cho kho này", HttpStatus.CONFLICT),
 
 
     CONTRACT_NOT_FOUND("Hợp đồng thuê kho không tồn tại", HttpStatus.NOT_FOUND),
-    CONTRACT_ALREADY_CONFIRMED("Bạn đã xác nhận bàn giao hoặc hợp đồng đã hoàn thành", HttpStatus.BAD_REQUEST),
+    TENANT_NOT_FOUND("Tenant không tồn tại trong hệ thống", HttpStatus.NOT_FOUND),
+    INVALID_ROLE("Người dùng không có vai trò phù hợp cho thao tác này", HttpStatus.BAD_REQUEST),
+    INVALID_CONTRACT_STATUS("Trạng thái hợp đồng không cho phép thực hiện thao tác này", HttpStatus.BAD_REQUEST),
+    CONTRACT_DATE_OVERLAP("Kho đã có hợp đồng trùng khoảng thời gian yêu cầu", HttpStatus.CONFLICT),
+    INVALID_LEASE_DIMENSIONS("Kích thước khu vực thuê không hợp lệ", HttpStatus.BAD_REQUEST),
 
 
     INSPECTION_NOT_FOUND("Yêu cầu kiểm định không tồn tại", HttpStatus.NOT_FOUND),
     INSPECTION_ALREADY_SUBMITTED("Kiểm định đã được nộp hoặc đang xử lý", HttpStatus.BAD_REQUEST),
-    INSPECTION_CANNOT_BE_REQUESTED_WHEN_RENTED("Không thể gửi yêu cầu kiểm định khi kho đang trong trạng thái cho thuê", HttpStatus.BAD_REQUEST),
     INSPECTION_WAREHOUSE_NOT_AVAILABLE("Chỉ có thể gửi yêu cầu kiểm định khi kho đã được phê duyệt và đang hoạt động", HttpStatus.BAD_REQUEST),
 
 
     WALLET_NOT_FOUND("Ví điện tử không tồn tại", HttpStatus.NOT_FOUND),
-    WALLET_INSUFFICIENT_BALANCE("Số dư ví không đủ để thực hiện giao dịch", HttpStatus.BAD_REQUEST),
+    INSUFFICIENT_BALANCE("Số dư ví không đủ để thực hiện giao dịch", HttpStatus.BAD_REQUEST),
     TRANSACTION_NOT_FOUND("Giao dịch không tồn tại", HttpStatus.NOT_FOUND),
 
 
     PACKAGE_NOT_FOUND("Gói dịch vụ không tồn tại", HttpStatus.NOT_FOUND),
+    LISTING_PACKAGE_INACTIVE("Gói đăng tin hiện không hoạt động", HttpStatus.BAD_REQUEST),
+    LISTING_PUBLICATION_PENDING("Kho đang có yêu cầu đăng bài chờ Admin duyệt", HttpStatus.CONFLICT),
     SUBSCRIPTION_ALREADY_ACTIVE("Bạn đã có gói dịch vụ đang hoạt động", HttpStatus.CONFLICT),
     SUBSCRIPTION_NOT_FOUND("Subscription không tồn tại", HttpStatus.NOT_FOUND),
 
@@ -87,8 +91,6 @@ public enum ErrorCode {
     WITHDRAW_ALREADY_PROCESSED("Yêu cầu rút tiền đã được xử lý", HttpStatus.BAD_REQUEST),
 
 
-    DISPUTE_NOT_FOUND("Tranh chấp không tồn tại", HttpStatus.NOT_FOUND),
-    DISPUTE_ALREADY_OPEN("Đã có tranh chấp đang mở cho hợp đồng này", HttpStatus.CONFLICT),
 
 
     NOTIFICATION_NOT_FOUND("Không tìm thấy thông báo", HttpStatus.NOT_FOUND),
@@ -112,6 +114,11 @@ public enum ErrorCode {
     SKU_IN_USE("Không thể xóa SKU vì đang có lô hàng tồn kho liên kết", HttpStatus.BAD_REQUEST),
     RECEIPT_NOT_FOUND("Không tìm thấy phiếu xuất nhập kho", HttpStatus.NOT_FOUND),
     RECEIPT_ALREADY_PROCESSED("Phiếu xuất nhập kho đã được xử lý", HttpStatus.BAD_REQUEST),
+    STOCK_TRANSFER_NOT_FOUND("Không tìm thấy yêu cầu chuyển kho", HttpStatus.NOT_FOUND),
+    STOCK_TRANSFER_INVALID_STATUS("Trạng thái yêu cầu chuyển kho không cho phép thao tác này", HttpStatus.CONFLICT),
+    STOCK_TRANSFER_SOURCE_DESTINATION_SAME("Kho nguồn và kho đích phải khác nhau", HttpStatus.BAD_REQUEST),
+    STOCK_TRANSFER_INVALID_ALLOCATION("Phân bổ hàng hóa chuyển kho không hợp lệ", HttpStatus.BAD_REQUEST),
+    STOCK_TRANSFER_DECISION_REASON_REQUIRED("Lý do từ chối hoặc hủy yêu cầu chuyển kho là bắt buộc", HttpStatus.BAD_REQUEST),
     CONFIG_NOT_FOUND("Cấu hình hệ thống không tồn tại", HttpStatus.NOT_FOUND),
     CONFIG_INVALID_VALUE("Giá trị cấu hình không hợp lệ", HttpStatus.BAD_REQUEST),
     UOM_NOT_FOUND("Không tìm thấy đơn vị tính", HttpStatus.NOT_FOUND),
@@ -150,7 +157,6 @@ public enum ErrorCode {
     REVIEW_ALREADY_EXISTS("Bạn đã đánh giá kho này cho hợp đồng này rồi", HttpStatus.CONFLICT),
     REVIEW_NOT_AUTHORIZED("Bạn không có quyền thực hiện thao tác này với đánh giá", HttpStatus.FORBIDDEN),
     REVIEW_EDIT_EXPIRED("Chỉ được sửa đánh giá trong vòng 7 ngày kể từ ngày tạo", HttpStatus.BAD_REQUEST),
-    REVIEW_CONTRACT_NOT_COMPLETED("Chỉ được đánh giá kho sau khi hợp đồng kết thúc", HttpStatus.BAD_REQUEST),
     REVIEW_OWNER_ALREADY_REPLIED("Owner đã phản hồi đánh giá này rồi", HttpStatus.CONFLICT);
 
     private final String message;

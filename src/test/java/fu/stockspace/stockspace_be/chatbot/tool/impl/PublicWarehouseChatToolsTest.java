@@ -3,6 +3,7 @@ package fu.stockspace.stockspace_be.chatbot.tool.impl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
+import fu.stockspace.stockspace_be.warehouse.entity.RentalPricingType;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -52,7 +53,8 @@ class PublicWarehouseChatToolsTest {
                 .address("Thủ Đức")
                 .description("Kho khô")
                 .capacity(new BigDecimal("250"))
-                .pricePerMonth(new BigDecimal("15000000"))
+                .rentalPricingType(RentalPricingType.FIXED_MONTHLY)
+                .rentalPrice(new BigDecimal("15000000"))
                 .status(WarehouseStatus.AVAILABLE)
                 .isVerified(true)
                 .build();
@@ -64,8 +66,11 @@ class PublicWarehouseChatToolsTest {
                         .execute(Map.of("warehouseId", warehouseId.toString()), null));
 
         assertEquals(warehouseId.toString(), result.get("id").asText());
+        assertEquals("15000000", result.get("rentalPrice").asText());
+        assertEquals("FIXED_MONTHLY", result.get("rentalPricingType").asText());
         assertEquals("Sẵn sàng cho thuê", result.get("status").asText());
         assertFalse(result.toString().contains("AVAILABLE"));
+        assertFalse(result.toString().contains("ownerPhone"));
         verify(warehouseRepository).findPublicAvailableById(warehouseId);
         verify(warehouseRepository, never()).findById(warehouseId);
     }
@@ -115,7 +120,8 @@ class PublicWarehouseChatToolsTest {
                 .address("Quận 7")
                 .description("Kho khô")
                 .capacity(new BigDecimal("100"))
-                .pricePerMonth(new BigDecimal("150"))
+                .rentalPricingType(RentalPricingType.PER_SQUARE_METER_MONTHLY)
+                .rentalPrice(new BigDecimal("150"))
                 .status(WarehouseStatus.AVAILABLE)
                 .isVerified(true)
                 .build();
@@ -125,6 +131,11 @@ class PublicWarehouseChatToolsTest {
                 eq(new BigDecimal("100")),
                 eq(new BigDecimal("200")),
                 eq(new BigDecimal("50")),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
                 any(Pageable.class)
         )).thenReturn(new PageImpl<>(List.of(warehouse)));
 
@@ -146,6 +157,11 @@ class PublicWarehouseChatToolsTest {
                 eq(new BigDecimal("100")),
                 eq(new BigDecimal("200")),
                 eq(new BigDecimal("50")),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
                 any(Pageable.class)
         );
     }
@@ -157,12 +173,18 @@ class PublicWarehouseChatToolsTest {
                 .name("Kho đang cho thuê")
                 .address("Bình Thạnh")
                 .capacity(new BigDecimal("80"))
-                .pricePerMonth(new BigDecimal("12000000"))
+                .rentalPricingType(RentalPricingType.FIXED_MONTHLY)
+                .rentalPrice(new BigDecimal("12000000"))
                 .status(WarehouseStatus.AVAILABLE)
                 .build();
         when(warehouseRepository.searchPublic(
                 eq(null),
                 eq(WarehouseStatus.AVAILABLE),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
                 eq(null),
                 eq(null),
                 eq(null),
@@ -177,6 +199,11 @@ class PublicWarehouseChatToolsTest {
         verify(warehouseRepository).searchPublic(
                 eq(null),
                 eq(WarehouseStatus.AVAILABLE),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
+                eq(null),
                 eq(null),
                 eq(null),
                 eq(null),

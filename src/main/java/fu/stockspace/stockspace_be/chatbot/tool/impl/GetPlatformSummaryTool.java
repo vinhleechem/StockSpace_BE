@@ -2,7 +2,6 @@ package fu.stockspace.stockspace_be.chatbot.tool.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
-import fu.stockspace.stockspace_be.booking.repository.BookingRequestRepository;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatTool;
 import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
@@ -26,7 +25,6 @@ public class GetPlatformSummaryTool implements ChatTool {
     private final ObjectMapper objectMapper;
     private final UserRepository userRepository;
     private final WarehouseRepository warehouseRepository;
-    private final BookingRequestRepository bookingRepository;
     private final RentalContractRepository contractRepository;
 
 
@@ -37,7 +35,7 @@ public class GetPlatformSummaryTool implements ChatTool {
 
     @Override
     public String getDescription() {
-        return "Xem tổng quan thống kê số lượng người dùng, kho bãi, cọc và hợp đồng trên toàn nền tảng (dành cho Admin).";
+        return "Xem tổng quan thống kê số lượng người dùng, kho bãi và hợp đồng trên toàn nền tảng (dành cho Admin).";
     }
 
     @Override
@@ -55,7 +53,6 @@ public class GetPlatformSummaryTool implements ChatTool {
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("totalUsers", userRepository.count());
             result.put("totalWarehouses", warehouseRepository.count());
-            result.put("totalBookings", bookingRepository.count());
             result.put("totalContracts", contractRepository.count());
 
             return objectMapper.writeValueAsString(result);

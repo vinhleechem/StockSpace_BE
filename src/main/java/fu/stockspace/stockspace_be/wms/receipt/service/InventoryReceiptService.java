@@ -4,18 +4,15 @@ import fu.stockspace.stockspace_be.auth.entity.RoleType;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.auth.util.TenantContextUtil;
-import fu.stockspace.stockspace_be.booking.entity.ApprovalStatus;
+import fu.stockspace.stockspace_be.common.entity.ApprovalStatus;
 import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
-import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
+import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
-import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
-import fu.stockspace.stockspace_be.staff.entity.AssignmentStatus;
-import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseBin;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseRack;
@@ -24,6 +21,9 @@ import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRackRepository;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
 import fu.stockspace.stockspace_be.wms.product.entity.ProductSku;
 import fu.stockspace.stockspace_be.wms.product.repository.ProductSkuRepository;
+import fu.stockspace.stockspace_be.wms.capacity.PhysicalLoad;
+import fu.stockspace.stockspace_be.wms.capacity.PhysicalLoadCalculator;
+import fu.stockspace.stockspace_be.wms.capacity.PhysicalLoadLine;
 import fu.stockspace.stockspace_be.wms.receipt.dto.*;
 import fu.stockspace.stockspace_be.wms.receipt.dto.InventoryTransactionResponse;
 import fu.stockspace.stockspace_be.wms.receipt.entity.DocumentType;
@@ -50,7 +50,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import java.math.BigDecimal;
 
 @Slf4j
 @Service
@@ -66,11 +65,10 @@ public class InventoryReceiptService {
     private final ProductSkuRepository productSkuRepository;
     private final WarehouseRackRepository rackRepository;
     private final WarehouseBinRepository binRepository;
-    private final SubscriptionService subscriptionService;
     private final fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository tenantMemberRepository;
-    private final RentalContractRepository rentalContractRepository;
-    private final StaffWarehouseAssignmentRepository assignmentRepository;
+    private final TenantWarehouseAccessService accessService;
     private final NotificationService notificationService;
+    private final PhysicalLoadCalculator physicalLoadCalculator;
 
     @Transactional
     public InventoryReceiptResponse createReceipt(UUID userId, CreateInventoryReceiptRequest request) {
@@ -79,13 +77,9 @@ public class InventoryReceiptService {
 
         UUID tenantId = resolveTenantId(creator);
 
-        if (!subscriptionService.hasActiveSubscription(tenantId)) {
-            throw new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED);
-        }
-
         Warehouse warehouse = warehouseRepository.findById(request.getWarehouseId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
-        requireWarehouseAccess(creator, tenantId, warehouse.getId());
+        requireWarehouseMutationAccess(creator, tenantId, warehouse.getId());
 
         InventoryReceipt receipt = InventoryReceipt.builder()
                 .warehouse(warehouse)
@@ -133,7 +127,7 @@ public class InventoryReceiptService {
         }
 
         if (request.getType() == DocumentType.INBOUND) {
-            validateInboundCapacity(capacityItems, false);
+            validateInboundCapacity(tenantId, warehouse.getId(), capacityItems, false);
         }
 
         try {
@@ -178,16 +172,12 @@ public class InventoryReceiptService {
         if (!creatorTenantId.equals(approverTenantId)) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
-        requireActiveWarehouseContract(approverTenantId, receipt.getWarehouse().getId());
-
-        if (!subscriptionService.hasActiveSubscription(creatorTenantId)) {
-            throw new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED);
-        }
+        requireWarehouseMutationAccess(approver, approverTenantId, receipt.getWarehouse().getId());
 
         List<InventoryReceiptItem> items = receiptItemRepository.findByReceiptId(receiptId);
 
         if (receipt.getType() == DocumentType.INBOUND) {
-            validateInboundCapacity(items.stream()
+            validateInboundCapacity(approverTenantId, receipt.getWarehouse().getId(), items.stream()
                     .map(item -> new CapacityItem(item.getBin(), item.getRack(), item.getSku(), item.getQuantity()))
                     .toList(), true);
         }
@@ -286,11 +276,7 @@ public class InventoryReceiptService {
         if (!creatorTenantId.equals(approverTenantId)) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
-        requireActiveWarehouseContract(approverTenantId, receipt.getWarehouse().getId());
-
-        if (!subscriptionService.hasActiveSubscription(creatorTenantId)) {
-            throw new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED);
-        }
+        requireWarehouseMutationAccess(approver, approverTenantId, receipt.getWarehouse().getId());
 
         receipt.setStatus(ApprovalStatus.REJECTED);
         if (reason != null && !reason.isBlank()) {
@@ -340,7 +326,7 @@ public class InventoryReceiptService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
         UUID tenantId = resolveTenantId(user);
-        requireWarehouseAccess(user, tenantId, warehouseId);
+        requireWarehouseObservationAccess(user, tenantId, warehouseId);
         return getReceiptsByWarehouse(warehouseId, type, pageable);
     }
 
@@ -363,7 +349,7 @@ public class InventoryReceiptService {
         UUID tenantId = resolveTenantId(user);
         InventoryReceipt receipt = receiptRepository.findById(receiptId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RECEIPT_NOT_FOUND));
-        requireWarehouseAccess(user, tenantId, receipt.getWarehouse().getId());
+        requireWarehouseObservationAccess(user, tenantId, receipt.getWarehouse().getId());
         List<InventoryReceiptItem> items = receiptItemRepository.findByReceiptId(receiptId);
         return mapToResponse(receipt, items);
     }
@@ -413,6 +399,8 @@ public class InventoryReceiptService {
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
+        UUID tenantId = resolveTenantId(creator);
+        requireWarehouseMutationAccess(creator, tenantId, warehouseId);
         if (quantity <= 0) {
             throw new BadRequestException("Adjustment quantity must be greater than 0");
         }
@@ -427,7 +415,8 @@ public class InventoryReceiptService {
             throw new BadRequestException(ErrorCode.STOCK_INSUFFICIENT_QUANTITY);
         }
         if (type == DocumentType.INBOUND) {
-            validateInboundCapacity(List.of(new CapacityItem(batch.getBin(), batch.getRack(), sku, quantity)), true);
+            validateInboundCapacity(tenantId, warehouseId,
+                    List.of(new CapacityItem(batch.getBin(), batch.getRack(), sku, quantity)), true);
         }
 
 
@@ -471,20 +460,6 @@ public class InventoryReceiptService {
 
 
 
-
-    @Transactional
-    public void recordTransaction(UUID receiptId, UUID batchId, int qty) {
-        InventoryReceipt receipt = receiptRepository.findById(receiptId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RECEIPT_NOT_FOUND));
-        StockBatch batch = stockBatchRepository.findById(batchId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STOCK_BATCH_NOT_FOUND));
-        InventoryTransaction tx = InventoryTransaction.builder()
-                .receipt(receipt)
-                .batch(batch)
-                .quantityChanged(qty)
-                .build();
-        transactionRepository.save(tx);
-    }
 
     @Transactional(readOnly = true)
     public byte[] exportReceiptsToCsv(UUID warehouseId, DocumentType type) {
@@ -538,7 +513,7 @@ public class InventoryReceiptService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
         UUID tenantId = resolveTenantId(user);
-        requireWarehouseAccess(user, tenantId, warehouseId);
+        requireWarehouseObservationAccess(user, tenantId, warehouseId);
         return exportReceiptsToCsv(warehouseId, type);
     }
 
@@ -591,11 +566,12 @@ public class InventoryReceiptService {
         UUID tenantId = resolveTenantId(user);
         StockBatch batch = stockBatchRepository.findByIdAndIsDeletedFalse(batchId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STOCK_BATCH_NOT_FOUND));
-        requireWarehouseAccess(user, tenantId, batch.getWarehouse().getId());
+        requireWarehouseObservationAccess(user, tenantId, batch.getWarehouse().getId());
         return getTransactionsByBatch(batchId, pageable);
     }
 
-    private void validateInboundCapacity(List<CapacityItem> items, boolean lockLocations) {
+    private void validateInboundCapacity(UUID tenantId, UUID warehouseId,
+                                         List<CapacityItem> items, boolean lockLocations) {
         if (items == null || items.isEmpty()) return;
 
         items.forEach(item -> {
@@ -625,105 +601,75 @@ public class InventoryReceiptService {
                             .ifPresent(bin -> bins.put(binId, bin)));
         }
 
+        boolean hasLimitedLocation = racks.values().stream()
+                .anyMatch(rack -> physicalLoadCalculator.isLimited(rack.getMaxWeight())
+                        || physicalLoadCalculator.isLimited(rack.getMaxVolume()))
+                || bins.values().stream()
+                .anyMatch(bin -> physicalLoadCalculator.isLimited(bin.getMaxWeight())
+                        || physicalLoadCalculator.isLimited(bin.getMaxVolume()));
+        List<PhysicalLoadLine> currentLoads = hasLimitedLocation
+                ? stockBatchRepository.findActivePhysicalLoadsByWarehouseIdAndTenantId(warehouseId, tenantId)
+                : List.of();
+        Map<UUID, List<PhysicalLoadLine>> currentLoadsByRack = currentLoads.stream()
+                .filter(line -> line.rackId() != null)
+                .collect(Collectors.groupingBy(PhysicalLoadLine::rackId));
+        Map<UUID, List<PhysicalLoadLine>> currentLoadsByBin = currentLoads.stream()
+                .filter(line -> line.binId() != null)
+                .collect(Collectors.groupingBy(PhysicalLoadLine::binId));
+        List<PhysicalLoadLine> incomingLoads = items.stream()
+                .map(this::toPhysicalLoadLine)
+                .toList();
+        Map<UUID, List<PhysicalLoadLine>> incomingLoadsByRack = incomingLoads.stream()
+                .filter(line -> line.rackId() != null)
+                .collect(Collectors.groupingBy(PhysicalLoadLine::rackId));
+        Map<UUID, List<PhysicalLoadLine>> incomingLoadsByBin = incomingLoads.stream()
+                .filter(line -> line.binId() != null)
+                .collect(Collectors.groupingBy(PhysicalLoadLine::binId));
+
         for (WarehouseRack rack : racks.values()) {
-            boolean weightLimited = isLimited(rack.getMaxWeight());
-            boolean volumeLimited = isLimited(rack.getMaxVolume());
+            boolean weightLimited = physicalLoadCalculator.isLimited(rack.getMaxWeight());
+            boolean volumeLimited = physicalLoadCalculator.isLimited(rack.getMaxVolume());
             if (!weightLimited && !volumeLimited) continue;
 
-            PhysicalLoad current = calculateLoad(stockBatchRepository.findByRackId(rack.getId()),
-                    weightLimited, volumeLimited);
-            PhysicalLoad incoming = calculateLoad(items.stream()
-                    .filter(item -> sameRack(item, rack))
-                    .toList(), weightLimited, volumeLimited);
-            assertCapacity("rack", rack.getName(), rack.getMaxWeight(), rack.getMaxVolume(),
-                    current.plus(incoming));
+            List<PhysicalLoadLine> lines = new ArrayList<>(
+                    currentLoadsByRack.getOrDefault(rack.getId(), List.of()));
+            lines.addAll(incomingLoadsByRack.getOrDefault(rack.getId(), List.of()));
+            PhysicalLoad total = physicalLoadCalculator.calculate(lines, weightLimited, volumeLimited);
+            physicalLoadCalculator.assertWithinCapacity("rack", rack.getName(),
+                    rack.getMaxWeight(), rack.getMaxVolume(), total);
         }
 
         for (WarehouseBin bin : bins.values()) {
-            boolean weightLimited = isLimited(bin.getMaxWeight());
-            boolean volumeLimited = isLimited(bin.getMaxVolume());
+            boolean weightLimited = physicalLoadCalculator.isLimited(bin.getMaxWeight());
+            boolean volumeLimited = physicalLoadCalculator.isLimited(bin.getMaxVolume());
             if (!weightLimited && !volumeLimited) continue;
 
-            PhysicalLoad current = calculateLoad(stockBatchRepository.findByBinId(bin.getId()),
-                    weightLimited, volumeLimited);
-            PhysicalLoad incoming = calculateLoad(items.stream()
-                    .filter(item -> item.bin() != null && bin.getId().equals(item.bin().getId()))
-                    .toList(), weightLimited, volumeLimited);
-            assertCapacity("bin", bin.getName(), bin.getMaxWeight(), bin.getMaxVolume(),
-                    current.plus(incoming));
+            List<PhysicalLoadLine> lines = new ArrayList<>(
+                    currentLoadsByBin.getOrDefault(bin.getId(), List.of()));
+            lines.addAll(incomingLoadsByBin.getOrDefault(bin.getId(), List.of()));
+            PhysicalLoad total = physicalLoadCalculator.calculate(lines, weightLimited, volumeLimited);
+            physicalLoadCalculator.assertWithinCapacity("bin", bin.getName(),
+                    bin.getMaxWeight(), bin.getMaxVolume(), total);
         }
     }
 
-    private boolean sameRack(CapacityItem item, WarehouseRack rack) {
-        WarehouseRack itemRack = item.rack() != null
+    private PhysicalLoadLine toPhysicalLoadLine(CapacityItem item) {
+        WarehouseRack rack = item.rack() != null
                 ? item.rack()
                 : item.bin() != null ? item.bin().getRack() : null;
-        return itemRack != null && rack.getId().equals(itemRack.getId());
-    }
-
-    private PhysicalLoad calculateLoad(List<?> source, boolean weightRequired, boolean volumeRequired) {
-        BigDecimal weight = BigDecimal.ZERO;
-        BigDecimal volume = BigDecimal.ZERO;
-
-        for (Object value : source) {
-            ProductSku sku;
-            int quantity;
-            if (value instanceof StockBatch batch) {
-                if (batch.isDeleted() || !batch.isActive()) continue;
-                sku = productSkuRepository.findByIdAndIsDeletedFalse(batch.getSkuId())
-                        .orElseThrow(() -> new BadRequestException("An active stock batch references a missing SKU"));
-                quantity = batch.getQuantity();
-            } else {
-                CapacityItem item = (CapacityItem) value;
-                sku = item.sku();
-                quantity = item.quantity();
-            }
-
-            if (weightRequired && !hasPositive(sku.getUnitWeightKg())) {
-                throw new BadRequestException("SKU " + sku.getSkuCode()
-                        + " is missing unitWeightKg; capacity-limited inbound is not allowed");
-            }
-            if (volumeRequired && !hasPositive(sku.getUnitVolumeM3())) {
-                throw new BadRequestException("SKU " + sku.getSkuCode()
-                        + " is missing unitVolumeM3; capacity-limited inbound is not allowed");
-            }
-            if (weightRequired) {
-                weight = weight.add(sku.getUnitWeightKg().multiply(BigDecimal.valueOf(quantity)));
-            }
-            if (volumeRequired) {
-                volume = volume.add(sku.getUnitVolumeM3().multiply(BigDecimal.valueOf(quantity)));
-            }
-        }
-        return new PhysicalLoad(weight, volume);
-    }
-
-    private void assertCapacity(String type, String name, BigDecimal maxWeight,
-                                BigDecimal maxVolume, PhysicalLoad total) {
-        if (isLimited(maxWeight) && total.weight().compareTo(maxWeight) > 0) {
-            throw new BadRequestException("Physical weight capacity exceeded for " + type + " " + name
-                    + " (limit=" + maxWeight + " kg, requested=" + total.weight() + " kg)");
-        }
-        if (isLimited(maxVolume) && total.volume().compareTo(maxVolume) > 0) {
-            throw new BadRequestException("Physical volume capacity exceeded for " + type + " " + name
-                    + " (limit=" + maxVolume + " m3, requested=" + total.volume() + " m3)");
-        }
-    }
-
-    private boolean isLimited(BigDecimal capacity) {
-        return capacity != null && capacity.signum() > 0;
-    }
-
-    private boolean hasPositive(BigDecimal value) {
-        return value != null && value.signum() > 0;
+        ProductSku sku = item.sku();
+        return new PhysicalLoadLine(
+                rack != null ? rack.getId() : null,
+                item.bin() != null ? item.bin().getId() : null,
+                sku.getId(),
+                sku.getSkuCode(),
+                sku.getName(),
+                sku.getUnitWeightKg(),
+                sku.getUnitVolumeM3(),
+                item.quantity());
     }
 
     private record CapacityItem(WarehouseBin bin, WarehouseRack rack, ProductSku sku, int quantity) {
-    }
-
-    private record PhysicalLoad(BigDecimal weight, BigDecimal volume) {
-        private PhysicalLoad plus(PhysicalLoad other) {
-            return new PhysicalLoad(weight.add(other.weight), volume.add(other.volume));
-        }
     }
 
     private UUID resolveTenantId(User user) {
@@ -735,20 +681,16 @@ public class InventoryReceiptService {
         return user.getId();
     }
 
-    private void requireWarehouseAccess(User user, UUID tenantId, UUID warehouseId) {
-        requireActiveWarehouseContract(tenantId, warehouseId);
-
-        if (isStaff(user)
-                && !assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
-                user.getId(), tenantId, warehouseId, AssignmentStatus.ACTIVE)) {
-            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+    private void requireWarehouseObservationAccess(User user, UUID tenantId, UUID warehouseId) {
+        accessService.requireActiveContract(tenantId, warehouseId);
+        if (isStaff(user)) {
+            accessService.requireActiveStaffAssignment(user.getId(), tenantId, warehouseId);
         }
     }
 
-    private void requireActiveWarehouseContract(UUID tenantId, UUID warehouseId) {
-        if (!rentalContractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(tenantId, warehouseId)) {
-            throw new ForbiddenException(ErrorCode.FORBIDDEN);
-        }
+    private void requireWarehouseMutationAccess(User user, UUID tenantId, UUID warehouseId) {
+        requireWarehouseObservationAccess(user, tenantId, warehouseId);
+        accessService.requireActiveSubscription(tenantId);
     }
 
     private boolean isStaff(User user) {

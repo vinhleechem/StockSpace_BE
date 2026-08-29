@@ -64,13 +64,13 @@ public class AdminWarehouseController {
 
 
 
-    @PostMapping("/{id}/verify")
-    @Operation(summary = "Duyệt kho (Xác minh thành công)")
-    public ResponseEntity<ApiResponse<WarehouseResponse>> verifyWarehouse(
+    @PostMapping("/{id}/approve")
+    @Operation(summary = "Duyệt bài đăng kho")
+    public ResponseEntity<ApiResponse<WarehouseResponse>> approveWarehouse(
             @PathVariable UUID id
     ) {
-        WarehouseResponse response = warehouseService.verifyWarehouse(id);
-        return ResponseEntity.ok(ApiResponse.success("Duyệt kho thành công. Kho hiện đã sẵn sàng hoạt động.", response));
+        WarehouseResponse response = warehouseService.approveWarehouse(id);
+        return ResponseEntity.ok(ApiResponse.success("Duyệt bài đăng thành công. Kho hiện đã hiển thị.", response));
     }
 
 

@@ -31,7 +31,7 @@ public class GetContractDetailTool implements ChatTool {
     @Override
     public String getDescription() {
         return "Xem thông tin một hợp đồng thuê kho mà người dùng đang đăng nhập có quyền truy cập: " +
-               "trạng thái, kho, thời hạn, tiền đặt cọc và xác nhận của người thuê, chủ kho.";
+               "trạng thái, kho, thời hạn, kích thước thuê, giá chụp tại thời điểm ký và giá thuê cuối cùng.";
     }
 
     @Override
@@ -80,9 +80,17 @@ public class GetContractDetailTool implements ChatTool {
         result.put("warehouseAddress", contract.getWarehouseAddress());
         result.put("startDate", contract.getStartDate());
         result.put("endDate", contract.getEndDate());
-        result.put("depositAmount", contract.getDepositAmount());
-        result.put("nguoiThueDaXacNhan", contract.isTenantConfirmed());
-        result.put("chuKhoDaXacNhan", contract.isOwnerConfirmed());
+        result.put("pricingType", contract.getPricingType());
+        result.put("rentalPriceSnapshot", contract.getRentalPriceSnapshot());
+        result.put("leasedWidth", contract.getLeasedWidth());
+        result.put("leasedLength", contract.getLeasedLength());
+        result.put("leasedHeight", contract.getLeasedHeight());
+        result.put("leasedAreaM2", contract.getLeasedAreaM2());
+        result.put("finalMonthlyRent", contract.getFinalMonthlyRent());
+        result.put("changeRequestReason", contract.getChangeRequestReason());
+        result.put("rejectionReason", contract.getRejectionReason());
+        result.put("submittedAt", contract.getSubmittedAt());
+        result.put("confirmedAt", contract.getConfirmedAt());
         return result;
     }
 }

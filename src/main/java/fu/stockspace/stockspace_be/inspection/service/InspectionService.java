@@ -67,10 +67,6 @@ public class InspectionService {
         Warehouse warehouse = warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId)
                 .orElseThrow(() -> new ForbiddenException(ErrorCode.WAREHOUSE_NOT_OWNED));
 
-        if (warehouse.getStatus() == WarehouseStatus.RENTED) {
-            throw new BadRequestException(ErrorCode.INSPECTION_CANNOT_BE_REQUESTED_WHEN_RENTED);
-        }
-
         if (warehouse.getStatus() != WarehouseStatus.AVAILABLE) {
             throw new BadRequestException(ErrorCode.INSPECTION_WAREHOUSE_NOT_AVAILABLE);
         }

@@ -12,7 +12,9 @@ import fu.stockspace.stockspace_be.warehouse.service.WarehouseService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -50,6 +52,14 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/owner/warehouses")
 @RequiredArgsConstructor
+@ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Warehouse is not owned by the caller",
+                content = @Content(schema = @Schema(implementation = ApiResponse.class),
+                        examples = @ExampleObject(value = "{\"success\":false,\"code\":\"WAREHOUSE_NOT_OWNED\",\"message\":\"You are not the warehouse owner\"}"))),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Warehouse not found",
+                content = @Content(schema = @Schema(implementation = ApiResponse.class),
+                        examples = @ExampleObject(value = "{\"success\":false,\"code\":\"WAREHOUSE_NOT_FOUND\",\"message\":\"Warehouse not found\"}")))
+})
 public class OwnerWarehouseController {
 
     private final WarehouseService warehouseService;
@@ -159,6 +169,16 @@ public class OwnerWarehouseController {
         UUID ownerId = getCurrentUserId();
         WarehouseResponse response = warehouseService.updateStatus(ownerId, id, status);
         return ResponseEntity.ok(ApiResponse.success("Cập nhật trạng thái kho thành công", response));
+    }
+
+    @PostMapping("/{id}/resubmit")
+    @PreAuthorize("@rbac.hasPermission('WAREHOUSE_UPDATE')")
+    @Operation(summary = "Gửi lại bài đăng warehouse sau khi bị từ chối")
+    public ResponseEntity<ApiResponse<WarehouseResponse>> resubmit(@PathVariable UUID id) {
+        UUID ownerId = getCurrentUserId();
+        WarehouseResponse response = warehouseService.resubmitWarehouse(ownerId, id);
+        return ResponseEntity.ok(ApiResponse.success(
+                "Gửi lại bài đăng thành công. Vui lòng chọn gói và thanh toán lại.", response));
     }
 
 

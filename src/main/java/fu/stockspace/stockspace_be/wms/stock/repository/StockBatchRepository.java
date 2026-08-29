@@ -1,5 +1,6 @@
 package fu.stockspace.stockspace_be.wms.stock.repository;
 
+import fu.stockspace.stockspace_be.wms.capacity.PhysicalLoadLine;
 import fu.stockspace.stockspace_be.wms.stock.entity.StockBatch;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -7,6 +8,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
 
 import java.util.List;
 import java.util.Optional;
@@ -28,10 +31,64 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
     Optional<StockBatch> findBySkuIdAndWarehouseIdAndRackIdAndBinIdAndIsDeletedFalse(
             UUID skuId, UUID warehouseId, UUID rackId, UUID binId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select b from StockBatch b
+            where b.skuId = :skuId
+              and b.warehouse.id = :warehouseId
+              and b.rack.id = :rackId
+              and b.bin.id = :binId
+              and b.isActive = true
+              and b.isDeleted = false
+            """)
+    Optional<StockBatch> findBySkuIdAndWarehouseIdAndRackIdAndBinIdForUpdate(
+            @Param("skuId") UUID skuId,
+            @Param("warehouseId") UUID warehouseId,
+            @Param("rackId") UUID rackId,
+            @Param("binId") UUID binId);
+
 
     Page<StockBatch> findByWarehouseIdAndIsDeletedFalse(UUID warehouseId, Pageable pageable);
 
     List<StockBatch> findAllByWarehouseIdAndIsDeletedFalse(UUID warehouseId);
+
+    @Query("""
+            SELECT new fu.stockspace.stockspace_be.wms.capacity.PhysicalLoadLine(
+                   b.rack.id,
+                   b.bin.id,
+                   b.skuId,
+                   s.skuCode,
+                   s.name,
+                   s.unitWeightKg,
+                   s.unitVolumeM3,
+                   b.quantity)
+            FROM StockBatch b
+            JOIN ProductSku s ON s.id = b.skuId
+            WHERE b.warehouse.id = :warehouseId
+              AND b.rack IS NOT NULL
+              AND b.bin IS NOT NULL
+              AND b.isActive = true
+              AND b.isDeleted = false
+              AND s.isActive = true
+              AND s.isDeleted = false
+              AND (s.tenant.id = :tenantId OR s.tenant IS NULL)
+            """)
+    List<PhysicalLoadLine> findActivePhysicalLoadsByWarehouseIdAndTenantId(
+            @Param("warehouseId") UUID warehouseId,
+            @Param("tenantId") UUID tenantId);
+
+    @Query("""
+            SELECT b FROM StockBatch b
+            JOIN ProductSku s ON s.id = b.skuId
+            WHERE b.warehouse.id = :warehouseId
+              AND s.tenant.id = :tenantId
+              AND b.isActive = true
+              AND b.isDeleted = false
+              AND s.isDeleted = false
+            """)
+    List<StockBatch> findAllByWarehouseIdAndTenantId(
+            @Param("warehouseId") UUID warehouseId,
+            @Param("tenantId") UUID tenantId);
 
     @Query("""
             SELECT b FROM StockBatch b
@@ -76,13 +133,13 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
               AND b.isDeleted = false
               AND EXISTS (
                   SELECT c.id FROM RentalContract c
-                  WHERE c.booking.tenant.id = :tenantId
-                    AND c.booking.warehouse.id = b.warehouse.id
+                  WHERE c.tenant.id = :tenantId
+                    AND c.warehouse.id = b.warehouse.id
                     AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
                     AND c.isActive = true
                     AND c.isDeleted = false
-                    AND c.booking.isActive = true
-                    AND c.booking.isDeleted = false
+                    AND c.startDate <= CURRENT_DATE
+                    AND c.endDate >= CURRENT_DATE
               )
             """)
     List<StockBatch> findBySkuIdInActiveTenantWarehouses(
@@ -97,13 +154,13 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
               AND b.isDeleted = false
               AND EXISTS (
                   SELECT c.id FROM RentalContract c
-                  WHERE c.booking.tenant.id = :tenantId
-                    AND c.booking.warehouse.id = b.warehouse.id
+                  WHERE c.tenant.id = :tenantId
+                    AND c.warehouse.id = b.warehouse.id
                     AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
                     AND c.isActive = true
                     AND c.isDeleted = false
-                    AND c.booking.isActive = true
-                    AND c.booking.isDeleted = false
+                    AND c.startDate <= CURRENT_DATE
+                    AND c.endDate >= CURRENT_DATE
               )
               AND EXISTS (
                   SELECT a.id FROM StaffWarehouseAssignment a
@@ -128,6 +185,10 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
     int sumQuantityByBinId(@Param("binId") UUID binId);
 
     Optional<StockBatch> findByIdAndIsDeletedFalse(UUID id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select b from StockBatch b where b.id = :id and b.isActive = true and b.isDeleted = false")
+    Optional<StockBatch> findByIdForUpdate(@Param("id") UUID id);
 
     interface WarehouseStockSummaryProjection {
         Long getProductCount();

@@ -1,5 +1,5 @@
 package fu.stockspace.stockspace_be.wallet.dto;
-import fu.stockspace.stockspace_be.booking.entity.ApprovalStatus;
+import fu.stockspace.stockspace_be.common.entity.ApprovalStatus;
 import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;

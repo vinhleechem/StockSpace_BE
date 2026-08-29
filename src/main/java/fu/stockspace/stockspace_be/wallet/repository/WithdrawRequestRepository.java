@@ -1,5 +1,5 @@
 package fu.stockspace.stockspace_be.wallet.repository;
-import fu.stockspace.stockspace_be.booking.entity.ApprovalStatus;
+import fu.stockspace.stockspace_be.common.entity.ApprovalStatus;
 import fu.stockspace.stockspace_be.wallet.entity.WithdrawRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

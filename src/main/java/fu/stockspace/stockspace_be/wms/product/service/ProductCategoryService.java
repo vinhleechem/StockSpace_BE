@@ -5,6 +5,7 @@ import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
+import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.wms.product.dto.CreateCategoryRequest;
 import fu.stockspace.stockspace_be.wms.product.dto.ProductCategoryResponse;
 import fu.stockspace.stockspace_be.wms.product.entity.ProductCategory;
@@ -26,6 +27,7 @@ public class ProductCategoryService {
     private final ProductCategoryRepository categoryRepository;
     private final ProductSkuRepository skuRepository;
     private final UserRepository userRepository;
+    private final TenantWarehouseAccessService accessService;
 
     public List<ProductCategoryResponse> getMyCategories(UUID tenantId) {
         List<ProductCategory> categories = categoryRepository.findAllActiveByTenantOrSystem(tenantId);
@@ -36,6 +38,7 @@ public class ProductCategoryService {
 
     @Transactional
     public ProductCategoryResponse createCategory(UUID tenantId, CreateCategoryRequest request) {
+        accessService.requireActiveSubscription(tenantId);
         User tenant = userRepository.findById(tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
 
@@ -51,6 +54,7 @@ public class ProductCategoryService {
 
     @Transactional
     public void deleteCategory(UUID tenantId, UUID categoryId) {
+        accessService.requireActiveSubscription(tenantId);
         ProductCategory category = categoryRepository.findByIdAndIsDeletedFalse(categoryId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.PRODUCT_CATEGORY_NOT_FOUND));
 

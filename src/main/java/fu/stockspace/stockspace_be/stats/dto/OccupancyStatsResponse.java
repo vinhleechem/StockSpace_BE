@@ -13,9 +13,9 @@ import java.util.List;
 @AllArgsConstructor
 public class OccupancyStatsResponse {
     private int totalWarehouses;
-    private int rentedWarehousesCount;
-    private int availableWarehousesCount;
+    private int warehousesWithActiveContracts;
+    private long activeContractCount;
+    private long activeTenantCount;
     private double occupancyRatePercentage;
-    private List<String> rentedWarehouseNames;
-    private List<String> availableWarehouseNames;
+    private List<String> occupiedWarehouseNames;
 }

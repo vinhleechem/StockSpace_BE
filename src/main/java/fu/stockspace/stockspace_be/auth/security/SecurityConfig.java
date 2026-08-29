@@ -68,6 +68,9 @@ public class SecurityConfig {
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html", "/actuator/**").permitAll()
 
 
+                        .requestMatchers(HttpMethod.GET, "/api/warehouses/*/owner-contact").authenticated()
+
+
                         .requestMatchers(HttpMethod.GET, "/api/warehouses/**").permitAll()
 
 
@@ -78,6 +81,9 @@ public class SecurityConfig {
 
 
                         .requestMatchers(HttpMethod.GET, "/api/packages/**").permitAll()
+
+
+                        .requestMatchers(HttpMethod.GET, "/api/listing-packages/**").permitAll()
 
 
                         .requestMatchers("/api/chat/guest/**").permitAll()

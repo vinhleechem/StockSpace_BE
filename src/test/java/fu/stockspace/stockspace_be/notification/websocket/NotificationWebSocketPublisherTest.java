@@ -25,7 +25,7 @@ class NotificationWebSocketPublisherTest {
     void publish_SendsNotificationToTheRecipientPrivateQueue() {
         NotificationResponse notification = NotificationResponse.builder()
                 .id(UUID.randomUUID())
-                .title("Booking approved")
+                .title("Contract submitted")
                 .build();
 
         publisher.publish(new NotificationCreatedEvent("tenant@test.com", notification));

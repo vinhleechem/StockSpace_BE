@@ -8,7 +8,6 @@ import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.common.repository.SystemConfigRepository;
-import fu.stockspace.stockspace_be.subscription.repository.ServicePackageRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -19,7 +18,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
@@ -28,9 +26,6 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SystemConfigService {
 
     private final SystemConfigRepository configRepository;
-    private final ServicePackageRepository packageRepository;
-
-
     private final Map<String, String> cache = new ConcurrentHashMap<>();
 
     @Transactional(readOnly = true)
@@ -150,16 +145,7 @@ public class SystemConfigService {
 
     private void validateValue(SystemConfigKey configKey, String value) {
         String key = configKey.getKey();
-        if (key.equals("deposit_percentage")) {
-            try {
-                int val = Integer.parseInt(value.trim());
-                if (val < 0 || val > 100) {
-                    throw new BadRequestException(ErrorCode.CONFIG_INVALID_VALUE, "Tỷ lệ phần trăm cọc phải nằm trong khoảng từ 0% đến 100%");
-                }
-            } catch (NumberFormatException e) {
-                throw new BadRequestException(ErrorCode.CONFIG_INVALID_VALUE, "Tỷ lệ phần trăm cọc phải là số nguyên");
-            }
-        } else if (key.equals("contract_expiry_days")) {
+        if (key.equals("contract_expiry_days")) {
             try {
                 int val = Integer.parseInt(value.trim());
                 if (val <= 0) {
@@ -168,7 +154,7 @@ public class SystemConfigService {
             } catch (NumberFormatException e) {
                 throw new BadRequestException(ErrorCode.CONFIG_INVALID_VALUE, "Số ngày tối đa xác nhận hợp đồng phải là số nguyên");
             }
-        } else if (key.equals("inspection_fee") || key.equals("warehouse_publish_fee")) {
+        } else if (key.equals("inspection_fee")) {
             try {
                 BigDecimal val = new BigDecimal(value.trim());
                 if (val.compareTo(BigDecimal.ZERO) < 0) {
@@ -176,16 +162,6 @@ public class SystemConfigService {
                 }
             } catch (NumberFormatException e) {
                 throw new BadRequestException(ErrorCode.CONFIG_INVALID_VALUE, "Cấu hình số tiền phải là số thập phân hợp lệ");
-            }
-        } else if (key.equals("warehouse_publish_package_id")) {
-
-            try {
-                UUID packageId = UUID.fromString(value.trim());
-                if (!packageRepository.existsById(packageId)) {
-                    throw new BadRequestException(ErrorCode.PACKAGE_NOT_FOUND, "Gói dịch vụ đăng bài không tồn tại trong hệ thống");
-                }
-            } catch (IllegalArgumentException e) {
-                throw new BadRequestException(ErrorCode.CONFIG_INVALID_VALUE, "ID gói dịch vụ đăng bài phải là định dạng UUID hợp lệ");
             }
         }
     }

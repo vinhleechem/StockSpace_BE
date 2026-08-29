@@ -165,7 +165,7 @@ public class WalletService {
         Wallet wallet = walletRepository.findByUserIdWithLock(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WALLET_NOT_FOUND));
         if (wallet.getBalance().compareTo(amount) < 0) {
-            throw new BadRequestException(ErrorCode.WALLET_INSUFFICIENT_BALANCE);
+            throw new BadRequestException(ErrorCode.INSUFFICIENT_BALANCE);
         }
         wallet.setBalance(wallet.getBalance().subtract(amount));
         walletRepository.save(wallet);

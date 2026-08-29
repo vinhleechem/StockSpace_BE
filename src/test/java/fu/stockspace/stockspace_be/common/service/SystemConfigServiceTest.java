@@ -7,7 +7,6 @@ import fu.stockspace.stockspace_be.common.entity.SystemConfigKey;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.common.repository.SystemConfigRepository;
-import fu.stockspace.stockspace_be.subscription.repository.ServicePackageRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,269 +15,88 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
-import java.util.*;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class SystemConfigServiceTest {
 
-    @Mock private SystemConfigRepository configRepository;
-    @Mock private ServicePackageRepository packageRepository;
+    @Mock
+    private SystemConfigRepository configRepository;
 
     @InjectMocks
     private SystemConfigService configService;
 
-    private SystemConfig depositConfig;
+    private SystemConfig expiryConfig;
     private SystemConfig feeConfig;
 
     @BeforeEach
     void setUp() {
-        depositConfig = SystemConfig.builder()
+        expiryConfig = SystemConfig.builder()
                 .id(UUID.randomUUID())
-                .configKey(SystemConfigKey.DEPOSIT_PERCENTAGE.getKey())
-                .configValue("15")
-                .description("Custom deposit description")
+                .configKey(SystemConfigKey.CONTRACT_EXPIRY_DAYS.getKey())
+                .configValue("14")
+                .description("Contract confirmation window")
                 .build();
-
         feeConfig = SystemConfig.builder()
                 .id(UUID.randomUUID())
                 .configKey(SystemConfigKey.INSPECTION_FEE.getKey())
                 .configValue("50000")
-                .description("Custom inspection fee description")
+                .description("Inspection fee")
                 .build();
     }
 
     @Test
-    void testGetValue_FallbackToEnumDefault() {
-        when(configRepository.findByConfigKey(SystemConfigKey.DEPOSIT_PERCENTAGE.getKey()))
-                .thenReturn(Optional.empty());
-
-        String value = configService.getValue(SystemConfigKey.DEPOSIT_PERCENTAGE.getKey(), "20");
-
-        assertEquals(SystemConfigKey.DEPOSIT_PERCENTAGE.getDefaultValue(), value);
-    }
-
-    @Test
-    void testGetValue_ReadFromRepository() {
-        when(configRepository.findByConfigKey(SystemConfigKey.DEPOSIT_PERCENTAGE.getKey()))
-                .thenReturn(Optional.of(depositConfig));
-
-        String value = configService.getValue(SystemConfigKey.DEPOSIT_PERCENTAGE.getKey(), "20");
-
-        assertEquals("15", value);
-    }
-
-    @Test
-    void testGetIntValue_FallbackToEnumDefault() {
-        when(configRepository.findByConfigKey(SystemConfigKey.DEPOSIT_PERCENTAGE.getKey()))
-                .thenReturn(Optional.empty());
-
-        int value = configService.getIntValue(SystemConfigKey.DEPOSIT_PERCENTAGE.getKey(), 20);
-
-        assertEquals(10, value);
-    }
-
-    @Test
-    void testGetBigDecimalValue_ReadFromRepository() {
-        when(configRepository.findByConfigKey(SystemConfigKey.INSPECTION_FEE.getKey()))
-                .thenReturn(Optional.of(feeConfig));
-
-        BigDecimal value = configService.getBigDecimalValue(SystemConfigKey.INSPECTION_FEE.getKey(), new BigDecimal("40000"));
-
-        assertEquals(new BigDecimal("50000"), value);
-    }
-
-    @Test
-    void testGetAllConfigs_Success() {
-        when(configRepository.findByConfigKey(SystemConfigKey.DEPOSIT_PERCENTAGE.getKey()))
-                .thenReturn(Optional.of(depositConfig));
-        when(configRepository.findByConfigKey(SystemConfigKey.INSPECTION_FEE.getKey()))
-                .thenReturn(Optional.empty());
+    void readsKnownValuesAndFallsBackToCanonicalDefaults() {
         when(configRepository.findByConfigKey(SystemConfigKey.CONTRACT_EXPIRY_DAYS.getKey()))
-                .thenReturn(Optional.empty());
-        when(configRepository.findByConfigKey(SystemConfigKey.WAREHOUSE_PUBLISH_FEE.getKey()))
-                .thenReturn(Optional.empty());
-        when(configRepository.findByConfigKey(SystemConfigKey.WAREHOUSE_PUBLISH_PACKAGE_ID.getKey()))
-                .thenReturn(Optional.empty());
-
-        List<SystemConfigResponse> responses = configService.getAllConfigs();
-
-
-        assertNotNull(responses);
-        assertEquals(SystemConfigKey.values().length, responses.size());
-
-
-        SystemConfigResponse depositResponse = responses.stream()
-                .filter(r -> r.getConfigKey().equals(SystemConfigKey.DEPOSIT_PERCENTAGE.getKey()))
-                .findFirst().orElse(null);
-
-        assertNotNull(depositResponse);
-        assertEquals("15", depositResponse.getConfigValue());
-        assertEquals("Custom deposit description", depositResponse.getDescription());
-
-
-        SystemConfigResponse feeResponse = responses.stream()
-                .filter(r -> r.getConfigKey().equals(SystemConfigKey.INSPECTION_FEE.getKey()))
-                .findFirst().orElse(null);
-
-        assertNotNull(feeResponse);
-        assertEquals(SystemConfigKey.INSPECTION_FEE.getDefaultValue(), feeResponse.getConfigValue());
-    }
-
-    @Test
-    void testUpdateConfig_Success_DepositPercentage() {
-        when(configRepository.findByConfigKey(SystemConfigKey.DEPOSIT_PERCENTAGE.getKey()))
-                .thenReturn(Optional.of(depositConfig));
-        when(configRepository.save(any(SystemConfig.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        UpdateSystemConfigRequest request = UpdateSystemConfigRequest.builder()
-                .configValue("25")
-                .description("Updated deposit description")
-                .build();
-
-        SystemConfigResponse response = configService.updateConfig(SystemConfigKey.DEPOSIT_PERCENTAGE.getKey(), request);
-
-        assertNotNull(response);
-        assertEquals("25", response.getConfigValue());
-        assertEquals("Updated deposit description", response.getDescription());
-    }
-
-    @Test
-    void testUpdateConfig_InvalidValue_DepositPercentage_OutOfRange() {
-        UpdateSystemConfigRequest request = UpdateSystemConfigRequest.builder()
-                .configValue("150")
-                .build();
-
-        assertThrows(BadRequestException.class, () ->
-                configService.updateConfig(SystemConfigKey.DEPOSIT_PERCENTAGE.getKey(), request));
-    }
-
-    @Test
-    void testUpdateConfig_InvalidValue_DepositPercentage_NotInteger() {
-        UpdateSystemConfigRequest request = UpdateSystemConfigRequest.builder()
-                .configValue("12.5")
-                .build();
-
-        assertThrows(BadRequestException.class, () ->
-                configService.updateConfig(SystemConfigKey.DEPOSIT_PERCENTAGE.getKey(), request));
-    }
-
-    @Test
-    void testUpdateConfig_Success_InspectionFee() {
+                .thenReturn(Optional.of(expiryConfig));
         when(configRepository.findByConfigKey(SystemConfigKey.INSPECTION_FEE.getKey()))
-                .thenReturn(Optional.of(feeConfig));
-        when(configRepository.save(any(SystemConfig.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        UpdateSystemConfigRequest request = UpdateSystemConfigRequest.builder()
-                .configValue("45000.50")
-                .build();
-
-        SystemConfigResponse response = configService.updateConfig(SystemConfigKey.INSPECTION_FEE.getKey(), request);
-
-        assertNotNull(response);
-        assertEquals("45000.50", response.getConfigValue());
-    }
-
-    @Test
-    void testUpdateConfig_InvalidValue_InspectionFee_Negative() {
-        UpdateSystemConfigRequest request = UpdateSystemConfigRequest.builder()
-                .configValue("-100")
-                .build();
-
-        assertThrows(BadRequestException.class, () ->
-                configService.updateConfig(SystemConfigKey.INSPECTION_FEE.getKey(), request));
-    }
-
-    @Test
-    void testUpdateConfig_Success_PackageId() {
-        UUID validId = UUID.randomUUID();
-        when(configRepository.findByConfigKey(SystemConfigKey.WAREHOUSE_PUBLISH_PACKAGE_ID.getKey()))
                 .thenReturn(Optional.empty());
-        when(packageRepository.existsById(validId)).thenReturn(true);
-        when(configRepository.save(any(SystemConfig.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        UpdateSystemConfigRequest request = UpdateSystemConfigRequest.builder()
-                .configValue(validId.toString())
-                .build();
-
-        SystemConfigResponse response = configService.updateConfig(SystemConfigKey.WAREHOUSE_PUBLISH_PACKAGE_ID.getKey(), request);
-
-        assertNotNull(response);
-        assertEquals(validId.toString(), response.getConfigValue());
+        assertEquals(14, configService.getIntValue(SystemConfigKey.CONTRACT_EXPIRY_DAYS.getKey(), 30));
+        assertEquals(new BigDecimal("40000"), configService.getBigDecimalValue(
+                SystemConfigKey.INSPECTION_FEE.getKey(), BigDecimal.ONE));
     }
 
     @Test
-    void testUpdateConfig_PackageId_NotFound() {
-        UUID nonExistentId = UUID.randomUUID();
-        when(packageRepository.existsById(nonExistentId)).thenReturn(false);
-
-        UpdateSystemConfigRequest request = UpdateSystemConfigRequest.builder()
-                .configValue(nonExistentId.toString())
-                .build();
-
-        assertThrows(BadRequestException.class, () ->
-                configService.updateConfig(SystemConfigKey.WAREHOUSE_PUBLISH_PACKAGE_ID.getKey(), request));
-    }
-
-    @Test
-    void testUpdateConfig_PackageId_InvalidUUIDFormat() {
-        UpdateSystemConfigRequest request = UpdateSystemConfigRequest.builder()
-                .configValue("invalid-uuid-string")
-                .build();
-
-        assertThrows(BadRequestException.class, () ->
-                configService.updateConfig(SystemConfigKey.WAREHOUSE_PUBLISH_PACKAGE_ID.getKey(), request));
-    }
-
-    @Test
-    void testUpdateConfig_ConfigNotFound() {
-        UpdateSystemConfigRequest request = UpdateSystemConfigRequest.builder()
-                .configValue("any")
-                .build();
-
-        assertThrows(ResourceNotFoundException.class, () ->
-                configService.updateConfig("non_existent_key", request));
-    }
-
-    @Test
-    void testGetPublicConfigs_Success() {
-        when(configRepository.findByConfigKey(SystemConfigKey.DEPOSIT_PERCENTAGE.getKey()))
-                .thenReturn(Optional.of(depositConfig));
-        when(configRepository.findByConfigKey(SystemConfigKey.INSPECTION_FEE.getKey()))
-                .thenReturn(Optional.of(feeConfig));
+    void listsOnlyTheRemainingCanonicalConfigurationKeys() {
         when(configRepository.findByConfigKey(SystemConfigKey.CONTRACT_EXPIRY_DAYS.getKey()))
-                .thenReturn(Optional.empty());
-        when(configRepository.findByConfigKey(SystemConfigKey.WAREHOUSE_PUBLISH_FEE.getKey()))
-                .thenReturn(Optional.empty());
+                .thenReturn(Optional.of(expiryConfig));
+        when(configRepository.findByConfigKey(SystemConfigKey.INSPECTION_FEE.getKey()))
+                .thenReturn(Optional.of(feeConfig));
 
         List<SystemConfigResponse> responses = configService.getPublicConfigs();
 
-        assertNotNull(responses);
-        assertEquals(4, responses.size());
-
-        boolean hasPackageId = responses.stream()
-                .anyMatch(r -> r.getConfigKey().equals(SystemConfigKey.WAREHOUSE_PUBLISH_PACKAGE_ID.getKey()));
-        assertFalse(hasPackageId);
+        assertEquals(2, responses.size());
+        assertEquals(List.of("contract_expiry_days", "inspection_fee"),
+                responses.stream().map(SystemConfigResponse::getConfigKey).toList());
     }
 
-
     @Test
-    void testGetPublicConfigByKey_Success_PublicConfig() {
-        when(configRepository.findByConfigKey(SystemConfigKey.DEPOSIT_PERCENTAGE.getKey()))
-                .thenReturn(Optional.of(depositConfig));
+    void updatesSupportedConfigurationAndRejectsInvalidValues() {
+        when(configRepository.findByConfigKey(SystemConfigKey.INSPECTION_FEE.getKey()))
+                .thenReturn(Optional.of(feeConfig));
+        when(configRepository.save(any(SystemConfig.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
-        SystemConfigResponse response = configService.getPublicConfigByKey(SystemConfigKey.DEPOSIT_PERCENTAGE.getKey());
+        SystemConfigResponse response = configService.updateConfig(
+                SystemConfigKey.INSPECTION_FEE.getKey(),
+                UpdateSystemConfigRequest.builder().configValue("45000.50").build());
 
         assertNotNull(response);
-        assertEquals("15", response.getConfigValue());
-    }
-
-    @Test
-    void testGetPublicConfigByKey_Failure_PrivateConfig() {
-        assertThrows(ResourceNotFoundException.class, () ->
-                configService.getPublicConfigByKey(SystemConfigKey.WAREHOUSE_PUBLISH_PACKAGE_ID.getKey()));
+        assertEquals("45000.50", response.getConfigValue());
+        assertThrows(BadRequestException.class, () -> configService.updateConfig(
+                SystemConfigKey.CONTRACT_EXPIRY_DAYS.getKey(),
+                UpdateSystemConfigRequest.builder().configValue("0").build()));
+        assertThrows(ResourceNotFoundException.class, () -> configService.updateConfig(
+                "retired_config_key",
+                UpdateSystemConfigRequest.builder().configValue("10").build()));
     }
 }

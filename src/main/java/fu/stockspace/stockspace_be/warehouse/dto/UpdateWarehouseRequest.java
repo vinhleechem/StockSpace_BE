@@ -1,5 +1,7 @@
 package fu.stockspace.stockspace_be.warehouse.dto;
 
+import fu.stockspace.stockspace_be.warehouse.entity.RentalPricingType;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
@@ -8,31 +10,44 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.math.BigDecimal;
-
-
-
-
+import java.util.UUID;
 
 @Getter
 @Setter
+@Schema(description = "Owner-editable warehouse fields")
 public class UpdateWarehouseRequest {
 
-    @Size(max = 255, message = "Tên kho tối đa 255 ký tự")
+    @Size(max = 255, message = "Warehouse name must not exceed 255 characters")
     private String name;
 
     private String address;
 
+    @Size(max = 50, message = "Province code must not exceed 50 characters")
+    private String provinceCode;
+
+    @Size(max = 255, message = "Province name must not exceed 255 characters")
+    private String provinceName;
+
+    @Size(max = 50, message = "District code must not exceed 50 characters")
+    private String districtCode;
+
+    @Size(max = 255, message = "District name must not exceed 255 characters")
+    private String districtName;
+
     private String description;
 
-    @DecimalMin(value = "1.0", message = "Sức chứa phải lớn hơn 0")
-    @DecimalMax(value = "99999999.99", message = "Sức chứa tối đa là 99,999,999.99 m²")
+    @DecimalMin(value = "1.0", message = "Capacity must be greater than 0")
+    @DecimalMax(value = "99999999.99", message = "Capacity exceeds the supported limit")
     private BigDecimal capacity;
 
+    @Schema(description = "Required and positive for fixed/per-m² pricing; must be null for negotiated pricing", example = "100000000")
+    @DecimalMin(value = "0.0", inclusive = false, message = "Rental price must be greater than 0")
+    @DecimalMax(value = "9999999999999.99", message = "Rental price exceeds the supported limit")
+    @Digits(integer = 13, fraction = 2, message = "Rental price must have at most 13 integer digits and 2 decimal places")
+    private BigDecimal rentalPrice;
 
-    @DecimalMin(value = "0.0", inclusive = false, message = "Giá thuê phải lớn hơn 0")
-    @DecimalMax(value = "9999999999999.99", message = "Price exceeds the supported limit")
-    @Digits(integer = 13, fraction = 2, message = "Price must have at most 13 integer digits and 2 decimal places")
-    private BigDecimal pricePerMonth;
+    @Schema(example = "FIXED_MONTHLY", allowableValues = {"FIXED_MONTHLY", "PER_SQUARE_METER_MONTHLY", "NEGOTIATED"})
+    private RentalPricingType rentalPricingType;
 
-    private java.util.UUID typeId;
+    private UUID typeId;
 }

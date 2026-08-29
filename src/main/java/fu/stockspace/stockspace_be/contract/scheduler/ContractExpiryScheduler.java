@@ -2,7 +2,6 @@ package fu.stockspace.stockspace_be.contract.scheduler;
 
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.service.EmailService;
-import fu.stockspace.stockspace_be.common.service.SystemConfigService;
 import fu.stockspace.stockspace_be.contract.entity.ContractStatus;
 import fu.stockspace.stockspace_be.contract.entity.RentalContract;
 import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
@@ -10,10 +9,8 @@ import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import fu.stockspace.stockspace_be.staff.entity.AssignmentStatus;
 import fu.stockspace.stockspace_be.staff.entity.StaffWarehouseAssignment;
 import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
-import fu.stockspace.stockspace_be.wallet.entity.TransactionType;
-import fu.stockspace.stockspace_be.wallet.service.WalletService;
+import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseLayoutService;
-import fu.stockspace.stockspace_be.warehouse.service.WarehouseService;
 import fu.stockspace.stockspace_be.wms.stock.entity.StockBatch;
 import fu.stockspace.stockspace_be.wms.stock.repository.StockBatchRepository;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 @Component
 @Slf4j
@@ -32,130 +30,113 @@ import java.util.List;
 public class ContractExpiryScheduler {
 
     private final RentalContractRepository contractRepository;
-    private final WarehouseService warehouseService;
     private final WarehouseLayoutService warehouseLayoutService;
     private final StockBatchRepository stockBatchRepository;
     private final StaffWarehouseAssignmentRepository assignmentRepository;
-    private final WalletService walletService;
-    private final SystemConfigService systemConfigService;
     private final NotificationService notificationService;
     private final EmailService emailService;
 
     @Scheduled(cron = "0 0 0 * * ?")
     @Transactional
     public void expireContracts() {
-        log.info("Starting daily contract expiry check...");
-
         LocalDate today = LocalDate.now();
+        log.info("Starting direct rental contract expiry check for {}", today);
+
         sendExpiryReminders(today);
-
-        int expiryDays = systemConfigService.getIntValue("contract_expiry_days", 7);
-        LocalDateTime threshold = LocalDateTime.now().minusDays(expiryDays);
-        List<RentalContract> unsignedContracts = contractRepository.findByStatusAndSubmittedAtBefore(
-                ContractStatus.PENDING_TENANT_CONFIRM, threshold);
-
-        log.info("Found {} expired contracts waiting for Tenant signature", unsignedContracts.size());
-        for (RentalContract contract : unsignedContracts) {
+        List<RentalContract> expiredContracts = contractRepository.findActiveContractsEndingBefore(today);
+        for (RentalContract contract : expiredContracts) {
             try {
-                cancelUnsignedContract(contract, expiryDays);
-            } catch (Exception e) {
-                log.error("Error processing unsigned contract ID = {}", contract.getId(), e);
+                expireActiveContract(contract, today);
+            } catch (RuntimeException exception) {
+                log.error("Failed to expire contract {}", contract.getId(), exception);
             }
         }
 
-        List<RentalContract> expiredActiveContracts = contractRepository.findActiveContractsEndingBefore(today);
-        log.info("Found {} active contracts past their end date", expiredActiveContracts.size());
-        for (RentalContract contract : expiredActiveContracts) {
-            try {
-                completeExpiredContract(contract, today);
-            } catch (Exception e) {
-                log.error("Error processing expired active contract ID = {}", contract.getId(), e);
-            }
-        }
-
-        log.info("Daily contract expiry check finished.");
+        log.info("Direct rental contract expiry check finished: {} candidate(s)", expiredContracts.size());
     }
 
     private void sendExpiryReminders(LocalDate today) {
+        LocalDate reminderDate = today.plusDays(30);
         List<RentalContract> contracts = contractRepository.findActiveContractsEndingBetween(
-                today.plusDays(29), today.plusMonths(1));
+                reminderDate, reminderDate);
 
         for (RentalContract contract : contracts) {
-            try {
-                User tenant = contract.getBooking().getTenant();
-                User owner = contract.getBooking().getWarehouse().getOwner();
-                String warehouseName = contract.getBooking().getWarehouse().getName();
-
-                if (tenant != null) {
-                    emailService.sendContractExpiryReminderEmail(
-                            tenant.getEmail(), tenant.getFullName(), warehouseName, contract.getEndDate());
-                    notificationService.push(
-                            tenant.getId(),
-                            "Warehouse contract expiry reminder",
-                            "Your rental contract for " + warehouseName + " expires on " + contract.getEndDate() + ".",
-                            "RENTAL");
-                }
-                if (owner != null) {
-                    emailService.sendContractExpiryReminderEmail(
-                            owner.getEmail(), owner.getFullName(), warehouseName, contract.getEndDate());
-                    notificationService.push(
-                            owner.getId(),
-                            "Warehouse contract expiry reminder",
-                            "The rental contract for " + warehouseName + " expires on " + contract.getEndDate() + ".",
-                            "RENTAL");
-                }
-
-                contract.setExpiryReminderSent(true);
-                contractRepository.save(contract);
-            } catch (Exception e) {
-                log.error("Failed to send expiry reminder for contract {}", contract.getId(), e);
+            if (contract.isExpiryReminderSent()) {
+                continue;
             }
+            User tenant = contract.getTenant();
+            User owner = contract.getOwner();
+            String warehouseName = contract.getWarehouse().getName();
+            sendReminderBestEffort(tenant, warehouseName, contract.getEndDate(), true);
+            sendReminderBestEffort(owner, warehouseName, contract.getEndDate(), false);
+
+            contract.setExpiryReminderSent(true);
+            contractRepository.save(contract);
         }
     }
 
-    private void cancelUnsignedContract(RentalContract contract, int expiryDays) {
-        User owner = contract.getBooking().getWarehouse().getOwner();
-        walletService.refundBalance(
-                owner.getId(),
-                contract.getBooking().getDepositAmount(),
-                TransactionType.DEPOSIT_REFUND,
-                "Deposit forfeited because the tenant did not confirm the contract in time: "
-                        + contract.getBooking().getWarehouse().getName(),
-                contract.getBooking().getId(),
-                null);
+    private void sendReminderBestEffort(
+            User recipient, String warehouseName, LocalDate endDate, boolean tenant) {
+        if (recipient == null) {
+            return;
+        }
+        try {
+            emailService.sendContractExpiryReminderEmail(
+                    recipient.getEmail(), recipient.getFullName(), warehouseName, endDate);
+        } catch (RuntimeException exception) {
+            log.warn("Failed to email contract expiry reminder to user {}: {}",
+                    recipient.getId(), exception.getMessage());
+        }
+        try {
+            notificationService.push(
+                    recipient.getId(),
+                    "Warehouse contract expiry reminder",
+                    (tenant ? "Your" : "The") + " rental contract for " + warehouseName
+                            + " expires on " + endDate + ".",
+                    "CONTRACT_EXPIRY_REMINDER");
+        } catch (RuntimeException exception) {
+            log.warn("Failed to push contract expiry reminder to user {}: {}",
+                    recipient.getId(), exception.getMessage());
+        }
+    }
 
-        User tenant = contract.getBooking().getTenant();
-        contract.setStatus(ContractStatus.CANCELLED);
-        contract.setCancelReason("Tenant did not confirm the online contract within " + expiryDays + " days");
+    private void expireActiveContract(RentalContract contract, LocalDate today) {
+        if (contract.getStatus() != ContractStatus.ACTIVE
+                || !contract.isActive()
+                || contract.isDeleted()
+                || contract.getEndDate() == null
+                || !contract.getEndDate().isBefore(today)) {
+            return;
+        }
+        User tenant = contract.getTenant();
+        User owner = contract.getOwner();
+        Warehouse warehouse = contract.getWarehouse();
+        UUID tenantId = tenant.getId();
+        UUID warehouseId = warehouse.getId();
+
+        boolean hasActiveSibling = contractRepository.existsOtherCurrentDirectActiveContract(
+                contract.getId(), tenantId, warehouseId, today);
+        if (hasActiveSibling) {
+            log.warn("Contract {} expired but shared Tenant-Warehouse data was retained because an active sibling exists",
+                    contract.getId());
+        } else {
+            clearTenantOperationalStock(tenantId, warehouseId);
+            warehouseLayoutService.archiveTenantLayout(warehouseId, tenantId);
+            revokeAssignments(tenantId, warehouseId);
+        }
+
+        contract.setStatus(ContractStatus.EXPIRED);
         contractRepository.save(contract);
-        warehouseService.markAsAvailable(contract.getBooking().getWarehouse().getId());
 
-        if (tenant != null) {
-            notificationService.push(
-                    tenant.getId(),
-                    "Rental contract cancelled",
-                    "Your rental contract for " + contract.getBooking().getWarehouse().getName()
-                            + " was cancelled because it was not confirmed in time.",
-                    "RENTAL");
-        }
-        if (owner != null) {
-            notificationService.push(
-                    owner.getId(),
-                    "Rental contract cancelled",
-                    "The tenant did not confirm the rental contract for "
-                            + contract.getBooking().getWarehouse().getName()
-                            + ". The deposit was transferred to your wallet.",
-                    "RENTAL");
-        }
+        notifyExpiryBestEffort(tenant, warehouse, true, hasActiveSibling);
+        notifyExpiryBestEffort(owner, warehouse, false, hasActiveSibling);
+        log.info("Expired direct contract {} on {}; cleanupSkipped={}",
+                contract.getId(), today, hasActiveSibling);
     }
 
-    private void completeExpiredContract(RentalContract contract, LocalDate today) {
-        User tenant = contract.getBooking().getTenant();
-        User owner = contract.getBooking().getWarehouse().getOwner();
-        var warehouse = contract.getBooking().getWarehouse();
-
+    private void clearTenantOperationalStock(UUID tenantId, UUID warehouseId) {
         List<StockBatch> activeBatches = stockBatchRepository
-                .findAllByWarehouseIdAndIsDeletedFalse(warehouse.getId());
+                .findAllByWarehouseIdAndTenantId(warehouseId, tenantId);
         activeBatches.forEach(batch -> {
             batch.setActive(false);
             batch.setDeleted(true);
@@ -163,50 +144,41 @@ public class ContractExpiryScheduler {
         if (!activeBatches.isEmpty()) {
             stockBatchRepository.saveAll(activeBatches);
         }
-
-        if (tenant != null) {
-            warehouseLayoutService.archiveTenantLayout(warehouse.getId(), tenant.getId());
-        }
-
-        if (tenant != null) {
-            List<StaffWarehouseAssignment> assignments = assignmentRepository
-                    .findByTenantIdAndWarehouseIdAndStatus(
-                            tenant.getId(), warehouse.getId(), AssignmentStatus.ACTIVE);
-            LocalDateTime now = LocalDateTime.now();
-            assignments.forEach(assignment -> {
-                assignment.setStatus(AssignmentStatus.REVOKED);
-                assignment.setEndDate(now);
-            });
-            if (!assignments.isEmpty()) {
-                assignmentRepository.saveAll(assignments);
-            }
-        }
-
-        contract.setStatus(ContractStatus.COMPLETED);
-        contract.setCancelReason("Rental contract expired on " + contract.getEndDate());
-        contractRepository.save(contract);
-        warehouseService.markAsAvailable(warehouse.getId());
-
-        if (tenant != null) {
-            notificationService.push(
-                    tenant.getId(),
-                    "Rental contract expired",
-                    "The contract for " + warehouse.getName()
-                            + " expired on " + contract.getEndDate()
-                            + ". Stock batches and warehouse assignments were closed; product and history data were retained.",
-                    "RENTAL");
-        }
-        if (owner != null) {
-            notificationService.push(
-                    owner.getId(),
-                    "Rental contract expired",
-                    "The contract for " + warehouse.getName()
-                            + " expired on " + contract.getEndDate()
-                            + ". The warehouse is available again and its owner layout can be updated.",
-                    "RENTAL");
-        }
-
-        log.info("Expired contract {} completed on {}: stock cleared, tenant layout archived, staff assignments revoked",
-                contract.getId(), today);
     }
+
+    private void revokeAssignments(UUID tenantId, UUID warehouseId) {
+        List<StaffWarehouseAssignment> assignments = assignmentRepository
+                .findByTenantIdAndWarehouseIdAndStatus(tenantId, warehouseId, AssignmentStatus.ACTIVE);
+        LocalDateTime now = LocalDateTime.now();
+        assignments.forEach(assignment -> {
+            assignment.setStatus(AssignmentStatus.REVOKED);
+            assignment.setActive(false);
+            assignment.setEndDate(now);
+        });
+        if (!assignments.isEmpty()) {
+            assignmentRepository.saveAll(assignments);
+        }
+    }
+
+    private void notifyExpiryBestEffort(
+            User recipient, Warehouse warehouse, boolean tenant, boolean cleanupSkipped) {
+        if (recipient == null) {
+            return;
+        }
+        try {
+            String suffix = cleanupSkipped
+                    ? " Shared operational data was retained because another active contract exists."
+                    : " Tenant operational access has been closed; historical records were retained.";
+            notificationService.push(
+                    recipient.getId(),
+                    "Rental contract expired",
+                    (tenant ? "Your contract" : "The contract") + " for " + warehouse.getName()
+                            + " has expired." + suffix,
+                    "CONTRACT_EXPIRED");
+        } catch (RuntimeException exception) {
+            log.warn("Failed to push contract expiry notification to user {}: {}",
+                    recipient.getId(), exception.getMessage());
+        }
+    }
+
 }
