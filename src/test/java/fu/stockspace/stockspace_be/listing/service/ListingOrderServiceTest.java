@@ -344,6 +344,77 @@ class ListingOrderServiceTest {
         verifyNoInteractions(walletService, transactionRepository);
     }
 
+    @Test
+    void stopActivePublicationKeepsPaidHistoryAndDoesNotRefund() {
+        UUID orderId = UUID.randomUUID();
+        LocalDateTime startedAt = NOW.minusDays(1);
+        ListingOrder order = scheduledOrder(orderId, startedAt);
+        warehouse.setPublishedAt(order.getPeriodStart());
+        warehouse.setVisibleUntil(order.getPeriodEnd());
+        Transaction payment = successfulTransaction();
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(listingOrderRepository.findByIdForUpdate(orderId)).thenReturn(Optional.of(order));
+        when(transactionRepository.findByListingOrderIdAndTransactionType(
+                orderId, TransactionType.LISTING_FEE)).thenReturn(Optional.of(payment));
+        when(listingOrderRepository.save(any(ListingOrder.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(warehouseRepository.save(any(Warehouse.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = listingOrderService.stopActivePublication(ownerId, warehouseId, orderId);
+
+        assertEquals(ListingOrderStatus.TERMINATED, response.getStatus());
+        assertEquals(startedAt, response.getPeriodStart());
+        assertEquals(startedAt.plusDays(10), response.getPeriodEnd());
+        assertNull(warehouse.getPublishedAt());
+        assertNull(warehouse.getVisibleUntil());
+        verifyNoInteractions(walletService);
+        verify(transactionRepository, never()).save(any());
+    }
+
+    @Test
+    void stopActivePublicationIsIdempotentAfterTermination() {
+        UUID orderId = UUID.randomUUID();
+        ListingOrder order = scheduledOrder(orderId, NOW.minusDays(1));
+        order.setStatus(ListingOrderStatus.TERMINATED);
+        Transaction payment = successfulTransaction();
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(listingOrderRepository.findByIdForUpdate(orderId)).thenReturn(Optional.of(order));
+        when(transactionRepository.findByListingOrderIdAndTransactionType(
+                orderId, TransactionType.LISTING_FEE)).thenReturn(Optional.of(payment));
+
+        var response = listingOrderService.stopActivePublication(ownerId, warehouseId, orderId);
+
+        assertEquals(ListingOrderStatus.TERMINATED, response.getStatus());
+        verifyNoInteractions(walletService);
+        verify(listingOrderRepository, never()).save(any(ListingOrder.class));
+        verify(warehouseRepository, never()).save(any(Warehouse.class));
+    }
+
+    @Test
+    void stopActivePublicationRejectsScheduledOrExpiredPeriod() {
+        UUID scheduledOrderId = UUID.randomUUID();
+        ListingOrder scheduled = scheduledOrder(scheduledOrderId, NOW.plusDays(1));
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(listingOrderRepository.findByIdForUpdate(scheduledOrderId)).thenReturn(Optional.of(scheduled));
+
+        BadRequestException scheduledException = assertThrows(
+                BadRequestException.class,
+                () -> listingOrderService.stopActivePublication(ownerId, warehouseId, scheduledOrderId));
+        assertEquals(ErrorCode.LISTING_PUBLICATION_ACTION_NOT_ALLOWED,
+                scheduledException.getErrorCode());
+
+        UUID expiredOrderId = UUID.randomUUID();
+        ListingOrder expired = scheduledOrder(expiredOrderId, NOW.minusDays(20));
+        when(listingOrderRepository.findByIdForUpdate(expiredOrderId)).thenReturn(Optional.of(expired));
+        BadRequestException expiredException = assertThrows(
+                BadRequestException.class,
+                () -> listingOrderService.stopActivePublication(ownerId, warehouseId, expiredOrderId));
+        assertEquals(ErrorCode.LISTING_PUBLICATION_ACTION_NOT_ALLOWED,
+                expiredException.getErrorCode());
+        verifyNoInteractions(walletService);
+    }
+
     private void stubPurchaseDependencies(Transaction transaction) {
         stubWarehouseAndPackage();
         when(listingOrderRepository.save(any(ListingOrder.class))).thenAnswer(invocation -> {

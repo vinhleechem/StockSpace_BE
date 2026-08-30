@@ -193,6 +193,50 @@ public class ListingOrderService {
                 refund.getId());
     }
 
+    @Transactional
+    public ListingOrderResponse stopActivePublication(
+            UUID ownerId,
+            UUID warehouseId,
+            UUID orderId
+    ) {
+        LocalDateTime now = LocalDateTime.now(publicationClock);
+        Warehouse warehouse = warehouseRepository.findByIdForUpdate(warehouseId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
+        ListingOrder order = listingOrderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.LISTING_ORDER_NOT_FOUND));
+
+        requireWarehouseOwner(warehouse, ownerId);
+        if (order.getWarehouse() == null
+                || !warehouseId.equals(order.getWarehouse().getId())
+                || order.getOwner() == null
+                || !ownerId.equals(order.getOwner().getId())) {
+            throw new ForbiddenException(ErrorCode.WAREHOUSE_NOT_OWNED);
+        }
+
+        if (order.getStatus() == ListingOrderStatus.TERMINATED) {
+            return mapToResponse(order, findTransactionId(orderId, TransactionType.LISTING_FEE), null);
+        }
+
+        if (order.getStatus() != ListingOrderStatus.PAID
+                || order.getPeriodStart() == null
+                || order.getPeriodEnd() == null
+                || !order.getPeriodStart().isBefore(now)
+                || !order.getPeriodEnd().isAfter(now)
+                || !isCurrentPublication(warehouse, order)) {
+            throw new BadRequestException(ErrorCode.LISTING_PUBLICATION_ACTION_NOT_ALLOWED);
+        }
+
+        order.setStatus(ListingOrderStatus.TERMINATED);
+        listingOrderRepository.save(order);
+        warehouse.setPublishedAt(null);
+        warehouse.setVisibleUntil(null);
+        warehouseRepository.save(warehouse);
+
+        log.info("Owner {} stopped active publication {} for warehouse {} without refund",
+                ownerId, orderId, warehouseId);
+        return mapToResponse(order, findTransactionId(orderId, TransactionType.LISTING_FEE), null);
+    }
+
     private void notifyPublication(UUID ownerId, Warehouse warehouse, LocalDateTime periodEnd, boolean startsToday) {
         try {
             notificationService.push(

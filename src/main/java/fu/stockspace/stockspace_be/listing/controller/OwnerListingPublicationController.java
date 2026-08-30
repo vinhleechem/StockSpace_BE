@@ -81,6 +81,17 @@ public class OwnerListingPublicationController {
                 "Scheduled warehouse publication cancelled and refunded successfully", response));
     }
 
+    @PostMapping("/{orderId}/stop")
+    @Operation(summary = "Stop an active warehouse publication without refund")
+    public ResponseEntity<ApiResponse<ListingOrderResponse>> stopActivePublication(
+            @PathVariable UUID warehouseId,
+            @PathVariable UUID orderId) {
+        ListingOrderResponse response = listingOrderService.stopActivePublication(
+                getCurrentUserId(), warehouseId, orderId);
+        return ResponseEntity.ok(ApiResponse.success(
+                "Active warehouse publication stopped without refund", response));
+    }
+
     private UUID getCurrentUserId() {
         return SecurityUtil.getCurrentUser()
                 .map(user -> user.getId())
