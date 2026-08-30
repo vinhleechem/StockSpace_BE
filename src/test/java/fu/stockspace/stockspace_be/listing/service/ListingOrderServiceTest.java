@@ -268,6 +268,82 @@ class ListingOrderServiceTest {
         verify(listingPackageRepository, never()).findById(any());
     }
 
+    @Test
+    void cancelScheduledPublicationRefundsExactFeeAndClearsCurrentPeriod() {
+        UUID orderId = UUID.randomUUID();
+        ListingOrder order = scheduledOrder(orderId, TODAY.plusDays(2).atStartOfDay());
+        warehouse.setPublishedAt(order.getPeriodStart());
+        warehouse.setVisibleUntil(order.getPeriodEnd());
+        Transaction payment = successfulTransaction();
+        Transaction refund = successfulTransaction();
+
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(listingOrderRepository.findByIdForUpdate(orderId)).thenReturn(Optional.of(order));
+        when(transactionRepository.findByListingOrderIdAndTransactionType(
+                orderId, TransactionType.LISTING_REFUND)).thenReturn(Optional.empty());
+        when(transactionRepository.findByListingOrderIdAndTransactionType(
+                orderId, TransactionType.LISTING_FEE)).thenReturn(Optional.of(payment));
+        when(walletService.refundBalance(
+                eq(ownerId), eq(listingPackage.getPrice()), eq(TransactionType.LISTING_REFUND),
+                any(String.class), eq(null), eq(null))).thenReturn(refund);
+        when(listingOrderRepository.save(any(ListingOrder.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(warehouseRepository.save(any(Warehouse.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = listingOrderService.cancelScheduledPublication(ownerId, warehouseId, orderId);
+
+        assertEquals(ListingOrderStatus.REFUNDED, response.getStatus());
+        assertEquals(refund.getId(), response.getRefundTransactionId());
+        assertEquals(ListingOrderStatus.REFUNDED, order.getStatus());
+        assertNull(warehouse.getPublishedAt());
+        assertNull(warehouse.getVisibleUntil());
+        verify(walletService).refundBalance(
+                eq(ownerId), eq(listingPackage.getPrice()), eq(TransactionType.LISTING_REFUND),
+                any(String.class), eq(null), eq(null));
+        verify(transactionRepository).save(refund);
+    }
+
+    @Test
+    void cancelScheduledPublicationIsIdempotentAfterRefund() {
+        UUID orderId = UUID.randomUUID();
+        ListingOrder order = scheduledOrder(orderId, TODAY.plusDays(2).atStartOfDay());
+        order.setStatus(ListingOrderStatus.REFUNDED);
+        Transaction refund = successfulTransaction();
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(listingOrderRepository.findByIdForUpdate(orderId)).thenReturn(Optional.of(order));
+        when(transactionRepository.findByListingOrderIdAndTransactionType(
+                orderId, TransactionType.LISTING_FEE)).thenReturn(Optional.empty());
+        when(transactionRepository.findByListingOrderIdAndTransactionType(
+                orderId, TransactionType.LISTING_REFUND)).thenReturn(Optional.of(refund));
+
+        var response = listingOrderService.cancelScheduledPublication(ownerId, warehouseId, orderId);
+
+        assertEquals(ListingOrderStatus.REFUNDED, response.getStatus());
+        assertEquals(refund.getId(), response.getRefundTransactionId());
+        verifyNoInteractions(walletService);
+        verify(transactionRepository, never()).save(any());
+        verify(warehouseRepository, never()).save(any(Warehouse.class));
+    }
+
+    @Test
+    void cancelScheduledPublicationRejectsPublicationThatAlreadyStarted() {
+        UUID orderId = UUID.randomUUID();
+        LocalDateTime startedAt = NOW.minusMinutes(1);
+        ListingOrder order = scheduledOrder(orderId, startedAt);
+        warehouse.setPublishedAt(startedAt);
+        warehouse.setVisibleUntil(order.getPeriodEnd());
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(listingOrderRepository.findByIdForUpdate(orderId)).thenReturn(Optional.of(order));
+
+        BadRequestException exception = assertThrows(
+                BadRequestException.class,
+                () -> listingOrderService.cancelScheduledPublication(ownerId, warehouseId, orderId));
+
+        assertEquals(ErrorCode.LISTING_PUBLICATION_ACTION_NOT_ALLOWED, exception.getErrorCode());
+        verifyNoInteractions(walletService, transactionRepository);
+    }
+
     private void stubPurchaseDependencies(Transaction transaction) {
         stubWarehouseAndPackage();
         when(listingOrderRepository.save(any(ListingOrder.class))).thenAnswer(invocation -> {
@@ -291,5 +367,19 @@ class ListingOrderServiceTest {
 
     private Transaction successfulTransaction() {
         return Transaction.builder().id(UUID.randomUUID()).build();
+    }
+
+    private ListingOrder scheduledOrder(UUID orderId, LocalDateTime periodStart) {
+        return ListingOrder.builder()
+                .id(orderId)
+                .owner(owner)
+                .warehouse(warehouse)
+                .listingPackage(listingPackage)
+                .durationDaysSnapshot(listingPackage.getDurationDays())
+                .priceSnapshot(listingPackage.getPrice())
+                .status(ListingOrderStatus.PAID)
+                .periodStart(periodStart)
+                .periodEnd(periodStart.plusDays(listingPackage.getDurationDays()))
+                .build();
     }
 }

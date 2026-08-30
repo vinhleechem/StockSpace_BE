@@ -126,6 +126,73 @@ public class ListingOrderService {
         return mapToResponse(order, transaction.getId(), null);
     }
 
+    @Transactional
+    public ListingOrderResponse cancelScheduledPublication(
+            UUID ownerId,
+            UUID warehouseId,
+            UUID orderId
+    ) {
+        LocalDateTime now = LocalDateTime.now(publicationClock);
+        Warehouse warehouse = warehouseRepository.findByIdForUpdate(warehouseId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
+        ListingOrder order = listingOrderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.LISTING_ORDER_NOT_FOUND));
+
+        requireWarehouseOwner(warehouse, ownerId);
+        if (order.getWarehouse() == null
+                || !warehouseId.equals(order.getWarehouse().getId())
+                || order.getOwner() == null
+                || !ownerId.equals(order.getOwner().getId())) {
+            throw new ForbiddenException(ErrorCode.WAREHOUSE_NOT_OWNED);
+        }
+
+        if (order.getStatus() == ListingOrderStatus.REFUNDED) {
+            return mapToResponse(
+                    order,
+                    findTransactionId(orderId, TransactionType.LISTING_FEE),
+                    findTransactionId(orderId, TransactionType.LISTING_REFUND));
+        }
+
+        if (order.getStatus() != ListingOrderStatus.PAID
+                || order.getPeriodStart() == null
+                || order.getPeriodEnd() == null
+                || !order.getPeriodStart().isAfter(now)
+                || !isCurrentPublication(warehouse, order)) {
+            throw new BadRequestException(ErrorCode.LISTING_PUBLICATION_ACTION_NOT_ALLOWED);
+        }
+
+        Transaction existingRefund = transactionRepository
+                .findByListingOrderIdAndTransactionType(orderId, TransactionType.LISTING_REFUND)
+                .orElse(null);
+        if (existingRefund != null) {
+            throw new ResourceConflictException(ErrorCode.LISTING_PUBLICATION_ACTION_NOT_ALLOWED);
+        }
+
+        Transaction refund = walletService.refundBalance(
+                ownerId,
+                order.getPriceSnapshot(),
+                TransactionType.LISTING_REFUND,
+                "Refund for cancelled scheduled warehouse publication: " + warehouse.getName(),
+                null,
+                null
+        );
+        refund.setListingOrderId(orderId);
+        transactionRepository.save(refund);
+
+        order.setStatus(ListingOrderStatus.REFUNDED);
+        listingOrderRepository.save(order);
+        warehouse.setPublishedAt(null);
+        warehouse.setVisibleUntil(null);
+        warehouseRepository.save(warehouse);
+
+        log.info("Owner {} cancelled scheduled publication {} for warehouse {}",
+                ownerId, orderId, warehouseId);
+        return mapToResponse(
+                order,
+                findTransactionId(orderId, TransactionType.LISTING_FEE),
+                refund.getId());
+    }
+
     private void notifyPublication(UUID ownerId, Warehouse warehouse, LocalDateTime periodEnd, boolean startsToday) {
         try {
             notificationService.push(
@@ -245,5 +312,17 @@ public class ListingOrderService {
                 .periodEnd(order.getPeriodEnd())
                 .createdAt(order.getCreatedAt())
                 .build();
+    }
+
+    private UUID findTransactionId(UUID orderId, TransactionType transactionType) {
+        return transactionRepository
+                .findByListingOrderIdAndTransactionType(orderId, transactionType)
+                .map(Transaction::getId)
+                .orElse(null);
+    }
+
+    private boolean isCurrentPublication(Warehouse warehouse, ListingOrder order) {
+        return order.getPeriodStart().equals(warehouse.getPublishedAt())
+                && order.getPeriodEnd().equals(warehouse.getVisibleUntil());
     }
 }

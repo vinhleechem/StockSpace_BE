@@ -70,6 +70,17 @@ public class OwnerListingPublicationController {
         return ResponseEntity.ok(ApiResponse.success("Warehouse publication history retrieved successfully", response));
     }
 
+    @PostMapping("/{orderId}/cancel")
+    @Operation(summary = "Cancel a scheduled warehouse publication and refund its fee")
+    public ResponseEntity<ApiResponse<ListingOrderResponse>> cancelScheduledPublication(
+            @PathVariable UUID warehouseId,
+            @PathVariable UUID orderId) {
+        ListingOrderResponse response = listingOrderService.cancelScheduledPublication(
+                getCurrentUserId(), warehouseId, orderId);
+        return ResponseEntity.ok(ApiResponse.success(
+                "Scheduled warehouse publication cancelled and refunded successfully", response));
+    }
+
     private UUID getCurrentUserId() {
         return SecurityUtil.getCurrentUser()
                 .map(user -> user.getId())

@@ -21,6 +21,14 @@ public interface ListingOrderRepository extends JpaRepository<ListingOrder, UUID
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             SELECT o FROM ListingOrder o
+            WHERE o.id = :orderId
+              AND o.isDeleted = false
+            """)
+    java.util.Optional<ListingOrder> findByIdForUpdate(@Param("orderId") UUID orderId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT o FROM ListingOrder o
             WHERE o.warehouse.id = :warehouseId
               AND o.status = fu.stockspace.stockspace_be.listing.entity.ListingOrderStatus.PAID
               AND o.periodStart IS NOT NULL
