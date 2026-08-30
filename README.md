@@ -132,5 +132,5 @@ src/main/java/fu/stockspace/stockspace_be/
 ## Lưu ý bảo mật
 
 - Không đưa `.env`, khóa SSH, JWT secret hay thông tin thanh toán vào Git.
-- Chỉ bật `SEED_DEMO_USERS=true` trong môi trường development.
+- Production hiện bật `SEED_DEMO_USERS=true`; phải đổi mật khẩu mặc định của các tài khoản demo ngay sau khi seed.
 - Profile `prod` đã bật cookie secure; luôn triển khai production qua HTTPS.
