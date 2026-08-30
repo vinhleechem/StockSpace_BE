@@ -24,6 +24,7 @@ import fu.stockspace.stockspace_be.warehouse.entity.RentalPricingType;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseLayout;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseType;
+import fu.stockspace.stockspace_be.warehouse.repository.WarehouseImageRepository;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseLayoutRepository;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseTypeRepository;
@@ -42,7 +43,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.ArrayList;
 import java.util.List;
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -84,6 +88,18 @@ class WarehouseServiceTest {
     private WarehouseLayoutRepository warehouseLayoutRepository;
 
     @Mock
+    private WarehouseImageRepository warehouseImageRepository;
+
+    @Mock
+    private Clock publicationClock;
+
+    @Mock
+    private WarehousePublicationEditPolicy publicationEditPolicy;
+
+    @Mock
+    private WarehouseApprovalNotifier approvalNotifier;
+
+    @Mock
     private WalletService walletService;
 
     @InjectMocks
@@ -112,6 +128,11 @@ class WarehouseServiceTest {
                 .owner(owner)
                 .images(new ArrayList<>())
                 .build();
+
+        lenient().when(publicationClock.instant())
+                .thenReturn(Instant.parse("2026-08-31T01:00:00Z"));
+        lenient().when(publicationClock.getZone())
+                .thenReturn(ZoneId.of("Asia/Ho_Chi_Minh"));
     }
 
     @Test
@@ -244,13 +265,9 @@ class WarehouseServiceTest {
                 .length(new BigDecimal("10"))
                 .height(new BigDecimal("5"))
                 .build();
-        User admin = User.builder().id(UUID.randomUUID()).fullName("Admin").build();
-
         when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
         when(warehouseLayoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId))
                 .thenReturn(Optional.of(defaultLayout));
-        when(userRepository.findFirstByRoles_Name("ROLE_ADMIN"))
-                .thenReturn(Optional.of(admin));
         when(warehouseRepository.save(any(Warehouse.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -261,25 +278,7 @@ class WarehouseServiceTest {
         assertNull(warehouse.getPublishedAt());
         assertNull(warehouse.getVisibleUntil());
         verify(walletService, never()).refundBalance(any(), any(), any(), any(), any(), any());
-        verify(notificationService).push(
-                eq(admin.getId()),
-                eq("Warehouse listing awaiting review"),
-                any(String.class),
-                eq("WAREHOUSE"));
-    }
-
-    @Test
-    void ownerCannotBypassAdminApprovalThroughStatusEndpoint() {
-        when(warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId))
-                .thenReturn(Optional.of(warehouse));
-
-        BadRequestException exception = assertThrows(
-                BadRequestException.class,
-                () -> warehouseService.updateStatus(ownerId, warehouseId, WarehouseStatus.AVAILABLE));
-
-        assertEquals(fu.stockspace.stockspace_be.common.exception.ErrorCode.WAREHOUSE_INVALID_STATUS_TRANSITION,
-                exception.getErrorCode());
-        verify(warehouseRepository, never()).save(any(Warehouse.class));
+        verify(approvalNotifier).notifyAdmin(warehouse);
     }
 
     @Test
@@ -290,7 +289,7 @@ class WarehouseServiceTest {
         UpdateWarehouseRequest request = new UpdateWarehouseRequest();
         request.setRentalPricingType(RentalPricingType.NEGOTIATED);
 
-        when(warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId))
+        when(warehouseRepository.findByIdForUpdate(warehouseId))
                 .thenReturn(Optional.of(warehouse));
         when(warehouseRepository.save(any(Warehouse.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -307,7 +306,7 @@ class WarehouseServiceTest {
         request.setRentalPricingType(RentalPricingType.FIXED_MONTHLY);
         request.setRentalPrice(BigDecimal.ZERO);
 
-        when(warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId))
+        when(warehouseRepository.findByIdForUpdate(warehouseId))
                 .thenReturn(Optional.of(warehouse));
 
         assertThrows(BadRequestException.class,
@@ -320,7 +319,7 @@ class WarehouseServiceTest {
         UpdateWarehouseRequest request = new UpdateWarehouseRequest();
         request.setProvinceCode("79");
 
-        when(warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId))
+        when(warehouseRepository.findByIdForUpdate(warehouseId))
                 .thenReturn(Optional.of(warehouse));
 
         assertThrows(BadRequestException.class,
@@ -336,7 +335,7 @@ class WarehouseServiceTest {
         request.setDistrictCode("760");
         request.setDistrictName("Quận 9");
 
-        when(warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId))
+        when(warehouseRepository.findByIdForUpdate(warehouseId))
                 .thenReturn(Optional.of(warehouse));
         when(warehouseRepository.save(any(Warehouse.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -361,7 +360,7 @@ class WarehouseServiceTest {
         UpdateWarehouseRequest request = new UpdateWarehouseRequest();
         request.setAddress("Địa chỉ mới");
 
-        when(warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId))
+        when(warehouseRepository.findByIdForUpdate(warehouseId))
                 .thenReturn(Optional.of(warehouse));
         when(warehouseRepository.save(any(Warehouse.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -372,6 +371,81 @@ class WarehouseServiceTest {
         assertNull(warehouse.getProvinceName());
         assertNull(warehouse.getDistrictCode());
         assertNull(warehouse.getDistrictName());
+    }
+
+    @Test
+    void updateWarehouseInvalidatesAvailableUnpublishedApproval() {
+        warehouse.setStatus(WarehouseStatus.AVAILABLE);
+        UpdateWarehouseRequest request = new UpdateWarehouseRequest();
+        request.setName("Updated warehouse");
+
+        when(warehouseRepository.findByIdForUpdate(warehouseId))
+                .thenReturn(Optional.of(warehouse));
+        when(publicationEditPolicy.prepareOwnerEdit(warehouse)).thenAnswer(invocation -> {
+            warehouse.setStatus(WarehouseStatus.PENDING_APPROVAL);
+            return true;
+        });
+        when(warehouseRepository.save(any(Warehouse.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        WarehouseResponse response = warehouseService.updateWarehouse(ownerId, warehouseId, request);
+
+        assertEquals(WarehouseStatus.PENDING_APPROVAL.name(), response.getStatus());
+        verify(warehouseRepository).save(warehouse);
+        verify(approvalNotifier).notifyAdmin(warehouse);
+    }
+
+    @Test
+    void updateWarehouseRejectsEditWhilePublicationIsScheduledOrActive() {
+        warehouse.setStatus(WarehouseStatus.AVAILABLE);
+        UpdateWarehouseRequest request = new UpdateWarehouseRequest();
+        request.setName("Blocked update");
+        BadRequestException policyException = new BadRequestException(
+                fu.stockspace.stockspace_be.common.exception.ErrorCode.LISTING_PUBLICATION_ACTION_NOT_ALLOWED);
+
+        when(warehouseRepository.findByIdForUpdate(warehouseId))
+                .thenReturn(Optional.of(warehouse));
+        when(publicationEditPolicy.prepareOwnerEdit(warehouse)).thenThrow(policyException);
+
+        BadRequestException exception = assertThrows(BadRequestException.class,
+                () -> warehouseService.updateWarehouse(ownerId, warehouseId, request));
+
+        assertEquals(policyException.getErrorCode(), exception.getErrorCode());
+        verify(warehouseRepository, never()).save(any(Warehouse.class));
+    }
+
+    @Test
+    void addImagesRejectsLockedPublicationBeforePersistingImages() {
+        warehouse.setStatus(WarehouseStatus.AVAILABLE);
+        BadRequestException policyException = new BadRequestException(
+                fu.stockspace.stockspace_be.common.exception.ErrorCode.LISTING_PUBLICATION_ACTION_NOT_ALLOWED);
+
+        when(warehouseRepository.findByIdForUpdate(warehouseId))
+                .thenReturn(Optional.of(warehouse));
+        when(publicationEditPolicy.prepareOwnerEdit(warehouse)).thenThrow(policyException);
+
+        assertThrows(BadRequestException.class,
+                () -> warehouseService.addImages(ownerId, warehouseId, List.of("https://example.com/image.jpg")));
+
+        verifyNoInteractions(warehouseImageRepository);
+        verify(approvalNotifier, never()).notifyAdmin(any(Warehouse.class));
+    }
+
+    @Test
+    void replaceImagesRejectsLockedPublicationBeforeDeletingExistingImages() {
+        warehouse.setStatus(WarehouseStatus.AVAILABLE);
+        BadRequestException policyException = new BadRequestException(
+                fu.stockspace.stockspace_be.common.exception.ErrorCode.LISTING_PUBLICATION_ACTION_NOT_ALLOWED);
+
+        when(warehouseRepository.findByIdForUpdate(warehouseId))
+                .thenReturn(Optional.of(warehouse));
+        when(publicationEditPolicy.prepareOwnerEdit(warehouse)).thenThrow(policyException);
+
+        assertThrows(BadRequestException.class,
+                () -> warehouseService.replaceImages(ownerId, warehouseId, List.of("https://example.com/image.jpg")));
+
+        verifyNoInteractions(warehouseImageRepository);
+        verify(approvalNotifier, never()).notifyAdmin(any(Warehouse.class));
     }
 
     @Test
@@ -624,7 +698,7 @@ class WarehouseServiceTest {
     @Test
     void deleteWarehouseIsBlockedByAnActiveContractInsteadOfListingStatus() {
         warehouse.setStatus(WarehouseStatus.AVAILABLE);
-        when(warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId))
+        when(warehouseRepository.findByIdForUpdate(warehouseId))
                 .thenReturn(Optional.of(warehouse));
         when(warehouseRepository.hasCurrentActiveContract(warehouseId)).thenReturn(true);
 
@@ -638,7 +712,7 @@ class WarehouseServiceTest {
 
     @Test
     void deleteWarehouseSucceedsWhenNoActiveContractExists() {
-        when(warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId))
+        when(warehouseRepository.findByIdForUpdate(warehouseId))
                 .thenReturn(Optional.of(warehouse));
         when(warehouseRepository.hasCurrentActiveContract(warehouseId)).thenReturn(false);
 

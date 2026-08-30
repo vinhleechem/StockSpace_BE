@@ -27,6 +27,7 @@ import fu.stockspace.stockspace_be.notification.service.NotificationService;
 
 import fu.stockspace.stockspace_be.auth.util.SecurityUtil;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -60,6 +61,9 @@ public class WarehouseService {
     private final TenantWarehouseAccessService tenantWarehouseAccessService;
     private final ListingOrderRepository listingOrderRepository;
     private final WarehouseLayoutRepository warehouseLayoutRepository;
+    private final Clock publicationClock;
+    private final WarehousePublicationEditPolicy publicationEditPolicy;
+    private final WarehouseApprovalNotifier approvalNotifier;
 
     @Transactional(readOnly = true)
     public List<WarehouseResponse> getActiveContractWarehouses(UUID tenantId) {
@@ -148,7 +152,8 @@ public class WarehouseService {
 
     @Transactional
     public WarehouseResponse updateWarehouse(UUID ownerId, UUID warehouseId, UpdateWarehouseRequest request) {
-        Warehouse warehouse = getOwnedWarehouse(ownerId, warehouseId);
+        Warehouse warehouse = getOwnedWarehouseForUpdate(ownerId, warehouseId);
+        boolean approvalRequired = publicationEditPolicy.prepareOwnerEdit(warehouse);
 
         boolean addressChanged = StringUtils.hasText(request.getAddress());
         boolean structuredLocationProvided = hasStructuredLocation(request);
@@ -194,6 +199,9 @@ public class WarehouseService {
         }
 
         warehouse = warehouseRepository.save(warehouse);
+        if (approvalRequired) {
+            approvalNotifier.notifyAdmin(warehouse);
+        }
         log.info("Owner {} updated warehouse {}", ownerId, warehouseId);
         return mapToResponse(warehouse);
     }
@@ -204,10 +212,14 @@ public class WarehouseService {
 
     @Transactional
     public void deleteWarehouse(UUID ownerId, UUID warehouseId) {
-        Warehouse warehouse = getOwnedWarehouse(ownerId, warehouseId);
+        Warehouse warehouse = getOwnedWarehouseForUpdate(ownerId, warehouseId);
 
         if (warehouseRepository.hasCurrentActiveContract(warehouseId)) {
             throw new BadRequestException(ErrorCode.WAREHOUSE_HAS_ACTIVE_CONTRACTS);
+        }
+        if (warehouseRepository.hasOpenPaidPublication(
+                warehouseId, LocalDateTime.now(publicationClock))) {
+            throw new BadRequestException(ErrorCode.LISTING_PUBLICATION_ACTION_NOT_ALLOWED);
         }
 
         warehouse.setDeleted(true);
@@ -218,22 +230,6 @@ public class WarehouseService {
 
 
 
-
-    @Transactional
-    public WarehouseResponse updateStatus(UUID ownerId, UUID warehouseId, WarehouseStatus newStatus) {
-        Warehouse warehouse = getOwnedWarehouse(ownerId, warehouseId);
-        if (newStatus == null
-                || newStatus == WarehouseStatus.PENDING_APPROVAL
-                || (warehouse.getStatus() == WarehouseStatus.PENDING_APPROVAL
-                && newStatus == WarehouseStatus.AVAILABLE)) {
-            throw new BadRequestException(ErrorCode.WAREHOUSE_INVALID_STATUS_TRANSITION);
-        }
-        warehouse.setStatus(newStatus);
-        warehouse = warehouseRepository.save(warehouse);
-
-        log.info("Owner {} updated warehouse {} status to {}", ownerId, warehouseId, newStatus);
-        return mapToResponse(warehouse);
-    }
 
 
 
@@ -258,16 +254,35 @@ public class WarehouseService {
 
     @Transactional
     public List<String> addImages(UUID ownerId, UUID warehouseId, List<String> imageUrls) {
-        Warehouse warehouse = getOwnedWarehouse(ownerId, warehouseId);
+        Warehouse warehouse = getOwnedWarehouseForUpdate(ownerId, warehouseId);
+        boolean approvalRequired = publicationEditPolicy.prepareOwnerEdit(warehouse);
 
         int currentCount = warehouseImageRepository.countByWarehouseId(warehouseId);
         if (currentCount + imageUrls.size() > MAX_IMAGES_PER_WAREHOUSE) {
             throw new BadRequestException(ErrorCode.WAREHOUSE_IMAGE_LIMIT_EXCEEDED);
         }
 
+        if (approvalRequired) {
+            warehouseRepository.save(warehouse);
+        }
+
         List<String> saved = attachImages(warehouse, imageUrls);
+        if (approvalRequired) {
+            approvalNotifier.notifyAdmin(warehouse);
+        }
         log.info("Added {} images to warehouse {}", imageUrls.size(), warehouseId);
         return saved;
+    }
+
+    /**
+     * Performs the read-only guard required before uploading owner images to
+     * external storage. The image mutation methods repeat the check under a
+     * row lock before persisting URLs.
+     */
+    @Transactional(readOnly = true)
+    public void validateOwnerContentEdit(UUID ownerId, UUID warehouseId) {
+        Warehouse warehouse = getOwnedWarehouse(ownerId, warehouseId);
+        publicationEditPolicy.assertOwnerEditAllowed(warehouse);
     }
 
 
@@ -275,12 +290,17 @@ public class WarehouseService {
 
     @Transactional
     public List<String> replaceImages(UUID ownerId, UUID warehouseId, List<String> imageUrls) {
-        Warehouse warehouse = getOwnedWarehouse(ownerId, warehouseId);
+        Warehouse warehouse = getOwnedWarehouseForUpdate(ownerId, warehouseId);
+        boolean approvalRequired = publicationEditPolicy.prepareOwnerEdit(warehouse);
 
         warehouseImageRepository.deleteAllByWarehouseId(warehouseId);
         warehouse.getImages().clear();
 
         List<String> saved = attachImages(warehouse, imageUrls);
+        if (approvalRequired) {
+            warehouseRepository.save(warehouse);
+            approvalNotifier.notifyAdmin(warehouse);
+        }
         log.info("Replaced images for warehouse {}", warehouseId);
         return saved;
     }
@@ -404,7 +424,7 @@ public class WarehouseService {
         warehouse.setVisibleUntil(null);
         warehouse = warehouseRepository.save(warehouse);
 
-        notifyAdminForApproval(warehouse);
+        approvalNotifier.notifyAdmin(warehouse);
 
         log.info("Owner {} submitted warehouse {} for approval", ownerId, warehouseId);
         return mapToResponse(warehouse);
@@ -422,20 +442,6 @@ public class WarehouseService {
                         && layout.getHeight().signum() > 0)
                 .orElseThrow(() -> new ResourceConflictException(
                         ErrorCode.WAREHOUSE_DEFAULT_LAYOUT_REQUIRED));
-    }
-
-    private void notifyAdminForApproval(Warehouse warehouse) {
-        try {
-            userRepository.findFirstByRoles_Name("ROLE_ADMIN")
-                    .ifPresent(admin -> notificationService.push(
-                            admin.getId(),
-                            "Warehouse listing awaiting review",
-                            "Owner submitted warehouse '" + warehouse.getName()
-                                    + "' for content approval.",
-                            "WAREHOUSE"));
-        } catch (Exception exception) {
-            log.warn("Failed to push warehouse approval notification: {}", exception.getMessage());
-        }
     }
 
     private void requireWarehouseOwner(Warehouse warehouse, UUID ownerId) {
@@ -526,6 +532,15 @@ public class WarehouseService {
     private Warehouse getOwnedWarehouse(UUID ownerId, UUID warehouseId) {
         return warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId)
                 .orElseThrow(() -> new ForbiddenException(ErrorCode.WAREHOUSE_NOT_OWNED));
+    }
+
+    private Warehouse getOwnedWarehouseForUpdate(UUID ownerId, UUID warehouseId) {
+        Warehouse warehouse = warehouseRepository.findByIdForUpdate(warehouseId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
+        if (warehouse.getOwner() == null || !ownerId.equals(warehouse.getOwner().getId())) {
+            throw new ForbiddenException(ErrorCode.WAREHOUSE_NOT_OWNED);
+        }
+        return warehouse;
     }
 
     @Transactional(readOnly = true)

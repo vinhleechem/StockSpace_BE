@@ -49,6 +49,8 @@ public class WarehouseLayoutService {
     private final TenantWarehouseAccessService tenantWarehouseAccessService;
     private final StockBatchRepository stockBatchRepository;
     private final ObjectMapper objectMapper;
+    private final WarehousePublicationEditPolicy publicationEditPolicy;
+    private final WarehouseApprovalNotifier approvalNotifier;
 
 
 
@@ -364,10 +366,14 @@ public class WarehouseLayoutService {
     public WarehouseLayoutResponse saveLayoutBulk(UUID warehouseId, UUID userId, String role, BulkLayoutSaveRequest request) {
         log.info("Performing bulk save for warehouse layout: {} by user: {}, role: {}", warehouseId, userId, role);
 
-        Warehouse warehouse = warehouseRepository.findById(warehouseId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
-
         boolean isTenantRole = role != null && "TENANT".equalsIgnoreCase(role.trim());
+        boolean isOwnerRole = role != null && "OWNER".equalsIgnoreCase(role.trim());
+        Warehouse warehouse = (isOwnerRole
+                ? warehouseRepository.findByIdForUpdate(warehouseId)
+                : warehouseRepository.findById(warehouseId))
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
+        boolean approvalRequired = isOwnerRole && publicationEditPolicy.prepareOwnerEdit(warehouse);
+
         WarehouseLayout layout = resolveLayoutForSave(warehouse, warehouseId, userId, role, request);
         if (isTenantRole) {
             validateTenantSnapshotDimensions(layout, request);
@@ -377,7 +383,12 @@ public class WarehouseLayoutService {
         WarehouseLayout savedLayout = layoutRepository.save(layout);
         if (savedLayout != null) layout = savedLayout;
 
-        return saveLayoutContents(layout, request, isTenantRole);
+        WarehouseLayoutResponse response = saveLayoutContents(layout, request, isTenantRole);
+        if (approvalRequired) {
+            warehouseRepository.save(warehouse);
+            approvalNotifier.notifyAdmin(warehouse);
+        }
+        return response;
     }
 
     /**

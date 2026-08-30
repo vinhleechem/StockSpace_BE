@@ -7,7 +7,6 @@ import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.UnauthorizedException;
 import fu.stockspace.stockspace_be.warehouse.dto.*;
-import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -159,18 +158,6 @@ public class OwnerWarehouseController {
 
 
 
-    @PatchMapping("/{id}/status")
-    @PreAuthorize("@rbac.hasPermission('WAREHOUSE_UPDATE')")
-    @Operation(summary = "Cập nhật trạng thái warehouse (AVAILABLE / INACTIVE)")
-    public ResponseEntity<ApiResponse<WarehouseResponse>> updateStatus(
-            @PathVariable UUID id,
-            @RequestParam WarehouseStatus status
-    ) {
-        UUID ownerId = getCurrentUserId();
-        WarehouseResponse response = warehouseService.updateStatus(ownerId, id, status);
-        return ResponseEntity.ok(ApiResponse.success("Cập nhật trạng thái kho thành công", response));
-    }
-
     @PostMapping("/{id}/submit-for-approval")
     @PreAuthorize("@rbac.hasPermission('WAREHOUSE_UPDATE')")
     @Operation(summary = "Gửi warehouse vào hàng đợi Admin duyệt nội dung")
@@ -211,6 +198,7 @@ public class OwnerWarehouseController {
             @RequestParam("files") List<MultipartFile> files
     ) throws IOException {
         UUID ownerId = getCurrentUserId();
+        warehouseService.validateOwnerContentEdit(ownerId, id);
         List<String> urls = cloudinaryService.uploadImages(files);
         List<String> saved = warehouseService.addImages(ownerId, id, urls);
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -229,6 +217,7 @@ public class OwnerWarehouseController {
             @RequestParam("files") List<MultipartFile> files
     ) throws IOException {
         UUID ownerId = getCurrentUserId();
+        warehouseService.validateOwnerContentEdit(ownerId, id);
         List<String> urls = cloudinaryService.uploadImages(files);
         List<String> saved = warehouseService.replaceImages(ownerId, id, urls);
         return ResponseEntity.ok(ApiResponse.success("Cập nhật ảnh thành công", saved));
