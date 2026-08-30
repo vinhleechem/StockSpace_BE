@@ -1,6 +1,5 @@
 package fu.stockspace.stockspace_be.warehouse.service;
 
-import fu.stockspace.stockspace_be.auth.entity.RoleType;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
@@ -9,14 +8,8 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenExceptio
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
-import fu.stockspace.stockspace_be.listing.entity.ListingOrder;
 import fu.stockspace.stockspace_be.listing.entity.ListingOrderStatus;
 import fu.stockspace.stockspace_be.listing.repository.ListingOrderRepository;
-import fu.stockspace.stockspace_be.wallet.entity.Transaction;
-import fu.stockspace.stockspace_be.wallet.entity.TransactionStatus;
-import fu.stockspace.stockspace_be.wallet.entity.TransactionType;
-import fu.stockspace.stockspace_be.wallet.repository.TransactionRepository;
-import fu.stockspace.stockspace_be.wallet.service.WalletService;
 import fu.stockspace.stockspace_be.warehouse.dto.*;
 import fu.stockspace.stockspace_be.warehouse.entity.*;
 import fu.stockspace.stockspace_be.warehouse.repository.*;
@@ -66,9 +59,7 @@ public class WarehouseService {
     private final NotificationService notificationService;
     private final TenantWarehouseAccessService tenantWarehouseAccessService;
     private final ListingOrderRepository listingOrderRepository;
-    private final TransactionRepository transactionRepository;
     private final WarehouseLayoutRepository warehouseLayoutRepository;
-    private final WalletService walletService;
 
     @Transactional(readOnly = true)
     public List<WarehouseResponse> getActiveContractWarehouses(UUID tenantId) {
@@ -129,7 +120,7 @@ public class WarehouseService {
                 .capacity(request.getCapacity())
                 .rentalPricingType(pricingType)
                 .rentalPrice(rentalPrice)
-                .status(WarehouseStatus.PENDING_APPROVAL)
+                .status(WarehouseStatus.DRAFT)
                 .isVerified(false)
                 .policy(policy)
                 .build();
@@ -146,20 +137,6 @@ public class WarehouseService {
 
         if (request.getImageUrls() != null && !request.getImageUrls().isEmpty()) {
             attachImages(warehouse, request.getImageUrls());
-        }
-
-        try {
-            final String whName = warehouse.getName();
-            final String ownerName = owner.getFullName() != null ? owner.getFullName() : owner.getEmail();
-            userRepository.findFirstByRoles_Name(RoleType.ROLE_ADMIN.name())
-                    .ifPresent(admin -> notificationService.push(
-                            admin.getId(),
-                            "Yêu cầu duyệt bài đăng kho mới",
-                            "Chủ kho '" + ownerName + "' vừa đăng kho bãi mới '" + whName + "'. Vui lòng kiểm tra và phê duyệt.",
-                            "WAREHOUSE"
-                    ));
-        } catch (Exception e) {
-            log.warn("Failed to push new warehouse notification to admin: {}", e.getMessage());
         }
 
         log.info("Warehouse created: {} (ID: {})", warehouse.getName(), warehouse.getId());
@@ -386,21 +363,12 @@ public class WarehouseService {
             throw new BadRequestException(ErrorCode.WAREHOUSE_INVALID_STATUS_TRANSITION);
         }
 
-        ListingOrder order = findPendingPaidOrder(warehouseId);
-
         validateDefaultLayoutForApproval(warehouseId);
-
-        LocalDateTime periodStart = LocalDateTime.now();
-        LocalDateTime periodEnd = periodStart.plusDays(order.getDurationDaysSnapshot());
-        order.setPeriodStart(periodStart);
-        order.setPeriodEnd(periodEnd);
-        order.setStatus(ListingOrderStatus.ACTIVATED);
-        listingOrderRepository.save(order);
 
         warehouse.setStatus(WarehouseStatus.AVAILABLE);
         warehouse.setRejectReason(null);
-        warehouse.setPublishedAt(periodStart);
-        warehouse.setVisibleUntil(periodEnd);
+        warehouse.setPublishedAt(null);
+        warehouse.setVisibleUntil(null);
         warehouse = warehouseRepository.save(warehouse);
 
         if (warehouse.getOwner() != null) {
@@ -408,31 +376,27 @@ public class WarehouseService {
                     warehouse.getOwner().getId(),
                     "Bài đăng kho bãi đã được duyệt",
                     "Chúc mừng! Bài đăng kho bãi '" + warehouse.getName()
-                            + "' đã được duyệt và đang hiển thị đến " + periodEnd + ".",
+                            + "' đã được duyệt. Bạn có thể chọn ngày và gói đăng bài.",
                     "SYSTEM"
             );
         }
 
-        log.info("Admin approved listing order {} for warehouse {}", order.getId(), warehouseId);
-        return mapToResponse(warehouse, order.getId(), order.getStatus());
+        log.info("Admin approved warehouse {} before publication payment", warehouseId);
+        return mapToResponse(warehouse);
     }
 
     @Transactional
-    public WarehouseResponse resubmitWarehouse(UUID ownerId, UUID warehouseId) {
+    public WarehouseResponse submitForApproval(UUID ownerId, UUID warehouseId) {
         Warehouse warehouse = warehouseRepository.findByIdForUpdate(warehouseId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
         requireWarehouseOwner(warehouse, ownerId);
 
-        if (warehouse.getStatus() != WarehouseStatus.INACTIVE
-                || !StringUtils.hasText(warehouse.getRejectReason())) {
+        if (warehouse.getStatus() != WarehouseStatus.DRAFT
+                && warehouse.getStatus() != WarehouseStatus.INACTIVE) {
             throw new BadRequestException(ErrorCode.WAREHOUSE_INVALID_STATUS_TRANSITION);
         }
 
-        List<ListingOrder> orders = listingOrderRepository
-                .findAllByOwnerIdAndWarehouseId(ownerId, warehouseId);
-        if (orders.isEmpty() || orders.get(0).getStatus() != ListingOrderStatus.REFUNDED) {
-            throw new BadRequestException(ErrorCode.WAREHOUSE_INVALID_STATUS_TRANSITION);
-        }
+        validateDefaultLayoutForApproval(warehouseId);
 
         warehouse.setStatus(WarehouseStatus.PENDING_APPROVAL);
         warehouse.setRejectReason(null);
@@ -440,15 +404,10 @@ public class WarehouseService {
         warehouse.setVisibleUntil(null);
         warehouse = warehouseRepository.save(warehouse);
 
-        notificationService.push(
-                ownerId,
-                "Warehouse listing resubmitted",
-                "Warehouse " + warehouse.getName()
-                        + " has been resubmitted and is waiting for a new listing payment and Admin approval.",
-                "LISTING_RESUBMITTED");
+        notifyAdminForApproval(warehouse);
 
-        log.info("Owner {} resubmitted rejected warehouse {}", ownerId, warehouseId);
-        return mapToResponse(warehouse, orders.get(0).getId(), orders.get(0).getStatus());
+        log.info("Owner {} submitted warehouse {} for approval", ownerId, warehouseId);
+        return mapToResponse(warehouse);
     }
 
     private void validateDefaultLayoutForApproval(UUID warehouseId) {
@@ -465,31 +424,25 @@ public class WarehouseService {
                         ErrorCode.WAREHOUSE_DEFAULT_LAYOUT_REQUIRED));
     }
 
+    private void notifyAdminForApproval(Warehouse warehouse) {
+        try {
+            userRepository.findFirstByRoles_Name("ROLE_ADMIN")
+                    .ifPresent(admin -> notificationService.push(
+                            admin.getId(),
+                            "Warehouse listing awaiting review",
+                            "Owner submitted warehouse '" + warehouse.getName()
+                                    + "' for content approval.",
+                            "WAREHOUSE"));
+        } catch (Exception exception) {
+            log.warn("Failed to push warehouse approval notification: {}", exception.getMessage());
+        }
+    }
+
     private void requireWarehouseOwner(Warehouse warehouse, UUID ownerId) {
         if (warehouse.getOwner() == null || !ownerId.equals(warehouse.getOwner().getId())) {
             throw new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND);
         }
     }
-
-    private ListingOrder findPendingPaidOrder(UUID warehouseId) {
-        List<ListingOrder> pendingOrders = listingOrderRepository
-                .findPendingByWarehouseIdForUpdate(warehouseId);
-        if (pendingOrders.size() != 1) {
-            throw new ResourceConflictException(ErrorCode.LISTING_PAYMENT_REQUIRED);
-        }
-
-        ListingOrder order = pendingOrders.get(0);
-        transactionRepository
-                .findByListingOrderIdAndTransactionType(order.getId(), TransactionType.LISTING_FEE)
-                .filter(transaction -> transaction.getStatus() == TransactionStatus.SUCCESS)
-                .filter(transaction -> transaction.getAmount() != null
-                        && transaction.getAmount().compareTo(order.getPriceSnapshot()) == 0)
-                .orElseThrow(() -> new ResourceConflictException(ErrorCode.LISTING_PAYMENT_REQUIRED));
-        return order;
-    }
-
-
-
 
     @Transactional
     public WarehouseResponse rejectWarehouse(UUID warehouseId, String reason) {
@@ -499,23 +452,6 @@ public class WarehouseService {
         if (warehouse.getStatus() != WarehouseStatus.PENDING_APPROVAL) {
             throw new BadRequestException(ErrorCode.WAREHOUSE_INVALID_STATUS_TRANSITION);
         }
-
-        ListingOrder order = findPendingPaidOrder(warehouseId);
-        Transaction refund = walletService.refundBalance(
-                warehouse.getOwner().getId(),
-                order.getPriceSnapshot(),
-                TransactionType.LISTING_REFUND,
-                "Refund for rejected warehouse listing: " + warehouse.getName(),
-                null,
-                null
-        );
-        refund.setListingOrderId(order.getId());
-        transactionRepository.save(refund);
-
-        order.setStatus(ListingOrderStatus.REFUNDED);
-        order.setPeriodStart(null);
-        order.setPeriodEnd(null);
-        listingOrderRepository.save(order);
 
         warehouse.setStatus(WarehouseStatus.INACTIVE);
         if (StringUtils.hasText(reason)) {
@@ -529,10 +465,10 @@ public class WarehouseService {
             String message = StringUtils.hasText(reason)
                     ? "Yêu cầu đăng kho bãi '" + warehouse.getName()
                             + "' của bạn không được phê duyệt. Lý do từ chối: " + reason.trim()
-                            + ". Phí đăng bài " + order.getPriceSnapshot() + " đã được hoàn vào ví."
+                            + ". Bạn có thể chỉnh sửa và gửi lại sau."
                     : "Yêu cầu đăng kho bãi '" + warehouse.getName()
                             + "' của bạn không được phê duyệt. Vui lòng kiểm tra lại thông tin. Phí đăng bài "
-                            + order.getPriceSnapshot() + " đã được hoàn vào ví.";
+                            + "Bạn có thể chỉnh sửa và gửi lại sau.";
 
             notificationService.push(
                     warehouse.getOwner().getId(),
@@ -543,7 +479,7 @@ public class WarehouseService {
         }
 
         log.info("Admin rejected warehouse listing {} with reason: {}", warehouseId, reason);
-        return mapToResponse(warehouse, order.getId(), order.getStatus());
+        return mapToResponse(warehouse);
     }
 
 
