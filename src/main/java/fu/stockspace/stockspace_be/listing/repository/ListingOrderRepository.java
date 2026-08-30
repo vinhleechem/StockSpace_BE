@@ -10,12 +10,28 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Repository
 public interface ListingOrderRepository extends JpaRepository<ListingOrder, UUID> {
 
     boolean existsByWarehouseIdAndStatusAndIsDeletedFalse(UUID warehouseId, ListingOrderStatus status);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT o FROM ListingOrder o
+            WHERE o.warehouse.id = :warehouseId
+              AND o.status = fu.stockspace.stockspace_be.listing.entity.ListingOrderStatus.PAID
+              AND o.periodStart IS NOT NULL
+              AND o.periodEnd > :now
+              AND o.isDeleted = false
+            ORDER BY o.periodEnd DESC
+            """)
+    List<ListingOrder> findOpenPaidByWarehouseIdForUpdate(
+            @Param("warehouseId") UUID warehouseId,
+            @Param("now") LocalDateTime now
+    );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""

@@ -51,11 +51,11 @@ public class OwnerListingPublicationController {
     private final ListingOrderService listingOrderService;
 
     @PostMapping
-    @Operation(summary = "Purchase or renew a warehouse listing package")
+    @Operation(summary = "Schedule a warehouse listing publication")
     public ResponseEntity<ApiResponse<ListingOrderResponse>> purchase(
             @PathVariable UUID warehouseId,
             @Valid @RequestBody PurchaseListingPackageRequest request) {
-        ListingOrderResponse response = listingOrderService.purchaseOrRenew(
+        ListingOrderResponse response = listingOrderService.purchasePublication(
                 getCurrentUserId(), warehouseId, request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Warehouse publication package purchased successfully", response));

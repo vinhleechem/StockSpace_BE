@@ -33,7 +33,7 @@ class RentalContractSchemaMappingTest {
 
     @Test
     void warehouseUsesOnlyListingStatesAndCanonicalRentalPrice() throws Exception {
-        assertEquals(Set.of("AVAILABLE", "PENDING_APPROVAL", "INACTIVE"),
+        assertEquals(Set.of("DRAFT", "AVAILABLE", "PENDING_APPROVAL", "INACTIVE"),
                 Arrays.stream(WarehouseStatus.values()).map(Enum::name).collect(Collectors.toSet()));
         Warehouse.class.getDeclaredField("rentalPrice");
     }

@@ -64,7 +64,7 @@ public class ListingOrder extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)
     @lombok.Builder.Default
-    private ListingOrderStatus status = ListingOrderStatus.ACTIVATED;
+    private ListingOrderStatus status = ListingOrderStatus.PAID;
 
     @Column(name = "period_start")
     private LocalDateTime periodStart;

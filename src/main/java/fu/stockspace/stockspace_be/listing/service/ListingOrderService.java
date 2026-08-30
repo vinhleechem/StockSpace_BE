@@ -29,6 +29,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.Map;
@@ -48,9 +50,10 @@ public class ListingOrderService {
     private final WarehouseLayoutRepository warehouseLayoutRepository;
     private final WalletService walletService;
     private final NotificationService notificationService;
+    private final Clock publicationClock;
 
     @Transactional
-    public ListingOrderResponse purchaseOrRenew(
+    public ListingOrderResponse purchasePublication(
             UUID ownerId,
             UUID warehouseId,
             PurchaseListingPackageRequest request
@@ -58,33 +61,34 @@ public class ListingOrderService {
         if (request == null || request.getListingPackageId() == null) {
             throw new BadRequestException("Listing package ID is required");
         }
+        if (request.getStartDate() == null) {
+            throw new BadRequestException("Publication start date is required");
+        }
 
         Warehouse warehouse = warehouseRepository.findByIdForUpdate(warehouseId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
         requireWarehouseOwner(warehouse, ownerId);
         validatePublishableWarehouse(warehouse);
 
-        if (listingOrderRepository.existsByWarehouseIdAndStatusAndIsDeletedFalse(
-                warehouseId, ListingOrderStatus.PENDING_APPROVAL)) {
-            throw new ResourceConflictException(ErrorCode.LISTING_PUBLICATION_PENDING);
-        }
-
         ListingPackage listingPackage = listingPackageRepository.findById(request.getListingPackageId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.PACKAGE_NOT_FOUND));
         validateListingPackage(listingPackage);
         validateDefaultLayout(warehouseId);
 
-        LocalDateTime now = LocalDateTime.now();
-        boolean requiresAdminApproval = warehouse.getStatus() == WarehouseStatus.PENDING_APPROVAL;
-        boolean extendingActivePublication = warehouse.getStatus() == WarehouseStatus.AVAILABLE
-                && warehouse.getVisibleUntil() != null
-                && warehouse.getVisibleUntil().isAfter(now);
-        LocalDateTime periodStart = extendingActivePublication
-                ? warehouse.getVisibleUntil()
-                : now;
-        LocalDateTime periodEnd = requiresAdminApproval
-                ? null
-                : periodStart.plusDays(listingPackage.getDurationDays());
+        LocalDateTime now = LocalDateTime.now(publicationClock);
+        LocalDate today = LocalDate.now(publicationClock);
+        if (request.getStartDate().isBefore(today)) {
+            throw new BadRequestException("Publication start date cannot be in the past");
+        }
+
+        if (!listingOrderRepository.findOpenPaidByWarehouseIdForUpdate(warehouseId, now).isEmpty()) {
+            throw new ResourceConflictException(ErrorCode.LISTING_PUBLICATION_PENDING);
+        }
+
+        LocalDateTime periodStart = request.getStartDate().isEqual(today)
+                ? now
+                : request.getStartDate().atStartOfDay();
+        LocalDateTime periodEnd = periodStart.plusDays(listingPackage.getDurationDays());
 
         User owner = warehouse.getOwner();
         ListingOrder order = ListingOrder.builder()
@@ -93,10 +97,8 @@ public class ListingOrderService {
                 .listingPackage(listingPackage)
                 .durationDaysSnapshot(listingPackage.getDurationDays())
                 .priceSnapshot(listingPackage.getPrice())
-                .status(requiresAdminApproval
-                        ? ListingOrderStatus.PENDING_APPROVAL
-                        : ListingOrderStatus.ACTIVATED)
-                .periodStart(requiresAdminApproval ? null : periodStart)
+                .status(ListingOrderStatus.PAID)
+                .periodStart(periodStart)
                 .periodEnd(periodEnd)
                 .isActive(true)
                 .isDeleted(false)
@@ -114,45 +116,28 @@ public class ListingOrderService {
         transaction.setListingOrderId(order.getId());
         transactionRepository.save(transaction);
 
-        if (!requiresAdminApproval) {
-            if (!extendingActivePublication || warehouse.getPublishedAt() == null) {
-                warehouse.setPublishedAt(periodStart);
-            }
-            warehouse.setVisibleUntil(periodEnd);
-            warehouseRepository.save(warehouse);
-            notifyPublication(ownerId, warehouse, periodEnd, extendingActivePublication);
-        } else {
-            notifyPendingApproval(ownerId, warehouse);
-        }
+        warehouse.setPublishedAt(periodStart);
+        warehouse.setVisibleUntil(periodEnd);
+        warehouseRepository.save(warehouse);
+        notifyPublication(ownerId, warehouse, periodEnd, periodStart.equals(now));
 
         log.info("Owner {} purchased {}-day listing package for warehouse {} with status {} until {}",
                 ownerId, listingPackage.getDurationDays(), warehouseId, order.getStatus(), periodEnd);
         return mapToResponse(order, transaction.getId(), null);
     }
 
-    private void notifyPublication(UUID ownerId, Warehouse warehouse, LocalDateTime periodEnd, boolean renewed) {
+    private void notifyPublication(UUID ownerId, Warehouse warehouse, LocalDateTime periodEnd, boolean startsToday) {
         try {
             notificationService.push(
                     ownerId,
-                    renewed ? "Warehouse publication renewed" : "Warehouse published",
-                    "Warehouse " + warehouse.getName() + " is visible until " + periodEnd + ".",
-                    renewed ? "LISTING_RENEWED" : "LISTING_PUBLISHED");
+                    startsToday ? "Warehouse published" : "Warehouse publication scheduled",
+                    startsToday
+                            ? "Warehouse " + warehouse.getName() + " is visible until " + periodEnd + "."
+                            : "Warehouse " + warehouse.getName() + " will be visible from "
+                            + warehouse.getPublishedAt() + " until " + periodEnd + ".",
+                    startsToday ? "LISTING_PUBLISHED" : "LISTING_SCHEDULED");
         } catch (Exception exception) {
             log.warn("Failed to push listing publication notification for warehouse {}: {}",
-                    warehouse.getId(), exception.getMessage());
-        }
-    }
-
-    private void notifyPendingApproval(UUID ownerId, Warehouse warehouse) {
-        try {
-            notificationService.push(
-                    ownerId,
-                    "Warehouse publication awaiting approval",
-                    "Warehouse " + warehouse.getName()
-                            + " has been paid and is waiting for Admin approval.",
-                    "LISTING_PENDING_APPROVAL");
-        } catch (Exception exception) {
-            log.warn("Failed to push pending listing notification for warehouse {}: {}",
                     warehouse.getId(), exception.getMessage());
         }
     }
@@ -208,7 +193,7 @@ public class ListingOrderService {
         if (!warehouse.isActive()
                 || warehouse.isDeleted()
                 || warehouse.getStatus() == null
-                || warehouse.getStatus() == WarehouseStatus.INACTIVE) {
+                || warehouse.getStatus() != WarehouseStatus.AVAILABLE) {
             throw new BadRequestException(ErrorCode.WAREHOUSE_NOT_AVAILABLE);
         }
     }
