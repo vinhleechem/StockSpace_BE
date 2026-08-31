@@ -19,7 +19,7 @@ import java.util.UUID;
 @Schema(description = "Owner request used to preview or create a direct rental-contract draft")
 public class CreateRentalContractRequest {
 
-    @Schema(description = "Owner's verified warehouse", format = "uuid")
+    @Schema(description = "Owner's active warehouse", format = "uuid")
     @NotNull(message = "Warehouse is required")
     private UUID warehouseId;
 

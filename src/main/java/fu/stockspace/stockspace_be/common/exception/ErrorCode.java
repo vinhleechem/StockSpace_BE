@@ -82,7 +82,9 @@ public enum ErrorCode {
 
     PACKAGE_NOT_FOUND("Gói dịch vụ không tồn tại", HttpStatus.NOT_FOUND),
     LISTING_PACKAGE_INACTIVE("Gói đăng tin hiện không hoạt động", HttpStatus.BAD_REQUEST),
+    LISTING_ORDER_NOT_FOUND("Lịch sử đăng bài không tồn tại", HttpStatus.NOT_FOUND),
     LISTING_PUBLICATION_PENDING("Kho đang có yêu cầu đăng bài chờ Admin duyệt", HttpStatus.CONFLICT),
+    LISTING_PUBLICATION_ACTION_NOT_ALLOWED("Thao tác không phù hợp với trạng thái đăng bài hiện tại", HttpStatus.BAD_REQUEST),
     SUBSCRIPTION_ALREADY_ACTIVE("Bạn đã có gói dịch vụ đang hoạt động", HttpStatus.CONFLICT),
     SUBSCRIPTION_NOT_FOUND("Subscription không tồn tại", HttpStatus.NOT_FOUND),
 

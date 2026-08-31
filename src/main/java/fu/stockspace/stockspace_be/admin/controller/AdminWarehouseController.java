@@ -70,7 +70,7 @@ public class AdminWarehouseController {
             @PathVariable UUID id
     ) {
         WarehouseResponse response = warehouseService.approveWarehouse(id);
-        return ResponseEntity.ok(ApiResponse.success("Duyệt bài đăng thành công. Kho hiện đã hiển thị.", response));
+        return ResponseEntity.ok(ApiResponse.success("Duyệt nội dung thành công. Owner có thể chọn gói và ngày đăng.", response));
     }
 
 

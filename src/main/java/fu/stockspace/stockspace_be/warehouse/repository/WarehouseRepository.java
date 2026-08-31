@@ -12,6 +12,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -121,4 +122,17 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
               AND c.endDate >= CURRENT_DATE
             """)
     boolean hasCurrentActiveContract(@Param("warehouseId") UUID warehouseId);
+
+    @Query("""
+            SELECT COUNT(o) > 0 FROM ListingOrder o
+            WHERE o.warehouse.id = :warehouseId
+              AND o.status = fu.stockspace.stockspace_be.listing.entity.ListingOrderStatus.PAID
+              AND o.periodEnd IS NOT NULL
+              AND o.periodEnd > :now
+              AND o.isDeleted = false
+            """)
+    boolean hasOpenPaidPublication(
+            @Param("warehouseId") UUID warehouseId,
+            @Param("now") LocalDateTime now
+    );
 }
