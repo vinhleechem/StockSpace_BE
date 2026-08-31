@@ -31,6 +31,9 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
     Optional<StockBatch> findBySkuIdAndWarehouseIdAndRackIdAndBinIdAndIsDeletedFalse(
             UUID skuId, UUID warehouseId, UUID rackId, UUID binId);
 
+    List<StockBatch> findAllBySkuIdAndWarehouseIdAndRackIdAndBinIdAndIsDeletedFalseOrderByArrivalDateAscCreatedAtAscIdAsc(
+            UUID skuId, UUID warehouseId, UUID rackId, UUID binId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
             select b from StockBatch b
