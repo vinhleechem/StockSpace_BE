@@ -44,6 +44,10 @@ class WarehouseLayoutServiceTest {
     private TenantWarehouseAccessService tenantWarehouseAccessService;
     @Mock
     private StockBatchRepository stockBatchRepository;
+    @Mock
+    private WarehousePublicationEditPolicy publicationEditPolicy;
+    @Mock
+    private WarehouseApprovalNotifier approvalNotifier;
 
     @InjectMocks
     private WarehouseLayoutService layoutService;
@@ -325,7 +329,7 @@ class WarehouseLayoutServiceTest {
 
     @Test
     void testSaveLayoutBulk_CoordinateOutOfBounds_ThrowsException() {
-        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
         when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)).thenReturn(Optional.of(defaultLayout));
         when(layoutRepository.save(any(WarehouseLayout.class))).thenReturn(defaultLayout);
 
@@ -355,7 +359,7 @@ class WarehouseLayoutServiceTest {
 
     @Test
     void testSaveLayoutBulk_AllowsDecimalMeters() {
-        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
         when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)).thenReturn(Optional.of(defaultLayout));
         when(layoutRepository.save(any(WarehouseLayout.class))).thenReturn(defaultLayout);
         when(rackRepository.findAllByLayoutId(defaultLayout.getId())).thenReturn(Collections.emptyList());
@@ -388,7 +392,7 @@ class WarehouseLayoutServiceTest {
 
     @Test
     void testSaveLayoutBulk_DeleteNonEmptyBin_ThrowsException() {
-        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
         when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)).thenReturn(Optional.of(defaultLayout));
         when(layoutRepository.save(any(WarehouseLayout.class))).thenReturn(defaultLayout);
 
@@ -695,7 +699,7 @@ class WarehouseLayoutServiceTest {
     @Test
     void testSaveLayoutBulk_OwnerCanModifyDefaultLayoutIndependentlyFromTenancy() {
         warehouse.setStatus(WarehouseStatus.AVAILABLE);
-        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
         when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)).thenReturn(Optional.of(defaultLayout));
         when(rackRepository.findAllByLayoutId(defaultLayout.getId())).thenReturn(Collections.emptyList());
         when(binRepository.findAllByRackLayoutId(defaultLayout.getId())).thenReturn(Collections.emptyList());
@@ -710,6 +714,57 @@ class WarehouseLayoutServiceTest {
 
         assertDoesNotThrow(() ->
                 layoutService.saveLayoutBulk(warehouseId, userId, "OWNER", request));
+    }
+
+    @Test
+    void testSaveLayoutBulk_OwnerEditInvalidatesApprovalAndNotifiesAdmin() {
+        warehouse.setStatus(WarehouseStatus.AVAILABLE);
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(publicationEditPolicy.prepareOwnerEdit(warehouse)).thenAnswer(invocation -> {
+            warehouse.setStatus(WarehouseStatus.PENDING_APPROVAL);
+            return true;
+        });
+        when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId))
+                .thenReturn(Optional.of(defaultLayout));
+        when(layoutRepository.save(any(WarehouseLayout.class))).thenReturn(defaultLayout);
+        when(rackRepository.findAllByLayoutId(defaultLayout.getId())).thenReturn(Collections.emptyList());
+        when(binRepository.findAllByRackLayoutId(defaultLayout.getId())).thenReturn(Collections.emptyList());
+        when(warehouseRepository.save(warehouse)).thenReturn(warehouse);
+
+        BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
+                .width(new BigDecimal("100"))
+                .length(new BigDecimal("100"))
+                .height(new BigDecimal("10"))
+                .racks(Collections.emptyList())
+                .build();
+
+        layoutService.saveLayoutBulk(warehouseId, userId, "OWNER", request);
+
+        assertEquals(WarehouseStatus.PENDING_APPROVAL, warehouse.getStatus());
+        verify(warehouseRepository).save(warehouse);
+        verify(approvalNotifier).notifyAdmin(warehouse);
+    }
+
+    @Test
+    void testSaveLayoutBulk_RejectsOwnerEditDuringPublication() {
+        warehouse.setStatus(WarehouseStatus.AVAILABLE);
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(publicationEditPolicy.prepareOwnerEdit(warehouse)).thenThrow(new BadRequestException(
+                ErrorCode.LISTING_PUBLICATION_ACTION_NOT_ALLOWED));
+
+        BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
+                .width(new BigDecimal("100"))
+                .length(new BigDecimal("100"))
+                .height(new BigDecimal("10"))
+                .racks(Collections.emptyList())
+                .build();
+
+        BadRequestException exception = assertThrows(BadRequestException.class,
+                () -> layoutService.saveLayoutBulk(warehouseId, userId, "OWNER", request));
+
+        assertEquals(ErrorCode.LISTING_PUBLICATION_ACTION_NOT_ALLOWED, exception.getErrorCode());
+        verify(layoutRepository, never()).save(any(WarehouseLayout.class));
+        verify(approvalNotifier, never()).notifyAdmin(any(Warehouse.class));
     }
 
     @Test
