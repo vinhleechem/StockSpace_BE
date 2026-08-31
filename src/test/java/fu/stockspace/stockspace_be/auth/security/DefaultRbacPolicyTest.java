@@ -37,5 +37,7 @@ class DefaultRbacPolicyTest {
                         || permission.name().equals("CONTRACT_HANDOVER_CONFIRM")));
         assertFalse(grants.get(RoleType.ROLE_STAFF).contains(PermissionCode.STAFF_MANAGE));
         assertTrue(grants.get(RoleType.ROLE_INSPECTOR).contains(PermissionCode.INSPECTION_EXECUTE));
+        grants.values().forEach(rolePermissions ->
+                assertTrue(rolePermissions.contains(PermissionCode.PROFILE_UPDATE)));
     }
 }
