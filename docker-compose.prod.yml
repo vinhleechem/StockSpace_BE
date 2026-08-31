@@ -8,7 +8,7 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=prod
       - SERVER_FORWARD_HEADERS_STRATEGY=framework
-      - SEED_DEMO_USERS=false
+      - SEED_DEMO_USERS=true
       - CHATBOT_RAG_INDEXER_ENABLED=${CHATBOT_RAG_INDEXER_ENABLED:-true}
       - JAVA_TOOL_OPTIONS=-Xmx1536m -Xms512m -XX:+UseContainerSupport -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+ExitOnOutOfMemoryError
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e  # exit ngay khi có lỗi
+set -e -o pipefail  # exit ngay khi có lỗi, kể cả lỗi ở giữa pipeline
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -106,7 +106,19 @@ deploy() {
     if [ "$DB_READY" != "true" ]; then
         log_error "PostgreSQL chưa sẵn sàng để chạy migration."
     fi
-    bash "$APP_DIR/ops/run-migrations.sh" --docker
+    if ! bash "$APP_DIR/ops/run-migrations.sh" --docker; then
+        log_warn "Migration failed; running the read-only rental-contract preflight for diagnostics..."
+        if [ -f "$APP_DIR/ops/maintenance/rental_contract_refactor_preflight.sql" ]; then
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+                exec -T postgres psql \
+                -X -v ON_ERROR_STOP=1 \
+                -U "${DB_USERNAME:-postgres}" \
+                -d "${DB_NAME:-stockspace}" \
+                < "$APP_DIR/ops/maintenance/rental_contract_refactor_preflight.sql" \
+                || log_warn "Rental-contract diagnostic query could not be completed."
+        fi
+        log_error "Production migration failed; application containers were left unchanged."
+    fi
     log_success "Production migrations completed."
 
     log_info "Build image và khởi động containers..."
@@ -182,6 +194,132 @@ backup_db() {
     ls -lh "$BACKUP_DIR"
 }
 
+purge_database_backups() {
+    if [ "${CONFIRM_PRODUCTION_BACKUP_PURGE:-}" != "PURGE_STOCKSPACE_DATABASE_BACKUPS" ]; then
+        log_error "Từ chối xóa backup: thiếu xác nhận PURGE_STOCKSPACE_DATABASE_BACKUPS."
+    fi
+
+    EXPECTED_BACKUP_DIR="$APP_DIR/backups"
+    if [ ! -d "$EXPECTED_BACKUP_DIR" ]; then
+        log_success "Không có thư mục backup database để xóa."
+        return
+    fi
+
+    RESOLVED_APP_DIR="$(realpath "$APP_DIR")"
+    RESOLVED_BACKUP_DIR="$(realpath "$EXPECTED_BACKUP_DIR")"
+    if [ "$RESOLVED_BACKUP_DIR" != "$RESOLVED_APP_DIR/backups" ]; then
+        log_error "Đường dẫn backup không hợp lệ; từ chối xóa: $RESOLVED_BACKUP_DIR"
+    fi
+
+    mapfile -d '' BACKUP_FILES < <(
+        find "$RESOLVED_BACKUP_DIR" -maxdepth 1 -type f -print0
+    )
+    if [ ${#BACKUP_FILES[@]} -eq 0 ]; then
+        log_success "Không còn file backup database nào trên VPS."
+        return
+    fi
+
+    log_warn "Xóa vĩnh viễn ${#BACKUP_FILES[@]} file trong $RESOLVED_BACKUP_DIR..."
+    for BACKUP_FILE in "${BACKUP_FILES[@]}"; do
+        rm -- "$BACKUP_FILE"
+    done
+
+    if find "$RESOLVED_BACKUP_DIR" -maxdepth 1 -type f -print -quit | grep -q .; then
+        log_error "Vẫn còn file backup sau khi purge."
+    fi
+    log_success "Toàn bộ file backup database trên VPS đã được xóa vĩnh viễn."
+}
+
+reset_database() {
+    if [ "${CONFIRM_PRODUCTION_DB_RESET:-}" != "RESET_STOCKSPACE_PRODUCTION" ]; then
+        log_error "Từ chối xóa dữ liệu: đặt CONFIRM_PRODUCTION_DB_RESET=RESET_STOCKSPACE_PRODUCTION để xác nhận."
+    fi
+
+    cd "$APP_DIR"
+    if [ ! -f ".env" ]; then
+        log_error "Không tìm thấy .env! Không thể backup hoặc reset database."
+    fi
+    check_env
+
+    log_warn "=== RESET TOÀN BỘ DỮ LIỆU NGHIỆP VỤ PRODUCTION ==="
+    docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d postgres
+
+    DB_READY=false
+    for ATTEMPT in $(seq 1 30); do
+        if docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+            exec -T postgres pg_isready \
+            -U "${DB_USERNAME:-postgres}" \
+            -d "${DB_NAME:-stockspace}" > /dev/null 2>&1; then
+            DB_READY=true
+            break
+        fi
+        sleep 2
+    done
+    if [ "$DB_READY" != "true" ]; then
+        log_error "PostgreSQL chưa sẵn sàng; chưa có dữ liệu nào bị xóa."
+    fi
+
+    log_info "Kiểm tra schema và baseline các migration lịch sử trước khi xóa dữ liệu..."
+    ALLOW_MIGRATION_BASELINE=true \
+        bash "$APP_DIR/ops/maintenance/migration_baseline.sh" --apply --docker
+    log_success "Schema preflight và migration baseline đã hoàn tất."
+
+    RUNNING_SERVICES="$(docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+        ps --status running --services 2>/dev/null || true)"
+    APP_WAS_RUNNING=false
+    NGINX_WAS_RUNNING=false
+    if grep -Fxq 'app' <<< "$RUNNING_SERVICES"; then APP_WAS_RUNNING=true; fi
+    if grep -Fxq 'nginx' <<< "$RUNNING_SERVICES"; then NGINX_WAS_RUNNING=true; fi
+
+    log_info "Dừng app/nginx để chặn ghi mới trong lúc backup và reset..."
+    docker compose -f docker-compose.yml -f docker-compose.prod.yml stop app nginx 2>/dev/null || true
+
+    BACKUP_DIR="$APP_DIR/backups"
+    mkdir -p "$BACKUP_DIR"
+    TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+    BACKUP_FILE="$BACKUP_DIR/pre_reset_${DB_NAME:-stockspace}_${TIMESTAMP}.sql.gz"
+    log_info "Backup database trước khi reset → $BACKUP_FILE"
+
+    if ! docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+        exec -T postgres pg_dump \
+        -U "${DB_USERNAME:-postgres}" \
+        -d "${DB_NAME:-stockspace}" \
+        --clean --if-exists --no-owner --no-privileges \
+        | gzip > "$BACKUP_FILE"; then
+        if [ "$APP_WAS_RUNNING" = "true" ]; then
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml start app || true
+        fi
+        if [ "$NGINX_WAS_RUNNING" = "true" ]; then
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml start nginx || true
+        fi
+        log_error "Backup thất bại; chưa có dữ liệu nào bị xóa và các service cũ đã được khôi phục."
+    fi
+    if [ ! -s "$BACKUP_FILE" ] || ! gzip -t "$BACKUP_FILE"; then
+        if [ "$APP_WAS_RUNNING" = "true" ]; then
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml start app || true
+        fi
+        if [ "$NGINX_WAS_RUNNING" = "true" ]; then
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml start nginx || true
+        fi
+        log_error "File backup rỗng hoặc hỏng; chưa có dữ liệu nào bị xóa."
+    fi
+    log_success "Backup hợp lệ đã được lưu trên VPS."
+
+    log_warn "Xóa toàn bộ dữ liệu trong các bảng public, giữ schema_migrations để bảo toàn lịch sử schema..."
+    if ! docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+        exec -T postgres psql \
+        -X -v ON_ERROR_STOP=1 \
+        -U "${DB_USERNAME:-postgres}" \
+        -d "${DB_NAME:-stockspace}" \
+        < "$APP_DIR/ops/maintenance/reset_business_data.sql"
+    then
+        log_error "Reset database thất bại. App vẫn đang dừng; dùng backup $BACKUP_FILE nếu cần khôi phục."
+    fi
+    log_success "Toàn bộ dữ liệu nghiệp vụ production đã được xóa."
+
+    deploy
+}
+
 check_env() {
     log_info "Kiểm tra biến môi trường..."
     source .env
@@ -223,6 +361,8 @@ print_usage() {
     echo "    stop      — Dừng toàn bộ services"
     echo "    status    — Xem trạng thái containers"
     echo "    backup    — Backup database PostgreSQL"
+    echo "    purge-db-backups — Xóa vĩnh viễn toàn bộ file backup database"
+    echo "    reset-db  — Backup, xóa toàn bộ dữ liệu production và deploy lại"
     echo ""
 }
 
@@ -236,5 +376,7 @@ case "$COMMAND" in
     stop)    stop_all ;;
     status)  show_status ;;
     backup)  backup_db ;;
+    purge-db-backups) purge_database_backups ;;
+    reset-db) reset_database ;;
     *)       print_usage ;;
 esac

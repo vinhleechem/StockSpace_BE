@@ -123,17 +123,17 @@ build_sql_stream() {
 
     printf '%s\n' '\if :migration_applied'
     printf '%s\n' '\if :migration_checksum_ok'
-    printf '    \echo Already applied: %s\n' "$filename"
+    printf '%s%s\n' '    \echo Already applied: ' "$filename"
     printf '%s\n' '  \else'
-    printf '    \echo ERROR: checksum mismatch for %s >&2\n' "$filename"
-    printf '%s\n' '    \quit 10'
+    printf '%s%s%s\n' '    \echo ERROR: checksum mismatch for ' "$filename" ' >&2'
+    printf '%s\n' '    SELECT 1 / 0; -- force ON_ERROR_STOP after checksum mismatch'
     printf '%s\n' '  \endif'
     printf '%s\n' '\else'
 
     if [[ "$DRY_RUN" == "true" ]]; then
-      printf '  \echo PENDING: %s\n' "$filename"
+      printf '%s%s\n' '  \echo PENDING: ' "$filename"
     else
-      printf '  \echo Applying: %s\n' "$filename"
+      printf '%s%s\n' '  \echo Applying: ' "$filename"
       printf '%s\n' '  BEGIN;'
       sed 's/^/  /' "$migration_file"
       printf '%s\n' "  INSERT INTO public.schema_migrations (filename, checksum) VALUES ($quoted_filename, $quoted_checksum);"
@@ -146,7 +146,7 @@ build_sql_stream() {
   if [[ "$DRY_RUN" == "true" ]]; then
     printf '%s\n' '\else'
     printf '%s\n' '\echo ERROR: schema_migrations does not exist; initialize or baseline it before dry-run >&2'
-    printf '%s\n' '\quit 11'
+    printf '%s\n' 'SELECT 1 / 0; -- force ON_ERROR_STOP when the ledger is missing'
     printf '%s\n' '\endif'
   fi
 

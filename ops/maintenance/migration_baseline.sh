@@ -34,7 +34,9 @@ if [[ ! -f "$MANIFEST" || ! -f "$PREFLIGHT" ]]; then
   exit 2
 fi
 
-mapfile -t BASELINE_FILES < <(sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d' "$MANIFEST")
+mapfile -t BASELINE_FILES < <(
+  sed -e 's/\r$//' -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d' "$MANIFEST"
+)
 if ((${#BASELINE_FILES[@]} == 0)); then
   printf 'Baseline manifest is empty\n' >&2
   exit 2
@@ -102,6 +104,7 @@ build_baseline_sql() {
     printf '%s\n' "  IF EXISTS (SELECT 1 FROM public.schema_migrations WHERE filename = '$quoted_filename' AND checksum <> '$quoted_checksum') THEN"
     printf '%s\n' "    RAISE EXCEPTION 'Baseline checksum mismatch for $quoted_filename';"
     printf '%s\n' '  END IF;'
+    printf '%s\n' 'END'
     printf '%s\n' '$baseline$;'
     printf '%s\n' "INSERT INTO public.schema_migrations (filename, checksum) VALUES ('$quoted_filename', '$quoted_checksum') ON CONFLICT (filename) DO NOTHING;"
   done

@@ -16,6 +16,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class EmbeddingClientTest {
 
+    private static final long SUCCESS_RESPONSE_TIMEOUT_MS = 5_000;
+
     @Test
     void missingApiKeyReturnsPositionPreservingFallbackWithoutNetworkCall() {
         AtomicInteger calls = new AtomicInteger();
@@ -64,7 +66,7 @@ class EmbeddingClientTest {
                 "key",
                 "test-model",
                 2,
-                1_000
+                SUCCESS_RESPONSE_TIMEOUT_MS
         );
 
         List<List<Float>> result = client.getEmbeddings(List.of("first", "second"));
@@ -130,7 +132,7 @@ class EmbeddingClientTest {
                 "key",
                 "test-model",
                 2,
-                1_000
+                SUCCESS_RESPONSE_TIMEOUT_MS
         );
 
         List<List<Float>> result = client.getEmbeddings(List.of("poison", "healthy"));

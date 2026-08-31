@@ -20,7 +20,7 @@ public final class DefaultRbacPolicy {
 
         grants.put(RoleType.ROLE_ADMIN, EnumSet.allOf(PermissionCode.class));
         grants.put(RoleType.ROLE_OWNER, permissions(
-                PermissionCode.AUTH_SESSION_MANAGE, PermissionCode.PROFILE_READ,
+                PermissionCode.AUTH_SESSION_MANAGE, PermissionCode.PROFILE_READ, PermissionCode.PROFILE_UPDATE,
                 PermissionCode.MEDIA_UPLOAD, PermissionCode.CHAT_USE,
                 PermissionCode.NOTIFICATION_READ, PermissionCode.NOTIFICATION_UPDATE,
                 PermissionCode.WALLET_READ, PermissionCode.WALLET_TOP_UP, PermissionCode.WALLET_WITHDRAW,
@@ -32,7 +32,7 @@ public final class DefaultRbacPolicy {
                 PermissionCode.INSPECTION_REQUEST, PermissionCode.OWNER_STATS_READ
         ));
         grants.put(RoleType.ROLE_TENANT, permissions(
-                PermissionCode.AUTH_SESSION_MANAGE, PermissionCode.PROFILE_READ,
+                PermissionCode.AUTH_SESSION_MANAGE, PermissionCode.PROFILE_READ, PermissionCode.PROFILE_UPDATE,
                 PermissionCode.MEDIA_UPLOAD, PermissionCode.CHAT_USE,
                 PermissionCode.NOTIFICATION_READ, PermissionCode.NOTIFICATION_UPDATE,
                 PermissionCode.WALLET_READ, PermissionCode.WALLET_TOP_UP, PermissionCode.WALLET_WITHDRAW,
@@ -46,7 +46,7 @@ public final class DefaultRbacPolicy {
                 PermissionCode.PACKAGE_PURCHASE
         ));
         grants.put(RoleType.ROLE_STAFF, permissions(
-                PermissionCode.AUTH_SESSION_MANAGE, PermissionCode.PROFILE_READ,
+                PermissionCode.AUTH_SESSION_MANAGE, PermissionCode.PROFILE_READ, PermissionCode.PROFILE_UPDATE,
                 PermissionCode.MEDIA_UPLOAD, PermissionCode.CHAT_USE,
                 PermissionCode.NOTIFICATION_READ, PermissionCode.NOTIFICATION_UPDATE,
                 PermissionCode.WALLET_READ, PermissionCode.WALLET_TOP_UP, PermissionCode.WALLET_WITHDRAW,
@@ -57,7 +57,7 @@ public final class DefaultRbacPolicy {
                 PermissionCode.PRODUCT_MANAGE, PermissionCode.STAFF_WORK_HISTORY_READ
         ));
         grants.put(RoleType.ROLE_INSPECTOR, permissions(
-                PermissionCode.AUTH_SESSION_MANAGE, PermissionCode.PROFILE_READ,
+                PermissionCode.AUTH_SESSION_MANAGE, PermissionCode.PROFILE_READ, PermissionCode.PROFILE_UPDATE,
                 PermissionCode.MEDIA_UPLOAD, PermissionCode.CHAT_USE,
                 PermissionCode.NOTIFICATION_READ, PermissionCode.NOTIFICATION_UPDATE,
                 PermissionCode.WALLET_READ, PermissionCode.WALLET_TOP_UP, PermissionCode.WALLET_WITHDRAW,

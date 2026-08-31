@@ -10,6 +10,7 @@ package fu.stockspace.stockspace_be.auth.entity;
 public enum PermissionCode {
     AUTH_SESSION_MANAGE("Manage the authenticated session"),
     PROFILE_READ("View own profile"),
+    PROFILE_UPDATE("Update own profile"),
     MEDIA_UPLOAD("Upload media"),
     CHAT_USE("Use authenticated chatbot"),
     NOTIFICATION_READ("View own notifications"),
