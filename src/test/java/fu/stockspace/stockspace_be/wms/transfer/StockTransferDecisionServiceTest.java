@@ -7,6 +7,7 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestExcepti
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
+import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
 import fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
@@ -62,6 +63,8 @@ class StockTransferDecisionServiceTest {
     private StockBatchRepository stockBatchRepository;
     @Mock
     private StaffWarehouseAssignmentRepository assignmentRepository;
+    @Mock
+    private NotificationService notificationService;
 
     @InjectMocks
     private StockTransferService transferService;
@@ -107,6 +110,12 @@ class StockTransferDecisionServiceTest {
         verify(transferRepository).save(transfer);
         verify(stockBatchRepository, never()).save(any());
         verify(receiptRepository, never()).save(any());
+        verify(notificationService).push(
+                tenantId,
+                "Yêu cầu chuyển kho bị từ chối",
+                "yêu cầu chuyển kho từ kho 'Source' đến kho 'Destination' đã bị từ chối. "
+                        + "Lý do: Source stock is no longer required",
+                "TRANSFER");
     }
 
     @Test
@@ -124,6 +133,12 @@ class StockTransferDecisionServiceTest {
         verify(transferRepository).save(transfer);
         verify(stockBatchRepository, never()).save(any());
         verify(receiptRepository, never()).save(any());
+        verify(notificationService).push(
+                tenantId,
+                "Yêu cầu chuyển kho đã bị hủy",
+                "yêu cầu chuyển kho từ kho 'Source' đến kho 'Destination' đã bị hủy. "
+                        + "Lý do: Created in error",
+                "TRANSFER");
     }
 
     @Test

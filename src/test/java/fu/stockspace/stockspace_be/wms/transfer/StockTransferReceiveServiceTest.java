@@ -8,6 +8,7 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenExceptio
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
+import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
 import fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
@@ -88,6 +89,8 @@ class StockTransferReceiveServiceTest {
     private TenantWarehouseAccessService accessService;
     @Mock
     private StaffWarehouseAssignmentRepository assignmentRepository;
+    @Mock
+    private NotificationService notificationService;
     @Spy
     private PhysicalLoadCalculator physicalLoadCalculator = new PhysicalLoadCalculator();
 
@@ -205,6 +208,12 @@ class StockTransferReceiveServiceTest {
         verify(transactionRepository).save(any(InventoryTransaction.class));
         verify(stockBatchRepository).save(any(StockBatch.class));
         verify(transferRepository).save(transfer);
+        verify(notificationService).push(
+                tenantId,
+                "Chuyển kho đã hoàn tất",
+                "yêu cầu chuyển kho từ kho 'Source' đến kho 'Destination' đã được tiếp nhận thành công. "
+                        + "Tồn kho tại kho đích đã được cập nhật.",
+                "TRANSFER");
     }
 
     @Test

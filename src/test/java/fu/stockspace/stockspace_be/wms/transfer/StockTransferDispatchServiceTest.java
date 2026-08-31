@@ -7,6 +7,7 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestExcepti
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
+import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
 import fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
@@ -72,6 +73,8 @@ class StockTransferDispatchServiceTest {
     private TenantWarehouseAccessService accessService;
     @Mock
     private StaffWarehouseAssignmentRepository assignmentRepository;
+    @Mock
+    private NotificationService notificationService;
 
     @InjectMocks
     private StockTransferService transferService;
@@ -165,6 +168,11 @@ class StockTransferDispatchServiceTest {
         verify(receiptItemRepository).save(any());
         verify(transactionRepository).save(any());
         verify(transferRepository).save(transfer);
+        verify(notificationService).push(
+                tenantId,
+                "Yêu cầu chuyển kho đã được duyệt xuất",
+                "yêu cầu chuyển kho từ kho 'Source' đến kho 'Destination' đã được duyệt xuất và đang vận chuyển.",
+                "TRANSFER");
     }
 
     @Test

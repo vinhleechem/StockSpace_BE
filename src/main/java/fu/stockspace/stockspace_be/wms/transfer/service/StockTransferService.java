@@ -11,6 +11,7 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenExceptio
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
+import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseBin;
@@ -53,6 +54,7 @@ import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferSourceAlloca
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferStatus;
 import fu.stockspace.stockspace_be.wms.transfer.repository.StockTransferRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -69,7 +71,10 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class StockTransferService {
+
+    private static final String TRANSFER_NOTIFICATION_TYPE = "TRANSFER";
 
     private final StockTransferRepository transferRepository;
     private final WarehouseRepository warehouseRepository;
@@ -85,6 +90,7 @@ public class StockTransferService {
     private final TenantMemberRepository tenantMemberRepository;
     private final TenantWarehouseAccessService accessService;
     private final PhysicalLoadCalculator physicalLoadCalculator;
+    private final NotificationService notificationService;
 
     @Transactional
     public StockTransferResponse createTransfer(UUID userId, CreateStockTransferRequest request) {
@@ -157,7 +163,9 @@ public class StockTransferService {
             transfer.getItems().add(transferItem);
         }
 
-        return mapToResponse(transferRepository.save(transfer));
+        StockTransfer savedTransfer = transferRepository.save(transfer);
+        notifyTransferCreated(savedTransfer, creator, tenantId);
+        return mapToResponse(savedTransfer);
     }
 
     @Transactional(readOnly = true)
@@ -238,7 +246,13 @@ public class StockTransferService {
         transfer.setApprovedAt(java.time.LocalDateTime.now());
         transfer.setOutboundReceipt(outboundReceipt);
         transfer.setStatus(StockTransferStatus.IN_TRANSIT);
-        return mapToResponse(transferRepository.save(transfer));
+        StockTransfer savedTransfer = transferRepository.save(transfer);
+        notifyTransferCreator(
+                savedTransfer,
+                "Yêu cầu chuyển kho đã được duyệt xuất",
+                transferRoute(savedTransfer) + " đã được duyệt xuất và đang vận chuyển.",
+                "dispatch");
+        return mapToResponse(savedTransfer);
     }
 
     @Transactional
@@ -319,7 +333,14 @@ public class StockTransferService {
         transfer.setReceivedAt(java.time.LocalDateTime.now());
         transfer.setInboundReceipt(inboundReceipt);
         transfer.setStatus(StockTransferStatus.COMPLETED);
-        return mapToResponse(transferRepository.save(transfer));
+        StockTransfer savedTransfer = transferRepository.save(transfer);
+        notifyTransferCreator(
+                savedTransfer,
+                "Chuyển kho đã hoàn tất",
+                transferRoute(savedTransfer)
+                        + " đã được tiếp nhận thành công. Tồn kho tại kho đích đã được cập nhật.",
+                "receive");
+        return mapToResponse(savedTransfer);
     }
 
     @Transactional
@@ -361,7 +382,67 @@ public class StockTransferService {
             transfer.setCancelledAt(java.time.LocalDateTime.now());
         }
         transfer.setStatus(decision);
-        return mapToResponse(transferRepository.save(transfer));
+        StockTransfer savedTransfer = transferRepository.save(transfer);
+        if (decision == StockTransferStatus.REJECTED) {
+            notifyTransferCreator(
+                    savedTransfer,
+                    "Yêu cầu chuyển kho bị từ chối",
+                    transferRoute(savedTransfer) + " đã bị từ chối. Lý do: " + reason,
+                    "reject");
+        } else {
+            notifyTransferCreator(
+                    savedTransfer,
+                    "Yêu cầu chuyển kho đã bị hủy",
+                    transferRoute(savedTransfer) + " đã bị hủy. Lý do: " + reason,
+                    "cancel");
+        }
+        return mapToResponse(savedTransfer);
+    }
+
+    private void notifyTransferCreated(StockTransfer transfer, User creator, UUID tenantId) {
+        if (!isStaff(creator)) {
+            return;
+        }
+
+        String creatorName = displayName(creator);
+        notifySafely(
+                tenantId,
+                "Yêu cầu chuyển kho mới",
+                "Nhân viên " + creatorName + " đã tạo " + transferRoute(transfer)
+                        + " và đang chờ bạn duyệt xuất.",
+                "create",
+                transfer.getId());
+    }
+
+    private void notifyTransferCreator(StockTransfer transfer, String title, String message, String action) {
+        if (transfer.getCreatedBy() == null || transfer.getCreatedBy().getId() == null) {
+            log.warn("Cannot push {} notification for transfer {} because creator is missing",
+                    action, transfer.getId());
+            return;
+        }
+        notifySafely(transfer.getCreatedBy().getId(), title, message, action, transfer.getId());
+    }
+
+    private void notifySafely(UUID recipientId, String title, String message,
+                              String action, UUID transferId) {
+        try {
+            notificationService.push(recipientId, title, message, TRANSFER_NOTIFICATION_TYPE);
+        } catch (Exception exception) {
+            log.warn("Failed to push {} notification for transfer {}: {}",
+                    action, transferId, exception.getMessage());
+        }
+    }
+
+    private String transferRoute(StockTransfer transfer) {
+        return "yêu cầu chuyển kho từ kho '" + transfer.getSourceWarehouse().getName()
+                + "' đến kho '" + transfer.getDestinationWarehouse().getName() + "'";
+    }
+
+    private String displayName(User user) {
+        if (user.getFullName() != null && !user.getFullName().isBlank()) {
+            return user.getFullName();
+        }
+        return user.getEmail() != null && !user.getEmail().isBlank() ? user.getEmail() : user.getId().toString();
     }
 
     private String normalizeDecisionReason(StockTransferDecisionRequest request) {

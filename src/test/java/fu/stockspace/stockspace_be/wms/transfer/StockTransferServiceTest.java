@@ -7,6 +7,7 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestExcepti
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
+import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import fu.stockspace.stockspace_be.staff.entity.AssignmentStatus;
 import fu.stockspace.stockspace_be.staff.entity.TenantMember;
 import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
@@ -73,6 +74,8 @@ class StockTransferServiceTest {
     private TenantWarehouseAccessService accessService;
     @Mock
     private StaffWarehouseAssignmentRepository assignmentRepository;
+    @Mock
+    private NotificationService notificationService;
 
     @InjectMocks
     private StockTransferService transferService;
@@ -151,6 +154,42 @@ class StockTransferServiceTest {
         assertTrue(response.getItems().get(0).getDestinationAllocations().isEmpty());
         assertEquals(20, sourceBatch.getQuantity());
         verify(stockBatchRepository, never()).save(any());
+        verify(notificationService, never()).push(any(), any(), any(), any());
+    }
+
+    @Test
+    void createTransfer_createdByStaff_notifiesTenant() {
+        UUID staffId = UUID.randomUUID();
+        User staff = User.builder()
+                .id(staffId)
+                .fullName("Warehouse Staff")
+                .roles(Set.of(Role.builder().name(RoleType.ROLE_STAFF.name()).build()))
+                .build();
+        TenantMember membership = TenantMember.builder().user(staff).tenant(tenant).build();
+        when(userRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(staffId))
+                .thenReturn(Optional.of(membership));
+        when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+        when(warehouseRepository.findById(sourceWarehouseId)).thenReturn(Optional.of(sourceWarehouse));
+        when(warehouseRepository.findById(destinationWarehouseId)).thenReturn(Optional.of(destinationWarehouse));
+        when(productSkuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(sku));
+        when(stockBatchRepository.findByIdAndIsDeletedFalse(batchId)).thenReturn(Optional.of(sourceBatch));
+        when(transferRepository.save(any(StockTransfer.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        doNothing().when(accessService).requireActiveContract(tenantId, sourceWarehouseId);
+        doNothing().when(accessService).requireActiveContract(tenantId, destinationWarehouseId);
+        doNothing().when(accessService).requireActiveSubscription(tenantId);
+        doNothing().when(accessService).requireActiveStaffAssignment(staffId, tenantId, sourceWarehouseId);
+        doNothing().when(accessService).requireActiveStaffAssignment(staffId, tenantId, destinationWarehouseId);
+
+        transferService.createTransfer(staffId, request(10, 10));
+
+        verify(notificationService).push(
+                tenantId,
+                "Yêu cầu chuyển kho mới",
+                "Nhân viên Warehouse Staff đã tạo yêu cầu chuyển kho từ kho 'Source Warehouse' "
+                        + "đến kho 'Destination Warehouse' và đang chờ bạn duyệt xuất.",
+                "TRANSFER");
     }
 
     @Test
