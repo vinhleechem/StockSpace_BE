@@ -34,6 +34,9 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
     List<StockBatch> findAllBySkuIdAndWarehouseIdAndRackIdAndBinIdAndIsDeletedFalseOrderByArrivalDateAscCreatedAtAscIdAsc(
             UUID skuId, UUID warehouseId, UUID rackId, UUID binId);
 
+    List<StockBatch> findAllBySkuIdAndWarehouseIdAndIsActiveTrueAndIsDeletedFalse(
+            UUID skuId, UUID warehouseId);
+
     Page<StockBatch> findByWarehouseIdAndIsDeletedFalse(UUID warehouseId, Pageable pageable);
 
     List<StockBatch> findAllByWarehouseIdAndIsDeletedFalse(UUID warehouseId);
