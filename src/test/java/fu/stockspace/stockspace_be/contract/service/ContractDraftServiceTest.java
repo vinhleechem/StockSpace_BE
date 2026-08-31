@@ -120,6 +120,18 @@ class ContractDraftServiceTest {
     }
 
     @Test
+    void previewAllowsWarehouseWithoutInspectionVerification() {
+        warehouse.setVerified(false);
+        stubDraftValidation();
+
+        RentalContractResponse response = contractService.previewOwnerDraft(
+                ownerId, request("10", "20", "5"));
+
+        assertEquals(ContractStatus.DRAFT.name(), response.getStatus());
+        assertEquals(warehouseId, response.getWarehouseId());
+    }
+
+    @Test
     void previewPerSquareMeterCalculatesFinalRentFromTheRequestedArea() {
         stubDraftValidation();
         warehouse.setRentalPricingType(RentalPricingType.PER_SQUARE_METER_MONTHLY);

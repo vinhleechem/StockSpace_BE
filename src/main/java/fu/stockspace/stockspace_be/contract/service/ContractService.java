@@ -680,9 +680,8 @@ public class ContractService {
                     "Tenant account must be active");
         }
         if (!warehouse.isActive() || warehouse.isDeleted()
-                || !warehouse.isVerified()
                 || warehouse.getStatus() == WarehouseStatus.INACTIVE) {
-            throw new BadRequestException("Warehouse must be verified and active");
+            throw new BadRequestException("Warehouse must be active");
         }
 
         RentalPricingType pricingType = warehouse.getRentalPricingType() != null
