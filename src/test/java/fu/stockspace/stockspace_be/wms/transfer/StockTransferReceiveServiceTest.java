@@ -22,6 +22,7 @@ import fu.stockspace.stockspace_be.wms.capacity.PhysicalLoadCalculator;
 import fu.stockspace.stockspace_be.wms.product.entity.ProductSku;
 import fu.stockspace.stockspace_be.wms.receipt.entity.DocumentType;
 import fu.stockspace.stockspace_be.wms.receipt.entity.InventoryReceipt;
+import fu.stockspace.stockspace_be.wms.receipt.entity.InventoryReceiptItem;
 import fu.stockspace.stockspace_be.wms.receipt.entity.InventoryTransaction;
 import fu.stockspace.stockspace_be.wms.receipt.repository.InventoryReceiptItemRepository;
 import fu.stockspace.stockspace_be.wms.receipt.repository.InventoryReceiptRepository;
@@ -42,6 +43,7 @@ import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -55,6 +57,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
@@ -204,7 +207,14 @@ class StockTransferReceiveServiceTest {
         assertEquals(1, item.getDestinationAllocations().size());
         assertEquals(5, item.getDestinationAllocations().get(0).getQuantity());
         verify(receiptRepository).save(any(InventoryReceipt.class));
-        verify(receiptItemRepository).save(any());
+        ArgumentCaptor<InventoryReceiptItem> receiptItemCaptor =
+                ArgumentCaptor.forClass(InventoryReceiptItem.class);
+        verify(receiptItemRepository).save(receiptItemCaptor.capture());
+        InventoryReceiptItem receiptItem = receiptItemCaptor.getValue();
+        assertEquals(5, receiptItem.getQuantity());
+        assertNotNull(receiptItem.getStockBatch());
+        assertEquals(5, receiptItem.getStockBatch().getQuantity());
+        assertNotNull(receiptItem.getStockBatch().getArrivalDate());
         verify(transactionRepository).save(any(InventoryTransaction.class));
         verify(stockBatchRepository).save(any(StockBatch.class));
         verify(transferRepository).save(transfer);
@@ -329,8 +339,6 @@ class StockTransferReceiveServiceTest {
         when(binRepository.findByIdForUpdate(binId)).thenReturn(Optional.of(destinationBin));
         when(stockBatchRepository.findActivePhysicalLoadsByWarehouseIdAndTenantId(
                 destinationWarehouseId, tenantId)).thenReturn(List.of());
-        when(stockBatchRepository.findBySkuIdAndWarehouseIdAndRackIdAndBinIdForUpdate(
-                skuId, destinationWarehouseId, rackId, binId)).thenReturn(Optional.empty());
         when(receiptRepository.save(any(InventoryReceipt.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(receiptItemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));

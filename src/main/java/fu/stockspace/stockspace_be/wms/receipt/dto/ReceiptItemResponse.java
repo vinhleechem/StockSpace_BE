@@ -19,5 +19,7 @@ public class ReceiptItemResponse {
     private String rackName;
     private UUID binId;
     private String binName;
+    private UUID stockBatchId;
+    private Integer pickSequence;
     private String note;
 }
