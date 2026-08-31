@@ -14,8 +14,16 @@ import java.util.UUID;
 @Repository
 public interface UnitOfMeasureRepository extends JpaRepository<UnitOfMeasure, UUID> {
 
-    @Query("SELECT u FROM UnitOfMeasure u WHERE u.isDeleted = false AND (u.tenant.id = :tenantId OR u.tenant IS NULL)")
+    @Query("""
+            SELECT u FROM UnitOfMeasure u
+            WHERE u.isDeleted = false
+              AND u.isActive = true
+              AND u.code = 'THUNG'
+              AND (u.tenant.id = :tenantId OR u.tenant IS NULL)
+            """)
     Page<UnitOfMeasure> findAllActiveByTenantOrSystem(@Param("tenantId") UUID tenantId, Pageable pageable);
+
+    boolean existsByCode(String code);
 
     Optional<UnitOfMeasure> findByIdAndIsDeletedFalse(UUID id);
 }

@@ -240,21 +240,20 @@ public class DataInitializer implements CommandLineRunner {
         }
 
         private void seedDefaultUoms() {
-                if (uomRepository.count() == 0) {
-                        log.info("Seeding default UOMs...");
-                        uomRepository.save(UnitOfMeasure.builder().code("CAI").name("Cái/Chiếc")
-                                        .description("Đơn vị đếm lẻ").build());
-                        uomRepository.save(UnitOfMeasure.builder().code("THUNG").name("Thùng")
-                                        .description("Đơn vị đóng thùng").build());
-                        uomRepository.save(UnitOfMeasure.builder().code("HOP").name("Hộp")
-                                        .description("Đơn vị đóng hộp").build());
-                        uomRepository.save(
-                                        UnitOfMeasure.builder().code("KG").name("Kg").description("Kilogram").build());
-                        uomRepository.save(UnitOfMeasure.builder().code("BAO").name("Bao")
-                                        .description("Đơn vị đóng bao").build());
-                        uomRepository.save(UnitOfMeasure.builder().code("KHOI").name("Khối")
-                                        .description("Mét khối (m3)").build());
+                seedDefaultUom("THUNG", "Thùng", "Đơn vị đóng thùng");
+        }
+
+        private void seedDefaultUom(String code, String name, String description) {
+                if (uomRepository.existsByCode(code)) {
+                        return;
                 }
+
+                uomRepository.save(UnitOfMeasure.builder()
+                                .code(code)
+                                .name(name)
+                                .description(description)
+                                .build());
+                log.info("Seeded missing default UOM {}", code);
         }
 
         private void seedSystemKnowledge() {
