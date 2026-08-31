@@ -11,6 +11,7 @@ import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
@@ -49,6 +50,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -274,6 +276,67 @@ public class InventoryReceiptService {
         }
     }
 
+    private Map<UUID, StockBatch> lockAndValidateOutboundBatches(
+            InventoryReceipt receipt, List<InventoryReceiptItem> items) {
+        Map<UUID, Long> requestedByBatchId = new HashMap<>();
+        for (InventoryReceiptItem item : items) {
+            if (item == null || item.getStockBatch() == null
+                    || item.getStockBatch().getId() == null
+                    || item.getSku() == null || item.getRack() == null || item.getBin() == null
+                    || item.getPickSequence() == null || item.getPickSequence() <= 0
+                    || item.getQuantity() <= 0) {
+                throw new ResourceConflictException(ErrorCode.OUTBOUND_PICK_LIST_STALE);
+            }
+
+            UUID batchId = item.getStockBatch().getId();
+            try {
+                requestedByBatchId.merge(batchId, (long) item.getQuantity(), Math::addExact);
+            } catch (ArithmeticException exception) {
+                throw new ResourceConflictException(ErrorCode.OUTBOUND_PICK_LIST_STALE);
+            }
+        }
+
+        Map<UUID, StockBatch> lockedBatches = new LinkedHashMap<>();
+        requestedByBatchId.keySet().stream()
+                .sorted(Comparator.naturalOrder())
+                .forEach(batchId -> {
+                    StockBatch batch = stockBatchRepository.findByIdForUpdate(batchId)
+                            .orElseThrow(() -> new ResourceConflictException(
+                                    ErrorCode.OUTBOUND_PICK_LIST_STALE));
+                    lockedBatches.put(batchId, batch);
+                });
+
+        UUID warehouseId = receipt.getWarehouse() != null ? receipt.getWarehouse().getId() : null;
+        for (InventoryReceiptItem item : items) {
+            UUID batchId = item.getStockBatch().getId();
+            StockBatch batch = lockedBatches.get(batchId);
+            if (batch == null
+                    || !batchId.equals(batch.getId())
+                    || !batch.isActive() || batch.isDeleted()
+                    || batch.getSkuId() == null || item.getSku().getId() == null
+                    || !item.getSku().getId().equals(batch.getSkuId())
+                    || warehouseId == null || batch.getWarehouse() == null
+                    || !warehouseId.equals(batch.getWarehouse().getId())
+                    || item.getRack().getId() == null || batch.getRack() == null
+                    || batch.getRack().getId() == null
+                    || !item.getRack().getId().equals(batch.getRack().getId())
+                    || item.getBin().getId() == null || batch.getBin() == null
+                    || batch.getBin().getId() == null
+                    || !item.getBin().getId().equals(batch.getBin().getId())) {
+                throw new ResourceConflictException(ErrorCode.OUTBOUND_PICK_LIST_STALE);
+            }
+            item.setStockBatch(batch);
+        }
+
+        for (Map.Entry<UUID, Long> entry : requestedByBatchId.entrySet()) {
+            StockBatch batch = lockedBatches.get(entry.getKey());
+            if (batch == null || batch.getQuantity() < entry.getValue()) {
+                throw new ResourceConflictException(ErrorCode.OUTBOUND_PICK_LIST_STALE);
+            }
+        }
+        return lockedBatches;
+    }
+
     @Transactional
     public InventoryReceiptResponse approveReceipt(UUID approverId, UUID receiptId) {
         User approver = userRepository.findById(approverId)
@@ -285,7 +348,7 @@ public class InventoryReceiptService {
             throw new ForbiddenException("Nhân viên không có quyền phê duyệt phiếu nhập/xuất kho. Phiếu phải được Doanh nghiệp (Tenant) phê duyệt.");
         }
 
-        InventoryReceipt receipt = receiptRepository.findById(receiptId)
+        InventoryReceipt receipt = receiptRepository.findByIdForUpdate(receiptId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RECEIPT_NOT_FOUND));
 
         if (receipt.getStatus() != ApprovalStatus.PENDING) {
@@ -302,6 +365,11 @@ public class InventoryReceiptService {
 
         List<InventoryReceiptItem> items = receiptItemRepository.findByReceiptId(receiptId);
 
+        Map<UUID, StockBatch> lockedOutboundBatches = Map.of();
+        if (receipt.getType() == DocumentType.OUTBOUND) {
+            lockedOutboundBatches = lockAndValidateOutboundBatches(receipt, items);
+        }
+
         if (receipt.getType() == DocumentType.INBOUND) {
             validateInboundCapacity(approverTenantId, receipt.getWarehouse().getId(), items.stream()
                     .map(item -> new CapacityItem(item.getBin(), item.getRack(), item.getSku(), item.getQuantity()))
@@ -310,9 +378,6 @@ public class InventoryReceiptService {
 
         for (InventoryReceiptItem item : items) {
             UUID skuId = item.getSku().getId();
-            UUID warehouseId = receipt.getWarehouse().getId();
-            UUID rackId = item.getRack().getId();
-            UUID binId = item.getBin().getId();
 
             if (receipt.getType() == DocumentType.INBOUND) {
                 StockBatch batch = StockBatch.builder()
@@ -336,13 +401,7 @@ public class InventoryReceiptService {
                 transactionRepository.save(transaction);
 
             } else if (receipt.getType() == DocumentType.OUTBOUND) {
-                StockBatch batch = stockBatchRepository
-                        .findBySkuIdAndWarehouseIdAndRackIdAndBinIdAndIsDeletedFalse(skuId, warehouseId, rackId, binId)
-                        .orElseThrow(() -> new BadRequestException(ErrorCode.STOCK_INSUFFICIENT_QUANTITY));
-
-                if (batch.getQuantity() < item.getQuantity()) {
-                    throw new BadRequestException(ErrorCode.STOCK_INSUFFICIENT_QUANTITY);
-                }
+                StockBatch batch = lockedOutboundBatches.get(item.getStockBatch().getId());
 
                 batch.setQuantity(batch.getQuantity() - item.getQuantity());
                 stockBatchRepository.save(batch);

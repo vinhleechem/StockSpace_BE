@@ -5,6 +5,7 @@ import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.common.entity.ApprovalStatus;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
@@ -36,6 +37,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.ArgumentCaptor;
@@ -101,6 +103,8 @@ class InventoryReceiptServiceTest {
 
         lenient().doNothing().when(accessService)
                 .requireActiveStaffAssignment(any(), any(), any());
+        lenient().when(receiptRepository.findByIdForUpdate(any()))
+                .thenAnswer(invocation -> receiptRepository.findById(invocation.getArgument(0)));
     }
 
     @Test
@@ -832,8 +836,10 @@ class InventoryReceiptServiceTest {
                 .bin(bin)
                 .quantity(100)
                 .build();
-        when(stockBatchRepository.findBySkuIdAndWarehouseIdAndRackIdAndBinIdAndIsDeletedFalse(
-                skuId, warehouseId, rackId, binId)).thenReturn(Optional.of(existingBatch));
+        item.setStockBatch(existingBatch);
+        item.setPickSequence(1);
+        when(stockBatchRepository.findByIdForUpdate(existingBatch.getId()))
+                .thenReturn(Optional.of(existingBatch));
 
         when(receiptRepository.save(any(InventoryReceipt.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -844,6 +850,8 @@ class InventoryReceiptServiceTest {
         assertEquals(70, existingBatch.getQuantity());
         verify(stockBatchRepository, times(1)).save(existingBatch);
         verify(transactionRepository, times(1)).save(any(InventoryTransaction.class));
+        assertThrows(BadRequestException.class,
+                () -> receiptService.approveReceipt(approverId, receipt.getId()));
     }
 
     @Test
@@ -879,10 +887,197 @@ class InventoryReceiptServiceTest {
                 .bin(bin)
                 .quantity(100)
                 .build();
-        when(stockBatchRepository.findBySkuIdAndWarehouseIdAndRackIdAndBinIdAndIsDeletedFalse(
-                skuId, warehouseId, rackId, binId)).thenReturn(Optional.of(existingBatch));
+        item.setStockBatch(existingBatch);
+        item.setPickSequence(1);
+        when(stockBatchRepository.findByIdForUpdate(existingBatch.getId()))
+                .thenReturn(Optional.of(existingBatch));
 
-        assertThrows(BadRequestException.class, () -> receiptService.approveReceipt(approverId, receipt.getId()));
+        assertThrows(ResourceConflictException.class,
+                () -> receiptService.approveReceipt(approverId, receipt.getId()));
+    }
+
+    @Test
+    void testApproveReceipt_Outbound_UsesStableBatchLockOrder() {
+        UUID firstBatchId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID secondBatchId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        UUID secondSkuId = UUID.randomUUID();
+        ProductSku secondSku = ProductSku.builder()
+                .id(secondSkuId)
+                .skuCode("SKU456")
+                .name("Product 2")
+                .build();
+        InventoryReceipt receipt = InventoryReceipt.builder()
+                .id(UUID.randomUUID())
+                .warehouse(warehouse)
+                .createdBy(tenantUser)
+                .type(DocumentType.OUTBOUND)
+                .status(ApprovalStatus.PENDING)
+                .build();
+        StockBatch secondBatch = StockBatch.builder()
+                .id(secondBatchId)
+                .skuId(skuId)
+                .warehouse(warehouse)
+                .rack(rack)
+                .bin(bin)
+                .quantity(40)
+                .build();
+        StockBatch firstBatch = StockBatch.builder()
+                .id(firstBatchId)
+                .skuId(secondSkuId)
+                .warehouse(warehouse)
+                .rack(rack)
+                .bin(bin)
+                .quantity(30)
+                .build();
+        InventoryReceiptItem secondItem = InventoryReceiptItem.builder()
+                .id(UUID.randomUUID())
+                .receipt(receipt)
+                .sku(productSku)
+                .quantity(20)
+                .rack(rack)
+                .bin(bin)
+                .stockBatch(secondBatch)
+                .pickSequence(2)
+                .build();
+        InventoryReceiptItem firstItem = InventoryReceiptItem.builder()
+                .id(UUID.randomUUID())
+                .receipt(receipt)
+                .sku(secondSku)
+                .quantity(10)
+                .rack(rack)
+                .bin(bin)
+                .stockBatch(firstBatch)
+                .pickSequence(1)
+                .build();
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
+        when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
+        when(receiptItemRepository.findByReceiptId(receipt.getId()))
+                .thenReturn(List.of(secondItem, firstItem));
+        when(stockBatchRepository.findByIdForUpdate(firstBatchId)).thenReturn(Optional.of(firstBatch));
+        when(stockBatchRepository.findByIdForUpdate(secondBatchId)).thenReturn(Optional.of(secondBatch));
+        when(receiptRepository.save(any(InventoryReceipt.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        InventoryReceiptResponse response = receiptService.approveReceipt(userId, receipt.getId());
+
+        assertEquals(ApprovalStatus.APPROVED, response.getStatus());
+        assertEquals(20, firstBatch.getQuantity());
+        assertEquals(20, secondBatch.getQuantity());
+        InOrder inOrder = inOrder(stockBatchRepository);
+        inOrder.verify(stockBatchRepository).findByIdForUpdate(firstBatchId);
+        inOrder.verify(stockBatchRepository).findByIdForUpdate(secondBatchId);
+        verify(transactionRepository, times(2)).save(any(InventoryTransaction.class));
+    }
+
+    @Test
+    void testApproveReceipt_Outbound_CompetingReceiptCannotOversellBatch() {
+        UUID batchId = UUID.randomUUID();
+        StockBatch sharedBatch = StockBatch.builder()
+                .id(batchId)
+                .skuId(skuId)
+                .warehouse(warehouse)
+                .rack(rack)
+                .bin(bin)
+                .quantity(100)
+                .build();
+        InventoryReceipt firstReceipt = InventoryReceipt.builder()
+                .id(UUID.randomUUID())
+                .warehouse(warehouse)
+                .createdBy(tenantUser)
+                .type(DocumentType.OUTBOUND)
+                .status(ApprovalStatus.PENDING)
+                .build();
+        InventoryReceipt secondReceipt = InventoryReceipt.builder()
+                .id(UUID.randomUUID())
+                .warehouse(warehouse)
+                .createdBy(tenantUser)
+                .type(DocumentType.OUTBOUND)
+                .status(ApprovalStatus.PENDING)
+                .build();
+        InventoryReceiptItem firstItem = outboundApprovalItem(firstReceipt, sharedBatch, 80, 1);
+        InventoryReceiptItem secondItem = outboundApprovalItem(secondReceipt, sharedBatch, 80, 1);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
+        when(receiptRepository.findById(firstReceipt.getId())).thenReturn(Optional.of(firstReceipt));
+        when(receiptRepository.findById(secondReceipt.getId())).thenReturn(Optional.of(secondReceipt));
+        when(receiptItemRepository.findByReceiptId(firstReceipt.getId())).thenReturn(List.of(firstItem));
+        when(receiptItemRepository.findByReceiptId(secondReceipt.getId())).thenReturn(List.of(secondItem));
+        when(stockBatchRepository.findByIdForUpdate(batchId)).thenReturn(Optional.of(sharedBatch));
+        when(receiptRepository.save(any(InventoryReceipt.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        receiptService.approveReceipt(userId, firstReceipt.getId());
+
+        assertThrows(ResourceConflictException.class,
+                () -> receiptService.approveReceipt(userId, secondReceipt.getId()));
+        assertEquals(20, sharedBatch.getQuantity());
+        assertEquals(ApprovalStatus.PENDING, secondReceipt.getStatus());
+        verify(stockBatchRepository, times(1)).save(sharedBatch);
+        verify(transactionRepository, times(1)).save(any(InventoryTransaction.class));
+    }
+
+    @Test
+    void testApproveReceipt_Outbound_StaleLocationDoesNotMutateStock() {
+        WarehouseRack staleRack = WarehouseRack.builder()
+                .id(UUID.randomUUID())
+                .layout(layout)
+                .name("Stale Rack")
+                .build();
+        UUID batchId = UUID.randomUUID();
+        StockBatch lockedBatch = StockBatch.builder()
+                .id(batchId)
+                .skuId(skuId)
+                .warehouse(warehouse)
+                .rack(rack)
+                .bin(bin)
+                .quantity(100)
+                .build();
+        InventoryReceipt receipt = InventoryReceipt.builder()
+                .id(UUID.randomUUID())
+                .warehouse(warehouse)
+                .createdBy(tenantUser)
+                .type(DocumentType.OUTBOUND)
+                .status(ApprovalStatus.PENDING)
+                .build();
+        InventoryReceiptItem item = InventoryReceiptItem.builder()
+                .id(UUID.randomUUID())
+                .receipt(receipt)
+                .sku(productSku)
+                .quantity(10)
+                .rack(staleRack)
+                .bin(bin)
+                .stockBatch(lockedBatch)
+                .pickSequence(1)
+                .build();
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
+        when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
+        when(receiptItemRepository.findByReceiptId(receipt.getId())).thenReturn(List.of(item));
+        when(stockBatchRepository.findByIdForUpdate(batchId)).thenReturn(Optional.of(lockedBatch));
+
+        ResourceConflictException exception = assertThrows(ResourceConflictException.class,
+                () -> receiptService.approveReceipt(userId, receipt.getId()));
+        assertEquals(ErrorCode.OUTBOUND_PICK_LIST_STALE, exception.getErrorCode());
+        assertEquals(100, lockedBatch.getQuantity());
+        assertEquals(ApprovalStatus.PENDING, receipt.getStatus());
+        verify(stockBatchRepository, never()).save(any(StockBatch.class));
+        verify(transactionRepository, never()).save(any(InventoryTransaction.class));
+        verify(receiptRepository, never()).save(any(InventoryReceipt.class));
+    }
+
+    private InventoryReceiptItem outboundApprovalItem(
+            InventoryReceipt receipt, StockBatch batch, int quantity, int pickSequence) {
+        return InventoryReceiptItem.builder()
+                .id(UUID.randomUUID())
+                .receipt(receipt)
+                .sku(productSku)
+                .quantity(quantity)
+                .rack(rack)
+                .bin(bin)
+                .stockBatch(batch)
+                .pickSequence(pickSequence)
+                .build();
     }
 
     @Test

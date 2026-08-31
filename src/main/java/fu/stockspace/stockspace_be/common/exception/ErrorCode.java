@@ -116,6 +116,7 @@ public enum ErrorCode {
     SKU_IN_USE("Không thể xóa SKU vì đang có lô hàng tồn kho liên kết", HttpStatus.BAD_REQUEST),
     RECEIPT_NOT_FOUND("Không tìm thấy phiếu xuất nhập kho", HttpStatus.NOT_FOUND),
     RECEIPT_ALREADY_PROCESSED("Phiếu xuất nhập kho đã được xử lý", HttpStatus.BAD_REQUEST),
+    OUTBOUND_PICK_LIST_STALE("Pick list xuất kho đã thay đổi hoặc không còn đủ tồn kho. Vui lòng tạo lại pick list", HttpStatus.CONFLICT),
     STOCK_TRANSFER_NOT_FOUND("Không tìm thấy yêu cầu chuyển kho", HttpStatus.NOT_FOUND),
     STOCK_TRANSFER_INVALID_STATUS("Trạng thái yêu cầu chuyển kho không cho phép thao tác này", HttpStatus.CONFLICT),
     STOCK_TRANSFER_SOURCE_DESTINATION_SAME("Kho nguồn và kho đích phải khác nhau", HttpStatus.BAD_REQUEST),
