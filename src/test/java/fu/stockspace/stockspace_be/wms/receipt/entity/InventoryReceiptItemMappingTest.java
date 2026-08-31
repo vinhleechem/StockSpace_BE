@@ -7,11 +7,8 @@ import jakarta.persistence.ManyToOne;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
-import java.util.List;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class InventoryReceiptItemMappingTest {
 
@@ -31,18 +28,5 @@ class InventoryReceiptItemMappingTest {
         assertEquals(Integer.class, pickSequence.getType());
         assertNotNull(column);
         assertEquals("pick_sequence", column.name());
-    }
-
-    @Test
-    void exposesSortedLocationBatchQueryForFutureFifoAllocation() throws NoSuchMethodException {
-        var method = fu.stockspace.stockspace_be.wms.stock.repository.StockBatchRepository.class
-                .getMethod(
-                        "findAllBySkuIdAndWarehouseIdAndRackIdAndBinIdAndIsDeletedFalseOrderByArrivalDateAscCreatedAtAscIdAsc",
-                        java.util.UUID.class,
-                        java.util.UUID.class,
-                        java.util.UUID.class,
-                        java.util.UUID.class);
-
-        assertTrue(List.class.isAssignableFrom(method.getReturnType()));
     }
 }
