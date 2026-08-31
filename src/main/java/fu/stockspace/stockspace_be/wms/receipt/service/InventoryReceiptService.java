@@ -35,6 +35,11 @@ import fu.stockspace.stockspace_be.wms.receipt.repository.InventoryReceiptReposi
 import fu.stockspace.stockspace_be.wms.receipt.repository.InventoryTransactionRepository;
 import fu.stockspace.stockspace_be.wms.stock.entity.StockBatch;
 import fu.stockspace.stockspace_be.wms.stock.repository.StockBatchRepository;
+import fu.stockspace.stockspace_be.wms.picking.OutboundPickingInputItem;
+import fu.stockspace.stockspace_be.wms.picking.OutboundPickingSuggestionService;
+import fu.stockspace.stockspace_be.wms.picking.dto.OutboundPickLineResponse;
+import fu.stockspace.stockspace_be.wms.picking.dto.OutboundPickStopResponse;
+import fu.stockspace.stockspace_be.wms.picking.dto.OutboundPickingSuggestionResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -45,9 +50,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -69,6 +77,7 @@ public class InventoryReceiptService {
     private final TenantWarehouseAccessService accessService;
     private final NotificationService notificationService;
     private final PhysicalLoadCalculator physicalLoadCalculator;
+    private final OutboundPickingSuggestionService pickingSuggestionService;
 
     @Transactional
     public InventoryReceiptResponse createReceipt(UUID userId, CreateInventoryReceiptRequest request) {
@@ -80,6 +89,10 @@ public class InventoryReceiptService {
         Warehouse warehouse = warehouseRepository.findById(request.getWarehouseId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
         requireWarehouseMutationAccess(creator, tenantId, warehouse.getId());
+
+        if (request.getType() == DocumentType.OUTBOUND) {
+            return createOutboundReceipt(creator, tenantId, warehouse, request);
+        }
 
         InventoryReceipt receipt = InventoryReceipt.builder()
                 .warehouse(warehouse)
@@ -97,6 +110,13 @@ public class InventoryReceiptService {
             ProductSku sku = productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(
                             itemRequest.getSkuId(), tenantId)
                     .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.SKU_NOT_FOUND));
+
+            if (itemRequest.getRackId() == null) {
+                throw new BadRequestException("Rack is required for inbound receipts");
+            }
+            if (itemRequest.getBinId() == null) {
+                throw new BadRequestException("Bin is required for inbound receipts");
+            }
 
             WarehouseRack rack = rackRepository.findByIdAndIsDeletedFalse(itemRequest.getRackId())
                     .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RACK_NOT_FOUND));
@@ -130,6 +150,115 @@ public class InventoryReceiptService {
             validateInboundCapacity(tenantId, warehouse.getId(), capacityItems, false);
         }
 
+        notifyReceiptCreated(receipt, creator, tenantId, warehouse);
+
+        log.info("WMS Receipt: Created receipt {} of type {} for warehouse {}", receipt.getId(), receipt.getType(), warehouse.getId());
+        return mapToResponse(receipt, savedItems);
+    }
+
+    private InventoryReceiptResponse createOutboundReceipt(
+            User creator, UUID tenantId, Warehouse warehouse, CreateInventoryReceiptRequest request) {
+        for (ReceiptItemRequest itemRequest : request.getItems()) {
+            if (itemRequest.getRackId() != null || itemRequest.getBinId() != null) {
+                throw new BadRequestException("Rack and bin must be omitted for outbound receipts");
+            }
+        }
+
+        List<OutboundPickingInputItem> inputItems = request.getItems().stream()
+                .map(item -> new OutboundPickingInputItem(item.getSkuId(), item.getQuantity()))
+                .toList();
+        OutboundPickingSuggestionResponse pickList = pickingSuggestionService.suggest(
+                tenantId,
+                isStaff(creator) ? creator.getId() : null,
+                warehouse.getId(),
+                inputItems);
+        if (!pickList.complete()) {
+            throw new BadRequestException(ErrorCode.STOCK_INSUFFICIENT_QUANTITY);
+        }
+
+        Map<UUID, ProductSku> skusById = new LinkedHashMap<>();
+        Map<UUID, String> notesBySkuId = new HashMap<>();
+        for (ReceiptItemRequest itemRequest : request.getItems()) {
+            ProductSku sku = productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(
+                            itemRequest.getSkuId(), tenantId)
+                    .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.SKU_NOT_FOUND));
+            skusById.put(itemRequest.getSkuId(), sku);
+            notesBySkuId.put(itemRequest.getSkuId(), itemRequest.getNote());
+        }
+
+        Set<UUID> batchIds = pickList.stops().stream()
+                .flatMap(stop -> stop.lines().stream())
+                .map(OutboundPickLineResponse::stockBatchId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        Map<UUID, StockBatch> batchesById = stockBatchRepository.findAllById(batchIds).stream()
+                .collect(Collectors.toMap(StockBatch::getId, batch -> batch, (left, right) -> left));
+        validateOutboundAllocations(pickList, batchesById, skusById, warehouse);
+
+        InventoryReceipt receipt = InventoryReceipt.builder()
+                .warehouse(warehouse)
+                .createdBy(creator)
+                .type(request.getType())
+                .signatureData(request.getSignatureData())
+                .status(ApprovalStatus.PENDING)
+                .build();
+        receipt = receiptRepository.save(receipt);
+
+        List<InventoryReceiptItem> savedItems = new ArrayList<>();
+        for (OutboundPickStopResponse stop : pickList.stops()) {
+            for (OutboundPickLineResponse line : stop.lines()) {
+                StockBatch batch = batchesById.get(line.stockBatchId());
+                InventoryReceiptItem item = InventoryReceiptItem.builder()
+                        .receipt(receipt)
+                        .sku(skusById.get(line.skuId()))
+                        .quantity(line.quantity())
+                        .rack(batch.getRack())
+                        .bin(batch.getBin())
+                        .stockBatch(batch)
+                        .pickSequence(stop.sequence())
+                        .note(notesBySkuId.get(line.skuId()))
+                        .build();
+                savedItems.add(receiptItemRepository.save(item));
+            }
+        }
+
+        notifyReceiptCreated(receipt, creator, tenantId, warehouse);
+
+        log.info("WMS Receipt: Created receipt {} of type {} for warehouse {}", receipt.getId(), receipt.getType(), warehouse.getId());
+        return mapToResponse(receipt, savedItems, pickList);
+    }
+
+    private void validateOutboundAllocations(
+            OutboundPickingSuggestionResponse pickList,
+            Map<UUID, StockBatch> batchesById,
+            Map<UUID, ProductSku> skusById,
+            Warehouse warehouse) {
+        Set<UUID> expectedBatchIds = pickList.stops().stream()
+                .flatMap(stop -> stop.lines().stream())
+                .map(OutboundPickLineResponse::stockBatchId)
+                .collect(Collectors.toSet());
+        if (batchesById.size() != expectedBatchIds.size()) {
+            throw new ResourceNotFoundException(ErrorCode.STOCK_BATCH_NOT_FOUND);
+        }
+
+        for (OutboundPickStopResponse stop : pickList.stops()) {
+            for (OutboundPickLineResponse line : stop.lines()) {
+                StockBatch batch = batchesById.get(line.stockBatchId());
+                ProductSku sku = skusById.get(line.skuId());
+                if (sku == null || batch == null || batch.getSkuId() == null
+                        || !line.skuId().equals(batch.getSkuId())
+                        || !batch.isActive() || batch.isDeleted()
+                        || batch.getQuantity() < line.quantity()
+                        || batch.getWarehouse() == null
+                        || !warehouse.getId().equals(batch.getWarehouse().getId())
+                        || batch.getRack() == null || batch.getBin() == null) {
+                    throw new BadRequestException(ErrorCode.STOCK_INSUFFICIENT_QUANTITY);
+                }
+            }
+        }
+    }
+
+    private void notifyReceiptCreated(
+            InventoryReceipt receipt, User creator, UUID tenantId, Warehouse warehouse) {
         try {
             String typeStr = receipt.getType() == DocumentType.INBOUND ? "nhập kho" : "xuất kho";
             if (isStaff(creator)) {
@@ -143,9 +272,6 @@ public class InventoryReceiptService {
         } catch (Exception e) {
             log.warn("Failed to push create notification for receipt {}: {}", receipt.getId(), e.getMessage());
         }
-
-        log.info("WMS Receipt: Created receipt {} of type {} for warehouse {}", receipt.getId(), receipt.getType(), warehouse.getId());
-        return mapToResponse(receipt, savedItems);
     }
 
     @Transactional
@@ -349,6 +475,13 @@ public class InventoryReceiptService {
     }
 
     private InventoryReceiptResponse mapToResponse(InventoryReceipt receipt, List<InventoryReceiptItem> items) {
+        return mapToResponse(receipt, items, null);
+    }
+
+    private InventoryReceiptResponse mapToResponse(
+            InventoryReceipt receipt,
+            List<InventoryReceiptItem> items,
+            OutboundPickingSuggestionResponse pickList) {
         List<ReceiptItemResponse> itemResponses = items.stream().map(item -> ReceiptItemResponse.builder()
                 .id(item.getId())
                 .skuId(item.getSku().getId())
@@ -359,6 +492,8 @@ public class InventoryReceiptService {
                 .rackName(item.getRack().getName())
                 .binId(item.getBin().getId())
                 .binName(item.getBin().getName())
+                .stockBatchId(item.getStockBatch() != null ? item.getStockBatch().getId() : null)
+                .pickSequence(item.getPickSequence())
                 .note(item.getNote())
                 .build()).collect(Collectors.toList());
 
@@ -373,6 +508,7 @@ public class InventoryReceiptService {
                 .status(receipt.getStatus())
                 .rejectReason(receipt.getRejectReason())
                 .items(itemResponses)
+                .pickList(pickList)
                 .createdAt(receipt.getCreatedAt())
                 .updatedAt(receipt.getUpdatedAt())
                 .build();

@@ -19,10 +19,8 @@ public class ReceiptItemRequest {
     @Min(value = 1, message = "Số lượng phải lớn hơn hoặc bằng 1")
     private int quantity;
 
-    @NotNull(message = "Kệ hàng (rack) không được để trống")
     private UUID rackId;
 
-    @NotNull(message = "Ô chứa (bin) không được để trống")
     private UUID binId;
 
     private String note;
