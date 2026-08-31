@@ -62,6 +62,16 @@ public class InventoryReceiptController {
         return ResponseEntity.ok(ApiResponse.success("Từ chối phiếu thành công", response));
     }
 
+    @PostMapping("/{id}/picking/replan")
+    @PreAuthorize("@rbac.hasPermission('OUTBOUND_CREATE')")
+    @Operation(summary = "Tạo lại FIFO pick list cho phiếu xuất đang chờ duyệt")
+    public ResponseEntity<ApiResponse<InventoryReceiptResponse>> replanOutboundReceipt(
+            @PathVariable UUID id) {
+        UUID userId = SecurityUtil.getCurrentUserId();
+        InventoryReceiptResponse response = receiptService.replanOutboundReceipt(userId, id);
+        return ResponseEntity.ok(ApiResponse.success("Tạo lại pick list xuất kho thành công", response));
+    }
+
     @GetMapping
     @PreAuthorize("@rbac.hasPermission('INVENTORY_READ')")
     @Operation(summary = "Lấy danh sách phiếu nhập/xuất kho phân trang theo kho")
