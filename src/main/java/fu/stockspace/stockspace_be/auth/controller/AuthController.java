@@ -3,6 +3,7 @@ package fu.stockspace.stockspace_be.auth.controller;
 import fu.stockspace.stockspace_be.auth.dto.*;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.service.AuthService;
+import fu.stockspace.stockspace_be.auth.service.ProfileService;
 import fu.stockspace.stockspace_be.auth.service.RefreshTokenService;
 import fu.stockspace.stockspace_be.auth.util.SecurityUtil;
 import fu.stockspace.stockspace_be.common.dto.ApiResponse;
@@ -41,6 +42,7 @@ import java.util.UUID;
 public class AuthController {
 
         private final AuthService authService;
+        private final ProfileService profileService;
         private final RefreshTokenService refreshTokenService;
         private final fu.stockspace.stockspace_be.staff.service.TenantStaffService tenantStaffService;
 
@@ -192,6 +194,23 @@ public class AuthController {
                 User user = SecurityUtil.getCurrentUser()
                                 .orElseThrow(() -> new IllegalStateException("Not authenticated"));
 
+                return ResponseEntity.ok(ApiResponse.success("User info retrieved", toUserInfoResponse(user)));
+        }
+
+        @PutMapping("/me")
+        @PreAuthorize("@rbac.hasPermission('PROFILE_UPDATE')")
+        @Operation(summary = "Cập nhật hồ sơ của user đang đăng nhập")
+        public ResponseEntity<ApiResponse<UserInfoResponse>> updateCurrentUser(
+                        @Valid @RequestBody UpdateProfileRequest request) {
+                UUID userId = SecurityUtil.getCurrentUserId();
+                User updatedUser = profileService.updateProfile(userId, request);
+
+                return ResponseEntity.ok(ApiResponse.success(
+                                "Profile updated successfully", toUserInfoResponse(updatedUser)));
+        }
+
+        private UserInfoResponse toUserInfoResponse(User user) {
+
                 String primaryRole = user.getRoles().stream()
                                 .map(fu.stockspace.stockspace_be.auth.entity.Role::getName)
                                 .findFirst()
@@ -215,8 +234,7 @@ public class AuthController {
                                 user.isActive(),
                                 user.getCreatedAt() != null ? user.getCreatedAt().toString() : null,
                                 tenantId);
-
-                return ResponseEntity.ok(ApiResponse.success("User info retrieved", info));
+                return info;
         }
 
 

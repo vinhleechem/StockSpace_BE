@@ -3,6 +3,7 @@ package fu.stockspace.stockspace_be.common.validation;
 import fu.stockspace.stockspace_be.admin.dto.CreateUserRequest;
 import fu.stockspace.stockspace_be.admin.dto.UpdateUserRequest;
 import fu.stockspace.stockspace_be.auth.dto.RegisterRequest;
+import fu.stockspace.stockspace_be.auth.dto.UpdateProfileRequest;
 import fu.stockspace.stockspace_be.auth.entity.RoleType;
 import fu.stockspace.stockspace_be.staff.dto.InviteStaffRequest;
 import jakarta.validation.Validation;
@@ -40,6 +41,7 @@ class PhoneValidationPatternsTest {
             assertFalse(hasPhoneViolation(registerRequest(phone)));
             assertFalse(hasPhoneViolation(createUserRequest(phone)));
             assertFalse(hasPhoneViolation(updateUserRequest(phone)));
+            assertFalse(hasPhoneViolation(updateProfileRequest(phone)));
             assertFalse(hasPhoneViolation(inviteStaffRequest(phone)));
         }
     }
@@ -50,6 +52,7 @@ class PhoneValidationPatternsTest {
             assertTrue(hasPhoneViolation(registerRequest(phone)));
             assertTrue(hasPhoneViolation(createUserRequest(phone)));
             assertTrue(hasPhoneViolation(updateUserRequest(phone)));
+            assertTrue(hasPhoneViolation(updateProfileRequest(phone)));
             assertTrue(hasPhoneViolation(inviteStaffRequest(phone)));
         }
     }
@@ -77,6 +80,13 @@ class PhoneValidationPatternsTest {
 
     private UpdateUserRequest updateUserRequest(String phone) {
         return UpdateUserRequest.builder()
+                .phone(phone)
+                .build();
+    }
+
+    private UpdateProfileRequest updateProfileRequest(String phone) {
+        return UpdateProfileRequest.builder()
+                .fullName("Profile User")
                 .phone(phone)
                 .build();
     }
