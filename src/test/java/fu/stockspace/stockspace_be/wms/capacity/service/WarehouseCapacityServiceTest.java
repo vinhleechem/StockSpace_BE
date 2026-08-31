@@ -189,8 +189,6 @@ class WarehouseCapacityServiceTest {
         assertEquals(2, binResponse.getStoredSkus().size());
         verify(stockBatchRepository, times(1))
                 .findActivePhysicalLoadsByWarehouseIdAndTenantId(warehouseId, tenantId);
-        verify(stockBatchRepository, never()).findByRackId(any());
-        verify(stockBatchRepository, never()).findByBinId(any());
     }
 
     @Test

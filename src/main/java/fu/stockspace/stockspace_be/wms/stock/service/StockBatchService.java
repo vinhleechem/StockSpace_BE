@@ -7,10 +7,6 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenExceptio
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
-import fu.stockspace.stockspace_be.warehouse.entity.WarehouseBin;
-import fu.stockspace.stockspace_be.warehouse.entity.WarehouseRack;
-import fu.stockspace.stockspace_be.warehouse.repository.WarehouseBinRepository;
-import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRackRepository;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
 import fu.stockspace.stockspace_be.wms.product.entity.ProductSku;
 import fu.stockspace.stockspace_be.wms.product.entity.UnitOfMeasure;
@@ -28,7 +24,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -41,8 +36,6 @@ public class StockBatchService {
     private final StockBatchRepository stockBatchRepository;
     private final WarehouseRepository warehouseRepository;
     private final ProductSkuRepository productSkuRepository;
-    private final WarehouseRackRepository rackRepository;
-    private final WarehouseBinRepository binRepository;
     private final TenantWarehouseAccessService accessService;
 
 
@@ -219,35 +212,6 @@ public class StockBatchService {
         log.info("WMS Stock: Adjusted batch {} quantity by {} → new qty={}", batchId, delta, newQty);
     }
 
-
-
-
-    @Transactional
-    public StockBatch findOrCreateBatch(UUID skuId, UUID warehouseId, UUID rackId, UUID binId) {
-        return stockBatchRepository
-                .findBySkuIdAndWarehouseIdAndRackIdAndBinIdAndIsDeletedFalse(
-                        skuId, warehouseId, rackId, binId)
-                .orElseGet(() -> {
-                    Warehouse warehouse = warehouseRepository.findById(warehouseId)
-                            .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
-                    WarehouseRack rack = rackId != null
-                            ? rackRepository.findByIdAndIsDeletedFalse(rackId).orElse(null)
-                            : null;
-                    WarehouseBin bin = binId != null
-                            ? binRepository.findByIdAndIsDeletedFalse(binId).orElse(null)
-                            : null;
-
-                    StockBatch newBatch = StockBatch.builder()
-                            .skuId(skuId)
-                            .warehouse(warehouse)
-                            .rack(rack)
-                            .bin(bin)
-                            .quantity(0)
-                            .arrivalDate(LocalDateTime.now())
-                            .build();
-                    return stockBatchRepository.save(newBatch);
-                });
-    }
 
 
 

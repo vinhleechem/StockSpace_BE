@@ -1,6 +1,7 @@
 package fu.stockspace.stockspace_be.wms.receipt.dto;
 
 import fu.stockspace.stockspace_be.common.entity.ApprovalStatus;
+import fu.stockspace.stockspace_be.wms.picking.dto.OutboundPickingSuggestionResponse;
 import fu.stockspace.stockspace_be.wms.receipt.entity.DocumentType;
 import lombok.*;
 
@@ -24,6 +25,7 @@ public class InventoryReceiptResponse {
     private ApprovalStatus status;
     private String rejectReason;
     private List<ReceiptItemResponse> items;
+    private OutboundPickingSuggestionResponse pickList;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

@@ -18,35 +18,14 @@ import java.util.UUID;
 @Repository
 public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
 
-    List<StockBatch> findByBinId(UUID binId);
-
-    List<StockBatch> findByRackId(UUID rackId);
-
     boolean existsByBinIdAndQuantityGreaterThanAndIsDeletedFalse(UUID binId, int quantity);
 
     boolean existsByRackIdAndQuantityGreaterThanAndIsDeletedFalse(UUID rackId, int quantity);
 
     boolean existsBySkuIdAndIsDeletedFalse(UUID skuId);
 
-    Optional<StockBatch> findBySkuIdAndWarehouseIdAndRackIdAndBinIdAndIsDeletedFalse(
-            UUID skuId, UUID warehouseId, UUID rackId, UUID binId);
-
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("""
-            select b from StockBatch b
-            where b.skuId = :skuId
-              and b.warehouse.id = :warehouseId
-              and b.rack.id = :rackId
-              and b.bin.id = :binId
-              and b.isActive = true
-              and b.isDeleted = false
-            """)
-    Optional<StockBatch> findBySkuIdAndWarehouseIdAndRackIdAndBinIdForUpdate(
-            @Param("skuId") UUID skuId,
-            @Param("warehouseId") UUID warehouseId,
-            @Param("rackId") UUID rackId,
-            @Param("binId") UUID binId);
-
+    List<StockBatch> findAllBySkuIdAndWarehouseIdAndIsActiveTrueAndIsDeletedFalse(
+            UUID skuId, UUID warehouseId);
 
     Page<StockBatch> findByWarehouseIdAndIsDeletedFalse(UUID warehouseId, Pageable pageable);
 
@@ -124,8 +103,6 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
             @Param("tenantId") UUID tenantId
     );
 
-    List<StockBatch> findBySkuIdAndIsDeletedFalse(UUID skuId);
-
     @Query("""
             SELECT b FROM StockBatch b
             WHERE b.skuId = :skuId
@@ -177,9 +154,6 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
             @Param("tenantId") UUID tenantId,
             @Param("staffId") UUID staffId
     );
-
-    @Query("SELECT COALESCE(SUM(b.quantity), 0) FROM StockBatch b WHERE b.skuId = :skuId AND b.isDeleted = false")
-    int sumQuantityBySkuId(@Param("skuId") UUID skuId);
 
     @Query("SELECT COALESCE(SUM(b.quantity), 0) FROM StockBatch b WHERE b.bin.id = :binId AND b.isDeleted = false")
     int sumQuantityByBinId(@Param("binId") UUID binId);
