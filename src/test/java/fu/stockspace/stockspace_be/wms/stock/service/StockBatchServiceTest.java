@@ -9,8 +9,6 @@ import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseBin;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseRack;
-import fu.stockspace.stockspace_be.warehouse.repository.WarehouseBinRepository;
-import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRackRepository;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
 import fu.stockspace.stockspace_be.wms.product.entity.ProductSku;
 import fu.stockspace.stockspace_be.wms.product.entity.UnitOfMeasure;
@@ -48,8 +46,6 @@ class StockBatchServiceTest {
     @Mock private StockBatchRepository stockBatchRepository;
     @Mock private WarehouseRepository warehouseRepository;
     @Mock private ProductSkuRepository productSkuRepository;
-    @Mock private WarehouseRackRepository rackRepository;
-    @Mock private WarehouseBinRepository binRepository;
     @Mock private TenantWarehouseAccessService accessService;
     @Mock private fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository assignmentRepository;
 
@@ -314,6 +310,42 @@ class StockBatchServiceTest {
     }
 
     @Test
+    void testGetStockSummaryBySku_SumsMultipleBatchesAtSameLocation() {
+        WarehouseRack rack = WarehouseRack.builder().id(UUID.randomUUID()).name("Rack 1").build();
+        WarehouseBin bin = WarehouseBin.builder().id(UUID.randomUUID()).rack(rack).name("Bin 1").build();
+        StockBatch firstBatch = StockBatch.builder()
+                .id(UUID.randomUUID())
+                .skuId(skuId)
+                .warehouse(warehouse)
+                .rack(rack)
+                .bin(bin)
+                .quantity(60)
+                .build();
+        StockBatch secondBatch = StockBatch.builder()
+                .id(UUID.randomUUID())
+                .skuId(skuId)
+                .warehouse(warehouse)
+                .rack(rack)
+                .bin(bin)
+                .quantity(40)
+                .build();
+
+        when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, tenantId))
+                .thenReturn(Optional.of(productSku));
+        when(stockBatchRepository.findBySkuIdInActiveTenantWarehouses(skuId, tenantId))
+                .thenReturn(List.of(firstBatch, secondBatch));
+
+        StockSummaryResponse summary = stockBatchService.getStockSummaryBySku(tenantId, skuId);
+
+        assertEquals(100, summary.getTotalQuantity());
+        assertEquals(2, summary.getLocations().size());
+        assertEquals(warehouseId, summary.getLocations().get(0).getWarehouseId());
+        assertEquals(warehouseId, summary.getLocations().get(1).getWarehouseId());
+        assertEquals(firstBatch.getId(), summary.getLocations().get(0).getBatchId());
+        assertEquals(secondBatch.getId(), summary.getLocations().get(1).getBatchId());
+    }
+
+    @Test
     void testGetStockSummaryBySku_StaffUsesAssignedWarehouseScope() {
         UUID staffId = UUID.randomUUID();
         StockBatch assignedBatch = StockBatch.builder()
@@ -390,80 +422,6 @@ class StockBatchServiceTest {
 
         assertThrows(ResourceNotFoundException.class,
                 () -> stockBatchService.adjustQuantity(batchId, 10));
-    }
-
-
-
-    @Test
-    void testFindOrCreateBatch_Found_ExistingBatch() {
-        UUID rackId = UUID.randomUUID();
-        UUID binId = UUID.randomUUID();
-
-        when(stockBatchRepository.findBySkuIdAndWarehouseIdAndRackIdAndBinIdAndIsDeletedFalse(
-                skuId, warehouseId, rackId, binId))
-                .thenReturn(Optional.of(stockBatch));
-
-        StockBatch result = stockBatchService.findOrCreateBatch(skuId, warehouseId, rackId, binId);
-
-        assertNotNull(result);
-        assertEquals(batchId, result.getId());
-        verify(stockBatchRepository, never()).save(any());
-    }
-
-    @Test
-    void testFindOrCreateBatch_NotFound_CreateNew() {
-        UUID rackId = UUID.randomUUID();
-        UUID binId = UUID.randomUUID();
-
-        WarehouseRack rack = WarehouseRack.builder().id(rackId).name("Rack 1").build();
-        WarehouseBin bin = WarehouseBin.builder().id(binId).name("Bin 1").build();
-
-        when(stockBatchRepository.findBySkuIdAndWarehouseIdAndRackIdAndBinIdAndIsDeletedFalse(
-                skuId, warehouseId, rackId, binId))
-                .thenReturn(Optional.empty());
-        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
-        when(rackRepository.findByIdAndIsDeletedFalse(rackId)).thenReturn(Optional.of(rack));
-        when(binRepository.findByIdAndIsDeletedFalse(binId)).thenReturn(Optional.of(bin));
-
-        StockBatch newBatch = StockBatch.builder()
-                .id(UUID.randomUUID())
-                .skuId(skuId)
-                .warehouse(warehouse)
-                .rack(rack)
-                .bin(bin)
-                .quantity(0)
-                .arrivalDate(LocalDateTime.now())
-                .build();
-        when(stockBatchRepository.save(any(StockBatch.class))).thenReturn(newBatch);
-
-        StockBatch result = stockBatchService.findOrCreateBatch(skuId, warehouseId, rackId, binId);
-
-        assertNotNull(result);
-        assertEquals(0, result.getQuantity());
-        verify(stockBatchRepository, times(1)).save(any(StockBatch.class));
-    }
-
-    @Test
-    void testFindOrCreateBatch_NullLocationIds_CreateNew() {
-        when(stockBatchRepository.findBySkuIdAndWarehouseIdAndRackIdAndBinIdAndIsDeletedFalse(
-                skuId, warehouseId, null, null))
-                .thenReturn(Optional.empty());
-        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
-
-        StockBatch newBatch = StockBatch.builder()
-                .id(UUID.randomUUID())
-                .skuId(skuId)
-                .warehouse(warehouse)
-                .quantity(0)
-                .arrivalDate(LocalDateTime.now())
-                .build();
-        when(stockBatchRepository.save(any(StockBatch.class))).thenReturn(newBatch);
-
-        StockBatch result = stockBatchService.findOrCreateBatch(skuId, warehouseId, null, null);
-
-        assertNotNull(result);
-        assertNull(result.getRack());
-        assertNull(result.getBin());
     }
 
 

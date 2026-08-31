@@ -34,23 +34,6 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
     List<StockBatch> findAllBySkuIdAndWarehouseIdAndRackIdAndBinIdAndIsDeletedFalseOrderByArrivalDateAscCreatedAtAscIdAsc(
             UUID skuId, UUID warehouseId, UUID rackId, UUID binId);
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("""
-            select b from StockBatch b
-            where b.skuId = :skuId
-              and b.warehouse.id = :warehouseId
-              and b.rack.id = :rackId
-              and b.bin.id = :binId
-              and b.isActive = true
-              and b.isDeleted = false
-            """)
-    Optional<StockBatch> findBySkuIdAndWarehouseIdAndRackIdAndBinIdForUpdate(
-            @Param("skuId") UUID skuId,
-            @Param("warehouseId") UUID warehouseId,
-            @Param("rackId") UUID rackId,
-            @Param("binId") UUID binId);
-
-
     Page<StockBatch> findByWarehouseIdAndIsDeletedFalse(UUID warehouseId, Pageable pageable);
 
     List<StockBatch> findAllByWarehouseIdAndIsDeletedFalse(UUID warehouseId);

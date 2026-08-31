@@ -189,24 +189,18 @@ public class InventoryReceiptService {
             UUID binId = item.getBin().getId();
 
             if (receipt.getType() == DocumentType.INBOUND) {
-                StockBatch batch = stockBatchRepository
-                        .findBySkuIdAndWarehouseIdAndRackIdAndBinIdAndIsDeletedFalse(skuId, warehouseId, rackId, binId)
-                        .orElse(null);
+                StockBatch batch = StockBatch.builder()
+                        .skuId(skuId)
+                        .warehouse(receipt.getWarehouse())
+                        .rack(item.getRack())
+                        .bin(item.getBin())
+                        .quantity(item.getQuantity())
+                        .arrivalDate(LocalDateTime.now())
+                        .build();
+                batch = stockBatchRepository.save(batch);
 
-                if (batch != null) {
-                    batch.setQuantity(batch.getQuantity() + item.getQuantity());
-                    stockBatchRepository.save(batch);
-                } else {
-                    batch = StockBatch.builder()
-                            .skuId(skuId)
-                            .warehouse(receipt.getWarehouse())
-                            .rack(item.getRack())
-                            .bin(item.getBin())
-                            .quantity(item.getQuantity())
-                            .arrivalDate(LocalDateTime.now())
-                            .build();
-                    stockBatchRepository.save(batch);
-                }
+                item.setStockBatch(batch);
+                receiptItemRepository.save(item);
 
                 InventoryTransaction transaction = InventoryTransaction.builder()
                         .receipt(receipt)
@@ -437,6 +431,7 @@ public class InventoryReceiptService {
                 .quantity(quantity)
                 .rack(batch.getRack())
                 .bin(batch.getBin())
+                .stockBatch(batch)
                 .note("Điều chỉnh tự động từ kiểm kê #" + auditId)
                 .build();
         receiptItemRepository.save(item);

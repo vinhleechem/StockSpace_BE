@@ -494,65 +494,89 @@ class InventoryReceiptServiceTest {
                 .bin(bin)
                 .build();
         when(receiptItemRepository.findByReceiptId(receipt.getId())).thenReturn(List.of(item));
-
-        when(stockBatchRepository.findBySkuIdAndWarehouseIdAndRackIdAndBinIdAndIsDeletedFalse(
-                skuId, warehouseId, rackId, binId)).thenReturn(Optional.empty());
-
         when(receiptRepository.save(any(InventoryReceipt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(receiptItemRepository.save(any(InventoryReceiptItem.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(stockBatchRepository.save(any(StockBatch.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
         InventoryReceiptResponse response = receiptService.approveReceipt(approverId, receipt.getId());
 
         assertNotNull(response);
         assertEquals(ApprovalStatus.APPROVED, response.getStatus());
+        assertNotNull(item.getStockBatch());
+        assertEquals(50, item.getStockBatch().getQuantity());
+        assertEquals(rack, item.getStockBatch().getRack());
+        assertEquals(bin, item.getStockBatch().getBin());
+        assertNotNull(item.getStockBatch().getArrivalDate());
         verify(stockBatchRepository, times(1)).save(any(StockBatch.class));
+        verify(receiptItemRepository, times(1)).save(item);
         verify(transactionRepository, times(1)).save(any(InventoryTransaction.class));
     }
 
     @Test
-    void testApproveReceipt_Success_Inbound_ExistingBatch() {
+    void testApproveReceipt_Success_Inbound_CreatesSeparateBatchPerReceipt() {
         UUID approverId = userId;
         User approver = tenantUser;
         when(userRepository.findById(approverId)).thenReturn(Optional.of(approver));
 
-        InventoryReceipt receipt = InventoryReceipt.builder()
+        InventoryReceipt firstReceipt = InventoryReceipt.builder()
                 .id(UUID.randomUUID())
                 .warehouse(warehouse)
                 .createdBy(tenantUser)
                 .type(DocumentType.INBOUND)
                 .status(ApprovalStatus.PENDING)
                 .build();
-        when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
-
-        InventoryReceiptItem item = InventoryReceiptItem.builder()
+        InventoryReceipt secondReceipt = InventoryReceipt.builder()
                 .id(UUID.randomUUID())
-                .receipt(receipt)
-                .sku(productSku)
-                .quantity(50)
-                .rack(rack)
-                .bin(bin)
-                .build();
-        when(receiptItemRepository.findByReceiptId(receipt.getId())).thenReturn(List.of(item));
-
-        StockBatch existingBatch = StockBatch.builder()
-                .id(UUID.randomUUID())
-                .skuId(skuId)
                 .warehouse(warehouse)
+                .createdBy(tenantUser)
+                .type(DocumentType.INBOUND)
+                .status(ApprovalStatus.PENDING)
+                .build();
+        when(receiptRepository.findById(firstReceipt.getId())).thenReturn(Optional.of(firstReceipt));
+        when(receiptRepository.findById(secondReceipt.getId())).thenReturn(Optional.of(secondReceipt));
+
+        InventoryReceiptItem firstItem = InventoryReceiptItem.builder()
+                .id(UUID.randomUUID())
+                .receipt(firstReceipt)
+                .sku(productSku)
+                .quantity(40)
                 .rack(rack)
                 .bin(bin)
-                .quantity(100)
                 .build();
-        when(stockBatchRepository.findBySkuIdAndWarehouseIdAndRackIdAndBinIdAndIsDeletedFalse(
-                skuId, warehouseId, rackId, binId)).thenReturn(Optional.of(existingBatch));
+        InventoryReceiptItem secondItem = InventoryReceiptItem.builder()
+                .id(UUID.randomUUID())
+                .receipt(secondReceipt)
+                .sku(productSku)
+                .quantity(60)
+                .rack(rack)
+                .bin(bin)
+                .build();
+        when(receiptItemRepository.findByReceiptId(firstReceipt.getId())).thenReturn(List.of(firstItem));
+        when(receiptItemRepository.findByReceiptId(secondReceipt.getId())).thenReturn(List.of(secondItem));
 
-        when(receiptRepository.save(any(InventoryReceipt.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(receiptRepository.save(any(InventoryReceipt.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(receiptItemRepository.save(any(InventoryReceiptItem.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(stockBatchRepository.save(any(StockBatch.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
-        InventoryReceiptResponse response = receiptService.approveReceipt(approverId, receipt.getId());
+        receiptService.approveReceipt(approverId, firstReceipt.getId());
+        receiptService.approveReceipt(approverId, secondReceipt.getId());
 
-        assertNotNull(response);
-        assertEquals(ApprovalStatus.APPROVED, response.getStatus());
-        assertEquals(150, existingBatch.getQuantity());
-        verify(stockBatchRepository, times(1)).save(existingBatch);
-        verify(transactionRepository, times(1)).save(any(InventoryTransaction.class));
+        assertNotNull(firstItem.getStockBatch());
+        assertNotNull(secondItem.getStockBatch());
+        assertNotSame(firstItem.getStockBatch(), secondItem.getStockBatch());
+        assertEquals(40, firstItem.getStockBatch().getQuantity());
+        assertEquals(60, secondItem.getStockBatch().getQuantity());
+        assertEquals(rack, firstItem.getStockBatch().getRack());
+        assertEquals(bin, secondItem.getStockBatch().getBin());
+        verify(stockBatchRepository, times(2)).save(any(StockBatch.class));
+        verify(receiptItemRepository).save(firstItem);
+        verify(receiptItemRepository).save(secondItem);
+        verify(transactionRepository, times(2)).save(any(InventoryTransaction.class));
     }
 
     @Test
@@ -681,6 +705,7 @@ class InventoryReceiptServiceTest {
         assertEquals(receipt, itemCaptor.getValue().getReceipt());
         assertEquals(15, itemCaptor.getValue().getQuantity());
         assertEquals(batch.getBin(), itemCaptor.getValue().getBin());
+        assertEquals(batch, itemCaptor.getValue().getStockBatch());
 
         ArgumentCaptor<InventoryTransaction> transactionCaptor =
                 ArgumentCaptor.forClass(InventoryTransaction.class);

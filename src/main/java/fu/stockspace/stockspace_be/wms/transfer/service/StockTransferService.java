@@ -234,6 +234,7 @@ public class StockTransferService {
                     .quantity(allocation.getQuantity())
                     .rack(allocation.getSourceRack())
                     .bin(allocation.getSourceBin())
+                    .stockBatch(batch)
                     .build());
             transactionRepository.save(InventoryTransaction.builder()
                     .receipt(outboundReceipt)
@@ -294,20 +295,14 @@ public class StockTransferService {
             WarehouseRack rack = lockedRacks.get(allocationRequest.getDestinationRackId());
             WarehouseBin bin = lockedBins.get(allocationRequest.getDestinationBinId());
 
-            StockBatch batch = stockBatchRepository
-                    .findBySkuIdAndWarehouseIdAndRackIdAndBinIdForUpdate(
-                            item.getSku().getId(), transfer.getDestinationWarehouse().getId(),
-                            rack.getId(), bin.getId())
-                    .orElseGet(() -> StockBatch.builder()
-                            .skuId(item.getSku().getId())
-                            .warehouse(transfer.getDestinationWarehouse())
-                            .rack(rack)
-                            .bin(bin)
-                            .quantity(0)
-                            .arrivalDate(java.time.LocalDateTime.now())
-                            .build());
-            batch.setQuantity(batch.getQuantity() + allocationRequest.getQuantity());
-            stockBatchRepository.save(batch);
+            StockBatch batch = stockBatchRepository.save(StockBatch.builder()
+                    .skuId(item.getSku().getId())
+                    .warehouse(transfer.getDestinationWarehouse())
+                    .rack(rack)
+                    .bin(bin)
+                    .quantity(allocationRequest.getQuantity())
+                    .arrivalDate(java.time.LocalDateTime.now())
+                    .build());
 
             item.getDestinationAllocations().add(StockTransferDestinationAllocation.builder()
                     .item(item)
@@ -321,6 +316,7 @@ public class StockTransferService {
                     .quantity(allocationRequest.getQuantity())
                     .rack(rack)
                     .bin(bin)
+                    .stockBatch(batch)
                     .build());
             transactionRepository.save(InventoryTransaction.builder()
                     .receipt(inboundReceipt)
