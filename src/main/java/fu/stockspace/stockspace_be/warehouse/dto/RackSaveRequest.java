@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Min;
 import lombok.*;
 import java.math.BigDecimal;
 import java.util.List;
@@ -50,6 +51,9 @@ public class RackSaveRequest {
     @NotNull(message = "Chiều cao của Rack không được để trống")
     @DecimalMin(value = "0.000001", message = "Rack height must be greater than 0")
     private BigDecimal height;
+
+    @Min(value = 1, message = "Rack shelfCount must be at least 1")
+    private Integer shelfCount;
 
     @Valid
     private List<BinSaveRequest> bins;
