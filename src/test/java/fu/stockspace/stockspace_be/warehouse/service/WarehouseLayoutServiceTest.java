@@ -88,6 +88,7 @@ class WarehouseLayoutServiceTest {
                 .width(new BigDecimal("10"))
                 .length(new BigDecimal("10"))
                 .height(new BigDecimal("5"))
+                .shelfCount(4)
                 .build();
 
         WarehouseBin bin = WarehouseBin.builder()
@@ -114,6 +115,7 @@ class WarehouseLayoutServiceTest {
         assertEquals(0, response.getOccupiedBins());
         assertEquals(1, response.getEmptyBins());
         assertEquals("Rack A1", response.getRacks().get(0).getName());
+        assertEquals(4, response.getRacks().get(0).getShelfCount());
         assertNotNull(response.getRacks().get(0).getOccupiedPositions());
         assertEquals(100, response.getRacks().get(0).getOccupiedPositions().size());
         assertTrue(response.getRacks().get(0).getOccupiedPositions().contains("0:0"));
@@ -232,6 +234,7 @@ class WarehouseLayoutServiceTest {
                 .width(new BigDecimal("10"))
                 .length(new BigDecimal("10"))
                 .height(new BigDecimal("5"))
+                .shelfCount(4)
                 .build();
 
         WarehouseBin bin = WarehouseBin.builder()
@@ -254,7 +257,7 @@ class WarehouseLayoutServiceTest {
         assertDoesNotThrow(() -> layoutService.cloneLayout(warehouseId, tenantId));
 
         verify(layoutRepository, times(1)).save(any(WarehouseLayout.class));
-        verify(rackRepository, times(1)).save(any(WarehouseRack.class));
+        verify(rackRepository).save(argThat(savedRack -> savedRack.getShelfCount() == 4));
         verify(binRepository, times(1)).save(any(WarehouseBin.class));
     }
 
@@ -331,7 +334,6 @@ class WarehouseLayoutServiceTest {
     void testSaveLayoutBulk_CoordinateOutOfBounds_ThrowsException() {
         when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
         when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)).thenReturn(Optional.of(defaultLayout));
-        when(layoutRepository.save(any(WarehouseLayout.class))).thenReturn(defaultLayout);
 
 
         RackSaveRequest rackReq = RackSaveRequest.builder()
@@ -375,6 +377,7 @@ class WarehouseLayoutServiceTest {
                 .width(new BigDecimal("3.50"))
                 .length(new BigDecimal("4.25"))
                 .height(new BigDecimal("2.80"))
+                .shelfCount(3)
                 .build();
 
         BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
@@ -387,7 +390,201 @@ class WarehouseLayoutServiceTest {
         assertDoesNotThrow(() -> layoutService.saveLayoutBulk(warehouseId, userId, "OWNER", request));
         verify(rackRepository).save(argThat(rack ->
                 new BigDecimal("1.25").compareTo(rack.getCoordinateX()) == 0
-                        && new BigDecimal("3.50").compareTo(rack.getWidth()) == 0));
+                        && new BigDecimal("3.50").compareTo(rack.getWidth()) == 0
+                        && rack.getShelfCount() == 3));
+    }
+
+    @Test
+    void testSaveLayoutBulk_RejectsRackShelfCountBelowOneBeforePersistence() {
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)).thenReturn(Optional.of(defaultLayout));
+
+        RackSaveRequest rack = RackSaveRequest.builder()
+                .name("Invalid Rack").code("R_INVALID")
+                .coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
+                .width(new BigDecimal("5")).length(new BigDecimal("5")).height(new BigDecimal("3"))
+                .shelfCount(0)
+                .build();
+        BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
+                .width(new BigDecimal("100")).length(new BigDecimal("100")).height(new BigDecimal("10"))
+                .racks(List.of(rack)).build();
+
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> layoutService.saveLayoutBulk(warehouseId, userId, "OWNER", request));
+
+        assertTrue(ex.getMessage().contains("shelfCount"));
+        verify(layoutRepository, never()).save(any(WarehouseLayout.class));
+        verify(rackRepository, never()).save(any(WarehouseRack.class));
+    }
+
+    @Test
+    void testSaveLayoutBulk_RejectsBinShelfLevelBelowOneBeforePersistence() {
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)).thenReturn(Optional.of(defaultLayout));
+
+        RackSaveRequest rack = RackSaveRequest.builder()
+                .name("Rack A").code("R_A")
+                .coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
+                .width(new BigDecimal("5")).length(new BigDecimal("5")).height(new BigDecimal("3"))
+                .shelfCount(2)
+                .bins(List.of(BinSaveRequest.builder()
+                        .name("Invalid Bin").code("B_INVALID")
+                        .shelfLevel(0)
+                        .coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
+                        .width(new BigDecimal("2")).length(new BigDecimal("2")).height(BigDecimal.ONE)
+                        .build()))
+                .build();
+        BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
+                .width(new BigDecimal("100")).length(new BigDecimal("100")).height(new BigDecimal("10"))
+                .racks(List.of(rack)).build();
+
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> layoutService.saveLayoutBulk(warehouseId, userId, "OWNER", request));
+
+        assertTrue(ex.getMessage().contains("shelfLevel"));
+        verify(layoutRepository, never()).save(any(WarehouseLayout.class));
+        verify(rackRepository, never()).save(any(WarehouseRack.class));
+    }
+
+    @Test
+    void testSaveLayoutBulk_RejectsBinShelfLevelAboveRackShelfCountBeforePersistence() {
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)).thenReturn(Optional.of(defaultLayout));
+
+        RackSaveRequest rack = RackSaveRequest.builder()
+                .name("Rack A").code("R_A")
+                .coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
+                .width(new BigDecimal("5")).length(new BigDecimal("5")).height(new BigDecimal("3"))
+                .shelfCount(2)
+                .bins(List.of(BinSaveRequest.builder()
+                        .name("High Bin").code("B_HIGH")
+                        .shelfLevel(3)
+                        .coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
+                        .width(new BigDecimal("2")).length(new BigDecimal("2")).height(BigDecimal.ONE)
+                        .build()))
+                .build();
+        BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
+                .width(new BigDecimal("100")).length(new BigDecimal("100")).height(new BigDecimal("10"))
+                .racks(List.of(rack)).build();
+
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> layoutService.saveLayoutBulk(warehouseId, userId, "OWNER", request));
+
+        assertTrue(ex.getMessage().contains("cannot exceed rack shelfCount"));
+        verify(layoutRepository, never()).save(any(WarehouseLayout.class));
+        verify(rackRepository, never()).save(any(WarehouseRack.class));
+    }
+
+    @Test
+    void testSaveLayoutBulk_AllowsBinShelfLevelEqualToRackShelfCount() {
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)).thenReturn(Optional.of(defaultLayout));
+        when(layoutRepository.save(defaultLayout)).thenReturn(defaultLayout);
+        when(rackRepository.findAllByLayoutId(defaultLayout.getId())).thenReturn(Collections.emptyList());
+        when(binRepository.findAllByRackLayoutId(defaultLayout.getId())).thenReturn(Collections.emptyList());
+        when(rackRepository.save(any(WarehouseRack.class))).thenAnswer(invocation -> {
+            WarehouseRack savedRack = invocation.getArgument(0);
+            savedRack.setId(UUID.randomUUID());
+            return savedRack;
+        });
+        when(binRepository.save(any(WarehouseBin.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        RackSaveRequest rack = RackSaveRequest.builder()
+                .name("Rack A").code("R_A")
+                .coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
+                .width(new BigDecimal("5")).length(new BigDecimal("5")).height(new BigDecimal("3"))
+                .shelfCount(2)
+                .bins(List.of(BinSaveRequest.builder()
+                        .name("Top Bin").code("B_TOP")
+                        .shelfLevel(2)
+                        .coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
+                        .width(new BigDecimal("2")).length(new BigDecimal("2")).height(BigDecimal.ONE)
+                        .build()))
+                .build();
+        BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
+                .width(new BigDecimal("100")).length(new BigDecimal("100")).height(new BigDecimal("10"))
+                .racks(List.of(rack)).build();
+
+        assertDoesNotThrow(() -> layoutService.saveLayoutBulk(warehouseId, userId, "OWNER", request));
+        verify(rackRepository).save(argThat(savedRack -> savedRack.getShelfCount() == 2));
+    }
+
+    @Test
+    void testSaveLayoutBulk_LegacyRackUpdateKeepsStoredShelfCountWhenOmitted() {
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)).thenReturn(Optional.of(defaultLayout));
+        when(layoutRepository.save(defaultLayout)).thenReturn(defaultLayout);
+
+        UUID rackId = UUID.randomUUID();
+        WarehouseRack existingRack = WarehouseRack.builder()
+                .id(rackId).layout(defaultLayout).name("Rack A").code("R_A")
+                .coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
+                .width(new BigDecimal("5")).length(new BigDecimal("5")).height(new BigDecimal("3"))
+                .shelfCount(4)
+                .build();
+        when(rackRepository.findAllByLayoutId(defaultLayout.getId())).thenReturn(List.of(existingRack));
+        when(binRepository.findAllByRackLayoutId(defaultLayout.getId())).thenReturn(Collections.emptyList());
+        when(rackRepository.save(any(WarehouseRack.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        RackSaveRequest rack = RackSaveRequest.builder()
+                .id(rackId).name("Rack A Updated").code("R_A")
+                .coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
+                .width(new BigDecimal("5")).length(new BigDecimal("5")).height(new BigDecimal("3"))
+                .build();
+        BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
+                .width(new BigDecimal("100")).length(new BigDecimal("100")).height(new BigDecimal("10"))
+                .racks(List.of(rack)).build();
+
+        assertDoesNotThrow(() -> layoutService.saveLayoutBulk(warehouseId, userId, "OWNER", request));
+        verify(rackRepository).save(argThat(savedRack -> savedRack.getId().equals(rackId)
+                && savedRack.getShelfCount() == 4));
+    }
+
+    @Test
+    void testSaveLayoutBulk_RejectsShelfCountReductionThatLeavesBinAboveBoundary() {
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)).thenReturn(Optional.of(defaultLayout));
+
+        UUID rackId = UUID.randomUUID();
+        UUID binId = UUID.randomUUID();
+        WarehouseRack existingRack = WarehouseRack.builder()
+                .id(rackId).layout(defaultLayout).name("Rack A").code("R_A")
+                .coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
+                .width(new BigDecimal("5")).length(new BigDecimal("5")).height(new BigDecimal("3"))
+                .shelfCount(4)
+                .build();
+        WarehouseBin existingBin = WarehouseBin.builder()
+                .id(binId).rack(existingRack).name("Bin A").code("B_A").shelfLevel(3)
+                .coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
+                .width(new BigDecimal("2")).length(new BigDecimal("2")).height(BigDecimal.ONE)
+                .build();
+        when(rackRepository.findAllByLayoutId(defaultLayout.getId())).thenReturn(List.of(existingRack));
+        when(binRepository.findAllByRackLayoutId(defaultLayout.getId())).thenReturn(List.of(existingBin));
+
+        RackSaveRequest rack = RackSaveRequest.builder()
+                .id(rackId).name("Rack A").code("R_A")
+                .coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
+                .width(new BigDecimal("5")).length(new BigDecimal("5")).height(new BigDecimal("3"))
+                .shelfCount(2)
+                .bins(List.of(BinSaveRequest.builder()
+                        .id(binId).name("Bin A").code("B_A").shelfLevel(3)
+                        .coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
+                        .width(new BigDecimal("2")).length(new BigDecimal("2")).height(BigDecimal.ONE)
+                        .build()))
+                .build();
+        BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
+                .width(new BigDecimal("100")).length(new BigDecimal("100")).height(new BigDecimal("10"))
+                .racks(List.of(rack)).build();
+
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> layoutService.saveLayoutBulk(warehouseId, userId, "OWNER", request));
+
+        assertTrue(ex.getMessage().contains("cannot exceed rack shelfCount"));
+        verify(layoutRepository, never()).save(any(WarehouseLayout.class));
+        verify(rackRepository, never()).save(any(WarehouseRack.class));
+        verify(binRepository, never()).save(any(WarehouseBin.class));
+        verify(rackRepository, never()).deleteById(any());
+        verify(binRepository, never()).deleteById(any());
     }
 
     @Test
@@ -561,8 +758,6 @@ class WarehouseLayoutServiceTest {
                 .isDefault(false).width(new BigDecimal("10")).length(new BigDecimal("10"))
                 .height(new BigDecimal("5")).build();
         when(layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId)).thenReturn(Optional.of(tenantLayout));
-        when(rackRepository.findAllByLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
-        when(binRepository.findAllByRackLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
 
         RackSaveRequest rack = RackSaveRequest.builder()
                 .name("Out of bounds").code("R_OUT")
@@ -589,8 +784,6 @@ class WarehouseLayoutServiceTest {
                 .isDefault(false).width(new BigDecimal("20")).length(new BigDecimal("20"))
                 .height(new BigDecimal("5")).build();
         when(layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId)).thenReturn(Optional.of(tenantLayout));
-        when(rackRepository.findAllByLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
-        when(binRepository.findAllByRackLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
 
         RackSaveRequest first = RackSaveRequest.builder()
                 .name("Rack 1").code("R_1").coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
@@ -618,9 +811,6 @@ class WarehouseLayoutServiceTest {
                 .isDefault(false).width(new BigDecimal("10")).length(new BigDecimal("20"))
                 .height(new BigDecimal("5")).build();
         when(layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId)).thenReturn(Optional.of(tenantLayout));
-        when(layoutRepository.save(tenantLayout)).thenReturn(tenantLayout);
-        when(rackRepository.findAllByLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
-        when(binRepository.findAllByRackLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
         when(rackRepository.save(any(WarehouseRack.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         RackSaveRequest rotatedRack = RackSaveRequest.builder()
@@ -647,9 +837,6 @@ class WarehouseLayoutServiceTest {
                 .isDefault(false).width(new BigDecimal("20")).length(new BigDecimal("20"))
                 .height(new BigDecimal("5")).build();
         when(layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId)).thenReturn(Optional.of(tenantLayout));
-        when(layoutRepository.save(tenantLayout)).thenReturn(tenantLayout);
-        when(rackRepository.findAllByLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
-        when(binRepository.findAllByRackLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
 
         RackSaveRequest oversizedCapacityRack = RackSaveRequest.builder()
                 .name("Oversized Capacity Rack").code("R_CAPACITY")
@@ -811,7 +998,8 @@ class WarehouseLayoutServiceTest {
         WarehouseBinResponse binB = WarehouseBinResponse.builder()
                 .id(UUID.randomUUID()).code("BIN-B").occupiedPositions(List.of("2:0", "1:0")).build();
         WarehouseBinResponse binA = WarehouseBinResponse.builder()
-                .id(UUID.randomUUID()).code("BIN-A").occupiedPositions(List.of("1:0", "0:0")).build();
+                .id(UUID.randomUUID()).code("BIN-A").shelfLevel(3)
+                .occupiedPositions(List.of("1:0", "0:0")).build();
         RackResponse rackB = RackResponse.builder().id(UUID.randomUUID()).code("RACK-B")
                 .bins(List.of(binB)).build();
         RackResponse rackA = RackResponse.builder().id(UUID.randomUUID()).code("RACK-A")
@@ -829,6 +1017,7 @@ class WarehouseLayoutServiceTest {
         assertEquals(List.of("BIN-A"), stable.getRacks().get(0).getBins().stream()
                 .map(WarehouseBinResponse::getCode).toList());
         assertEquals(List.of("0:0", "1:0", "2:0"), stable.getPositions());
+        assertEquals(3, stable.getRacks().get(0).getShelfCount());
     }
 }
 

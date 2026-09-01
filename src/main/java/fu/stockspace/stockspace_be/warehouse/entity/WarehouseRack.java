@@ -64,4 +64,8 @@ public class WarehouseRack extends BaseEntity {
 
     @Column(name = "height")
     private BigDecimal height;
+
+    @Column(name = "shelf_count", nullable = false)
+    @Builder.Default
+    private Integer shelfCount = 1;
 }
