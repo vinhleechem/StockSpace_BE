@@ -571,7 +571,21 @@ public class ContractService {
 
     private WarehouseLayoutResponse readLayoutSnapshot(String snapshot) {
         try {
-            return objectMapper.readValue(snapshot, WarehouseLayoutResponse.class);
+            WarehouseLayoutResponse layout = objectMapper.readValue(snapshot, WarehouseLayoutResponse.class);
+            if (layout.getRacks() != null) {
+                layout.getRacks().forEach(rack -> {
+                    if (rack.getShelfCount() == null) {
+                        int shelfCount = rack.getBins() == null
+                                ? 1
+                                : rack.getBins().stream()
+                                .mapToInt(bin -> bin.getShelfLevel() == null ? 1 : bin.getShelfLevel())
+                                .max()
+                                .orElse(1);
+                        rack.setShelfCount(Math.max(1, shelfCount));
+                    }
+                });
+            }
+            return layout;
         } catch (JsonProcessingException e) {
             throw new BadRequestException("Contract layout snapshot is invalid");
         }

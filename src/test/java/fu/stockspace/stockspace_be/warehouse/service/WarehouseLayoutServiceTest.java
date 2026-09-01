@@ -88,6 +88,7 @@ class WarehouseLayoutServiceTest {
                 .width(new BigDecimal("10"))
                 .length(new BigDecimal("10"))
                 .height(new BigDecimal("5"))
+                .shelfCount(4)
                 .build();
 
         WarehouseBin bin = WarehouseBin.builder()
@@ -114,6 +115,7 @@ class WarehouseLayoutServiceTest {
         assertEquals(0, response.getOccupiedBins());
         assertEquals(1, response.getEmptyBins());
         assertEquals("Rack A1", response.getRacks().get(0).getName());
+        assertEquals(4, response.getRacks().get(0).getShelfCount());
         assertNotNull(response.getRacks().get(0).getOccupiedPositions());
         assertEquals(100, response.getRacks().get(0).getOccupiedPositions().size());
         assertTrue(response.getRacks().get(0).getOccupiedPositions().contains("0:0"));
@@ -232,6 +234,7 @@ class WarehouseLayoutServiceTest {
                 .width(new BigDecimal("10"))
                 .length(new BigDecimal("10"))
                 .height(new BigDecimal("5"))
+                .shelfCount(4)
                 .build();
 
         WarehouseBin bin = WarehouseBin.builder()
@@ -254,7 +257,7 @@ class WarehouseLayoutServiceTest {
         assertDoesNotThrow(() -> layoutService.cloneLayout(warehouseId, tenantId));
 
         verify(layoutRepository, times(1)).save(any(WarehouseLayout.class));
-        verify(rackRepository, times(1)).save(any(WarehouseRack.class));
+        verify(rackRepository).save(argThat(savedRack -> savedRack.getShelfCount() == 4));
         verify(binRepository, times(1)).save(any(WarehouseBin.class));
     }
 
@@ -375,6 +378,7 @@ class WarehouseLayoutServiceTest {
                 .width(new BigDecimal("3.50"))
                 .length(new BigDecimal("4.25"))
                 .height(new BigDecimal("2.80"))
+                .shelfCount(3)
                 .build();
 
         BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
@@ -387,7 +391,8 @@ class WarehouseLayoutServiceTest {
         assertDoesNotThrow(() -> layoutService.saveLayoutBulk(warehouseId, userId, "OWNER", request));
         verify(rackRepository).save(argThat(rack ->
                 new BigDecimal("1.25").compareTo(rack.getCoordinateX()) == 0
-                        && new BigDecimal("3.50").compareTo(rack.getWidth()) == 0));
+                        && new BigDecimal("3.50").compareTo(rack.getWidth()) == 0
+                        && rack.getShelfCount() == 3));
     }
 
     @Test
@@ -811,7 +816,8 @@ class WarehouseLayoutServiceTest {
         WarehouseBinResponse binB = WarehouseBinResponse.builder()
                 .id(UUID.randomUUID()).code("BIN-B").occupiedPositions(List.of("2:0", "1:0")).build();
         WarehouseBinResponse binA = WarehouseBinResponse.builder()
-                .id(UUID.randomUUID()).code("BIN-A").occupiedPositions(List.of("1:0", "0:0")).build();
+                .id(UUID.randomUUID()).code("BIN-A").shelfLevel(3)
+                .occupiedPositions(List.of("1:0", "0:0")).build();
         RackResponse rackB = RackResponse.builder().id(UUID.randomUUID()).code("RACK-B")
                 .bins(List.of(binB)).build();
         RackResponse rackA = RackResponse.builder().id(UUID.randomUUID()).code("RACK-A")
@@ -829,6 +835,7 @@ class WarehouseLayoutServiceTest {
         assertEquals(List.of("BIN-A"), stable.getRacks().get(0).getBins().stream()
                 .map(WarehouseBinResponse::getCode).toList());
         assertEquals(List.of("0:0", "1:0", "2:0"), stable.getPositions());
+        assertEquals(3, stable.getRacks().get(0).getShelfCount());
     }
 }
 
