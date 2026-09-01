@@ -375,12 +375,14 @@ public class WarehouseLayoutService {
                 ? warehouseRepository.findByIdForUpdate(warehouseId)
                 : warehouseRepository.findById(warehouseId))
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
-        boolean approvalRequired = isOwnerRole && publicationEditPolicy.prepareOwnerEdit(warehouse);
 
         WarehouseLayout layout = resolveLayoutForSave(warehouse, warehouseId, userId, role, request);
         if (isTenantRole) {
             validateTenantSnapshotDimensions(layout, request);
         }
+        validateRequestGeometry(layout, request, isTenantRole);
+        validateShelfConfigurationBeforePersistence(layout, request);
+        boolean approvalRequired = isOwnerRole && publicationEditPolicy.prepareOwnerEdit(warehouse);
 
         layout.setPositions(serializePositions(request.getPositions()));
         WarehouseLayout savedLayout = layoutRepository.save(layout);
@@ -465,6 +467,7 @@ public class WarehouseLayoutService {
         Map<UUID, WarehouseBin> dbBinMap = dbBins.stream().collect(Collectors.toMap(WarehouseBin::getId, b -> b));
 
         validateRequestGeometry(layout, request, isTenantRole);
+        validateShelfConfiguration(request, dbRackMap, dbBinMap);
 
         Set<UUID> reqRackIds = new HashSet<>();
         Set<UUID> reqBinIds = new HashSet<>();
@@ -544,7 +547,7 @@ public class WarehouseLayoutService {
                     rack.setHeight(rReq.getHeight());
                     rack.setShelfCount(rReq.getShelfCount() != null
                             ? rReq.getShelfCount()
-                            : (rack.getShelfCount() != null ? rack.getShelfCount() : 1));
+                            : resolveExistingRackShelfCount(rack, dbBins));
                 } else {
                     rack = WarehouseRack.builder()
                             .layout(layout)
@@ -662,7 +665,9 @@ public class WarehouseLayoutService {
                 .length(expectedLength)
                 .height(expectedHeight)
                 .build();
-        validateRequestGeometry(validationLayout, toValidationRequest(layout), false);
+        BulkLayoutSaveRequest validationRequest = toValidationRequest(layout);
+        validateRequestGeometry(validationLayout, validationRequest, false);
+        validateShelfConfiguration(validationRequest, Collections.emptyMap(), Collections.emptyMap());
     }
 
     private BulkLayoutSaveRequest toValidationRequest(WarehouseLayoutResponse layout) {
@@ -889,22 +894,108 @@ public class WarehouseLayoutService {
         if (request.getBins() == null) {
             return 1;
         }
-        return request.getBins().stream()
+        int inferredShelfCount = request.getBins().stream()
                 .map(BinSaveRequest::getShelfLevel)
                 .map(level -> level == null ? 1 : level)
                 .max(Integer::compareTo)
                 .orElse(1);
+        return Math.max(1, inferredShelfCount);
     }
 
     private int inferShelfCount(Collection<WarehouseBin> bins) {
         if (bins == null || bins.isEmpty()) {
             return 1;
         }
-        return bins.stream()
+        int inferredShelfCount = bins.stream()
                 .map(WarehouseBin::getShelfLevel)
                 .map(level -> level == null ? 1 : level)
                 .max(Integer::compareTo)
                 .orElse(1);
+        return Math.max(1, inferredShelfCount);
+    }
+
+    private int resolveExistingRackShelfCount(WarehouseRack rack, Collection<WarehouseBin> dbBins) {
+        if (rack.getShelfCount() != null) {
+            return rack.getShelfCount();
+        }
+        Collection<WarehouseBin> rackBins = dbBins == null
+                ? Collections.emptyList()
+                : dbBins.stream()
+                .filter(bin -> bin.getRack() != null && rack.getId() != null
+                        && rack.getId().equals(bin.getRack().getId()))
+                .toList();
+        return inferShelfCount(rackBins);
+    }
+
+    private void validateShelfConfigurationBeforePersistence(WarehouseLayout layout,
+                                                               BulkLayoutSaveRequest request) {
+        List<WarehouseRack> dbRacks = layout.getId() == null
+                ? Collections.emptyList()
+                : rackRepository.findAllByLayoutId(layout.getId());
+        List<WarehouseBin> dbBins = layout.getId() == null
+                ? Collections.emptyList()
+                : binRepository.findAllByRackLayoutId(layout.getId());
+        Map<UUID, WarehouseRack> dbRackMap = dbRacks.stream()
+                .collect(Collectors.toMap(WarehouseRack::getId, rack -> rack));
+        Map<UUID, WarehouseBin> dbBinMap = dbBins.stream()
+                .collect(Collectors.toMap(WarehouseBin::getId, bin -> bin));
+        validateShelfConfiguration(request, dbRackMap, dbBinMap);
+    }
+
+    private void validateShelfConfiguration(BulkLayoutSaveRequest request,
+                                             Map<UUID, WarehouseRack> dbRackMap,
+                                             Map<UUID, WarehouseBin> dbBinMap) {
+        List<RackSaveRequest> racks = request.getRacks() == null
+                ? Collections.emptyList()
+                : request.getRacks();
+
+        for (RackSaveRequest rackRequest : racks) {
+            WarehouseRack existingRack = rackRequest.getId() == null
+                    ? null
+                    : dbRackMap.get(rackRequest.getId());
+            int shelfCount = resolveEffectiveShelfCount(rackRequest, existingRack, dbBinMap);
+            if (shelfCount < 1) {
+                throw invalidGeometry("Rack " + rackRequest.getName() + " shelfCount must be at least 1");
+            }
+
+            List<BinSaveRequest> bins = rackRequest.getBins() == null
+                    ? Collections.emptyList()
+                    : rackRequest.getBins();
+            for (BinSaveRequest binRequest : bins) {
+                int shelfLevel = resolveEffectiveShelfLevel(binRequest, dbBinMap);
+                if (shelfLevel < 1) {
+                    throw invalidGeometry("Bin " + binRequest.getName() + " shelfLevel must be at least 1");
+                }
+                if (shelfLevel > shelfCount) {
+                    throw invalidGeometry("Bin " + binRequest.getName()
+                            + " shelfLevel cannot exceed rack shelfCount");
+                }
+            }
+        }
+    }
+
+    private int resolveEffectiveShelfCount(RackSaveRequest request,
+                                            WarehouseRack existingRack,
+                                            Map<UUID, WarehouseBin> dbBinMap) {
+        if (request.getShelfCount() != null) {
+            return request.getShelfCount();
+        }
+        if (existingRack != null) {
+            return resolveExistingRackShelfCount(existingRack, dbBinMap.values());
+        }
+        return resolveNewRackShelfCount(request);
+    }
+
+    private int resolveEffectiveShelfLevel(BinSaveRequest request,
+                                           Map<UUID, WarehouseBin> dbBinMap) {
+        if (request.getShelfLevel() != null) {
+            return request.getShelfLevel();
+        }
+        if (request.getId() != null && dbBinMap.containsKey(request.getId())
+                && dbBinMap.get(request.getId()).getShelfLevel() != null) {
+            return dbBinMap.get(request.getId()).getShelfLevel();
+        }
+        return 1;
     }
 
     private int resolveSnapshotShelfCount(RackResponse rack) {

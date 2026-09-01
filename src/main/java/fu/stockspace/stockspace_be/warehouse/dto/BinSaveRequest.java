@@ -3,6 +3,7 @@ package fu.stockspace.stockspace_be.warehouse.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Min;
 import lombok.*;
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -15,6 +16,7 @@ import java.util.UUID;
 public class BinSaveRequest {
     private UUID id;
 
+    @Min(value = 1, message = "Bin shelfLevel must be at least 1")
     private Integer shelfLevel;
 
     @NotBlank(message = "Tên Bin không được để trống")
