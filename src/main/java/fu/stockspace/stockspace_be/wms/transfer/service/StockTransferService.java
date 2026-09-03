@@ -217,6 +217,7 @@ public class StockTransferService {
                 .warehouse(transfer.getSourceWarehouse())
                 .createdBy(approver)
                 .type(DocumentType.OUTBOUND)
+                .receiverName(transfer.getDestinationWarehouse().getName())
                 .status(ApprovalStatus.APPROVED)
                 .referenceId(transfer.getId())
                 .build());
@@ -285,6 +286,7 @@ public class StockTransferService {
                 .warehouse(transfer.getDestinationWarehouse())
                 .createdBy(receiver)
                 .type(DocumentType.INBOUND)
+                .senderName(transfer.getSourceWarehouse().getName())
                 .status(ApprovalStatus.APPROVED)
                 .referenceId(transfer.getId())
                 .build());

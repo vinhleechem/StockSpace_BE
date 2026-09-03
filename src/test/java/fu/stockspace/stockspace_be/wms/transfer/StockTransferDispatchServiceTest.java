@@ -32,6 +32,7 @@ import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -164,7 +165,9 @@ class StockTransferDispatchServiceTest {
         assertEquals(StockTransferStatus.IN_TRANSIT, transfer.getStatus());
         verify(stockBatchRepository).findByIdForUpdate(batchId);
         verify(stockBatchRepository).save(sourceBatch);
-        verify(receiptRepository).save(any(InventoryReceipt.class));
+        ArgumentCaptor<InventoryReceipt> receiptCaptor = ArgumentCaptor.forClass(InventoryReceipt.class);
+        verify(receiptRepository).save(receiptCaptor.capture());
+        assertEquals("Destination", receiptCaptor.getValue().getReceiverName());
         verify(receiptItemRepository).save(any());
         verify(transactionRepository).save(any());
         verify(transferRepository).save(transfer);

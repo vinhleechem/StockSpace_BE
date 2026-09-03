@@ -39,6 +39,12 @@ public class InventoryReceipt extends BaseEntity {
     @Column(name = "signature_data", columnDefinition = "text")
     private String signatureData;
 
+    @Column(name = "sender_name", length = 255)
+    private String senderName;
+
+    @Column(name = "receiver_name", length = 255)
+    private String receiverName;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     @Builder.Default

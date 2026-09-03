@@ -42,7 +42,10 @@ import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -121,6 +124,7 @@ class InventoryReceiptServiceTest {
                 .warehouse(warehouse)
                 .createdBy(tenantUser)
                 .type(DocumentType.INBOUND)
+                .senderName("Công ty gửi hàng")
                 .status(ApprovalStatus.PENDING)
                 .build();
         when(receiptRepository.save(any(InventoryReceipt.class))).thenReturn(receipt);
@@ -145,6 +149,7 @@ class InventoryReceiptServiceTest {
         CreateInventoryReceiptRequest request = CreateInventoryReceiptRequest.builder()
                 .warehouseId(warehouseId)
                 .type(DocumentType.INBOUND)
+                .senderName("Công ty gửi hàng")
                 .items(List.of(itemRequest))
                 .build();
 
@@ -153,9 +158,12 @@ class InventoryReceiptServiceTest {
         assertNotNull(response);
         assertEquals(ApprovalStatus.PENDING, response.getStatus());
         assertEquals(DocumentType.INBOUND, response.getType());
+        assertEquals("Công ty gửi hàng", response.getSenderName());
         assertEquals(1, response.getItems().size());
         assertEquals("SKU123", response.getItems().get(0).getSkuCode());
-        verify(receiptRepository, times(1)).save(any(InventoryReceipt.class));
+        ArgumentCaptor<InventoryReceipt> receiptCaptor = ArgumentCaptor.forClass(InventoryReceipt.class);
+        verify(receiptRepository, times(1)).save(receiptCaptor.capture());
+        assertEquals("Công ty gửi hàng", receiptCaptor.getValue().getSenderName());
     }
 
     @Test
@@ -431,6 +439,7 @@ class InventoryReceiptServiceTest {
                 .warehouseId(warehouseId)
                 .type(DocumentType.OUTBOUND)
                 .signatureData("signature")
+                .receiverName("Công ty nhận hàng")
                 .items(List.of(itemRequest))
                 .build();
 
@@ -440,6 +449,7 @@ class InventoryReceiptServiceTest {
         assertEquals(DocumentType.OUTBOUND, response.getType());
         assertEquals(ApprovalStatus.PENDING, response.getStatus());
         assertEquals("signature", response.getSignatureData());
+        assertEquals("Công ty nhận hàng", response.getReceiverName());
         assertEquals(pickList, response.getPickList());
         assertEquals(2, response.getItems().size());
         assertEquals(firstBatchId, response.getItems().get(0).getStockBatchId());
@@ -1431,5 +1441,28 @@ class InventoryReceiptServiceTest {
         when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
 
         assertThrows(BadRequestException.class, () -> receiptService.rejectReceipt(approverId, receipt.getId(), "Reason"));
+    }
+
+    @Test
+    void exportReceiptsToCsv_IncludesSenderAndReceiverColumns() {
+        InventoryReceipt receipt = InventoryReceipt.builder()
+                .id(UUID.randomUUID())
+                .warehouse(warehouse)
+                .createdBy(tenantUser)
+                .type(DocumentType.INBOUND)
+                .senderName("Công ty gửi hàng")
+                .status(ApprovalStatus.PENDING)
+                .build();
+        when(receiptRepository.findByWarehouseIdAndTypeAndIsDeletedFalse(
+                warehouseId, DocumentType.INBOUND, Pageable.unpaged()))
+                .thenReturn(new PageImpl<>(List.of(receipt)));
+        when(receiptItemRepository.findByReceiptId(receipt.getId())).thenReturn(List.of());
+
+        String csv = new String(
+                receiptService.exportReceiptsToCsv(warehouseId, DocumentType.INBOUND),
+                StandardCharsets.UTF_8);
+
+        assertTrue(csv.contains("Tên Nơi Gửi,Tên Nơi Nhận"));
+        assertTrue(csv.contains("\"Công ty gửi hàng\",\"\""));
     }
 }
