@@ -22,6 +22,8 @@ public class InventoryReceiptResponse {
     private String createdByFullName;
     private DocumentType type;
     private String signatureData;
+    private String senderName;
+    private String receiverName;
     private ApprovalStatus status;
     private String rejectReason;
     private List<ReceiptItemResponse> items;

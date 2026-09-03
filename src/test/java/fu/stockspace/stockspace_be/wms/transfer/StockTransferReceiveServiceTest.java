@@ -206,7 +206,9 @@ class StockTransferReceiveServiceTest {
         assertEquals(StockTransferStatus.COMPLETED, transfer.getStatus());
         assertEquals(1, item.getDestinationAllocations().size());
         assertEquals(5, item.getDestinationAllocations().get(0).getQuantity());
-        verify(receiptRepository).save(any(InventoryReceipt.class));
+        ArgumentCaptor<InventoryReceipt> receiptCaptor = ArgumentCaptor.forClass(InventoryReceipt.class);
+        verify(receiptRepository).save(receiptCaptor.capture());
+        assertEquals("Source", receiptCaptor.getValue().getSenderName());
         ArgumentCaptor<InventoryReceiptItem> receiptItemCaptor =
                 ArgumentCaptor.forClass(InventoryReceiptItem.class);
         verify(receiptItemRepository).save(receiptItemCaptor.capture());

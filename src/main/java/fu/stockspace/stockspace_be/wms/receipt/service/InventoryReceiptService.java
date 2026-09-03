@@ -101,6 +101,8 @@ public class InventoryReceiptService {
                 .createdBy(creator)
                 .type(request.getType())
                 .signatureData(request.getSignatureData())
+                .senderName(request.getSenderName())
+                .receiverName(request.getReceiverName())
                 .status(ApprovalStatus.PENDING)
                 .build();
 
@@ -196,6 +198,8 @@ public class InventoryReceiptService {
                 .createdBy(creator)
                 .type(request.getType())
                 .signatureData(request.getSignatureData())
+                .senderName(request.getSenderName())
+                .receiverName(request.getReceiverName())
                 .status(ApprovalStatus.PENDING)
                 .build();
         receipt = receiptRepository.save(receipt);
@@ -649,6 +653,8 @@ public class InventoryReceiptService {
                 .createdByFullName(receipt.getCreatedBy().getFullName())
                 .type(receipt.getType())
                 .signatureData(receipt.getSignatureData())
+                .senderName(receipt.getSenderName())
+                .receiverName(receipt.getReceiverName())
                 .status(receipt.getStatus())
                 .rejectReason(receipt.getRejectReason())
                 .items(itemResponses)
@@ -748,7 +754,7 @@ public class InventoryReceiptService {
         StringBuilder csv = new StringBuilder();
         csv.append("sep=,\n");
         csv.append("\uFEFF");
-        csv.append("STT,Mã Phiếu,Loại Phiếu,Kho Bãi,Trạng Thái,Mã SKU,Tên Sản Phẩm,Đơn Vị Tính,Số Lượng,Người Tạo,Thời Gian Tạo\n");
+        csv.append("STT,Mã Phiếu,Loại Phiếu,Kho Bãi,Tên Nơi Gửi,Tên Nơi Nhận,Trạng Thái,Mã SKU,Tên Sản Phẩm,Đơn Vị Tính,Số Lượng,Người Tạo,Thời Gian Tạo\n");
 
         java.time.format.DateTimeFormatter dateFormatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
         int stt = 1;
@@ -756,14 +762,17 @@ public class InventoryReceiptService {
         for (InventoryReceipt receipt : page.getContent()) {
             List<InventoryReceiptItem> items = receiptItemRepository.findByReceiptId(receipt.getId());
             String warehouseName = escapeCsvField(receipt.getWarehouse() != null ? receipt.getWarehouse().getName() : "");
+            String senderName = escapeCsvField(receipt.getSenderName());
+            String receiverName = escapeCsvField(receipt.getReceiverName());
             String typeStr = receipt.getType() == DocumentType.INBOUND ? "Nhập kho" : "Xuất kho";
             String statusStr = mapStatusToVietnamese(receipt.getStatus());
             String createdByStr = escapeCsvField(receipt.getCreatedBy() != null ? receipt.getCreatedBy().getFullName() : "");
             String formattedDate = receipt.getCreatedAt() != null ? receipt.getCreatedAt().format(dateFormatter) : "";
 
             if (items.isEmpty()) {
-                csv.append(String.format("%d,%s,\"%s\",%s,%s,-,-,-,0,\"%s\",%s\n",
-                        stt++, receipt.getId(), typeStr, warehouseName, statusStr, createdByStr, formattedDate));
+                csv.append(String.format("%d,%s,\"%s\",\"%s\",\"%s\",\"%s\",%s,-,-,-,0,\"%s\",%s\n",
+                        stt++, receipt.getId(), typeStr, warehouseName, senderName, receiverName,
+                        statusStr, createdByStr, formattedDate));
             } else {
                 for (InventoryReceiptItem item : items) {
                     ProductSku sku = item.getSku();
@@ -771,8 +780,9 @@ public class InventoryReceiptService {
                     String skuName = escapeCsvField(sku != null ? sku.getName() : "-");
                     String uomName = sku != null && sku.getUom() != null ? sku.getUom().getName() : "-";
 
-                    csv.append(String.format("%d,%s,%s,\"%s\",%s,%s,\"%s\",%s,%d,\"%s\",%s\n",
-                            stt++, receipt.getId(), typeStr, warehouseName, statusStr, skuCode, skuName, uomName, item.getQuantity(), createdByStr, formattedDate));
+                    csv.append(String.format("%d,%s,%s,\"%s\",\"%s\",\"%s\",%s,%s,\"%s\",%s,%d,\"%s\",%s\n",
+                            stt++, receipt.getId(), typeStr, warehouseName, senderName, receiverName,
+                            statusStr, skuCode, skuName, uomName, item.getQuantity(), createdByStr, formattedDate));
                 }
             }
         }

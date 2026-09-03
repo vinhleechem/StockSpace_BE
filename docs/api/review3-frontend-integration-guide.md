@@ -312,6 +312,8 @@ Create request:
   "warehouseId": "warehouse-uuid",
   "type": "INBOUND",
   "signatureData": "optional-signature",
+  "senderName": "Công ty gửi hàng",
+  "receiverName": null,
   "items": [
     {
       "skuId": "sku-uuid",
@@ -324,6 +326,11 @@ Create request:
 }
 ```
 
+`senderName` is the sending organization/place shown for an `INBOUND` receipt;
+`receiverName` is the receiving organization/place shown for an `OUTBOUND`
+receipt. Both fields are optional and limited to 255 characters so existing and
+system-generated receipts remain compatible.
+
 `type` is `INBOUND` or `OUTBOUND`. Every item requires a positive integer
 `quantity`, `skuId`, `rackId` and `binId`. New receipts start at
 `PENDING`; stock changes only when the receipt is approved. Capacity is checked
@@ -331,7 +338,8 @@ again during the mutation, so a previously displayed suggestion can become
 stale.
 
 Receipt response fields are `id`, `warehouseId`, `warehouseName`, creator data,
-`type`, `signatureData`, `status`, `rejectReason`, `items`, `createdAt` and
+`type`, `signatureData`, `senderName`, `receiverName`, `status`, `rejectReason`,
+`items`, `createdAt` and
 `updatedAt`. Receipt status is `PENDING`, `APPROVED`, `REJECTED` or `CANCELLED`.
 
 ## 5. Put-away suggestions

@@ -4,6 +4,7 @@ import fu.stockspace.stockspace_be.wms.receipt.entity.DocumentType;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.*;
 
 import java.util.List;
@@ -23,6 +24,12 @@ public class CreateInventoryReceiptRequest {
     private DocumentType type;
 
     private String signatureData;
+
+    @Size(max = 255, message = "Tên nơi gửi không được vượt quá 255 ký tự")
+    private String senderName;
+
+    @Size(max = 255, message = "Tên nơi nhận không được vượt quá 255 ký tự")
+    private String receiverName;
 
     @NotEmpty(message = "Danh sách chi tiết hàng hóa không được để trống")
     @Valid

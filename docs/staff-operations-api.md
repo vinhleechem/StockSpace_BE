@@ -121,6 +121,8 @@ Request tạo receipt:
   "warehouseId": "warehouse-uuid",
   "type": "INBOUND",
   "signatureData": "optional-signature",
+  "senderName": "Công ty gửi hàng",
+  "receiverName": null,
   "items": [
     {
       "skuId": "sku-uuid",
@@ -133,7 +135,11 @@ Request tạo receipt:
 }
 ```
 
-`type` dùng enum hiện tại của backend, ví dụ `INBOUND` hoặc `OUTBOUND`. Các field `skuId`, `quantity`, `rackId`, `binId` cần gửi theo validation của request.
+`senderName` dùng cho tên nơi gửi của phiếu `INBOUND`; `receiverName` dùng cho
+tên nơi nhận của phiếu `OUTBOUND`. Cả hai field đều không bắt buộc và có tối đa
+255 ký tự. `type` dùng enum hiện tại của backend, ví dụ `INBOUND` hoặc
+`OUTBOUND`. Các field `skuId`, `quantity`, `rackId`, `binId` cần gửi theo
+validation của request.
 
 ### 3.2 Inventory Audit
 
