@@ -35,8 +35,8 @@ public class GetInventoryReceiptsTool implements ChatTool {
 
     @Override
     public String getDescription() {
-        return "Xem phiếu nhập hoặc xuất tại kho đang được chọn của người thuê. Có thể xem danh sách mới nhất "
-                + "hoặc chi tiết một phiếu; đây là dữ liệu đọc, không duyệt hay thay đổi phiếu.";
+        return "Xem phiếu nhập hoặc xuất của người thuê. Mặc định dùng kho đang mở trên giao diện; "
+                + "truyền warehouseId để lọc phiếu của kho khác. Đây là dữ liệu đọc, không duyệt hay thay đổi phiếu.";
     }
 
     @Override
@@ -44,6 +44,8 @@ public class GetInventoryReceiptsTool implements ChatTool {
         return Map.of(
                 "type", "object",
                 "properties", Map.of(
+                        "warehouseId", Map.of("type", "string",
+                                "description", "UUID kho cần lọc phiếu. Bỏ trống để dùng kho đang mở trên giao diện."),
                         "receiptId", Map.of("type", "string", "description", "Mã phiếu nếu cần xem chi tiết"),
                         "type", Map.of("type", "string", "enum", List.of("INBOUND", "OUTBOUND"),
                                 "description", "Loại phiếu: nhập kho hoặc xuất kho"),
@@ -74,7 +76,7 @@ public class GetInventoryReceiptsTool implements ChatTool {
                 return objectMapper.writeValueAsString(toDetail(receiptService.getReceiptDetail(userId, receiptId)));
             }
 
-            UUID warehouseId = context.activeWarehouseId();
+            UUID warehouseId = resolveWarehouseId(params, context);
             if (warehouseId == null) {
                 return "{\"error\":\"Chưa có kho được chọn. Vui lòng chọn kho trên giao diện rồi thử lại.\"}";
             }
@@ -153,5 +155,15 @@ public class GetInventoryReceiptsTool implements ChatTool {
         } catch (IllegalArgumentException ignored) {
             return null;
         }
+    }
+
+    /**
+     * AI-supplied warehouseId takes priority over the page-context warehouse so
+     * tenants can query a different warehouse without leaving the current screen.
+     */
+    private UUID resolveWarehouseId(Map<String, Object> params, ChatRequestContext context) {
+        UUID explicit = warehouseIdFromParams(params);
+        return explicit != null ? explicit
+                : (context == null ? null : context.activeWarehouseId());
     }
 }

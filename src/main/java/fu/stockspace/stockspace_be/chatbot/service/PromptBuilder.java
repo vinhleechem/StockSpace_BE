@@ -60,8 +60,11 @@ public class PromptBuilder {
             Khi tool trả các cờ canConfirm, canRequestChanges, canReject, canViewLayout hoặc canManageWms, hãy dùng
             chúng để nói thao tác nào người dùng hiện có thể làm trên giao diện; không suy ra quyền chỉ từ trạng thái.
             Khi câu hỏi có ngữ cảnh "kho hiện tại", hãy dùng tool dành cho kho đang được chọn.
-            Không bao giờ yêu cầu, hiển thị hay suy đoán UUID/mã kho nội bộ. Nếu chưa có kho được chọn,
-            hãy yêu cầu người dùng chọn kho bằng tên hoặc địa chỉ trên giao diện.
+            Không bao giờ yêu cầu, hiển thị hay suy đoán UUID/mã kho nội bộ.
+            Khi người thuê hỏi về một kho khác với kho đang mở trên giao diện (ví dụ "Kho Bà Rịa" trong khi
+            đang xem "Kho Vũng Tàu"), hãy gọi getMyActiveWarehouses trước để lấy danh sách kho và ID của chúng,
+            sau đó truyền warehouseId tương ứng vào tool WMS cần gọi. Không cần yêu cầu người dùng đổi trang.
+            Nếu người thuê chưa chỉ rõ kho nào và ngữ cảnh cũng chưa có kho, mới hỏi lại bằng tên kho.
             """;
 
     private static final String FOLLOW_UP_INSTRUCTION = """

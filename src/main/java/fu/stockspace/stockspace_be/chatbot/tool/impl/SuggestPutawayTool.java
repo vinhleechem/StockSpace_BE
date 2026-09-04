@@ -41,7 +41,23 @@ public class SuggestPutawayTool implements ChatTool {
 
     @Override
     public Map<String, Object> getParameterSchema() {
-        return itemListSchema("Danh sách SKU và số lượng cần xếp");
+        Map<String, Object> itemProperties = new LinkedHashMap<>();
+        itemProperties.put("skuId", Map.of("type", "string"));
+        itemProperties.put("quantity", Map.of("type", "integer", "minimum", 1));
+        Map<String, Object> itemSchema = new LinkedHashMap<>();
+        itemSchema.put("type", "object");
+        itemSchema.put("properties", itemProperties);
+        itemSchema.put("required", List.of("skuId", "quantity"));
+        Map<String, Object> properties = new LinkedHashMap<>();
+        properties.put("warehouseId", Map.of("type", "string",
+                "description", "UUID kho cần gợi ý xếp hàng. Bỏ trống để dùng kho đang mở trên giao diện."));
+        properties.put("items", Map.of(
+                "type", "array", "description", "Danh sách SKU và số lượng cần xếp",
+                "minItems", 1, "maxItems", MAX_ITEMS, "items", itemSchema));
+        return Map.of(
+                "type", "object",
+                "properties", properties,
+                "required", List.of("items"));
     }
 
     @Override
@@ -56,6 +72,11 @@ public class SuggestPutawayTool implements ChatTool {
 
     @Override
     public String executeWithContext(Map<String, Object> params, ChatRequestContext context) {
+        // AI-supplied warehouseId takes priority over the page-context warehouse
+        UUID explicit = ChatToolParameters.optionalUuid(params, "warehouseId");
+        if (explicit != null && context != null) {
+            return read(params, new ChatRequestContext(context.userId(), explicit, null));
+        }
         return read(params, context);
     }
 

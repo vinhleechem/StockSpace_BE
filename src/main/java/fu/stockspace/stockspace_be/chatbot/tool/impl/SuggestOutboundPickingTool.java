@@ -47,11 +47,15 @@ public class SuggestOutboundPickingTool implements ChatTool {
                 "skuId", Map.of("type", "string"),
                 "quantity", Map.of("type", "integer", "minimum", 1)));
         itemSchema.put("required", List.of("skuId", "quantity"));
+        Map<String, Object> properties = new LinkedHashMap<>();
+        properties.put("warehouseId", Map.of("type", "string",
+                "description", "UUID kho cần gợi ý lấy hàng. Bỏ trống để dùng kho đang mở trên giao diện."));
+        properties.put("items", Map.of(
+                "type", "array", "description", "Danh sách SKU và số lượng cần lấy",
+                "minItems", 1, "maxItems", MAX_ITEMS, "items", itemSchema));
         return Map.of(
                 "type", "object",
-                "properties", Map.of("items", Map.of(
-                        "type", "array", "description", "Danh sách SKU và số lượng cần lấy",
-                        "minItems", 1, "maxItems", MAX_ITEMS, "items", itemSchema)),
+                "properties", properties,
                 "required", List.of("items"));
     }
 
@@ -67,6 +71,11 @@ public class SuggestOutboundPickingTool implements ChatTool {
 
     @Override
     public String executeWithContext(Map<String, Object> params, ChatRequestContext context) {
+        // AI-supplied warehouseId takes priority over the page-context warehouse
+        UUID explicit = ChatToolParameters.optionalUuid(params, "warehouseId");
+        if (explicit != null && context != null) {
+            return read(params, new ChatRequestContext(context.userId(), explicit, null));
+        }
         return read(params, context);
     }
 

@@ -33,7 +33,9 @@ public class GetMyWarehouseLayoutTool implements ChatTool {
 
     @Override
     public Map<String, Object> getParameterSchema() {
-        return Map.of("type", "object", "properties", Map.of());
+        return Map.of("type", "object", "properties", Map.of(
+                "warehouseId", Map.of("type", "string",
+                        "description", "UUID kho cần xem sơ đồ. Bỏ trống để dùng kho đang mở trên giao diện.")));
     }
 
     @Override
@@ -48,6 +50,11 @@ public class GetMyWarehouseLayoutTool implements ChatTool {
 
     @Override
     public String executeWithContext(Map<String, Object> params, ChatRequestContext context) {
+        // AI-supplied warehouseId takes priority over the page-context warehouse
+        UUID explicit = ChatToolParameters.optionalUuid(params, "warehouseId");
+        if (explicit != null && context != null) {
+            return read(new ChatRequestContext(context.userId(), explicit, null));
+        }
         return read(context);
     }
 

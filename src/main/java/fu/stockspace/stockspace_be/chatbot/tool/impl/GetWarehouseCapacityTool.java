@@ -35,7 +35,9 @@ public class GetWarehouseCapacityTool implements ChatTool {
 
     @Override
     public Map<String, Object> getParameterSchema() {
-        return Map.of("type", "object", "properties", Map.of());
+        return Map.of("type", "object", "properties", Map.of(
+                "warehouseId", Map.of("type", "string",
+                        "description", "UUID kho cần xem sức chứa. Bỏ trống để dùng kho đang mở trên giao diện.")));
     }
 
     @Override
@@ -45,8 +47,12 @@ public class GetWarehouseCapacityTool implements ChatTool {
 
     @Override
     public String executeWithContext(Map<String, Object> params, ChatRequestContext context) {
-        return read(context == null ? null : context.userId(),
-                context == null ? null : context.activeWarehouseId());
+        UUID userId = context == null ? null : context.userId();
+        // AI-supplied warehouseId takes priority over the page-context warehouse
+        UUID explicitId = warehouseIdFromParams(params);
+        UUID warehouseId = explicitId != null ? explicitId
+                : (context == null ? null : context.activeWarehouseId());
+        return read(userId, warehouseId);
     }
 
     private String read(UUID userId, UUID warehouseId) {
