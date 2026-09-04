@@ -11,5 +11,6 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=dev
       - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      - SPRING_SQL_INIT_MODE=${SPRING_SQL_INIT_MODE:-always}
       - JAVA_TOOL_OPTIONS=-Xmx512m -Xms256m
     restart: "no"
