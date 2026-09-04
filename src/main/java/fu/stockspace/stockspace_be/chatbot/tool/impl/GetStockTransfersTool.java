@@ -46,6 +46,8 @@ public class GetStockTransfersTool implements ChatTool {
         return Map.of(
                 "type", "object",
                 "properties", Map.of(
+                        "warehouseId", Map.of("type", "string",
+                                "description", "UUID kho cần lọc chuyển hàng. Bỏ trống để dùng kho đang mở trên giao diện."),
                         "transferId", Map.of("type", "string", "description", "Mã yêu cầu nếu cần xem chi tiết"),
                         "status", Map.of("type", "string",
                                 "enum", List.of("PENDING", "IN_TRANSIT", "COMPLETED", "REJECTED", "CANCELLED"),
@@ -77,7 +79,7 @@ public class GetStockTransfersTool implements ChatTool {
                 return objectMapper.writeValueAsString(toDetail(transferService.getTransfer(userId, transferId)));
             }
             StockTransferStatus status = optionalStatus(params);
-            UUID warehouseId = context.activeWarehouseId();
+            UUID warehouseId = resolveWarehouseId(params, context);
             int pageNumber = ChatToolParameters.page(params);
             int pageSize = ChatToolParameters.pageSize(params, 10, 30);
             List<StockTransferResponse> transfers;
@@ -202,5 +204,15 @@ public class GetStockTransfersTool implements ChatTool {
         } catch (IllegalArgumentException ignored) {
             return null;
         }
+    }
+
+    /**
+     * AI-supplied warehouseId takes priority over the page-context warehouse so
+     * tenants can query a different warehouse without leaving the current screen.
+     */
+    private UUID resolveWarehouseId(Map<String, Object> params, ChatRequestContext context) {
+        UUID explicit = warehouseIdFromParams(params);
+        return explicit != null ? explicit
+                : (context == null ? null : context.activeWarehouseId());
     }
 }

@@ -32,13 +32,15 @@ public class GetMyStockTool implements ChatTool {
 
     @Override
     public String getDescription() {
-        return "Xem tồn kho của người thuê đang đăng nhập tại kho đang được chọn: tổng số SKU, số lô, số lượng "
-                + "và tối đa 20 SKU kèm đơn vị tính, khối lượng, thể tích. Chỉ đọc kho có hợp đồng hiệu lực.";
+        return "Xem tồn kho của người thuê đang đăng nhập. Mặc định dùng kho đang mở trên giao diện; "
+                + "truyền warehouseId để xem kho khác mà người thuê đang có hợp đồng hiệu lực.";
     }
 
     @Override
     public Map<String, Object> getParameterSchema() {
         return Map.of("type", "object", "properties", Map.of(
+                "warehouseId", Map.of("type", "string",
+                        "description", "UUID kho cần xem. Bỏ trống để dùng kho đang mở trên giao diện."),
                 "page", Map.of("type", "integer", "minimum", 0),
                 "pageSize", Map.of("type", "integer", "minimum", 1, "maximum", 30)));
     }
@@ -50,9 +52,12 @@ public class GetMyStockTool implements ChatTool {
 
     @Override
     public String executeWithContext(Map<String, Object> params, ChatRequestContext context) {
-        return readStock(params,
-                context == null ? null : context.userId(),
-                context == null ? null : context.activeWarehouseId());
+        UUID userId = context == null ? null : context.userId();
+        // AI-supplied warehouseId takes priority over the page context warehouse
+        UUID explicitId = warehouseIdFromParams(params);
+        UUID warehouseId = explicitId != null ? explicitId
+                : (context == null ? null : context.activeWarehouseId());
+        return readStock(params, userId, warehouseId);
     }
 
     private String readStock(Map<String, Object> params, UUID userId, UUID warehouseId) {
