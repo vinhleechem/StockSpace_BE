@@ -6,11 +6,14 @@ import fu.stockspace.stockspace_be.chatbot.tool.ChatRequestContext;
 import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.wms.stock.dto.WarehouseStockOverviewResponse;
 import fu.stockspace.stockspace_be.wms.stock.service.StockBatchService;
+import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
+import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.data.domain.PageRequest;
 
+import java.util.List;
 import java.util.Map;
 import java.util.LinkedHashMap;
 import java.util.UUID;
@@ -26,6 +29,7 @@ public class GetMyStockTool implements ChatTool {
 
     private final ObjectMapper objectMapper;
     private final StockBatchService stockBatchService;
+    private final TenantWarehouseAccessService accessService;
 
     @Override
     public String getName() { return "getMyStock"; }
@@ -65,7 +69,16 @@ public class GetMyStockTool implements ChatTool {
             return "{\"error\":\"Bạn cần đăng nhập để xem tồn kho.\"}";
         }
         if (warehouseId == null) {
-            return "{\"error\":\"Chưa có kho được chọn. Vui lòng chọn kho trên giao diện rồi thử lại.\"}";
+            List<Warehouse> active = accessService.findActiveContractWarehouses(userId);
+            if (active != null && active.size() == 1) {
+                warehouseId = active.get(0).getId();
+            } else if (active != null && active.size() > 1) {
+                List<String> names = active.stream().map(Warehouse::getName).toList();
+                return "{\"error\":\"Người dùng đang thuê nhiều kho: " + String.join(", ", names)
+                        + ". Hãy hỏi người dùng muốn kiểm tra tồn kho tại kho nào theo TÊN KHO, tuyệt đối không dùng mã ID.\"}";
+            } else {
+                return "{\"error\":\"Bạn chưa có hợp đồng thuê kho nào đang hiệu lực để xem tồn kho.\"}";
+            }
         }
 
         try {

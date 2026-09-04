@@ -39,6 +39,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
+
 @ExtendWith(MockitoExtension.class)
 class TenantChatToolsTest {
 
@@ -50,6 +52,9 @@ class TenantChatToolsTest {
 
     @Mock
     private SubscriptionService subscriptionService;
+
+    @Mock
+    private TenantWarehouseAccessService accessService;
 
     @Mock
     private StockBatchService stockBatchService;
@@ -260,7 +265,7 @@ class TenantChatToolsTest {
                         .build());
 
         JsonNode result = objectMapper.readTree(
-                new GetMyStockTool(objectMapper, stockBatchService)
+                new GetMyStockTool(objectMapper, stockBatchService, accessService)
                         .executeWithContext(Map.of(), new ChatRequestContext(
                                 userId, warehouseId)));
 
@@ -279,7 +284,7 @@ class TenantChatToolsTest {
     @Test
     void getMyStockRejectsGuestBeforeCallingService() throws Exception {
         JsonNode result = objectMapper.readTree(
-                new GetMyStockTool(objectMapper, stockBatchService)
+                new GetMyStockTool(objectMapper, stockBatchService, accessService)
                         .execute(Map.of("warehouseId", UUID.randomUUID().toString()), null));
 
         assertTrue(result.has("error"));
@@ -291,7 +296,7 @@ class TenantChatToolsTest {
         List<String> descriptions = List.of(
                 new GetMyContractsTool(objectMapper, contractService).getDescription(),
                 new GetContractDetailTool(objectMapper, contractService).getDescription(),
-                new GetMyStockTool(objectMapper, stockBatchService).getDescription(),
+                new GetMyStockTool(objectMapper, stockBatchService, accessService).getDescription(),
                 new GetMyWalletTool(objectMapper, walletService).getDescription()
         );
 
