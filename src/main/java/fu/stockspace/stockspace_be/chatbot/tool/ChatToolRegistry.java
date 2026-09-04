@@ -28,7 +28,10 @@ public class ChatToolRegistry {
     private static final List<String> PUBLIC_TOOL_NAMES = List.of(
             "searchWarehouses",
             "getWarehouseDetail",
+            "getPublicWarehouseLayout",
+            "getWarehouseTypes",
             "searchSystemPolicy",
+            "getCurrentSystemRules",
             "getServicePackages"
     );
     private static final List<String> GUEST_TOOL_NAMES = merge(
@@ -37,8 +40,26 @@ public class ChatToolRegistry {
     );
     private static final List<String> TENANT_TOOL_NAMES = merge(
             PUBLIC_TOOL_NAMES,
-            List.of("getMyContracts", "getContractDetail", "getMyStock", "getMyWallet",
-                    "getMyActiveSubscription")
+            List.of(
+                    "getMyContracts",
+                    "getContractDetail",
+                    "getMyActiveWarehouses",
+                    "getWarehouseOwnerContact",
+                    "getMyWarehouseLayout",
+                    "getMyProductCatalog",
+                    "getMyStock",
+                    "getInventoryReceipts",
+                    "getInventoryAudits",
+                    "getStockTransfers",
+                    "getWarehouseCapacity",
+                    "getMyWallet",
+                    "getMyWalletActivity",
+                    "getMyNotifications",
+                    "getMyActiveSubscription",
+                    "previewSubscriptionChange",
+                    "suggestPutaway",
+                    "suggestOutboundPicking"
+            )
     );
     private final Map<String, List<ChatTool>> toolsByRole;
     private final Map<String, ChatTool> toolsByName;

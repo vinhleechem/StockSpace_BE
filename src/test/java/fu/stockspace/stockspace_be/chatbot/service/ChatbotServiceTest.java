@@ -10,7 +10,6 @@ import fu.stockspace.stockspace_be.chatbot.tool.ChatToolRegistry;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatRequestContext;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ChatProviderException;
-import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,7 +30,6 @@ import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -41,7 +39,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -99,7 +96,7 @@ class ChatbotServiceTest {
     }
 
     @Test
-    void rejectsModelRequestedToolOutsideRoleAllowlistAndKeepsFullTranscript() {
+    void rejectsModelRequestedToolOutsideAllowlistAndKeepsFullTranscript() {
         UUID userId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
         ChatTool allowedTool = namedTool("searchWarehouses");
@@ -107,16 +104,15 @@ class ChatbotServiceTest {
         OpenRouterClient.FunctionCall forbiddenCall =
                 new OpenRouterClient.FunctionCall(
                         "call_forbidden",
-                        "adminDeleteWarehouse",
+                        "deleteWarehouse",
                         Map.of("warehouseId", UUID.randomUUID().toString())
                 );
 
         when(conversationStore.prepareUserSession(userId, null))
                 .thenReturn(new PreparedChatSession(sessionId, null, List.of()));
         when(toolRegistry.getToolsForRole("ROLE_TENANT")).thenReturn(allowedTools);
-        ChatRequestContext resolvedContext = new ChatRequestContext(
-                userId, "ROLE_TENANT", null);
-        when(activeWarehouseContextResolver.resolve(userId, "ROLE_TENANT", null))
+        ChatRequestContext resolvedContext = new ChatRequestContext(userId, null);
+        when(activeWarehouseContextResolver.resolve(userId, null))
                 .thenReturn(resolvedContext);
         when(promptBuilder.buildSystemPrompt(
                 eq("ROLE_TENANT"), eq(allowedTools), eq(resolvedContext)))
@@ -133,9 +129,8 @@ class ChatbotServiceTest {
                 org.mockito.ArgumentMatchers.any(Duration.class)
         );
 
-        ChatResponse result = service.processMessage(
+        ChatResponse result = service.processTenantMessage(
                 userId,
-                "ROLE_TENANT",
                 new SendMessageRequest(null, "xóa kho")
         );
 
@@ -171,21 +166,6 @@ class ChatbotServiceTest {
     }
 
     @Test
-    void rejectsNonTenantBeforeCreatingSessionOrCallingAi() {
-        UUID userId = UUID.randomUUID();
-
-        ForbiddenException exception = assertThrows(ForbiddenException.class,
-                () -> service.processMessage(
-                        userId,
-                        "ROLE_OWNER",
-                        new SendMessageRequest(null, "Xem kho của tôi")
-                ));
-
-        assertEquals("Chatbot hiện chỉ hỗ trợ khách và người thuê kho", exception.getMessage());
-        verifyNoInteractions(conversationStore, toolRegistry, activeWarehouseContextResolver);
-    }
-
-    @Test
     void passesActiveWarehouseContextToAllowedToolWithoutGivingItToModelArgs() {
         UUID userId = UUID.randomUUID();
         UUID warehouseId = UUID.randomUUID();
@@ -199,8 +179,8 @@ class ChatbotServiceTest {
                 .thenReturn(new PreparedChatSession(sessionId, null, List.of()));
         when(toolRegistry.getToolsForRole("ROLE_TENANT")).thenReturn(allowedTools);
         ChatRequestContext resolvedContext = new ChatRequestContext(
-                userId, "ROLE_TENANT", warehouseId, "Kho A");
-        when(activeWarehouseContextResolver.resolve(userId, "ROLE_TENANT", warehouseId))
+                userId, warehouseId, "Kho A");
+        when(activeWarehouseContextResolver.resolve(userId, warehouseId))
                 .thenReturn(resolvedContext);
         when(promptBuilder.buildSystemPrompt(
                 eq("ROLE_TENANT"), eq(allowedTools), eq(resolvedContext)))
@@ -218,9 +198,8 @@ class ChatbotServiceTest {
         ).when(openRouterClient).complete(
                 anyList(), eq(allowedTools), org.mockito.ArgumentMatchers.any(Duration.class));
 
-        service.processMessage(
+        service.processTenantMessage(
                 userId,
-                "ROLE_TENANT",
                 new SendMessageRequest(null, "Xem tồn kho kho hiện tại", warehouseId)
         );
 
@@ -229,7 +208,6 @@ class ChatbotServiceTest {
         verify(allowedTool).executeWithContext(
                 eq(Map.of()), contextCaptor.capture());
         assertEquals(userId, contextCaptor.getValue().userId());
-        assertEquals("ROLE_TENANT", contextCaptor.getValue().roleName());
         assertEquals(warehouseId, contextCaptor.getValue().activeWarehouseId());
     }
 

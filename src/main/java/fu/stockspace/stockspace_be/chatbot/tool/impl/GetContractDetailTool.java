@@ -30,8 +30,8 @@ public class GetContractDetailTool implements ChatTool {
 
     @Override
     public String getDescription() {
-        return "Xem thông tin một hợp đồng thuê kho mà người dùng đang đăng nhập có quyền truy cập: " +
-               "trạng thái, kho, thời hạn, kích thước thuê, giá chụp tại thời điểm ký và giá thuê cuối cùng.";
+        return "Xem chi tiết hợp đồng thuê kho của người thuê đang đăng nhập: điều khoản, tệp hợp đồng giấy, "
+                + "lý do thay đổi hoặc từ chối và các lựa chọn hiện được phép.";
     }
 
     @Override
@@ -80,15 +80,22 @@ public class GetContractDetailTool implements ChatTool {
         result.put("warehouseAddress", contract.getWarehouseAddress());
         result.put("startDate", contract.getStartDate());
         result.put("endDate", contract.getEndDate());
-        result.put("pricingType", contract.getPricingType());
+        result.put("pricingType", ChatToolLocalization.rentalPricingType(contract.getPricingType()));
         result.put("rentalPriceSnapshot", contract.getRentalPriceSnapshot());
         result.put("leasedWidth", contract.getLeasedWidth());
         result.put("leasedLength", contract.getLeasedLength());
         result.put("leasedHeight", contract.getLeasedHeight());
         result.put("leasedAreaM2", contract.getLeasedAreaM2());
         result.put("finalMonthlyRent", contract.getFinalMonthlyRent());
+        result.put("paperContractFiles", contract.getPaperContractFiles());
+        result.put("ownerNote", contract.getOwnerNote());
         result.put("changeRequestReason", contract.getChangeRequestReason());
         result.put("rejectionReason", contract.getRejectionReason());
+        result.put("canConfirm", contract.isCanConfirm());
+        result.put("canRequestChanges", contract.isCanRequestChanges());
+        result.put("canReject", contract.isCanReject());
+        result.put("canViewLayout", contract.isCanViewLayout());
+        result.put("canManageWms", contract.isCanManageWms());
         result.put("submittedAt", contract.getSubmittedAt());
         result.put("confirmedAt", contract.getConfirmedAt());
         return result;

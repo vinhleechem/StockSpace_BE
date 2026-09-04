@@ -3,6 +3,7 @@ package fu.stockspace.stockspace_be.wms.receipt.service;
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.common.entity.ApprovalStatus;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
@@ -108,6 +109,14 @@ class InventoryReceiptServiceTest {
                 .requireActiveStaffAssignment(any(), any(), any());
         lenient().when(receiptRepository.findByIdForUpdate(any()))
                 .thenAnswer(invocation -> receiptRepository.findById(invocation.getArgument(0)));
+        lenient().when(receiptRepository.findByIdAndTenantIdForUpdate(any(), any()))
+                .thenAnswer(invocation -> {
+                    UUID receiptId = invocation.getArgument(0);
+                    Optional<InventoryReceipt> locked = receiptRepository.findByIdForUpdate(receiptId);
+                    return locked.isPresent() ? locked : receiptRepository.findById(receiptId);
+                });
+        lenient().when(receiptRepository.findByIdAndTenantIdAndIsDeletedFalse(any(), any()))
+                .thenAnswer(invocation -> receiptRepository.findById(invocation.getArgument(0)));
     }
 
     @Test
@@ -164,6 +173,7 @@ class InventoryReceiptServiceTest {
         ArgumentCaptor<InventoryReceipt> receiptCaptor = ArgumentCaptor.forClass(InventoryReceipt.class);
         verify(receiptRepository, times(1)).save(receiptCaptor.capture());
         assertEquals("Công ty gửi hàng", receiptCaptor.getValue().getSenderName());
+        assertSame(tenantUser, receiptCaptor.getValue().getTenant());
     }
 
     @Test
@@ -1441,6 +1451,48 @@ class InventoryReceiptServiceTest {
         when(receiptRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
 
         assertThrows(BadRequestException.class, () -> receiptService.rejectReceipt(approverId, receipt.getId(), "Reason"));
+    }
+
+    @Test
+    void tenantReceiptDetailNeverFallsBackToWarehouseWideLookup() {
+        UUID receiptId = UUID.randomUUID();
+        when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
+        when(receiptRepository.findByIdAndTenantIdAndIsDeletedFalse(receiptId, userId))
+                .thenReturn(Optional.empty());
+        clearInvocations(receiptRepository);
+
+        assertThrows(
+                fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException.class,
+                () -> receiptService.getReceiptDetail(userId, receiptId));
+
+        verify(receiptRepository).findByIdAndTenantIdAndIsDeletedFalse(receiptId, userId);
+        verify(receiptItemRepository, never()).findByReceiptId(receiptId);
+    }
+
+    @Test
+    void tenantReceiptListUsesImmutableTenantOwnerScope() {
+        InventoryReceipt receipt = InventoryReceipt.builder()
+                .id(UUID.randomUUID())
+                .tenant(tenantUser)
+                .warehouse(warehouse)
+                .createdBy(tenantUser)
+                .type(DocumentType.INBOUND)
+                .status(ApprovalStatus.PENDING)
+                .build();
+        Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 10);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
+        when(receiptRepository.findByTenantIdAndWarehouseIdAndIsDeletedFalse(
+                userId, warehouseId, pageable))
+                .thenReturn(new PageImpl<>(List.of(receipt), pageable, 1));
+        when(receiptItemRepository.findByReceiptId(receipt.getId())).thenReturn(List.of());
+
+        PagedResponse<InventoryReceiptResponse> result = receiptService.getReceiptsByWarehouse(
+                userId, warehouseId, null, pageable);
+
+        assertEquals(1, result.getTotalElements());
+        verify(receiptRepository).findByTenantIdAndWarehouseIdAndIsDeletedFalse(
+                userId, warehouseId, pageable);
+        verify(receiptRepository, never()).findByWarehouseIdAndIsDeletedFalse(any(), any());
     }
 
     @Test

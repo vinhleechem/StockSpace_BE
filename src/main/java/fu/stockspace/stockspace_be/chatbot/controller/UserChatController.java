@@ -1,6 +1,5 @@
 package fu.stockspace.stockspace_be.chatbot.controller;
 
-import fu.stockspace.stockspace_be.auth.entity.Role;
 import fu.stockspace.stockspace_be.auth.util.SecurityUtil;
 import fu.stockspace.stockspace_be.chatbot.dto.*;
 import fu.stockspace.stockspace_be.chatbot.service.ChatbotService;
@@ -32,7 +31,7 @@ import java.util.UUID;
 
 
 
-@Tag(name = "Chatbot - User", description = "Chat API cho user đã đăng nhập")
+@Tag(name = "Chatbot - Tenant", description = "Chat API cho người thuê kho đã đăng nhập")
 @RestController
 @RequestMapping("/api/chat")
 @RequiredArgsConstructor
@@ -41,16 +40,13 @@ public class UserChatController {
 
     private final ChatbotService chatbotService;
 
-    @Operation(summary = "Gửi tin nhắn tới chatbot", description = "Auto-detect role từ JWT để cấp đúng tools cho AI. Frontend có thể gửi activeWarehouseId của kho đang mở; giá trị này chỉ là context và luôn được backend kiểm tra quyền trước khi sử dụng.")
+    @Operation(summary = "Gửi tin nhắn tới chatbot", description = "Chatbot dành cho người thuê kho. Frontend có thể gửi activeWarehouseId của kho đang mở; giá trị này chỉ là context và luôn được backend kiểm tra quyền trước khi sử dụng.")
     @PostMapping("/send")
     public ResponseEntity<ApiResponse<ChatResponse>> sendMessage(
             @Valid @RequestBody SendMessageRequest request) {
 
         UUID userId = SecurityUtil.getCurrentUserId();
-        Role role = SecurityUtil.getCurrentRole();
-        String roleName = role != null ? role.getName() : "GUEST";
-
-        ChatResponse response = chatbotService.processMessage(userId, roleName, request);
+        ChatResponse response = chatbotService.processTenantMessage(userId, request);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -67,11 +63,8 @@ public class UserChatController {
             @Valid @RequestBody SendMessageRequest request) {
 
         UUID userId = SecurityUtil.getCurrentUserId();
-        Role role = SecurityUtil.getCurrentRole();
-        String roleName = role != null ? role.getName() : "GUEST";
-
         SseEmitter emitter =
-                chatbotService.streamMessage(userId, roleName, request);
+                chatbotService.streamTenantMessage(userId, request);
         return streamResponse(emitter);
     }
 

@@ -18,10 +18,12 @@ public final class DefaultRbacPolicy {
     public static Map<RoleType, Set<PermissionCode>> grants() {
         Map<RoleType, Set<PermissionCode>> grants = new EnumMap<>(RoleType.class);
 
-        grants.put(RoleType.ROLE_ADMIN, EnumSet.allOf(PermissionCode.class));
+        Set<PermissionCode> adminPermissions = EnumSet.allOf(PermissionCode.class);
+        adminPermissions.remove(PermissionCode.CHAT_USE);
+        grants.put(RoleType.ROLE_ADMIN, adminPermissions);
         grants.put(RoleType.ROLE_OWNER, permissions(
                 PermissionCode.AUTH_SESSION_MANAGE, PermissionCode.PROFILE_READ, PermissionCode.PROFILE_UPDATE,
-                PermissionCode.MEDIA_UPLOAD, PermissionCode.CHAT_USE,
+                PermissionCode.MEDIA_UPLOAD,
                 PermissionCode.NOTIFICATION_READ, PermissionCode.NOTIFICATION_UPDATE,
                 PermissionCode.WALLET_READ, PermissionCode.WALLET_TOP_UP, PermissionCode.WALLET_WITHDRAW,
                 PermissionCode.WAREHOUSE_READ, PermissionCode.WAREHOUSE_CREATE,
@@ -47,7 +49,7 @@ public final class DefaultRbacPolicy {
         ));
         grants.put(RoleType.ROLE_STAFF, permissions(
                 PermissionCode.AUTH_SESSION_MANAGE, PermissionCode.PROFILE_READ, PermissionCode.PROFILE_UPDATE,
-                PermissionCode.MEDIA_UPLOAD, PermissionCode.CHAT_USE,
+                PermissionCode.MEDIA_UPLOAD,
                 PermissionCode.NOTIFICATION_READ, PermissionCode.NOTIFICATION_UPDATE,
                 PermissionCode.WALLET_READ, PermissionCode.WALLET_TOP_UP, PermissionCode.WALLET_WITHDRAW,
                 PermissionCode.WAREHOUSE_READ, PermissionCode.INVENTORY_READ,
@@ -58,7 +60,7 @@ public final class DefaultRbacPolicy {
         ));
         grants.put(RoleType.ROLE_INSPECTOR, permissions(
                 PermissionCode.AUTH_SESSION_MANAGE, PermissionCode.PROFILE_READ, PermissionCode.PROFILE_UPDATE,
-                PermissionCode.MEDIA_UPLOAD, PermissionCode.CHAT_USE,
+                PermissionCode.MEDIA_UPLOAD,
                 PermissionCode.NOTIFICATION_READ, PermissionCode.NOTIFICATION_UPDATE,
                 PermissionCode.WALLET_READ, PermissionCode.WALLET_TOP_UP, PermissionCode.WALLET_WITHDRAW,
                 PermissionCode.WAREHOUSE_READ, PermissionCode.WAREHOUSE_REVIEW,

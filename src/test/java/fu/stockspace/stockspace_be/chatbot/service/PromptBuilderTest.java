@@ -25,20 +25,32 @@ class PromptBuilderTest {
         assertFalse(prompt.contains("cứ list ra"));
         assertTrue(prompt.contains("getServicePackages"));
         assertTrue(prompt.contains("getMyActiveSubscription"));
+        assertTrue(prompt.contains("getInventoryReceipts"));
+        assertTrue(prompt.contains("getInventoryAudits"));
+        assertTrue(prompt.contains("getStockTransfers"));
+        assertTrue(prompt.contains("getWarehouseCapacity"));
+        assertTrue(prompt.contains("getCurrentSystemRules"));
+        assertTrue(prompt.contains("previewSubscriptionChange"));
+        assertTrue(prompt.contains("Tiền thuê kho được hai bên thanh toán ngoài StockSpace"));
+        assertTrue(prompt.contains("thanh toán gói dịch vụ"));
     }
 
     @Test
-    void roleInstructionsUseUserFacingVietnameseLabels() {
-        for (String role : new String[]{
-                "ROLE_TENANT", "ROLE_OWNER", "ROLE_STAFF", "ROLE_ADMIN", "ROLE_INSPECTOR"
-        }) {
+    void guestIsDirectedToLoginForPrivateWmsAndContactData() {
+        String prompt = promptBuilder.buildSystemPrompt("GUEST");
+
+        assertTrue(prompt.contains("thông tin liên hệ"));
+        assertTrue(prompt.contains("phiếu nhập xuất"));
+        assertTrue(prompt.contains("chuyển kho"));
+        assertTrue(prompt.contains("askLoginPrompt"));
+    }
+
+    @Test
+    void guestAndTenantInstructionsUseUserFacingVietnameseLabels() {
+        for (String role : new String[]{"GUEST", "ROLE_TENANT"}) {
             String prompt = promptBuilder.buildSystemPrompt(role);
 
             assertFalse(prompt.contains("Tenant"));
-            assertFalse(prompt.contains("Owner"));
-            assertFalse(prompt.contains("Staff"));
-            assertFalse(prompt.contains("Admin"));
-            assertFalse(prompt.contains("Inspector"));
             assertFalse(prompt.contains("PENDING"));
             assertFalse(prompt.contains("ACTIVE"));
         }
@@ -47,10 +59,10 @@ class PromptBuilderTest {
     @Test
     void includesVerifiedWarehouseNamePerRequestInsteadOfHardCodingOne() {
         String prompt = promptBuilder.buildSystemPrompt(
-                "ROLE_OWNER",
+                "ROLE_TENANT",
                 List.of(),
                 new ChatRequestContext(
-                        UUID.randomUUID(), "ROLE_OWNER", UUID.randomUUID(), "Kho Bình Tân"));
+                        UUID.randomUUID(), UUID.randomUUID(), "Kho Bình Tân"));
 
         assertTrue(prompt.contains("Kho Bình Tân"));
         assertTrue(prompt.contains("Ngữ cảnh kho đã xác minh"));

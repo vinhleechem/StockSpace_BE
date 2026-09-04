@@ -24,6 +24,20 @@ public interface InventoryReceiptRepository extends JpaRepository<InventoryRecei
     @Query("select r from InventoryReceipt r where r.id = :id")
     Optional<InventoryReceipt> findByIdForUpdate(@Param("id") UUID id);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select r from InventoryReceipt r where r.id = :id and r.tenant.id = :tenantId and r.isDeleted = false")
+    Optional<InventoryReceipt> findByIdAndTenantIdForUpdate(
+            @Param("id") UUID id,
+            @Param("tenantId") UUID tenantId);
+
+    Optional<InventoryReceipt> findByIdAndTenantIdAndIsDeletedFalse(UUID id, UUID tenantId);
+
+    Page<InventoryReceipt> findByTenantIdAndWarehouseIdAndTypeAndIsDeletedFalse(
+            UUID tenantId, UUID warehouseId, DocumentType type, Pageable pageable);
+
+    Page<InventoryReceipt> findByTenantIdAndWarehouseIdAndIsDeletedFalse(
+            UUID tenantId, UUID warehouseId, Pageable pageable);
+
     Page<InventoryReceipt> findByWarehouseIdAndTypeAndIsDeletedFalse(UUID warehouseId, DocumentType type, Pageable pageable);
     Page<InventoryReceipt> findByWarehouseIdAndIsDeletedFalse(UUID warehouseId, Pageable pageable);
     Page<InventoryReceipt> findByWarehouseIdAndTypeAndStatusAndIsDeletedFalse(UUID warehouseId, DocumentType type, ApprovalStatus status, Pageable pageable);

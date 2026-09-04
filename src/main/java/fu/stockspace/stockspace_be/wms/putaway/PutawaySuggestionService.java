@@ -195,10 +195,11 @@ public class PutawaySuggestionService {
     private Map<UUID, ProductSku> loadRequestedSkus(UUID tenantId, List<PutawayInputItem> items) {
         Map<UUID, ProductSku> skus = new HashMap<>();
         for (PutawayInputItem item : items) {
-            ProductSku sku = productSkuRepository.findByIdAndIsDeletedFalse(item.skuId())
-                    .filter(candidate -> candidate.isActive()
-                            && candidate.getTenant() != null
-                            && tenantId.equals(candidate.getTenant().getId()))
+            ProductSku sku = productSkuRepository
+                    .findByIdAndTenantIdOrSystemAndIsDeletedFalse(item.skuId(), tenantId)
+                    .filter(ProductSku::isActive)
+                    .filter(candidate -> candidate.getTenant() == null
+                            || tenantId.equals(candidate.getTenant().getId()))
                     .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.SKU_NOT_FOUND));
             skus.put(item.skuId(), sku);
         }

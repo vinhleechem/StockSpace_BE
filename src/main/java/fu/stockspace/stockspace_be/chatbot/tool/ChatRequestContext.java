@@ -9,16 +9,15 @@ import java.util.UUID;
  */
 public record ChatRequestContext(
         UUID userId,
-        String roleName,
         UUID activeWarehouseId,
         String activeWarehouseName
 ) {
 
-    public ChatRequestContext(UUID userId, String roleName, UUID activeWarehouseId) {
-        this(userId, roleName, activeWarehouseId, null);
+    public ChatRequestContext(UUID userId, UUID activeWarehouseId) {
+        this(userId, activeWarehouseId, null);
     }
 
     public static ChatRequestContext guest() {
-        return new ChatRequestContext(null, "GUEST", null, null);
+        return new ChatRequestContext(null, null, null);
     }
 }

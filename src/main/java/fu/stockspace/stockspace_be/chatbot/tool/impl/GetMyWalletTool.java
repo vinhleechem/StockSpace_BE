@@ -29,7 +29,8 @@ public class GetMyWalletTool implements ChatTool {
 
     @Override
     public String getDescription() {
-        return "Xem số dư ví của người thuê đang đăng nhập: số tiền khả dụng để thanh toán thuê kho.";
+        return "Xem số dư ví StockSpace của người thuê đang đăng nhập. Với người thuê, ví dùng để nạp tiền, "
+                + "thanh toán gói dịch vụ và gửi yêu cầu rút tiền; tiền thuê kho được hai bên thanh toán ngoài StockSpace.";
     }
 
     @Override
