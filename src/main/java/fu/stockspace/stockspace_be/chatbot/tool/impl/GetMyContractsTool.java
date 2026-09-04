@@ -31,13 +31,15 @@ public class GetMyContractsTool implements ChatTool {
 
     @Override
     public String getDescription() {
-        return "Lấy danh sách hợp đồng thuê kho của người thuê đang đăng nhập, gồm kho, trạng thái, " +
-               "thời hạn, kích thước thuê và giá thuê cuối cùng. Không dùng cho khách chưa đăng nhập.";
+        return "Lấy danh sách hợp đồng thuê kho của người thuê đang đăng nhập, gồm trạng thái, thời hạn, "
+                + "giá thuê cuối cùng và các lựa chọn hiện được phép như xác nhận, yêu cầu sửa hoặc từ chối.";
     }
 
     @Override
     public Map<String, Object> getParameterSchema() {
-        return Map.of("type", "object", "properties", Map.of());
+        return Map.of("type", "object", "properties", Map.of(
+                "page", Map.of("type", "integer", "minimum", 0),
+                "pageSize", Map.of("type", "integer", "minimum", 1, "maximum", 30)));
     }
 
     @Override
@@ -47,15 +49,23 @@ public class GetMyContractsTool implements ChatTool {
         }
 
         try {
-            Page<RentalContractResponse> page = contractService.getMyContractsAsTenant(userId, 0, 20);
+            int pageNumber = ChatToolParameters.page(params);
+            int pageSize = ChatToolParameters.pageSize(params, 10, 30);
+            Page<RentalContractResponse> page = contractService.getMyContractsAsTenant(
+                    userId, pageNumber, pageSize);
             List<Map<String, Object>> contracts = page.getContent().stream()
                     .map(this::toSafeContractSummary)
                     .toList();
 
-            return objectMapper.writeValueAsString(Map.of(
-                    "contracts", contracts,
-                    "total", page.getTotalElements()
-            ));
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("contracts", contracts);
+            result.put("page", page.getNumber());
+            result.put("total", page.getTotalElements());
+            result.put("totalPages", page.getTotalPages());
+            result.put("hasMore", !page.isLast());
+            return objectMapper.writeValueAsString(result);
+        } catch (IllegalArgumentException e) {
+            return "{\"error\":\"Thông tin phân trang hợp đồng không hợp lệ.\"}";
         } catch (Exception e) {
             log.warn("[GetMyContractsTool] Read failed (cause={})",
                     e.getClass().getSimpleName());
@@ -71,10 +81,15 @@ public class GetMyContractsTool implements ChatTool {
         result.put("warehouseName", contract.getWarehouseName());
         result.put("startDate", contract.getStartDate());
         result.put("endDate", contract.getEndDate());
-        result.put("pricingType", contract.getPricingType());
+        result.put("pricingType", ChatToolLocalization.rentalPricingType(contract.getPricingType()));
         result.put("rentalPriceSnapshot", contract.getRentalPriceSnapshot());
         result.put("leasedAreaM2", contract.getLeasedAreaM2());
         result.put("finalMonthlyRent", contract.getFinalMonthlyRent());
+        result.put("canConfirm", contract.isCanConfirm());
+        result.put("canRequestChanges", contract.isCanRequestChanges());
+        result.put("canReject", contract.isCanReject());
+        result.put("canViewLayout", contract.isCanViewLayout());
+        result.put("canManageWms", contract.isCanManageWms());
         return result;
     }
 }

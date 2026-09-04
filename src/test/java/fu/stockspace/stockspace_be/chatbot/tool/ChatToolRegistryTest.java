@@ -17,38 +17,69 @@ class ChatToolRegistryTest {
     private static final List<String> REQUIRED_NAMES = List.of(
             "searchWarehouses",
             "getWarehouseDetail",
+            "getPublicWarehouseLayout",
+            "getWarehouseTypes",
             "searchSystemPolicy",
+            "getCurrentSystemRules",
             "getServicePackages",
             "askLoginPrompt",
             "getMyContracts",
             "getContractDetail",
+            "getMyActiveWarehouses",
+            "getWarehouseOwnerContact",
+            "getMyWarehouseLayout",
+            "getMyProductCatalog",
             "getMyStock",
+            "getInventoryReceipts",
+            "getInventoryAudits",
+            "getStockTransfers",
+            "getWarehouseCapacity",
             "getMyWallet",
-            "getMyActiveSubscription"
+            "getMyWalletActivity",
+            "getMyNotifications",
+            "getMyActiveSubscription",
+            "previewSubscriptionChange",
+            "suggestPutaway",
+            "suggestOutboundPicking"
     );
 
     @Test
-    void tenantGetsPrivateReadToolsWhileGuestAndOtherRolesDoNot() {
+    void tenantGetsPrivateReadToolsWhileGuestAndUnknownRolesDoNot() {
         ChatToolRegistry registry = new ChatToolRegistry(requiredTools());
 
         List<String> guest = names(registry.getToolsForRole("GUEST"));
         List<String> tenant = names(registry.getToolsForRole("ROLE_TENANT"));
-        List<String> owner = names(registry.getToolsForRole("ROLE_OWNER"));
-        List<String> staff = names(registry.getToolsForRole("ROLE_STAFF"));
+        List<String> unsupported = names(registry.getToolsForRole("ROLE_UNSUPPORTED"));
 
         assertTrue(guest.contains("askLoginPrompt"));
         assertFalse(guest.contains("getMyWallet"));
         assertTrue(tenant.containsAll(List.of(
                 "getMyContracts",
                 "getContractDetail",
+                "getMyActiveWarehouses",
+                "getWarehouseOwnerContact",
+                "getMyWarehouseLayout",
+                "getMyProductCatalog",
                 "getMyStock",
+                "getInventoryReceipts",
+                "getInventoryAudits",
+                "getStockTransfers",
+                "getWarehouseCapacity",
                 "getMyWallet",
-                "getMyActiveSubscription"
+                "getMyWalletActivity",
+                "getMyNotifications",
+                "getMyActiveSubscription",
+                "previewSubscriptionChange",
+                "suggestPutaway",
+                "suggestOutboundPicking"
         )));
         assertTrue(guest.contains("getServicePackages"));
+        assertTrue(guest.containsAll(List.of(
+                "getPublicWarehouseLayout",
+                "getWarehouseTypes",
+                "getCurrentSystemRules")));
         assertFalse(tenant.contains("askLoginPrompt"));
-        assertTrue(owner.isEmpty());
-        assertTrue(staff.isEmpty());
+        assertTrue(unsupported.isEmpty());
     }
 
 

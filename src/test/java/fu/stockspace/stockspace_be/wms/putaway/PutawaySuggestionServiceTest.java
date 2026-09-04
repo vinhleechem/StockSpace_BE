@@ -243,6 +243,7 @@ class PutawaySuggestionServiceTest {
                 .thenReturn(Optional.of(layout));
         when(rackRepository.findAllByLayoutId(layoutId)).thenReturn(List.of(rack));
         when(binRepository.findAllByRackLayoutId(layoutId)).thenReturn(List.of(firstBin, secondBin));
-        when(productSkuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(sku));
+        when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, tenantId))
+                .thenReturn(Optional.of(sku));
     }
 }

@@ -11,7 +11,10 @@ import lombok.experimental.SuperBuilder;
 import java.util.UUID;
 
 @Entity
-@Table(name = "inventory_receipts")
+@Table(name = "inventory_receipts", indexes = {
+        @Index(name = "idx_inventory_receipts_tenant_warehouse", columnList = "tenant_id,warehouse_id"),
+        @Index(name = "idx_inventory_receipts_tenant_status", columnList = "tenant_id,status")
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -23,6 +26,14 @@ public class InventoryReceipt extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
+
+    /**
+     * Immutable data owner. This must not be inferred from createdBy when a
+     * receipt is read because staff membership can change over time.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tenant_id", nullable = false, updatable = false)
+    private User tenant;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "warehouse_id", nullable = false)

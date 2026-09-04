@@ -214,6 +214,7 @@ public class StockTransferService {
         List<LockedSourceAllocation> lockedAllocations = lockAndValidateSourceAllocations(transfer);
 
         InventoryReceipt outboundReceipt = receiptRepository.save(InventoryReceipt.builder()
+                .tenant(tenantUser(tenantId))
                 .warehouse(transfer.getSourceWarehouse())
                 .createdBy(approver)
                 .type(DocumentType.OUTBOUND)
@@ -283,6 +284,7 @@ public class StockTransferService {
         validateDestinationCapacity(tenantId, transfer, references, lockedRacks, lockedBins);
 
         InventoryReceipt inboundReceipt = receiptRepository.save(InventoryReceipt.builder()
+                .tenant(tenantUser(tenantId))
                 .warehouse(transfer.getDestinationWarehouse())
                 .createdBy(receiver)
                 .type(DocumentType.INBOUND)

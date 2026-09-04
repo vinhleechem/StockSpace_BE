@@ -58,6 +58,8 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
               AND w.visibleUntil >= CURRENT_TIMESTAMP
               AND (:keyword IS NULL OR LOWER(w.name) LIKE :keyword
                    OR LOWER(w.address) LIKE :keyword
+                   OR LOWER(w.provinceName) LIKE :keyword
+                   OR LOWER(w.districtName) LIKE :keyword
                    OR LOWER(w.description) LIKE :keyword
                    OR LOWER(w.type.name) LIKE :keyword)
               AND (:provinceCode IS NULL OR w.provinceCode = :provinceCode)

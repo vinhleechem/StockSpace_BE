@@ -86,17 +86,19 @@ public class InventoryReceiptService {
         User creator = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
 
-        UUID tenantId = resolveTenantId(creator);
+        User tenant = resolveTenantUser(creator);
+        UUID tenantId = tenant.getId();
 
         Warehouse warehouse = warehouseRepository.findById(request.getWarehouseId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
         requireWarehouseMutationAccess(creator, tenantId, warehouse.getId());
 
         if (request.getType() == DocumentType.OUTBOUND) {
-            return createOutboundReceipt(creator, tenantId, warehouse, request);
+            return createOutboundReceipt(creator, tenant, warehouse, request);
         }
 
         InventoryReceipt receipt = InventoryReceipt.builder()
+                .tenant(tenant)
                 .warehouse(warehouse)
                 .createdBy(creator)
                 .type(request.getType())
@@ -161,7 +163,8 @@ public class InventoryReceiptService {
     }
 
     private InventoryReceiptResponse createOutboundReceipt(
-            User creator, UUID tenantId, Warehouse warehouse, CreateInventoryReceiptRequest request) {
+            User creator, User tenant, Warehouse warehouse, CreateInventoryReceiptRequest request) {
+        UUID tenantId = tenant.getId();
         for (ReceiptItemRequest itemRequest : request.getItems()) {
             if (itemRequest.getRackId() != null || itemRequest.getBinId() != null) {
                 throw new BadRequestException("Rack and bin must be omitted for outbound receipts");
@@ -194,6 +197,7 @@ public class InventoryReceiptService {
         validateOutboundAllocations(pickList, batchesById, skusById, warehouse);
 
         InventoryReceipt receipt = InventoryReceipt.builder()
+                .tenant(tenant)
                 .warehouse(warehouse)
                 .createdBy(creator)
                 .type(request.getType())
@@ -221,7 +225,7 @@ public class InventoryReceiptService {
         User actor = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
         UUID tenantId = resolveTenantId(actor);
-        InventoryReceipt receipt = receiptRepository.findByIdForUpdate(receiptId)
+        InventoryReceipt receipt = receiptRepository.findByIdAndTenantIdForUpdate(receiptId, tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RECEIPT_NOT_FOUND));
 
         if (receipt.getType() != DocumentType.OUTBOUND) {
@@ -437,7 +441,8 @@ public class InventoryReceiptService {
             throw new ForbiddenException("Nhân viên không có quyền phê duyệt phiếu nhập/xuất kho. Phiếu phải được Doanh nghiệp (Tenant) phê duyệt.");
         }
 
-        InventoryReceipt receipt = receiptRepository.findByIdForUpdate(receiptId)
+        UUID approverTenantId = resolveTenantId(approver);
+        InventoryReceipt receipt = receiptRepository.findByIdAndTenantIdForUpdate(receiptId, approverTenantId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RECEIPT_NOT_FOUND));
 
         if (receipt.getStatus() != ApprovalStatus.PENDING) {
@@ -445,11 +450,6 @@ public class InventoryReceiptService {
         }
 
 
-        UUID creatorTenantId = resolveTenantId(receipt.getCreatedBy());
-        UUID approverTenantId = resolveTenantId(approver);
-        if (!creatorTenantId.equals(approverTenantId)) {
-            throw new ForbiddenException(ErrorCode.FORBIDDEN);
-        }
         requireWarehouseMutationAccess(approver, approverTenantId, receipt.getWarehouse().getId());
 
         List<InventoryReceiptItem> items = receiptItemRepository.findByReceiptId(receiptId);
@@ -532,18 +532,15 @@ public class InventoryReceiptService {
             throw new ForbiddenException("Nhân viên không có quyền từ chối phiếu nhập/xuất kho. Phiếu phải được Doanh nghiệp (Tenant) phê duyệt.");
         }
 
-        InventoryReceipt receipt = receiptRepository.findById(receiptId)
+        UUID approverTenantId = resolveTenantId(approver);
+        InventoryReceipt receipt = receiptRepository.findByIdAndTenantIdForUpdate(
+                        receiptId, approverTenantId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RECEIPT_NOT_FOUND));
 
         if (receipt.getStatus() != ApprovalStatus.PENDING) {
             throw new BadRequestException(ErrorCode.RECEIPT_ALREADY_PROCESSED);
         }
 
-        UUID creatorTenantId = resolveTenantId(receipt.getCreatedBy());
-        UUID approverTenantId = resolveTenantId(approver);
-        if (!creatorTenantId.equals(approverTenantId)) {
-            throw new ForbiddenException(ErrorCode.FORBIDDEN);
-        }
         requireWarehouseMutationAccess(approver, approverTenantId, receipt.getWarehouse().getId());
 
         receipt.setStatus(ApprovalStatus.REJECTED);
@@ -579,6 +576,10 @@ public class InventoryReceiptService {
             page = receiptRepository.findByWarehouseIdAndIsDeletedFalse(warehouseId, pageable);
         }
 
+        return mapReceiptPage(page);
+    }
+
+    private PagedResponse<InventoryReceiptResponse> mapReceiptPage(Page<InventoryReceipt> page) {
         return PagedResponse.fromPage(page, receipt -> {
             List<InventoryReceiptItem> items = receiptItemRepository.findByReceiptId(receipt.getId());
             return mapToResponse(receipt, items);
@@ -595,7 +596,12 @@ public class InventoryReceiptService {
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
         UUID tenantId = resolveTenantId(user);
         requireWarehouseObservationAccess(user, tenantId, warehouseId);
-        return getReceiptsByWarehouse(warehouseId, type, pageable);
+        Page<InventoryReceipt> page = type == null
+                ? receiptRepository.findByTenantIdAndWarehouseIdAndIsDeletedFalse(
+                        tenantId, warehouseId, pageable)
+                : receiptRepository.findByTenantIdAndWarehouseIdAndTypeAndIsDeletedFalse(
+                        tenantId, warehouseId, type, pageable);
+        return mapReceiptPage(page);
     }
 
 
@@ -615,7 +621,7 @@ public class InventoryReceiptService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
         UUID tenantId = resolveTenantId(user);
-        InventoryReceipt receipt = receiptRepository.findById(receiptId)
+        InventoryReceipt receipt = receiptRepository.findByIdAndTenantIdAndIsDeletedFalse(receiptId, tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RECEIPT_NOT_FOUND));
         requireWarehouseObservationAccess(user, tenantId, receipt.getWarehouse().getId());
         List<InventoryReceiptItem> items = receiptItemRepository.findByReceiptId(receiptId);
@@ -679,7 +685,8 @@ public class InventoryReceiptService {
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
-        UUID tenantId = resolveTenantId(creator);
+        User tenant = resolveTenantUser(creator);
+        UUID tenantId = tenant.getId();
         requireWarehouseMutationAccess(creator, tenantId, warehouseId);
         if (quantity <= 0) {
             throw new BadRequestException("Adjustment quantity must be greater than 0");
@@ -701,6 +708,7 @@ public class InventoryReceiptService {
 
 
         InventoryReceipt receipt = InventoryReceipt.builder()
+                .tenant(tenant)
                 .warehouse(warehouse)
                 .createdBy(creator)
                 .type(type)
@@ -751,6 +759,10 @@ public class InventoryReceiptService {
             page = receiptRepository.findByWarehouseIdAndIsDeletedFalse(warehouseId, Pageable.unpaged());
         }
 
+        return renderReceiptsCsv(page);
+    }
+
+    private byte[] renderReceiptsCsv(Page<InventoryReceipt> page) {
         StringBuilder csv = new StringBuilder();
         csv.append("sep=,\n");
         csv.append("\uFEFF");
@@ -799,7 +811,12 @@ public class InventoryReceiptService {
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
         UUID tenantId = resolveTenantId(user);
         requireWarehouseObservationAccess(user, tenantId, warehouseId);
-        return exportReceiptsToCsv(warehouseId, type);
+        Page<InventoryReceipt> page = type == null
+                ? receiptRepository.findByTenantIdAndWarehouseIdAndIsDeletedFalse(
+                        tenantId, warehouseId, Pageable.unpaged())
+                : receiptRepository.findByTenantIdAndWarehouseIdAndTypeAndIsDeletedFalse(
+                        tenantId, warehouseId, type, Pageable.unpaged());
+        return renderReceiptsCsv(page);
     }
 
     private String mapStatusToVietnamese(ApprovalStatus status) {
@@ -957,13 +974,17 @@ public class InventoryReceiptService {
     private record CapacityItem(WarehouseBin bin, WarehouseRack rack, ProductSku sku, int quantity) {
     }
 
-    private UUID resolveTenantId(User user) {
+    private User resolveTenantUser(User user) {
         if (isStaff(user)) {
             return tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(user.getId())
-                    .map(member -> member.getTenant().getId())
+                    .map(member -> member.getTenant())
                     .orElseThrow(() -> new ForbiddenException(ErrorCode.FORBIDDEN));
         }
-        return user.getId();
+        return user;
+    }
+
+    private UUID resolveTenantId(User user) {
+        return resolveTenantUser(user).getId();
     }
 
     private void requireWarehouseObservationAccess(User user, UUID tenantId, UUID warehouseId) {

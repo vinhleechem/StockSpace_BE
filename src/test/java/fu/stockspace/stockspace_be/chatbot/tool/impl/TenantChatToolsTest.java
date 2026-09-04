@@ -12,6 +12,8 @@ import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
 import fu.stockspace.stockspace_be.wallet.dto.WalletResponse;
 import fu.stockspace.stockspace_be.wallet.service.WalletService;
 import fu.stockspace.stockspace_be.wms.stock.service.StockBatchService;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
+import fu.stockspace.stockspace_be.wms.stock.dto.WarehouseStockOverviewResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,6 +33,8 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -73,14 +77,19 @@ class TenantChatToolsTest {
                 .rentalPriceSnapshot(new BigDecimal("200000"))
                 .leasedAreaM2(new BigDecimal("80"))
                 .finalMonthlyRent(new BigDecimal("16000000"))
+                .canConfirm(true)
+                .canRequestChanges(true)
+                .canReject(true)
+                .canViewLayout(true)
+                .canManageWms(true)
                 .tenantId(userId)
                 .tenantName("Tenant Secret")
                 .tenantEmail("tenant@example.com")
                 .ownerId(UUID.randomUUID())
                 .ownerName("Owner Secret")
                 .build();
-        when(contractService.getMyContractsAsTenant(userId, 0, 20))
-                .thenReturn(new PageImpl<>(List.of(contract), PageRequest.of(0, 20), 1));
+        when(contractService.getMyContractsAsTenant(userId, 0, 10))
+                .thenReturn(new PageImpl<>(List.of(contract), PageRequest.of(0, 10), 1));
 
         JsonNode result = objectMapper.readTree(
                 new GetMyContractsTool(objectMapper, contractService).execute(Map.of(), userId));
@@ -94,7 +103,9 @@ class TenantChatToolsTest {
         assertFalse(result.toString().contains("tenantName"));
         assertFalse(result.toString().contains("ownerName"));
         assertEquals("16000000", result.at("/contracts/0/finalMonthlyRent").asText());
-        verify(contractService).getMyContractsAsTenant(userId, 0, 20);
+        assertTrue(result.at("/contracts/0/canConfirm").asBoolean());
+        assertTrue(result.at("/contracts/0/canManageWms").asBoolean());
+        verify(contractService).getMyContractsAsTenant(userId, 0, 10);
     }
 
     @Test
@@ -123,6 +134,10 @@ class TenantChatToolsTest {
                 .leasedHeight(new BigDecimal("4"))
                 .leasedAreaM2(new BigDecimal("80"))
                 .finalMonthlyRent(new BigDecimal("16000000"))
+                .paperContractFiles(List.of("https://example.com/contract.pdf"))
+                .ownerNote("Đọc kỹ phụ lục")
+                .canViewLayout(true)
+                .canManageWms(true)
                 .build();
         when(contractService.getContractById(contractId, userId)).thenReturn(contract);
 
@@ -135,6 +150,9 @@ class TenantChatToolsTest {
         assertEquals("Đang có hiệu lực", result.get("status").asText());
         assertEquals("80", result.get("leasedAreaM2").asText());
         assertEquals("16000000", result.get("finalMonthlyRent").asText());
+        assertEquals("https://example.com/contract.pdf", result.at("/paperContractFiles/0").asText());
+        assertEquals("Đọc kỹ phụ lục", result.get("ownerNote").asText());
+        assertTrue(result.get("canManageWms").asBoolean());
         assertFalse(result.toString().contains("ACTIVE"));
         assertFalse(result.toString().contains("tenantEmail"));
         assertFalse(result.toString().contains("tenantName"));
@@ -226,18 +244,36 @@ class TenantChatToolsTest {
         StockBatchService.WarehouseStockSummary summary =
                 new StockBatchService.WarehouseStockSummary(warehouseId, "Kho C", 4, 9, 350);
         when(stockBatchService.getStockSummaryByWarehouse(userId, warehouseId)).thenReturn(summary);
+        when(stockBatchService.getStockOverviewByWarehouse(
+                eq(userId), eq(warehouseId), any(PageRequest.class)))
+                .thenReturn(PagedResponse.<WarehouseStockOverviewResponse>builder()
+                        .content(List.of(WarehouseStockOverviewResponse.builder()
+                                .skuCode("SKU-01")
+                                .skuName("Sản phẩm A")
+                                .categoryName("Hàng khô")
+                                .uomSymbol("THUNG")
+                                .totalQuantity(350)
+                                .totalWeightKg(new BigDecimal("700"))
+                                .totalVolumeM3(new BigDecimal("12.5"))
+                                .build()))
+                        .totalElements(1)
+                        .build());
 
         JsonNode result = objectMapper.readTree(
                 new GetMyStockTool(objectMapper, stockBatchService)
                         .executeWithContext(Map.of(), new ChatRequestContext(
-                                userId, "ROLE_TENANT", warehouseId)));
+                                userId, warehouseId)));
 
         assertEquals("Kho C", result.get("warehouseName").asText());
         assertEquals(4, result.get("productCount").asLong());
         assertEquals(9, result.get("batchCount").asLong());
         assertEquals(350, result.get("totalQuantity").asLong());
+        assertEquals("SKU-01", result.at("/products/0/skuCode").asText());
+        assertEquals("700", result.at("/products/0/weightKg").asText());
         assertFalse(result.has("warehouseId"));
         verify(stockBatchService).getStockSummaryByWarehouse(userId, warehouseId);
+        verify(stockBatchService).getStockOverviewByWarehouse(
+                eq(userId), eq(warehouseId), any(PageRequest.class));
     }
 
     @Test

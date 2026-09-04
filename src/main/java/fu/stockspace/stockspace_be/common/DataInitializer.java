@@ -271,13 +271,13 @@ public class DataInitializer implements CommandLineRunner {
                                                 "kb.rental-process.current",
                                                 KnowledgeCategory.RENTAL_PROCESS,
                                                 "Quy trình Thuê kho bãi trên StockSpace",
-                                                "Bước 1: Người thuê xem bài đăng kho và liên hệ trực tiếp với chủ kho. "
+                                                "Bước 1: Người thuê xem bài đăng kho còn thời hạn công bố; sau khi đăng nhập có thể lấy thông tin để liên hệ trực tiếp với chủ kho. "
                                                                 +
                                                                 "Bước 2: Chủ kho tạo bản nháp hợp đồng, nhập điều khoản thuê và chuẩn bị bố trí kho cho người thuê. "
                                                                 +
-                                                                "Bước 3: Chủ kho gửi hợp đồng; người thuê có thể yêu cầu chỉnh sửa, từ chối hoặc xác nhận. "
+                                                                "Bước 3: Chủ kho đính kèm hợp đồng giấy và gửi hợp đồng; trong thời hạn xác nhận của hệ thống, người thuê có thể yêu cầu chỉnh sửa, từ chối hoặc xác nhận. "
                                                                 +
-                                                                "Bước 4: Sau khi xác nhận, hợp đồng có hiệu lực. Tiền thuê được thanh toán ngoài StockSpace."),
+                                                                "Bước 4: Sau khi xác nhận và đến thời gian thuê, hợp đồng cho phép người thuê quan sát dữ liệu kho. Tiền thuê được thanh toán ngoài StockSpace."),
                                 new KnowledgeSeed(
                                                 "kb.wallet-vnpay.current",
                                                 KnowledgeCategory.FAQ,
@@ -286,7 +286,32 @@ public class DataInitializer implements CommandLineRunner {
                                                                 +
                                                                 "hiển thị tại thời điểm giao dịch. Số dư chỉ được ghi nhận sau khi hệ thống nhận và xác minh "
                                                                 +
-                                                                "kết quả thanh toán thành công; hãy kiểm tra lịch sử giao dịch nếu số dư chưa cập nhật."));
+                                                                "kết quả thanh toán thành công; hãy kiểm tra lịch sử giao dịch nếu số dư chưa cập nhật. "
+                                                                +
+                                                                "Ví StockSpace không dùng để thanh toán tiền thuê kho. Với người thuê, ví dùng để nạp tiền, thanh toán gói dịch vụ và gửi yêu cầu rút tiền."),
+                                new KnowledgeSeed(
+                                                "kb.wms-access.current",
+                                                KnowledgeCategory.FAQ,
+                                                "Điều kiện truy cập và quản lý WMS",
+                                                "Hợp đồng thuê đang có hiệu lực cho phép người thuê quan sát kho và dữ liệu tồn kho thuộc mình. "
+                                                                +
+                                                                "Các thao tác làm thay đổi dữ liệu WMS còn yêu cầu gói dịch vụ đang có hiệu lực. "
+                                                                +
+                                                                "Chatbot chỉ đọc dữ liệu; việc tạo, gửi, duyệt, từ chối hoặc hủy phải thực hiện trên giao diện."),
+                                new KnowledgeSeed(
+                                                "kb.receipt-audit.current",
+                                                KnowledgeCategory.FAQ,
+                                                "Quy trình phiếu nhập xuất và kiểm kê",
+                                                "Phiếu nhập hoặc xuất được tạo ở trạng thái chờ duyệt. Khi phiếu được duyệt, hệ thống mới cộng hoặc trừ tồn kho và ghi nhật ký giao dịch; phiếu có thể bị từ chối khi đang chờ duyệt. "
+                                                                +
+                                                                "Kiểm kê chụp số lượng hệ thống, nhận số đếm thực tế và tính chênh lệch. Chỉ khi kết quả kiểm kê được duyệt thì hệ thống mới tạo điều chỉnh tồn kho."),
+                                new KnowledgeSeed(
+                                                "kb.transfer-picking-capacity.current",
+                                                KnowledgeCategory.FAQ,
+                                                "Chuyển kho, lấy hàng và sức chứa vật lý",
+                                                "Chuyển hàng giữa hai kho của cùng người thuê đi qua các bước chờ duyệt xuất, đang vận chuyển và đã nhận tại kho đích; yêu cầu có thể bị từ chối hoặc hủy khi trạng thái cho phép. "
+                                                                +
+                                                                "Gợi ý xuất kho ưu tiên lô nhập trước rồi sắp xếp lộ trình lấy hàng theo kệ và ô chứa. Gợi ý xếp hàng nhập và nhận chuyển kho kiểm tra giới hạn khối lượng, thể tích của kệ và ô chứa trước khi phân bổ."));
 
                 int changed = 0;
                 for (KnowledgeSeed seed : seeds) {

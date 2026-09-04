@@ -66,8 +66,9 @@ class PublicWarehouseChatToolsTest {
                         .execute(Map.of("warehouseId", warehouseId.toString()), null));
 
         assertEquals(warehouseId.toString(), result.get("id").asText());
-        assertEquals("15000000", result.get("rentalPrice").asText());
-        assertEquals("FIXED_MONTHLY", result.get("rentalPricingType").asText());
+        assertEquals("15000000", result.get("listedRentalPrice").asText());
+        assertEquals("Cố định theo tháng", result.get("pricingType").asText());
+        assertEquals("VND/tháng", result.get("priceUnit").asText());
         assertEquals("Sẵn sàng cho thuê", result.get("status").asText());
         assertFalse(result.toString().contains("AVAILABLE"));
         assertFalse(result.toString().contains("ownerPhone"));
@@ -93,9 +94,9 @@ class PublicWarehouseChatToolsTest {
     void searchWarehousesRejectsNegativeFiltersWithoutQueryingDatabase() throws Exception {
         JsonNode result = objectMapper.readTree(
                 new SearchWarehousesTool(warehouseRepository, objectMapper)
-                        .execute(Map.of("minArea", -1), null));
+                        .execute(Map.of("minCapacity", -1), null));
 
-        assertEquals("Diện tích tối thiểu không được là số âm", result.get("error").asText());
+        assertEquals("Sức chứa tối thiểu không được là số âm", result.get("error").asText());
         verifyNoInteractions(warehouseRepository);
     }
 
@@ -103,10 +104,10 @@ class PublicWarehouseChatToolsTest {
     void searchWarehousesRejectsInvertedPriceRangeWithoutQueryingDatabase() throws Exception {
         JsonNode result = objectMapper.readTree(
                 new SearchWarehousesTool(warehouseRepository, objectMapper)
-                        .execute(Map.of("minPrice", 200, "maxPrice", 100), null));
+                        .execute(Map.of("minRentalPrice", 200, "maxRentalPrice", 100), null));
 
         assertEquals(
-                "Giá thuê tối thiểu không được lớn hơn giá thuê tối đa",
+                "Giá niêm yết tối thiểu không được lớn hơn giá niêm yết tối đa",
                 result.get("error").asText()
         );
         verifyNoInteractions(warehouseRepository);
@@ -131,20 +132,22 @@ class PublicWarehouseChatToolsTest {
                 eq(new BigDecimal("100")),
                 eq(new BigDecimal("200")),
                 eq(new BigDecimal("50")),
+                eq(new BigDecimal("200")),
                 eq(null),
                 eq(null),
                 eq(null),
-                eq(null),
-                eq(null),
+                eq(true),
                 any(Pageable.class)
         )).thenReturn(new PageImpl<>(List.of(warehouse)));
 
         JsonNode result = objectMapper.readTree(
                 new SearchWarehousesTool(warehouseRepository, objectMapper).execute(Map.of(
                         "keyword", "  Quận 7  ",
-                        "minPrice", 100,
-                        "maxPrice", 200,
-                        "minArea", 50
+                        "minRentalPrice", 100,
+                        "maxRentalPrice", 200,
+                        "minCapacity", 50,
+                        "maxCapacity", 200,
+                        "isVerified", true
                 ), null));
 
         assertEquals(1, result.get("total").asLong());
@@ -157,11 +160,11 @@ class PublicWarehouseChatToolsTest {
                 eq(new BigDecimal("100")),
                 eq(new BigDecimal("200")),
                 eq(new BigDecimal("50")),
+                eq(new BigDecimal("200")),
                 eq(null),
                 eq(null),
                 eq(null),
-                eq(null),
-                eq(null),
+                eq(true),
                 any(Pageable.class)
         );
     }
@@ -227,9 +230,11 @@ class PublicWarehouseChatToolsTest {
         Map<String, Map<String, Object>> properties =
                 (Map<String, Map<String, Object>>) searchSchema.get("properties");
         assertEquals("string", properties.get("keyword").get("type"));
-        assertEquals("number", properties.get("minPrice").get("type"));
-        assertEquals("number", properties.get("maxPrice").get("type"));
-        assertEquals("number", properties.get("minArea").get("type"));
+        assertEquals("number", properties.get("minRentalPrice").get("type"));
+        assertEquals("number", properties.get("maxRentalPrice").get("type"));
+        assertEquals("number", properties.get("minCapacity").get("type"));
+        assertEquals("number", properties.get("maxCapacity").get("type"));
+        assertEquals("boolean", properties.get("isVerified").get("type"));
     }
 
     @Test

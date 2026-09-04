@@ -3,10 +3,13 @@ package fu.stockspace.stockspace_be.chatbot.tool.impl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatTool;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatRequestContext;
+import fu.stockspace.stockspace_be.common.dto.PagedResponse;
+import fu.stockspace.stockspace_be.wms.stock.dto.WarehouseStockOverviewResponse;
 import fu.stockspace.stockspace_be.wms.stock.service.StockBatchService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.data.domain.PageRequest;
 
 import java.util.Map;
 import java.util.LinkedHashMap;
@@ -29,28 +32,30 @@ public class GetMyStockTool implements ChatTool {
 
     @Override
     public String getDescription() {
-        return "Xem tóm tắt tồn kho của người thuê đang đăng nhập tại kho đang được chọn có hợp đồng đang hiệu lực: " +
-               "số SKU, số lô và tổng số lượng. Không trả tồn kho của người thuê khác.";
+        return "Xem tồn kho của người thuê đang đăng nhập tại kho đang được chọn: tổng số SKU, số lô, số lượng "
+                + "và tối đa 20 SKU kèm đơn vị tính, khối lượng, thể tích. Chỉ đọc kho có hợp đồng hiệu lực.";
     }
 
     @Override
     public Map<String, Object> getParameterSchema() {
-        return Map.of("type", "object", "properties", Map.of());
+        return Map.of("type", "object", "properties", Map.of(
+                "page", Map.of("type", "integer", "minimum", 0),
+                "pageSize", Map.of("type", "integer", "minimum", 1, "maximum", 30)));
     }
 
     @Override
     public String execute(Map<String, Object> params, UUID userId) {
-        return readStock(userId, warehouseIdFromParams(params));
+        return readStock(params, userId, warehouseIdFromParams(params));
     }
 
     @Override
     public String executeWithContext(Map<String, Object> params, ChatRequestContext context) {
-        return readStock(
+        return readStock(params,
                 context == null ? null : context.userId(),
                 context == null ? null : context.activeWarehouseId());
     }
 
-    private String readStock(UUID userId, UUID warehouseId) {
+    private String readStock(Map<String, Object> params, UUID userId, UUID warehouseId) {
         if (userId == null) {
             return "{\"error\":\"Bạn cần đăng nhập để xem tồn kho.\"}";
         }
@@ -59,13 +64,24 @@ public class GetMyStockTool implements ChatTool {
         }
 
         try {
+            int pageNumber = ChatToolParameters.page(params);
+            int pageSize = ChatToolParameters.pageSize(params, 15, 30);
             StockBatchService.WarehouseStockSummary summary =
                     stockBatchService.getStockSummaryByWarehouse(userId, warehouseId);
+            PagedResponse<WarehouseStockOverviewResponse> overview =
+                    stockBatchService.getStockOverviewByWarehouse(
+                            userId, warehouseId, PageRequest.of(pageNumber, pageSize));
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("warehouseName", summary.warehouseName());
             result.put("productCount", summary.productCount());
             result.put("batchCount", summary.batchCount());
             result.put("totalQuantity", summary.totalQuantity());
+            result.put("products", overview.getContent().stream().map(this::toProductSummary).toList());
+            result.put("productsReturned", overview.getContent().size());
+            result.put("productsTotal", overview.getTotalElements());
+            result.put("page", overview.getPage());
+            result.put("totalPages", overview.getTotalPages());
+            result.put("hasMore", !overview.isLast());
             return objectMapper.writeValueAsString(result);
 
         } catch (IllegalArgumentException e) {
@@ -75,6 +91,18 @@ public class GetMyStockTool implements ChatTool {
                     e.getClass().getSimpleName());
             return "{\"error\":\"Không thể lấy thông tin tồn kho lúc này.\"}";
         }
+    }
+
+    private Map<String, Object> toProductSummary(WarehouseStockOverviewResponse stock) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("skuCode", stock.getSkuCode());
+        result.put("skuName", stock.getSkuName());
+        result.put("category", stock.getCategoryName());
+        result.put("unit", stock.getUomSymbol());
+        result.put("quantity", stock.getTotalQuantity());
+        result.put("weightKg", stock.getTotalWeightKg());
+        result.put("volumeM3", stock.getTotalVolumeM3());
+        return result;
     }
 
     private UUID warehouseIdFromParams(Map<String, Object> params) {

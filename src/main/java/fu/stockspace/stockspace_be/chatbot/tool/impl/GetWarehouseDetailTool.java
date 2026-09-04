@@ -3,6 +3,7 @@ package fu.stockspace.stockspace_be.chatbot.tool.impl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatTool;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
+import fu.stockspace.stockspace_be.warehouse.entity.RentalPricingType;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,8 +29,8 @@ public class GetWarehouseDetailTool implements ChatTool {
 
     @Override
     public String getDescription() {
-        return "Lấy thông tin công khai của một kho bãi đang sẵn sàng cho thuê theo mã kho: " +
-               "địa chỉ, diện tích, giá thuê, loại kho, mô tả và trạng thái xác minh.";
+        return "Lấy chi tiết một bài đăng kho còn hiệu lực: vị trí, sức chứa, cách tính giá, "
+                + "giá niêm yết, loại kho, mô tả, thời hạn hiển thị và trạng thái xác minh.";
     }
 
     @Override
@@ -64,14 +65,18 @@ public class GetWarehouseDetailTool implements ChatTool {
             detail.put("id", w.getId().toString());
             detail.put("name", w.getName());
             detail.put("address", w.getAddress());
+            detail.put("province", w.getProvinceName());
+            detail.put("district", w.getDistrictName());
             detail.put("description", w.getDescription());
-            detail.put("rentalPrice", w.getRentalPrice());
-            detail.put("rentalPricingType", w.getRentalPricingType() != null
-                    ? w.getRentalPricingType().name() : "FIXED_MONTHLY");
             detail.put("capacity", w.getCapacity());
+            detail.put("pricingType", ChatToolLocalization.rentalPricingType(w.getRentalPricingType()));
+            detail.put("listedRentalPrice", w.getRentalPrice());
+            detail.put("priceUnit", priceUnit(w.getRentalPricingType()));
             detail.put("type", w.getType() != null ? w.getType().getName() : null);
             detail.put("status", ChatToolLocalization.warehouseStatus(w.getStatus()));
-            detail.put("isVerified", w.isVerified());
+            detail.put("verified", w.isVerified());
+            detail.put("listingVisibleUntil", w.getVisibleUntil());
+            detail.put("imageUrls", w.getImages().stream().map(image -> image.getImageUrl()).toList());
 
             return objectMapper.writeValueAsString(detail);
 
@@ -82,5 +87,16 @@ public class GetWarehouseDetailTool implements ChatTool {
                     e.getClass().getSimpleName());
             return "{\"error\":\"Không thể lấy thông tin kho\"}";
         }
+    }
+
+    private String priceUnit(RentalPricingType pricingType) {
+        if (pricingType == null) {
+            return null;
+        }
+        return switch (pricingType) {
+            case FIXED_MONTHLY -> "VND/tháng";
+            case PER_SQUARE_METER_MONTHLY -> "VND/m²/tháng";
+            case NEGOTIATED -> "Thỏa thuận";
+        };
     }
 }

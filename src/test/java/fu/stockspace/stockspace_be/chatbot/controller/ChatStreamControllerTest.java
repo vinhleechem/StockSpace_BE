@@ -1,10 +1,8 @@
 package fu.stockspace.stockspace_be.chatbot.controller;
 
-import fu.stockspace.stockspace_be.auth.entity.Role;
 import fu.stockspace.stockspace_be.auth.util.SecurityUtil;
 import fu.stockspace.stockspace_be.chatbot.dto.SendMessageRequest;
 import fu.stockspace.stockspace_be.chatbot.service.ChatbotService;
-import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.springframework.http.MediaType;
@@ -15,7 +13,6 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
@@ -52,15 +49,11 @@ class ChatStreamControllerTest {
         SseEmitter emitter = new SseEmitter();
         SendMessageRequest request = new SendMessageRequest(null, "Kiểm tra ví");
         UUID userId = UUID.randomUUID();
-        Role role = mock(Role.class);
-        when(role.getName()).thenReturn("ROLE_TENANT");
-        when(chatbotService.streamMessage(userId, "ROLE_TENANT", request))
+        when(chatbotService.streamTenantMessage(userId, request))
                 .thenReturn(emitter);
 
         try (MockedStatic<SecurityUtil> security = mockStatic(SecurityUtil.class)) {
             security.when(SecurityUtil::getCurrentUserId).thenReturn(userId);
-            security.when(SecurityUtil::getCurrentRole).thenReturn(role);
-
             ResponseEntity<SseEmitter> response =
                     controller.streamMessage(request);
 
@@ -71,6 +64,6 @@ class ChatStreamControllerTest {
             );
         }
 
-        verify(chatbotService).streamMessage(userId, "ROLE_TENANT", request);
+        verify(chatbotService).streamTenantMessage(userId, request);
     }
 }

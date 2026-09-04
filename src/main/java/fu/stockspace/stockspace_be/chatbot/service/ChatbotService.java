@@ -15,7 +15,6 @@ import fu.stockspace.stockspace_be.chatbot.tool.ChatToolRegistry;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatRequestContext;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ChatProviderException;
-import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -86,26 +85,24 @@ public class ChatbotService {
     @Value("${app.chatbot.max-assistant-response-chars:16000}")
     private int maxAssistantResponseChars;
 
-    public ChatResponse processMessage(UUID userId,
-                                       String roleName,
-                                       SendMessageRequest request) {
-        requireSupportedAuthenticatedRole(roleName);
+    public ChatResponse processTenantMessage(UUID userId,
+                                             SendMessageRequest request) {
         return authenticatedRateLimiter.execute(
                 userId,
-                () -> processAuthenticatedMessage(userId, roleName, request)
+                () -> processTenantMessageWithinRateLimit(userId, request)
         );
     }
 
-    private ChatResponse processAuthenticatedMessage(UUID userId,
-                                                     String roleName,
-                                                     SendMessageRequest request) {
+    private ChatResponse processTenantMessageWithinRateLimit(
+            UUID userId,
+            SendMessageRequest request) {
         ChatRequestContext context = activeWarehouseContextResolver.resolve(
-                userId, roleName, request.activeWarehouseId());
+                userId, request.activeWarehouseId());
         String message = normalizeMessage(request.message());
         PreparedChatSession prepared =
                 conversationStore.prepareUserSession(userId, request.sessionId());
-        List<ChatTool> tools = toolRegistry.getToolsForRole(roleName);
-        String systemPrompt = promptBuilder.buildSystemPrompt(roleName, tools, context);
+        List<ChatTool> tools = toolRegistry.getToolsForRole(TENANT_ROLE);
+        String systemPrompt = promptBuilder.buildSystemPrompt(TENANT_ROLE, tools, context);
 
         String reply = runAgenticLoop(
                 prepared.history(),
@@ -158,19 +155,17 @@ public class ChatbotService {
 
 
 
-    public SseEmitter streamMessage(UUID userId,
-                                    String roleName,
-                                    SendMessageRequest request) {
-        requireSupportedAuthenticatedRole(roleName);
+    public SseEmitter streamTenantMessage(UUID userId,
+                                          SendMessageRequest request) {
         Permit permit = authenticatedRateLimiter.acquire(userId);
         try {
             String message = normalizeMessage(request.message());
             PreparedChatSession prepared =
                     conversationStore.prepareUserSession(userId, request.sessionId());
-            List<ChatTool> tools = toolRegistry.getToolsForRole(roleName);
+            List<ChatTool> tools = toolRegistry.getToolsForRole(TENANT_ROLE);
             ChatRequestContext context = activeWarehouseContextResolver.resolve(
-                    userId, roleName, request.activeWarehouseId());
-            String systemPrompt = promptBuilder.buildSystemPrompt(roleName, tools, context);
+                    userId, request.activeWarehouseId());
+            String systemPrompt = promptBuilder.buildSystemPrompt(TENANT_ROLE, tools, context);
 
             return startStream(
                     userId,
@@ -227,13 +222,6 @@ public class ChatbotService {
 
     public List<ChatMessageResponse> getGuestHistory(String sessionToken) {
         return conversationStore.getGuestHistory(sessionToken);
-    }
-
-    /** Guest chat is handled separately; authenticated chat is intentionally tenant-only. */
-    public void requireSupportedAuthenticatedRole(String roleName) {
-        if (roleName == null || !TENANT_ROLE.equalsIgnoreCase(roleName.trim())) {
-            throw new ForbiddenException("Chatbot hiện chỉ hỗ trợ khách và người thuê kho");
-        }
     }
 
     private SseEmitter startStream(UUID userId,

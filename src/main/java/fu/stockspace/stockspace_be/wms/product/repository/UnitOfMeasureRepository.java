@@ -18,8 +18,19 @@ public interface UnitOfMeasureRepository extends JpaRepository<UnitOfMeasure, UU
             SELECT u FROM UnitOfMeasure u
             WHERE u.isDeleted = false
               AND u.isActive = true
-              AND u.code = 'THUNG'
-              AND (u.tenant.id = :tenantId OR u.tenant IS NULL)
+              AND (
+                    u.tenant.id = :tenantId
+                    OR (
+                        u.tenant IS NULL
+                        AND NOT EXISTS (
+                            SELECT 1 FROM UnitOfMeasure sub
+                            WHERE sub.tenant.id = :tenantId
+                              AND sub.code = u.code
+                              AND sub.isDeleted = false
+                              AND sub.isActive = true
+                        )
+                    )
+              )
             """)
     Page<UnitOfMeasure> findAllActiveByTenantOrSystem(@Param("tenantId") UUID tenantId, Pageable pageable);
 
