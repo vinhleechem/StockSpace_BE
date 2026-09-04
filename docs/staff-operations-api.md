@@ -138,8 +138,12 @@ Request tạo receipt:
 `senderName` dùng cho tên nơi gửi của phiếu `INBOUND`; `receiverName` dùng cho
 tên nơi nhận của phiếu `OUTBOUND`. Cả hai field đều không bắt buộc và có tối đa
 255 ký tự. `type` dùng enum hiện tại của backend, ví dụ `INBOUND` hoặc
-`OUTBOUND`. Các field `skuId`, `quantity`, `rackId`, `binId` cần gửi theo
-validation của request.
+`OUTBOUND`. `skuId` và `quantity` luôn bắt buộc. Với `INBOUND`, mỗi item phải có
+đủ `rackId` và `binId` (có thể lấy suggestion rồi chỉnh thủ công trước khi
+submit). Với `OUTBOUND`, bỏ cả hai field location ở tất cả item để backend
+auto-pick FIFO; hoặc gửi đủ cả hai field cho tất cả item để chọn location thủ
+công. Manual outbound vẫn chọn stock batch FIFO bên trong bin đã chọn. Không
+được trộn item auto và manual trong cùng request.
 
 ### 3.2 Inventory Audit
 
