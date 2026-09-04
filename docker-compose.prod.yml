@@ -7,6 +7,9 @@ services:
     restart: unless-stopped
     environment:
       - SPRING_PROFILES_ACTIVE=prod
+      # Production schema changes are applied by ops/run-migrations.sh before
+      # the application container starts. Never parse schema.sql in Spring.
+      - SPRING_SQL_INIT_MODE=never
       - SERVER_FORWARD_HEADERS_STRATEGY=framework
       - SEED_DEMO_USERS=true
       - CHATBOT_RAG_INDEXER_ENABLED=${CHATBOT_RAG_INDEXER_ENABLED:-true}
