@@ -25,17 +25,30 @@ public class ActiveWarehouseContextResolver {
     private final TenantWarehouseAccessService accessService;
 
     public ChatRequestContext resolve(UUID tenantId, UUID requestedWarehouseId) {
-        if (tenantId == null || requestedWarehouseId == null) {
-            return withoutWarehouse(tenantId);
+        if (tenantId == null) {
+            return withoutWarehouse(null);
         }
 
         try {
-            Optional<Warehouse> warehouse = resolveTenantWarehouse(
-                    tenantId, requestedWarehouseId);
-            return warehouse
-                    .map(value -> new ChatRequestContext(
-                            tenantId, value.getId(), value.getName()))
-                    .orElseGet(() -> withoutWarehouse(tenantId));
+            if (requestedWarehouseId != null) {
+                Optional<Warehouse> warehouse = resolveTenantWarehouse(
+                        tenantId, requestedWarehouseId);
+                if (warehouse.isPresent()) {
+                    Warehouse value = warehouse.get();
+                    return new ChatRequestContext(tenantId, value.getId(), value.getName());
+                }
+            }
+
+            // Smart fallback: If no warehouse was explicitly requested, but tenant has exactly 1 active warehouse, auto-resolve it
+            java.util.List<Warehouse> activeWarehouses = accessService.findActiveContractWarehouses(tenantId);
+            if (activeWarehouses != null && activeWarehouses.size() == 1) {
+                Warehouse single = activeWarehouses.get(0);
+                log.info("[ActiveWarehouseContext] Auto-resolved single active warehouse: id={} name={}",
+                        single.getId(), single.getName());
+                return new ChatRequestContext(tenantId, single.getId(), single.getName());
+            }
+
+            return withoutWarehouse(tenantId);
         } catch (RuntimeException exception) {
             log.warn("[ActiveWarehouseContext] Tenant resolution failed cause={}",
                     exception.getClass().getSimpleName());

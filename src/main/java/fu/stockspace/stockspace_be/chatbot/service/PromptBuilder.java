@@ -57,19 +57,25 @@ public class PromptBuilder {
             - Chừa dòng trống giữa các đoạn và danh sách.
             - Không dùng HTML.
             Không tự nhận đã thực hiện thao tác thay đổi dữ liệu; các tool hiện tại chỉ dùng để đọc thông tin.
-            Khi tool trả các cờ canConfirm, canRequestChanges, canReject, canViewLayout hoặc canManageWms, hãy dùng
+            QUY TẮC BẢO MẬT & ĐỊNH DẠNG TUYỆT ĐỐI:
+            - TUYỆT ĐỐI KHÔNG BAO GIỜ hiển thị, yêu cầu, hay nhắc đến chuỗi UUID (định dạng xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx) trong bất kỳ câu trả lời nào cho người dùng. Kể cả khi kết quả tool trả về trường 'id' là UUID, trường đó CHỈ DÙNG NỘI BỘ để truyền vào tham số tool khác. Người dùng chỉ biết TÊN KHO, TÊN SẢN PHẨM, MÃ SKU, không bao giờ được thấy UUID.
+            - Khi tool trả các cờ canConfirm, canRequestChanges, canReject, canViewLayout hoặc canManageWms, hãy dùng
             chúng để nói thao tác nào người dùng hiện có thể làm trên giao diện; không suy ra quyền chỉ từ trạng thái.
-            Khi câu hỏi có ngữ cảnh "kho hiện tại", hãy dùng tool dành cho kho đang được chọn.
-            Không bao giờ yêu cầu, hiển thị hay suy đoán UUID/mã kho nội bộ.
-            Khi người thuê hỏi về một kho khác với kho đang mở trên giao diện (ví dụ "Kho Bà Rịa" trong khi
+            QUY TẮC GỌI TOOL & XỬ LÝ CÂU HỎI VỀ KHO:
+            - Khi người dùng hỏi tồn kho, xem hàng trong kho, hoặc câu hỏi có ngữ cảnh kho: BẮT BUỘC tự động gọi tool tương ứng (getMyStock, getInventoryReceipts...) ngay lập tức. TUYỆT ĐỐI KHÔNG hỏi lại người dùng để bắt họ chọn kho hoặc xác nhận lại kho nếu trong ngữ cảnh đã có kho hoặc tài khoản chỉ có 1 kho.
+            - Khi người thuê hỏi về một kho khác với kho đang mở trên giao diện (ví dụ "Kho Bà Rịa" trong khi
             đang xem "Kho Vũng Tàu"), hãy gọi getMyActiveWarehouses trước để lấy danh sách kho và ID của chúng,
             sau đó truyền warehouseId tương ứng vào tool WMS cần gọi. Không cần yêu cầu người dùng đổi trang.
-            Nếu người thuê chưa chỉ rõ kho nào và ngữ cảnh cũng chưa có kho, mới hỏi lại bằng tên kho.
+            - Chỉ khi người thuê chưa chỉ rõ kho nào VÀ ngữ cảnh cũng chưa có kho, mới hỏi lại bằng TÊN KHO (tuyệt đối không nhắc đến UUID).
+            QUY TẮC CHỐNG BỊA SỐ LIỆU (ANTI-HALLUCINATION):
+            - Mọi con số về số lượng tồn, số lượng khả dụng, số lượng nhập/xuất, trọng lượng, thể tích BẮT BUỘC phải trích xuất chính xác 100% từ kết quả trả về của tool trong lượt hiện tại.
+            - TUYỆT ĐỐI KHÔNG BAO GIỜ tự bịa số (như tự nghĩ ra 10 thùng, 5 thùng...). Nếu tool chưa được gọi, hoặc tool báo lỗi, hoặc dữ liệu rỗng: hãy thông báo rõ ràng bằng tiếng Việt rằng chưa thể tra cứu được số liệu lúc này, tuyệt đối không tự đoán mò.
             """;
 
     private static final String FOLLOW_UP_INSTRUCTION = """
-            Luôn hiểu các câu hỏi ngắn là câu hỏi nối tiếp trong lịch sử gần nhất. Không gọi lại tool không liên quan
-            chỉ vì từ khóa xuất hiện trong câu trả lời trước. Với câu hỏi về gói dịch vụ, gói cơ bản, bảng giá hoặc
+            Luôn hiểu các câu hỏi ngắn là câu hỏi nối tiếp trong lịch sử gần nhất.
+            Khi người dùng gửi câu ngắn nối tiếp (như chỉ gửi tên kho "Kho Vũng Tàu", "ừ", "xem đi" sau câu hỏi về tồn kho/phiếu/kho): BẮT BUỘC hiểu đây là câu trả lời tiếp nối cho lượt trước, PHẢI kích hoạt tool tương ứng (như getMyStock) cho kho đó để đọc số liệu thực tế. TUYỆT ĐỐI KHÔNG được dừng lại nói suông hay tự bịa số liệu ra trả lời.
+            Không gọi lại tool không liên quan chỉ vì từ khóa xuất hiện trong câu trả lời trước. Với câu hỏi về gói dịch vụ, gói cơ bản, bảng giá hoặc
             quyền lợi, phải dùng getServicePackages. Với câu hỏi về gói của chính người thuê, gói đang dùng hoặc hạn
             gói, phải dùng getMyActiveSubscription. Hợp đồng thuê kho và gói dịch vụ là hai loại dữ liệu khác nhau;
             khi người thuê hỏi có thể đổi sang một gói cụ thể hay không, dùng previewSubscriptionChange theo đúng tên gói.

@@ -28,7 +28,9 @@ public class GetMyActiveWarehousesTool implements ChatTool {
 
     @Override
     public String getDescription() {
-        return "Liệt kê các kho mà người thuê hiện có hợp đồng hiệu lực để người dùng biết kho nào có thể chọn và xem dữ liệu WMS.";
+        return "Liệt kê các kho mà người thuê hiện có hợp đồng hiệu lực. "
+                + "Trường 'id' là mã nội bộ chỉ dùng để AI truyền vào tham số warehouseId của các tool WMS khác; "
+                + "TUYỆT ĐỐI KHÔNG BAO GIỜ hiển thị trường 'id' này ra câu trả lời cho người dùng.";
     }
 
     @Override

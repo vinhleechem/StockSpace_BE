@@ -467,13 +467,23 @@ public class ChatbotService {
         return result.substring(0, limit) + "\n[tool result truncated]";
     }
 
+    private static final java.util.regex.Pattern UUID_PATTERN =
+            java.util.regex.Pattern.compile("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
+
     private String capAssistantResponse(String value) {
         if (value == null || value.isBlank()) {
             throw new ChatProviderException(ErrorCode.CHAT_PROVIDER_INVALID_RESPONSE);
         }
-        String reply = value.trim();
+        String reply = sanitizeRawUuid(value.trim());
         int limit = Math.max(1_000, maxAssistantResponseChars);
         return reply.length() <= limit ? reply : reply.substring(0, limit);
+    }
+
+    public static String sanitizeRawUuid(String value) {
+        if (value == null || value.isBlank()) {
+            return value;
+        }
+        return UUID_PATTERN.matcher(value).replaceAll("");
     }
 
     private String normalizeMessage(String message) {
@@ -586,7 +596,7 @@ public class ChatbotService {
                     throw new ChatProviderException(
                             ErrorCode.CHAT_PROVIDER_INVALID_RESPONSE);
                 }
-                completeSuccessfully(reply);
+                completeSuccessfully(sanitizeRawUuid(reply));
             } catch (CancellationException ignored) {
                 cancelWithoutEvent();
             } catch (Throwable failure) {
