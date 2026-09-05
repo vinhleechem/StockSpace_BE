@@ -8,6 +8,7 @@ import fu.stockspace.stockspace_be.chatbot.dto.SendMessageRequest;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatTool;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatToolRegistry;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatRequestContext;
+import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ChatProviderException;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,6 +52,9 @@ class ChatbotServiceTest {
     private ChatToolRegistry toolRegistry;
 
     @Mock
+    private SubscriptionService subscriptionService;
+
+    @Mock
     private PromptBuilder promptBuilder;
 
     @Mock
@@ -71,11 +75,13 @@ class ChatbotServiceTest {
                 conversationStore,
                 openRouterClient,
                 toolRegistry,
+                subscriptionService,
                 promptBuilder,
                 activeWarehouseContextResolver,
                 new AuthenticatedChatRateLimiter(),
                 chatStreamRuntime
         );
+        when(subscriptionService.hasActiveSubscription(any(UUID.class))).thenReturn(true);
         ReflectionTestUtils.setField(service, "maxAgentIterations", 4);
         ReflectionTestUtils.setField(service, "requestDeadline", Duration.ofSeconds(10));
         ReflectionTestUtils.setField(service, "maxToolResultChars", 16_000);

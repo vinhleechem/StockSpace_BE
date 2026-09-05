@@ -82,6 +82,37 @@ class ChatToolRegistryTest {
         assertTrue(unsupported.isEmpty());
     }
 
+    @Test
+    void hidesSubscriptionGatedWmsToolsWhenTenantHasNoActiveSubscription() {
+        ChatToolRegistry registry = new ChatToolRegistry(requiredTools());
+        List<ChatTool> tenantTools = registry.getToolsForRole("ROLE_TENANT");
+
+        List<String> locked = names(
+                ChatToolRegistry.filterForActiveSubscription(tenantTools, false));
+
+        assertFalse(locked.contains("getMyStock"));
+        assertFalse(locked.contains("getInventoryReceipts"));
+        assertFalse(locked.contains("getWarehouseCapacity"));
+        assertFalse(locked.contains("suggestPutaway"));
+        assertTrue(locked.containsAll(List.of(
+                "getServicePackages",
+                "getMyContracts",
+                "getMyActiveSubscription",
+                "previewSubscriptionChange",
+                "getMyWallet"
+        )));
+    }
+
+    @Test
+    void keepsAllTenantToolsWhenSubscriptionIsActive() {
+        ChatToolRegistry registry = new ChatToolRegistry(requiredTools());
+        List<ChatTool> tenantTools = registry.getToolsForRole("ROLE_TENANT");
+
+        assertEquals(
+                names(tenantTools),
+                names(ChatToolRegistry.filterForActiveSubscription(tenantTools, true)));
+    }
+
 
     @Test
     void failsFastWhenRequiredToolIsMissingOrDuplicated() {

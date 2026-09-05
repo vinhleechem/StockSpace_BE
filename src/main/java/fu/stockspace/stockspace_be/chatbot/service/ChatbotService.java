@@ -13,6 +13,7 @@ import fu.stockspace.stockspace_be.chatbot.dto.SendMessageRequest;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatTool;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatToolRegistry;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatRequestContext;
+import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ChatProviderException;
 import lombok.RequiredArgsConstructor;
@@ -60,6 +61,8 @@ public class ChatbotService {
             "{\"error\":\"Không thể lấy dữ liệu, vui lòng thử lại sau\"}";
     private static final String TOOL_NOT_ALLOWED =
             "{\"error\":\"Tool không được phép trong phiên này\"}";
+    private static final String TOOL_SUBSCRIPTION_REQUIRED =
+            "{\"error\":\"T\\u00ednh n\\u0103ng n\\u00e0y y\\u00eau c\\u1ea7u g\\u00f3i d\\u1ecbch v\\u1ee5 \\u0111ang c\\u00f3 hi\\u1ec7u l\\u1ef1c. H\\u00e3y xem danh s\\u00e1ch g\\u00f3i v\\u00e0 \\u0111\\u0103ng k\\u00fd tr\\u01b0\\u1edbc khi s\\u1eed d\\u1ee5ng.\"}";
     private static final String MAX_ITERATIONS_REPLY =
             "Xin lỗi, tôi chưa thể hoàn thành yêu cầu này. Vui lòng diễn đạt ngắn gọn hơn hoặc thử lại sau.";
 
@@ -68,6 +71,7 @@ public class ChatbotService {
     private final ChatConversationStore conversationStore;
     private final OpenRouterClient openRouterClient;
     private final ChatToolRegistry toolRegistry;
+    private final SubscriptionService subscriptionService;
     private final PromptBuilder promptBuilder;
     private final ActiveWarehouseContextResolver activeWarehouseContextResolver;
     private final AuthenticatedChatRateLimiter authenticatedRateLimiter;
@@ -101,7 +105,7 @@ public class ChatbotService {
         String message = normalizeMessage(request.message());
         PreparedChatSession prepared =
                 conversationStore.prepareUserSession(userId, request.sessionId());
-        List<ChatTool> tools = toolRegistry.getToolsForRole(TENANT_ROLE);
+        List<ChatTool> tools = getTenantTools(userId);
         String systemPrompt = promptBuilder.buildSystemPrompt(TENANT_ROLE, tools, context);
 
         String reply = runAgenticLoop(
@@ -162,7 +166,7 @@ public class ChatbotService {
             String message = normalizeMessage(request.message());
             PreparedChatSession prepared =
                     conversationStore.prepareUserSession(userId, request.sessionId());
-            List<ChatTool> tools = toolRegistry.getToolsForRole(TENANT_ROLE);
+            List<ChatTool> tools = getTenantTools(userId);
             ChatRequestContext context = activeWarehouseContextResolver.resolve(
                     userId, request.activeWarehouseId());
             String systemPrompt = promptBuilder.buildSystemPrompt(TENANT_ROLE, tools, context);
@@ -308,7 +312,13 @@ public class ChatbotService {
             if (tool == null) {
                 log.warn("[AgenticLoop] Rejected non-allowlisted tool name={}",
                         safeToolName(functionCall.name()));
-                toolResult = TOOL_NOT_ALLOWED;
+                toolResult = isSubscriptionLocked(functionCall.name(), context)
+                        ? TOOL_SUBSCRIPTION_REQUIRED
+                        : TOOL_NOT_ALLOWED;
+            } else if (!hasRequiredSubscription(tool, context)) {
+                log.info("[AgenticLoop] Subscription-gated tool rejected name={}",
+                        tool.getName());
+                toolResult = TOOL_SUBSCRIPTION_REQUIRED;
             } else {
                 try {
                     Map<String, Object> args = functionCall.args() == null
@@ -410,7 +420,13 @@ public class ChatbotService {
 
                 log.warn("[AgenticLoop] Rejected non-allowlisted tool name={}",
                         safeToolName(functionCall.name()));
-                toolResult = TOOL_NOT_ALLOWED;
+                toolResult = isSubscriptionLocked(functionCall.name(), context)
+                        ? TOOL_SUBSCRIPTION_REQUIRED
+                        : TOOL_NOT_ALLOWED;
+            } else if (!hasRequiredSubscription(tool, context)) {
+                log.info("[AgenticLoop] Subscription-gated tool rejected name={}",
+                        tool.getName());
+                toolResult = TOOL_SUBSCRIPTION_REQUIRED;
             } else {
                 try {
                     Map<String, Object> args = functionCall.args() == null
@@ -488,6 +504,32 @@ public class ChatbotService {
 
     private String normalizeMessage(String message) {
         return message == null ? "" : message.strip();
+    }
+
+    private List<ChatTool> getTenantTools(UUID userId) {
+        List<ChatTool> roleTools = toolRegistry.getToolsForRole(TENANT_ROLE);
+        boolean hasActiveSubscription = subscriptionService.hasActiveSubscription(userId);
+        if (!hasActiveSubscription) {
+            log.info("[AgenticLoop] Tenant {} has no active subscription; WMS chatbot tools are hidden",
+                    userId);
+        }
+        return ChatToolRegistry.filterForActiveSubscription(roleTools, hasActiveSubscription);
+    }
+
+    private boolean hasRequiredSubscription(ChatTool tool, ChatRequestContext context) {
+        if (!ChatToolRegistry.requiresActiveSubscription(tool.getName())) {
+            return true;
+        }
+        return context != null
+                && context.userId() != null
+                && subscriptionService.hasActiveSubscription(context.userId());
+    }
+
+    private boolean isSubscriptionLocked(String toolName, ChatRequestContext context) {
+        return ChatToolRegistry.requiresActiveSubscription(toolName)
+                && (context == null
+                || context.userId() == null
+                || !subscriptionService.hasActiveSubscription(context.userId()));
     }
 
     private Duration effectiveDeadline() {

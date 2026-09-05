@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 
 
@@ -61,6 +62,25 @@ public class ChatToolRegistry {
                     "suggestOutboundPicking"
             )
     );
+
+    /**
+     * Tenant tools that expose operational WMS data or capacity-aware
+     * suggestions.  These tools are not exposed to a tenant without a
+     * currently active service subscription.  Contract/warehouse metadata,
+     * package information, wallet and notification tools remain available so
+     * the chatbot can explain what is locked and how to subscribe.
+     */
+    private static final Set<String> SUBSCRIPTION_REQUIRED_TOOL_NAMES = Set.of(
+            "getMyWarehouseLayout",
+            "getMyProductCatalog",
+            "getMyStock",
+            "getInventoryReceipts",
+            "getInventoryAudits",
+            "getStockTransfers",
+            "getWarehouseCapacity",
+            "suggestPutaway",
+            "suggestOutboundPicking"
+    );
     private final Map<String, List<ChatTool>> toolsByRole;
     private final Map<String, ChatTool> toolsByName;
 
@@ -89,6 +109,26 @@ public class ChatToolRegistry {
                 ? GUEST_KEY
                 : roleName.trim().toUpperCase(Locale.ROOT);
         return toolsByRole.getOrDefault(key, List.of());
+    }
+
+    /**
+     * Applies the subscription gate to a tenant's allowlist before the tool
+     * definitions are sent to the model.  This is intentionally separate from
+     * role resolution because subscription state is request/user-specific.
+     */
+    public static List<ChatTool> filterForActiveSubscription(
+            List<ChatTool> tools,
+            boolean hasActiveSubscription) {
+        if (hasActiveSubscription || tools.isEmpty()) {
+            return tools;
+        }
+        return tools.stream()
+                .filter(tool -> !requiresActiveSubscription(tool.getName()))
+                .toList();
+    }
+
+    public static boolean requiresActiveSubscription(String toolName) {
+        return toolName != null && SUBSCRIPTION_REQUIRED_TOOL_NAMES.contains(toolName);
     }
 
 
