@@ -9,6 +9,8 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.jdbc.CannotGetJdbcConnectionException;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -149,6 +151,21 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleChatProvider(ChatProviderException ex) {
         return ResponseEntity.status(ex.getErrorCode().getStatus())
                 .body(ApiResponse.error(ex.getErrorCode(), ex.getMessage()));
+    }
+
+    /**
+     * A saturated/unavailable Hikari pool is a temporary capacity problem,
+     * not an application bug. Return 503 so clients can retry and so the
+     * generic 500 response does not hide the actual database outage.
+     */
+    @ExceptionHandler({
+            CannotCreateTransactionException.class,
+            CannotGetJdbcConnectionException.class
+    })
+    public ResponseEntity<ApiResponse<Void>> handleDatabaseUnavailable(Exception ex) {
+        log.warn("Database connection pool unavailable: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponse.error("Hệ thống đang quá tải, vui lòng thử lại sau."));
     }
 
 
