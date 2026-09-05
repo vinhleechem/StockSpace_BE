@@ -1,6 +1,7 @@
 package fu.stockspace.stockspace_be.wms.stock.dto;
 
 import fu.stockspace.stockspace_be.wms.stock.entity.AuditStatus;
+import fu.stockspace.stockspace_be.wms.stock.entity.AuditScopeType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -33,4 +34,12 @@ public class InventoryAuditResponse {
     private LocalDateTime updatedAt;
 
     private List<InventoryAuditItemResponse> items;
+    private int countRound;
+    private AuditScopeType scopeType;
+    private UUID assignedToId;
+    private String assignedToName;
+    private LocalDateTime startedAt;
+    private LocalDateTime submittedAt;
+    private LocalDateTime reviewedAt;
+    private String reviewReason;
 }

@@ -12,5 +12,7 @@ public interface InventoryAuditItemRepository extends JpaRepository<InventoryAud
 
     List<InventoryAuditItem> findByAuditId(UUID auditId);
 
+    List<InventoryAuditItem> findByAuditIdAndCountRoundOrderById(UUID auditId, int countRound);
+
     List<InventoryAuditItem> findByBatchId(UUID batchId);
 }

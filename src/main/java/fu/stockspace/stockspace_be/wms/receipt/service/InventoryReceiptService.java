@@ -36,6 +36,7 @@ import fu.stockspace.stockspace_be.wms.receipt.repository.InventoryReceiptReposi
 import fu.stockspace.stockspace_be.wms.receipt.repository.InventoryTransactionRepository;
 import fu.stockspace.stockspace_be.wms.stock.entity.StockBatch;
 import fu.stockspace.stockspace_be.wms.stock.repository.StockBatchRepository;
+import fu.stockspace.stockspace_be.wms.stock.service.InventoryAuditLockService;
 import fu.stockspace.stockspace_be.wms.picking.OutboundPickingInputItem;
 import fu.stockspace.stockspace_be.wms.picking.OutboundPickingSuggestionService;
 import fu.stockspace.stockspace_be.wms.picking.dto.OutboundPickLineResponse;
@@ -83,6 +84,7 @@ public class InventoryReceiptService {
     private final NotificationService notificationService;
     private final PhysicalLoadCalculator physicalLoadCalculator;
     private final OutboundPickingSuggestionService pickingSuggestionService;
+    private final InventoryAuditLockService inventoryAuditLockService;
 
     @Transactional
     public InventoryReceiptResponse createReceipt(UUID userId, CreateInventoryReceiptRequest request) {
@@ -647,6 +649,9 @@ public class InventoryReceiptService {
 
 
         requireWarehouseMutationAccess(approver, approverTenantId, receipt.getWarehouse().getId());
+        if (inventoryAuditLockService != null) {
+            inventoryAuditLockService.assertMovementAllowed(receipt.getWarehouse().getId());
+        }
 
         List<InventoryReceiptItem> items = receiptItemRepository.findByReceiptId(receiptId);
 
@@ -876,6 +881,20 @@ public class InventoryReceiptService {
     public InventoryReceipt createAdjustmentReceipt(
             UUID userId, UUID auditId, UUID warehouseId,
             DocumentType type, UUID batchId, int quantity) {
+        return createAdjustmentReceipt(userId, auditId, warehouseId, type, batchId, quantity, false);
+    }
+
+    /** Called by the audit transaction while that audit owns the warehouse lock. */
+    @Transactional
+    public InventoryReceipt createAuditAdjustmentReceipt(
+            UUID userId, UUID auditId, UUID warehouseId,
+            DocumentType type, UUID batchId, int quantity) {
+        return createAdjustmentReceipt(userId, auditId, warehouseId, type, batchId, quantity, true);
+    }
+
+    private InventoryReceipt createAdjustmentReceipt(
+            UUID userId, UUID auditId, UUID warehouseId,
+            DocumentType type, UUID batchId, int quantity, boolean auditOwnedLock) {
 
         User creator = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
@@ -884,12 +903,21 @@ public class InventoryReceiptService {
         User tenant = resolveTenantUser(creator);
         UUID tenantId = tenant.getId();
         requireWarehouseMutationAccess(creator, tenantId, warehouseId);
+        if (!auditOwnedLock && inventoryAuditLockService != null) {
+            inventoryAuditLockService.assertMovementAllowed(warehouseId);
+        }
         if (quantity <= 0) {
             throw new BadRequestException("Adjustment quantity must be greater than 0");
         }
 
-        StockBatch batch = stockBatchRepository.findByIdAndIsDeletedFalse(batchId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STOCK_BATCH_NOT_FOUND));
+        StockBatch batch;
+        if (!auditOwnedLock && inventoryAuditLockService != null) {
+            batch = stockBatchRepository.findByIdForUpdate(batchId)
+                    .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STOCK_BATCH_NOT_FOUND));
+        } else {
+            batch = stockBatchRepository.findByIdAndIsDeletedFalse(batchId)
+                    .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STOCK_BATCH_NOT_FOUND));
+        }
         ProductSku sku = productSkuRepository.findByIdAndIsDeletedFalse(batch.getSkuId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.SKU_NOT_FOUND));
 

@@ -5,7 +5,11 @@ import fu.stockspace.stockspace_be.common.dto.ApiResponse;
 import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
-import fu.stockspace.stockspace_be.wms.stock.dto.*;
+import fu.stockspace.stockspace_be.wms.stock.dto.AddUnexpectedAuditItemRequest;
+import fu.stockspace.stockspace_be.wms.stock.dto.AuditReviewReasonRequest;
+import fu.stockspace.stockspace_be.wms.stock.dto.CreateInventoryAuditPlanRequest;
+import fu.stockspace.stockspace_be.wms.stock.dto.InventoryAuditResponse;
+import fu.stockspace.stockspace_be.wms.stock.dto.SaveAuditCountsRequest;
 import fu.stockspace.stockspace_be.wms.stock.service.InventoryAuditService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -16,12 +20,18 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
 import java.util.UUID;
 
-@Tag(name = "Tenant — WMS Inventory Audit", description = "Các API quản lý phiếu kiểm kê kho dành cho Tenant")
+@Tag(name = "Tenant WMS Inventory Audit", description = "Inventory audit APIs")
 @RestController
 @RequestMapping("/api/tenant/inventory/audits")
 @RequiredArgsConstructor
@@ -30,71 +40,90 @@ public class InventoryAuditController {
 
     private final InventoryAuditService auditService;
 
-    private UUID getCurrentUserId() {
+    private UUID currentUserId() {
         return SecurityUtil.getCurrentUser()
                 .orElseThrow(() -> new ForbiddenException(ErrorCode.UNAUTHENTICATED))
                 .getId();
     }
 
     @PostMapping
-    @Operation(summary = "Tạo phiếu kiểm kê mới — tự động snapshot tồn kho hiện tại")
-    public ResponseEntity<ApiResponse<InventoryAuditResponse>> createAudit(
-            @Valid @RequestBody CreateInventoryAuditRequest request
-    ) {
-        UUID userId = getCurrentUserId();
-        InventoryAuditResponse response = auditService.createAudit(userId, request);
-        return ResponseEntity.ok(ApiResponse.success("Tạo phiếu kiểm kê thành công", response));
+    @Operation(summary = "Create an inventory audit plan")
+    public ResponseEntity<ApiResponse<InventoryAuditResponse>> create(
+            @Valid @RequestBody CreateInventoryAuditPlanRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("Inventory audit plan created",
+                auditService.createAuditV2(currentUserId(), request)));
     }
 
     @GetMapping
-    @Operation(summary = "Danh sách phiếu kiểm kê của tôi (phân trang, có thể lọc theo kho)")
-    public ResponseEntity<ApiResponse<PagedResponse<InventoryAuditResponse>>> getMyAudits(
+    @Operation(summary = "List inventory audits")
+    public ResponseEntity<ApiResponse<PagedResponse<InventoryAuditResponse>>> list(
             @RequestParam(required = false) UUID warehouseId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size
-    ) {
-        UUID userId = getCurrentUserId();
+            @RequestParam(defaultValue = "10") int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        PagedResponse<InventoryAuditResponse> response = auditService.getMyAudits(userId, warehouseId, pageable);
-        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách phiếu kiểm kê thành công", response));
+        return ResponseEntity.ok(ApiResponse.success("Inventory audits loaded",
+                auditService.getAuditsV2(currentUserId(), warehouseId, pageable)));
     }
 
-    @GetMapping("/{id}")
-    @Operation(summary = "Chi tiết phiếu kiểm kê")
-    public ResponseEntity<ApiResponse<InventoryAuditResponse>> getAuditDetail(@PathVariable UUID id) {
-        UUID userId = getCurrentUserId();
-        InventoryAuditResponse response = auditService.getAuditDetail(userId, id);
-        return ResponseEntity.ok(ApiResponse.success("Lấy chi tiết phiếu kiểm kê thành công", response));
+    @PostMapping("/{id}/start")
+    @Operation(summary = "Start an inventory audit and snapshot stock")
+    public ResponseEntity<ApiResponse<InventoryAuditResponse>> start(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.success("Inventory audit started",
+                auditService.startAuditV2(currentUserId(), id)));
+    }
+
+    @PutMapping("/{id}/counts")
+    @Operation(summary = "Save physical count results")
+    public ResponseEntity<ApiResponse<InventoryAuditResponse>> saveCounts(
+            @PathVariable UUID id, @Valid @RequestBody SaveAuditCountsRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("Count results saved",
+                auditService.saveAuditCountsV2(currentUserId(), id, request)));
     }
 
     @PostMapping("/{id}/submit")
-    @Operation(summary = "Nộp kết quả kiểm đếm thực tế — điền actualQuantity cho từng dòng")
-    public ResponseEntity<ApiResponse<InventoryAuditResponse>> submitAudit(
-            @PathVariable UUID id,
-            @Valid @RequestBody SubmitAuditRequest request
-    ) {
-        UUID userId = getCurrentUserId();
-        InventoryAuditResponse response = auditService.submitAudit(userId, id, request);
-        return ResponseEntity.ok(ApiResponse.success("Nộp kết quả kiểm kê thành công", response));
+    @Operation(summary = "Submit an inventory audit")
+    public ResponseEntity<ApiResponse<InventoryAuditResponse>> submit(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.success("Inventory audit submitted",
+                auditService.submitAuditV2(currentUserId(), id)));
     }
 
-    @PatchMapping("/{id}/approve")
-    @Operation(summary = "Duyệt phiếu kiểm kê — tự động sinh phiếu điều chỉnh và cập nhật tồn kho")
-    public ResponseEntity<ApiResponse<InventoryAuditResponse>> approveAudit(@PathVariable UUID id) {
-        UUID approverId = getCurrentUserId();
-        InventoryAuditResponse response = auditService.approveAudit(approverId, id);
-        return ResponseEntity.ok(ApiResponse.success("Duyệt phiếu kiểm kê thành công. Tồn kho đã được điều chỉnh.", response));
+    @PostMapping("/{id}/unexpected-items")
+    @Operation(summary = "Add a physically found SKU missing from the snapshot")
+    public ResponseEntity<ApiResponse<InventoryAuditResponse>> addUnexpectedItem(
+            @PathVariable UUID id, @Valid @RequestBody AddUnexpectedAuditItemRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("Unexpected item added",
+                auditService.addUnexpectedItemV2(currentUserId(), id, request)));
     }
 
-    @PatchMapping("/{id}/reject")
-    @Operation(summary = "Từ chối phiếu kiểm kê")
-    public ResponseEntity<ApiResponse<InventoryAuditResponse>> rejectAudit(
+    @PostMapping("/{id}/recount")
+    @Operation(summary = "Request a recount")
+    public ResponseEntity<ApiResponse<InventoryAuditResponse>> recount(
+            @PathVariable UUID id, @Valid @RequestBody AuditReviewReasonRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("Recount requested",
+                auditService.requestRecountV2(currentUserId(), id, request.getReason())));
+    }
+
+    @PostMapping("/{id}/approve")
+    @Operation(summary = "Approve an inventory audit and adjust stock")
+    public ResponseEntity<ApiResponse<InventoryAuditResponse>> approve(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.success("Inventory audit approved",
+                auditService.approveAuditV2(currentUserId(), id)));
+    }
+
+    @PostMapping("/{id}/cancel")
+    @Operation(summary = "Cancel an inventory audit")
+    public ResponseEntity<ApiResponse<InventoryAuditResponse>> cancel(
             @PathVariable UUID id,
-            @RequestBody(required = false) Map<String, String> body
-    ) {
-        UUID approverId = getCurrentUserId();
-        String reason = body != null ? body.get("reason") : null;
-        InventoryAuditResponse response = auditService.rejectAudit(approverId, id, reason);
-        return ResponseEntity.ok(ApiResponse.success("Từ chối phiếu kiểm kê thành công", response));
+            @RequestBody(required = false) AuditReviewReasonRequest request) {
+        String reason = request == null ? null : request.getReason();
+        return ResponseEntity.ok(ApiResponse.success("Inventory audit cancelled",
+                auditService.cancelAuditV2(currentUserId(), id, reason)));
+    }
+
+    @GetMapping("/{id}")
+    @Operation(summary = "Get inventory audit details")
+    public ResponseEntity<ApiResponse<InventoryAuditResponse>> detail(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.success("Inventory audit loaded",
+                auditService.getAuditDetailV2(currentUserId(), id)));
     }
 }
