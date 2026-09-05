@@ -60,7 +60,8 @@ public enum PermissionCode {
     ADMIN_WITHDRAWAL_MANAGE("Approve or reject withdrawals"),
     ADMIN_INVENTORY_READ("View platform inventory"),
     ADMIN_STATS_READ("View platform statistics"),
-    OWNER_STATS_READ("View own owner statistics");
+    OWNER_STATS_READ("View own owner statistics"),
+    TENANT_DASHBOARD_READ("View own tenant dashboard");
 
     private final String description;
 
