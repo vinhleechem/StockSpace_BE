@@ -36,10 +36,12 @@ import fu.stockspace.stockspace_be.wms.receipt.repository.InventoryReceiptReposi
 import fu.stockspace.stockspace_be.wms.receipt.repository.InventoryTransactionRepository;
 import fu.stockspace.stockspace_be.wms.stock.entity.StockBatch;
 import fu.stockspace.stockspace_be.wms.stock.repository.StockBatchRepository;
+import fu.stockspace.stockspace_be.wms.stock.service.InventoryAuditLockService;
 import fu.stockspace.stockspace_be.wms.picking.OutboundPickingInputItem;
 import fu.stockspace.stockspace_be.wms.picking.OutboundPickingSuggestionService;
 import fu.stockspace.stockspace_be.wms.picking.dto.OutboundPickLineResponse;
 import fu.stockspace.stockspace_be.wms.picking.dto.OutboundPickStopResponse;
+import fu.stockspace.stockspace_be.wms.picking.dto.OutboundPickingItemResponse;
 import fu.stockspace.stockspace_be.wms.picking.dto.OutboundPickingSuggestionResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -66,6 +68,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class InventoryReceiptService {
 
+    private static final String MANUAL_OUTBOUND_STRATEGY = "MANUAL_LOCATION_FIFO_V1";
+
     private final InventoryReceiptRepository receiptRepository;
     private final InventoryReceiptItemRepository receiptItemRepository;
     private final InventoryTransactionRepository transactionRepository;
@@ -80,6 +84,7 @@ public class InventoryReceiptService {
     private final NotificationService notificationService;
     private final PhysicalLoadCalculator physicalLoadCalculator;
     private final OutboundPickingSuggestionService pickingSuggestionService;
+    private final InventoryAuditLockService inventoryAuditLockService;
 
     @Transactional
     public InventoryReceiptResponse createReceipt(UUID userId, CreateInventoryReceiptRequest request) {
@@ -165,10 +170,10 @@ public class InventoryReceiptService {
     private InventoryReceiptResponse createOutboundReceipt(
             User creator, User tenant, Warehouse warehouse, CreateInventoryReceiptRequest request) {
         UUID tenantId = tenant.getId();
-        for (ReceiptItemRequest itemRequest : request.getItems()) {
-            if (itemRequest.getRackId() != null || itemRequest.getBinId() != null) {
-                throw new BadRequestException("Rack and bin must be omitted for outbound receipts");
-            }
+        boolean manualLocation = request.getItems().stream()
+                .anyMatch(item -> item.getRackId() != null || item.getBinId() != null);
+        if (manualLocation) {
+            return createManualOutboundReceipt(creator, tenant, warehouse, request);
         }
 
         List<OutboundPickingInputItem> inputItems = request.getItems().stream()
@@ -218,6 +223,177 @@ public class InventoryReceiptService {
 
         log.info("WMS Receipt: Created receipt {} of type {} for warehouse {}", receipt.getId(), receipt.getType(), warehouse.getId());
         return mapToResponse(receipt, savedItems, pickList);
+    }
+
+    private InventoryReceiptResponse createManualOutboundReceipt(
+            User creator, User tenant, Warehouse warehouse, CreateInventoryReceiptRequest request) {
+        UUID tenantId = tenant.getId();
+        List<ManualOutboundAllocation> allocations = new ArrayList<>();
+        Map<UUID, Integer> remainingByBatchId = new HashMap<>();
+        Map<ManualPickStopKey, Integer> sequenceByLocation = new LinkedHashMap<>();
+        Map<UUID, Integer> requestedBySkuId = new LinkedHashMap<>();
+
+        for (ReceiptItemRequest itemRequest : request.getItems()) {
+            if (itemRequest.getRackId() == null || itemRequest.getBinId() == null) {
+                throw new BadRequestException(
+                        "Manual outbound requires rackId and binId for every item; omit both for every item to use auto-suggest");
+            }
+
+            ProductSku sku = productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(
+                            itemRequest.getSkuId(), tenantId)
+                    .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.SKU_NOT_FOUND));
+            WarehouseRack rack = rackRepository.findByIdAndIsDeletedFalse(itemRequest.getRackId())
+                    .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RACK_NOT_FOUND));
+            if (rack.getLayout() == null || rack.getLayout().getWarehouse() == null
+                    || !warehouse.getId().equals(rack.getLayout().getWarehouse().getId())) {
+                throw new BadRequestException(ErrorCode.LAYOUT_INVALID_COORDINATES);
+            }
+
+            WarehouseBin bin = binRepository.findByIdAndIsDeletedFalse(itemRequest.getBinId())
+                    .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_BIN_NOT_FOUND));
+            if (bin.getRack() == null || !rack.getId().equals(bin.getRack().getId())) {
+                throw new BadRequestException(ErrorCode.LAYOUT_INVALID_COORDINATES);
+            }
+
+            ManualPickStopKey location = new ManualPickStopKey(rack.getId(), bin.getId());
+            int pickSequence = sequenceByLocation.computeIfAbsent(
+                    location, ignored -> sequenceByLocation.size() + 1);
+            try {
+                requestedBySkuId.merge(itemRequest.getSkuId(), itemRequest.getQuantity(), Math::addExact);
+            } catch (ArithmeticException exception) {
+                throw new BadRequestException("Outbound quantity is too large");
+            }
+
+            int remainingQuantity = itemRequest.getQuantity();
+            List<StockBatch> selectedLocationBatches = stockBatchRepository
+                    .findAllBySkuIdAndWarehouseIdAndIsActiveTrueAndIsDeletedFalse(
+                            itemRequest.getSkuId(), warehouse.getId())
+                    .stream()
+                    .filter(batch -> belongsToManualOutboundLocation(batch, warehouse, rack, bin))
+                    .sorted(manualOutboundFifoComparator())
+                    .toList();
+
+            for (StockBatch batch : selectedLocationBatches) {
+                int availableQuantity = remainingByBatchId.computeIfAbsent(
+                        batch.getId(), ignored -> batch.getQuantity());
+                if (availableQuantity <= 0 || remainingQuantity <= 0) {
+                    continue;
+                }
+                int allocatedQuantity = Math.min(availableQuantity, remainingQuantity);
+                allocations.add(new ManualOutboundAllocation(
+                        sku, batch, allocatedQuantity, pickSequence, itemRequest.getNote()));
+                remainingByBatchId.put(batch.getId(), availableQuantity - allocatedQuantity);
+                remainingQuantity -= allocatedQuantity;
+            }
+
+            if (remainingQuantity > 0) {
+                throw new BadRequestException(ErrorCode.STOCK_INSUFFICIENT_QUANTITY);
+            }
+        }
+
+        InventoryReceipt receipt = InventoryReceipt.builder()
+                .tenant(tenant)
+                .warehouse(warehouse)
+                .createdBy(creator)
+                .type(request.getType())
+                .signatureData(request.getSignatureData())
+                .senderName(request.getSenderName())
+                .receiverName(request.getReceiverName())
+                .status(ApprovalStatus.PENDING)
+                .build();
+        receipt = receiptRepository.save(receipt);
+
+        List<InventoryReceiptItem> savedItems = new ArrayList<>();
+        for (ManualOutboundAllocation allocation : allocations) {
+            InventoryReceiptItem item = InventoryReceiptItem.builder()
+                    .receipt(receipt)
+                    .sku(allocation.sku())
+                    .quantity(allocation.quantity())
+                    .rack(allocation.batch().getRack())
+                    .bin(allocation.batch().getBin())
+                    .stockBatch(allocation.batch())
+                    .pickSequence(allocation.pickSequence())
+                    .note(allocation.note())
+                    .build();
+            savedItems.add(receiptItemRepository.save(item));
+        }
+
+        OutboundPickingSuggestionResponse pickList = buildManualOutboundPickList(
+                warehouse, requestedBySkuId, allocations);
+        notifyReceiptCreated(receipt, creator, tenantId, warehouse);
+        log.info("WMS Receipt: Created manual outbound receipt {} for warehouse {}",
+                receipt.getId(), warehouse.getId());
+        return mapToResponse(receipt, savedItems, pickList);
+    }
+
+    private boolean belongsToManualOutboundLocation(
+            StockBatch batch, Warehouse warehouse, WarehouseRack rack, WarehouseBin bin) {
+        return batch != null
+                && batch.getId() != null
+                && batch.getQuantity() > 0
+                && batch.isActive()
+                && !batch.isDeleted()
+                && batch.getWarehouse() != null
+                && warehouse.getId().equals(batch.getWarehouse().getId())
+                && batch.getRack() != null
+                && rack.getId().equals(batch.getRack().getId())
+                && batch.getBin() != null
+                && bin.getId().equals(batch.getBin().getId());
+    }
+
+    private Comparator<StockBatch> manualOutboundFifoComparator() {
+        return Comparator.comparing(StockBatch::getArrivalDate,
+                        Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(StockBatch::getCreatedAt,
+                        Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(StockBatch::getId, UUID::compareTo);
+    }
+
+    private OutboundPickingSuggestionResponse buildManualOutboundPickList(
+            Warehouse warehouse,
+            Map<UUID, Integer> requestedBySkuId,
+            List<ManualOutboundAllocation> allocations) {
+        List<OutboundPickingItemResponse> itemResponses =
+                requestedBySkuId.entrySet().stream()
+                        .map(entry -> new OutboundPickingItemResponse(
+                                entry.getKey(), entry.getValue(), entry.getValue(), 0))
+                        .toList();
+
+        Map<Integer, List<ManualOutboundAllocation>> allocationsByStop = allocations.stream()
+                .collect(Collectors.groupingBy(
+                        ManualOutboundAllocation::pickSequence,
+                        LinkedHashMap::new,
+                        Collectors.toList()));
+        List<OutboundPickStopResponse> stops = allocationsByStop.entrySet().stream()
+                .map(entry -> {
+                    StockBatch firstBatch = entry.getValue().get(0).batch();
+                    return new OutboundPickStopResponse(
+                            entry.getKey(),
+                            firstBatch.getRack().getId(),
+                            firstBatch.getRack().getCode(),
+                            firstBatch.getBin().getId(),
+                            firstBatch.getBin().getCode(),
+                            firstBatch.getBin().getShelfLevel(),
+                            entry.getValue().stream()
+                                    .map(allocation -> new OutboundPickLineResponse(
+                                            allocation.batch().getId(),
+                                            allocation.sku().getId(),
+                                            allocation.sku().getSkuCode(),
+                                            allocation.sku().getName(),
+                                            allocation.batch().getArrivalDate(),
+                                            allocation.quantity()))
+                                    .toList());
+                })
+                .toList();
+        UUID layoutId = allocations.get(0).batch().getRack().getLayout().getId();
+        return new OutboundPickingSuggestionResponse(
+                warehouse.getId(),
+                layoutId,
+                MANUAL_OUTBOUND_STRATEGY,
+                true,
+                itemResponses,
+                stops,
+                List.of("Locations selected manually; stock batches allocated FIFO within each selected bin"));
     }
 
     @Transactional
@@ -335,6 +511,7 @@ public class InventoryReceiptService {
             throw new ResourceNotFoundException(ErrorCode.STOCK_BATCH_NOT_FOUND);
         }
 
+        Map<UUID, Long> requestedByBatchId = new HashMap<>();
         for (OutboundPickStopResponse stop : pickList.stops()) {
             for (OutboundPickLineResponse line : stop.lines()) {
                 StockBatch batch = batchesById.get(line.stockBatchId());
@@ -348,8 +525,29 @@ public class InventoryReceiptService {
                         || batch.getRack() == null || batch.getBin() == null) {
                     throw new BadRequestException(ErrorCode.STOCK_INSUFFICIENT_QUANTITY);
                 }
+                try {
+                    requestedByBatchId.merge(batch.getId(), (long) line.quantity(), Math::addExact);
+                } catch (ArithmeticException exception) {
+                    throw new BadRequestException(ErrorCode.STOCK_INSUFFICIENT_QUANTITY);
+                }
             }
         }
+        requestedByBatchId.forEach((batchId, quantity) -> {
+            if (batchesById.get(batchId).getQuantity() < quantity) {
+                throw new BadRequestException(ErrorCode.STOCK_INSUFFICIENT_QUANTITY);
+            }
+        });
+    }
+
+    private record ManualPickStopKey(UUID rackId, UUID binId) {
+    }
+
+    private record ManualOutboundAllocation(
+            ProductSku sku,
+            StockBatch batch,
+            int quantity,
+            int pickSequence,
+            String note) {
     }
 
     private void notifyReceiptCreated(
@@ -451,6 +649,9 @@ public class InventoryReceiptService {
 
 
         requireWarehouseMutationAccess(approver, approverTenantId, receipt.getWarehouse().getId());
+        if (inventoryAuditLockService != null) {
+            inventoryAuditLockService.assertMovementAllowed(receipt.getWarehouse().getId());
+        }
 
         List<InventoryReceiptItem> items = receiptItemRepository.findByReceiptId(receiptId);
 
@@ -680,6 +881,20 @@ public class InventoryReceiptService {
     public InventoryReceipt createAdjustmentReceipt(
             UUID userId, UUID auditId, UUID warehouseId,
             DocumentType type, UUID batchId, int quantity) {
+        return createAdjustmentReceipt(userId, auditId, warehouseId, type, batchId, quantity, false);
+    }
+
+    /** Called by the audit transaction while that audit owns the warehouse lock. */
+    @Transactional
+    public InventoryReceipt createAuditAdjustmentReceipt(
+            UUID userId, UUID auditId, UUID warehouseId,
+            DocumentType type, UUID batchId, int quantity) {
+        return createAdjustmentReceipt(userId, auditId, warehouseId, type, batchId, quantity, true);
+    }
+
+    private InventoryReceipt createAdjustmentReceipt(
+            UUID userId, UUID auditId, UUID warehouseId,
+            DocumentType type, UUID batchId, int quantity, boolean auditOwnedLock) {
 
         User creator = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
@@ -688,12 +903,21 @@ public class InventoryReceiptService {
         User tenant = resolveTenantUser(creator);
         UUID tenantId = tenant.getId();
         requireWarehouseMutationAccess(creator, tenantId, warehouseId);
+        if (!auditOwnedLock && inventoryAuditLockService != null) {
+            inventoryAuditLockService.assertMovementAllowed(warehouseId);
+        }
         if (quantity <= 0) {
             throw new BadRequestException("Adjustment quantity must be greater than 0");
         }
 
-        StockBatch batch = stockBatchRepository.findByIdAndIsDeletedFalse(batchId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STOCK_BATCH_NOT_FOUND));
+        StockBatch batch;
+        if (!auditOwnedLock && inventoryAuditLockService != null) {
+            batch = stockBatchRepository.findByIdForUpdate(batchId)
+                    .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STOCK_BATCH_NOT_FOUND));
+        } else {
+            batch = stockBatchRepository.findByIdAndIsDeletedFalse(batchId)
+                    .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STOCK_BATCH_NOT_FOUND));
+        }
         ProductSku sku = productSkuRepository.findByIdAndIsDeletedFalse(batch.getSkuId())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.SKU_NOT_FOUND));
 

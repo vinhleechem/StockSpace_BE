@@ -6,6 +6,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.UUID;
+import java.time.LocalDateTime;
+import fu.stockspace.stockspace_be.wms.stock.entity.AuditCountStatus;
 
 @Data
 @Builder
@@ -19,8 +21,14 @@ public class InventoryAuditItemResponse {
     private String uomSymbol;
     private String rackName;
     private String binName;
-    private int expectedQuantity;
+    private Integer expectedQuantity;
     private Integer actualQuantity;
     private Integer discrepancy;
     private String note;
+    private String varianceReason;
+    private LocalDateTime arrivalDate;
+    private AuditCountStatus countStatus;
+    private UUID countedById;
+    private LocalDateTime countedAt;
+    private int countRound;
 }

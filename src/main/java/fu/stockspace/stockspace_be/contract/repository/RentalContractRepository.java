@@ -1,5 +1,6 @@
 package fu.stockspace.stockspace_be.contract.repository;
 
+import fu.stockspace.stockspace_be.contract.entity.ContractStatus;
 import fu.stockspace.stockspace_be.contract.entity.RentalContract;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -196,6 +197,39 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
     List<UUID> findCurrentDirectActiveWarehouseIdsByOwnerId(
             @Param("ownerId") UUID ownerId,
             @Param("today") java.time.LocalDate today);
+
+    @Query("""
+            SELECT COUNT(c) FROM RentalContract c
+            WHERE c.tenant.id = :tenantId
+              AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
+              AND c.isActive = true
+              AND c.isDeleted = false
+              AND c.startDate IS NOT NULL
+              AND c.endDate IS NOT NULL
+              AND c.startDate <= :today
+              AND c.endDate >= :today
+            """)
+    long countCurrentDirectActiveContractsByTenantId(
+            @Param("tenantId") UUID tenantId,
+            @Param("today") java.time.LocalDate today);
+
+    @Query("""
+            SELECT COUNT(DISTINCT c.warehouse.id) FROM RentalContract c
+            WHERE c.tenant.id = :tenantId
+              AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
+              AND c.isActive = true
+              AND c.isDeleted = false
+              AND c.startDate IS NOT NULL
+              AND c.endDate IS NOT NULL
+              AND c.startDate <= :today
+              AND c.endDate >= :today
+            """)
+    long countCurrentDirectActiveWarehousesByTenantId(
+            @Param("tenantId") UUID tenantId,
+            @Param("today") java.time.LocalDate today);
+
+    long countByTenantIdAndStatusAndIsActiveTrueAndIsDeletedFalse(
+            UUID tenantId, ContractStatus status);
 
 }
 

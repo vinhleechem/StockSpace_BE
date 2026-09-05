@@ -22,6 +22,26 @@ public interface ProductSkuRepository extends JpaRepository<ProductSku, UUID> {
 
     Optional<ProductSku> findByIdAndIsDeletedFalse(UUID id);
 
+    @Query("""
+            SELECT COUNT(s) FROM ProductSku s
+            WHERE s.isActive = true
+              AND s.isDeleted = false
+              AND (
+                    s.tenant.id = :tenantId
+                    OR (
+                        s.tenant IS NULL
+                        AND NOT EXISTS (
+                            SELECT 1
+                            FROM ProductSku sub
+                            WHERE sub.tenant.id = :tenantId
+                              AND sub.skuCode = s.skuCode
+                              AND sub.isDeleted = false
+                        )
+                    )
+              )
+            """)
+    long countVisibleByTenantId(@Param("tenantId") UUID tenantId);
+
     @Query("SELECT s FROM ProductSku s WHERE s.id = :id AND s.isDeleted = false AND (s.tenant.id = :tenantId OR s.tenant IS NULL)")
     Optional<ProductSku> findByIdAndTenantIdOrSystemAndIsDeletedFalse(@Param("id") UUID id, @Param("tenantId") UUID tenantId);
 

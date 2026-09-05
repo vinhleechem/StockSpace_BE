@@ -29,6 +29,10 @@ import fu.stockspace.stockspace_be.wms.stock.entity.StockBatch;
 import fu.stockspace.stockspace_be.wms.stock.repository.InventoryAuditItemRepository;
 import fu.stockspace.stockspace_be.wms.stock.repository.InventoryAuditRepository;
 import fu.stockspace.stockspace_be.wms.stock.repository.StockBatchRepository;
+import fu.stockspace.stockspace_be.wms.stock.repository.InventoryAuditAdjustmentRepository;
+import fu.stockspace.stockspace_be.wms.stock.repository.InventoryAuditLockRepository;
+import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRackRepository;
+import fu.stockspace.stockspace_be.warehouse.repository.WarehouseBinRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -58,6 +62,10 @@ class InventoryAuditServiceTest {
     @Mock private TenantMemberRepository tenantMemberRepository;
     @Mock private StaffWarehouseAssignmentRepository assignmentRepository;
     @Mock private TenantWarehouseAccessService accessService;
+    @Mock private WarehouseRackRepository warehouseRackRepository;
+    @Mock private WarehouseBinRepository warehouseBinRepository;
+    @Mock private InventoryAuditLockService auditLockService;
+    @Mock private InventoryAuditAdjustmentRepository auditAdjustmentRepository;
 
     @InjectMocks
     private InventoryAuditService inventoryAuditService;
@@ -938,5 +946,77 @@ class InventoryAuditServiceTest {
 
         assertNotNull(response);
         assertTrue(response.getContent().isEmpty());
+    }
+
+    @Test
+    void testCreateAuditV2_CreatesDraftWithoutSnapshot() {
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(auditRepository.save(any(InventoryAudit.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        InventoryAuditResponse response = inventoryAuditService.createAuditV2(userId,
+                CreateInventoryAuditPlanRequest.builder().warehouseId(warehouseId).note("Cycle count").build());
+
+        assertEquals(AuditStatus.DRAFT, response.getStatus());
+        verify(stockBatchRepository, never()).findByWarehouseIdAndTenantId(any(), any(), any());
+    }
+
+    @Test
+    void testStartAuditV2_SnapshotsAndLocksWarehouse() {
+        InventoryAudit draft = InventoryAudit.builder()
+                .id(auditId).warehouse(warehouse).tenant(tenantUser).requestedBy(tenantUser)
+                .status(AuditStatus.DRAFT).workflowVersion(2).build();
+        when(auditRepository.findV2ByIdForUpdate(auditId)).thenReturn(Optional.of(draft));
+        when(stockBatchRepository.findByWarehouseIdAndTenantId(eq(warehouseId), eq(userId), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(stockBatch)));
+        when(auditItemRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(auditRepository.save(any(InventoryAudit.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(productSkuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(productSku));
+
+        InventoryAuditResponse response = inventoryAuditService.startAuditV2(userId, auditId);
+
+        assertEquals(AuditStatus.IN_PROGRESS, response.getStatus());
+        assertEquals(1, response.getItems().size());
+        verify(auditLockService).acquire(draft);
+    }
+
+    @Test
+    void testSubmitAuditV2_RejectsIncompleteCount() {
+        InventoryAudit inProgress = InventoryAudit.builder()
+                .id(auditId).warehouse(warehouse).tenant(tenantUser).requestedBy(tenantUser)
+                .status(AuditStatus.IN_PROGRESS).workflowVersion(2).build();
+        InventoryAuditItem uncounted = InventoryAuditItem.builder()
+                .id(UUID.randomUUID()).audit(inProgress).batch(stockBatch)
+                .expectedQuantity(100).countRound(1).build();
+        when(auditRepository.findV2ByIdForUpdate(auditId)).thenReturn(Optional.of(inProgress));
+        when(auditItemRepository.findByAuditIdAndCountRoundOrderById(auditId, 1))
+                .thenReturn(List.of(uncounted));
+
+        assertThrows(BadRequestException.class, () -> inventoryAuditService.submitAuditV2(userId, auditId));
+        verify(auditRepository, never()).save(any(InventoryAudit.class));
+    }
+
+    @Test
+    void testApproveAuditV2_AbortsWhenBookQuantityChanged() {
+        User counter = User.builder().id(UUID.randomUUID()).fullName("Counter").build();
+        InventoryAudit submitted = InventoryAudit.builder()
+                .id(auditId).warehouse(warehouse).tenant(tenantUser).requestedBy(tenantUser)
+                .status(AuditStatus.SUBMITTED).workflowVersion(2).assignedTo(counter).build();
+        InventoryAuditItem item = InventoryAuditItem.builder()
+                .id(UUID.randomUUID()).audit(submitted).batch(stockBatch)
+                .expectedQuantity(100).actualQuantity(95).discrepancy(-5)
+                .countStatus(fu.stockspace.stockspace_be.wms.stock.entity.AuditCountStatus.COUNTED)
+                .countRound(1).build();
+        StockBatch changedBatch = StockBatch.builder().id(batchId).skuId(skuId)
+                .warehouse(warehouse).quantity(90).build();
+        when(auditRepository.findV2ByIdForUpdate(auditId)).thenReturn(Optional.of(submitted));
+        when(userRepository.findById(approverId)).thenReturn(Optional.of(approverUser));
+        when(auditLockService.isLockedBy(auditId, warehouseId)).thenReturn(true);
+        when(auditItemRepository.findByAuditIdAndCountRoundOrderById(auditId, 1)).thenReturn(List.of(item));
+        when(stockBatchRepository.findByIdForUpdate(batchId)).thenReturn(Optional.of(changedBatch));
+
+        assertThrows(RuntimeException.class, () -> inventoryAuditService.approveAuditV2(approverId, auditId));
+        verify(inventoryReceiptService, never()).createAuditAdjustmentReceipt(any(), any(), any(), any(), any(), anyInt());
     }
 }

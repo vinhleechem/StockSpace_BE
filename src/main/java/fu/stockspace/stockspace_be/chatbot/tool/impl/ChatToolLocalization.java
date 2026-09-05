@@ -76,9 +76,13 @@ final class ChatToolLocalization {
         }
         return switch (status) {
             case PENDING -> "Chờ kiểm kê";
+            case DRAFT -> "Bản nháp";
+            case IN_PROGRESS -> "Đang kiểm kê";
             case SUBMITTED -> "Đã gửi kết quả";
+            case RECOUNT_REQUIRED -> "Yêu cầu kiểm kê lại";
             case APPROVED -> "Đã duyệt";
             case REJECTED -> "Đã từ chối";
+            case CANCELLED -> "Đã hủy";
         };
     }
 

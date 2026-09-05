@@ -53,6 +53,7 @@ import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferItem;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferSourceAllocation;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferStatus;
 import fu.stockspace.stockspace_be.wms.transfer.repository.StockTransferRepository;
+import fu.stockspace.stockspace_be.wms.stock.service.InventoryAuditLockService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -91,6 +92,7 @@ public class StockTransferService {
     private final TenantWarehouseAccessService accessService;
     private final PhysicalLoadCalculator physicalLoadCalculator;
     private final NotificationService notificationService;
+    private final InventoryAuditLockService inventoryAuditLockService;
 
     @Transactional
     public StockTransferResponse createTransfer(UUID userId, CreateStockTransferRequest request) {
@@ -211,6 +213,9 @@ public class StockTransferService {
         }
 
         requireTenantMutationAccess(tenantId, transfer);
+        if (inventoryAuditLockService != null) {
+            inventoryAuditLockService.assertMovementAllowed(transfer.getSourceWarehouse().getId());
+        }
         List<LockedSourceAllocation> lockedAllocations = lockAndValidateSourceAllocations(transfer);
 
         InventoryReceipt outboundReceipt = receiptRepository.save(InventoryReceipt.builder()
@@ -275,6 +280,9 @@ public class StockTransferService {
         }
 
         requireTenantMutationAccess(tenantId, transfer);
+        if (inventoryAuditLockService != null) {
+            inventoryAuditLockService.assertMovementAllowed(transfer.getDestinationWarehouse().getId());
+        }
         WarehouseLayout destinationLayout = findActiveTenantLayout(
                 transfer.getDestinationWarehouse().getId(), tenantId);
         List<DestinationAllocationReference> references = validateDestinationAllocations(

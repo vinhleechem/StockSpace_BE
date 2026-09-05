@@ -45,7 +45,7 @@ public final class DefaultRbacPolicy {
                 PermissionCode.INVENTORY_DELETE, PermissionCode.INBOUND_CREATE,
                 PermissionCode.OUTBOUND_CREATE, PermissionCode.INVENTORY_AUDIT_MANAGE,
                 PermissionCode.PRODUCT_MANAGE, PermissionCode.STAFF_MANAGE,
-                PermissionCode.PACKAGE_PURCHASE
+                PermissionCode.PACKAGE_PURCHASE, PermissionCode.TENANT_DASHBOARD_READ
         ));
         grants.put(RoleType.ROLE_STAFF, permissions(
                 PermissionCode.AUTH_SESSION_MANAGE, PermissionCode.PROFILE_READ, PermissionCode.PROFILE_UPDATE,

@@ -140,6 +140,10 @@ public enum ErrorCode {
     AUDIT_NOT_FOUND("Không tìm thấy phiếu kiểm kê", HttpStatus.NOT_FOUND),
     AUDIT_ALREADY_PROCESSED("Phiếu kiểm kê đã được xử lý (APPROVED/REJECTED)", HttpStatus.BAD_REQUEST),
     AUDIT_INVALID_STATUS("Trạng thái phiếu kiểm kê không hợp lệ để thực hiện hành động này", HttpStatus.BAD_REQUEST),
+    AUDIT_SCOPE_INVALID("Phạm vi kiểm kê không hợp lệ", HttpStatus.BAD_REQUEST),
+    AUDIT_COUNT_INCOMPLETE("Chưa nhập đủ số lượng thực tế cho phiếu kiểm kê", HttpStatus.BAD_REQUEST),
+    AUDIT_MOVEMENT_LOCKED("Kho đang bị khóa để kiểm kê, không thể thay đổi tồn kho", HttpStatus.CONFLICT),
+    AUDIT_STOCK_CHANGED("Tồn kho đã thay đổi trong lúc kiểm kê, cần kiểm tra lại", HttpStatus.CONFLICT),
 
 
     CHAT_SESSION_NOT_FOUND("Phiên hội thoại không tồn tại", HttpStatus.NOT_FOUND),

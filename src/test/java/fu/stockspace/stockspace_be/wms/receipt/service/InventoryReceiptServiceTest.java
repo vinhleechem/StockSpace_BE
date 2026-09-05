@@ -552,7 +552,72 @@ class InventoryReceiptServiceTest {
     }
 
     @Test
-    void testCreateReceipt_Outbound_RejectsManualLocation() {
+    void testCreateReceipt_Outbound_ManualLocationAllocatesFifoWithinSelectedBin() {
+        UUID firstBatchId = UUID.randomUUID();
+        UUID secondBatchId = UUID.randomUUID();
+        StockBatch firstBatch = StockBatch.builder()
+                .id(firstBatchId)
+                .skuId(skuId)
+                .warehouse(warehouse)
+                .rack(rack)
+                .bin(bin)
+                .quantity(4)
+                .arrivalDate(java.time.LocalDateTime.of(2026, 1, 8, 0, 0))
+                .build();
+        StockBatch secondBatch = StockBatch.builder()
+                .id(secondBatchId)
+                .skuId(skuId)
+                .warehouse(warehouse)
+                .rack(rack)
+                .bin(bin)
+                .quantity(10)
+                .arrivalDate(java.time.LocalDateTime.of(2026, 5, 8, 0, 0))
+                .build();
+        when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, userId))
+                .thenReturn(Optional.of(productSku));
+        when(rackRepository.findByIdAndIsDeletedFalse(rackId)).thenReturn(Optional.of(rack));
+        when(binRepository.findByIdAndIsDeletedFalse(binId)).thenReturn(Optional.of(bin));
+        when(stockBatchRepository.findAllBySkuIdAndWarehouseIdAndIsActiveTrueAndIsDeletedFalse(
+                skuId, warehouseId)).thenReturn(List.of(secondBatch, firstBatch));
+        when(receiptRepository.save(any(InventoryReceipt.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(receiptItemRepository.save(any(InventoryReceiptItem.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        ReceiptItemRequest itemRequest = ReceiptItemRequest.builder()
+                .skuId(skuId)
+                .quantity(6)
+                .rackId(rackId)
+                .binId(binId)
+                .note("Manual location")
+                .build();
+        CreateInventoryReceiptRequest request = CreateInventoryReceiptRequest.builder()
+                .warehouseId(warehouseId)
+                .type(DocumentType.OUTBOUND)
+                .items(List.of(itemRequest))
+                .build();
+
+        InventoryReceiptResponse response = receiptService.createReceipt(userId, request);
+
+        assertEquals("MANUAL_LOCATION_FIFO_V1", response.getPickList().strategy());
+        assertTrue(response.getPickList().complete());
+        assertEquals(2, response.getItems().size());
+        assertEquals(firstBatchId, response.getItems().get(0).getStockBatchId());
+        assertEquals(4, response.getItems().get(0).getQuantity());
+        assertEquals(secondBatchId, response.getItems().get(1).getStockBatchId());
+        assertEquals(2, response.getItems().get(1).getQuantity());
+        assertEquals(rackId, response.getItems().get(0).getRackId());
+        assertEquals(binId, response.getItems().get(0).getBinId());
+        assertEquals(1, response.getItems().get(0).getPickSequence());
+        verify(pickingSuggestionService, never()).suggest(any(), any(), any(), any());
+        verify(receiptRepository).save(any(InventoryReceipt.class));
+        verify(receiptItemRepository, times(2)).save(any(InventoryReceiptItem.class));
+    }
+
+    @Test
+    void testCreateReceipt_Outbound_RejectsIncompleteManualLocation() {
         when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
 
@@ -560,7 +625,6 @@ class InventoryReceiptServiceTest {
                 .skuId(skuId)
                 .quantity(10)
                 .rackId(rackId)
-                .binId(binId)
                 .build();
         CreateInventoryReceiptRequest request = CreateInventoryReceiptRequest.builder()
                 .warehouseId(warehouseId)
@@ -571,6 +635,42 @@ class InventoryReceiptServiceTest {
         assertThrows(BadRequestException.class, () -> receiptService.createReceipt(userId, request));
         verify(pickingSuggestionService, never()).suggest(any(), any(), any(), any());
         verify(receiptRepository, never()).save(any(InventoryReceipt.class));
+    }
+
+    @Test
+    void testCreateReceipt_Outbound_ManualLocationRejectsInsufficientStockBeforeSaving() {
+        StockBatch batch = StockBatch.builder()
+                .id(UUID.randomUUID())
+                .skuId(skuId)
+                .warehouse(warehouse)
+                .rack(rack)
+                .bin(bin)
+                .quantity(4)
+                .build();
+        when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, userId))
+                .thenReturn(Optional.of(productSku));
+        when(rackRepository.findByIdAndIsDeletedFalse(rackId)).thenReturn(Optional.of(rack));
+        when(binRepository.findByIdAndIsDeletedFalse(binId)).thenReturn(Optional.of(bin));
+        when(stockBatchRepository.findAllBySkuIdAndWarehouseIdAndIsActiveTrueAndIsDeletedFalse(
+                skuId, warehouseId)).thenReturn(List.of(batch));
+
+        CreateInventoryReceiptRequest request = CreateInventoryReceiptRequest.builder()
+                .warehouseId(warehouseId)
+                .type(DocumentType.OUTBOUND)
+                .items(List.of(ReceiptItemRequest.builder()
+                        .skuId(skuId)
+                        .quantity(5)
+                        .rackId(rackId)
+                        .binId(binId)
+                        .build()))
+                .build();
+
+        assertThrows(BadRequestException.class, () -> receiptService.createReceipt(userId, request));
+        verify(pickingSuggestionService, never()).suggest(any(), any(), any(), any());
+        verify(receiptRepository, never()).save(any(InventoryReceipt.class));
+        verify(receiptItemRepository, never()).save(any(InventoryReceiptItem.class));
     }
 
     @Test

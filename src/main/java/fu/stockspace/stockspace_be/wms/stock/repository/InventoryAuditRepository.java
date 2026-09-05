@@ -36,6 +36,10 @@ public interface InventoryAuditRepository extends JpaRepository<InventoryAudit, 
             """)
     Optional<InventoryAudit> findByIdForUpdate(@Param("auditId") UUID auditId);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select a from InventoryAudit a where a.id = :auditId and a.workflowVersion = 2 and a.isDeleted = false")
+    Optional<InventoryAudit> findV2ByIdForUpdate(@Param("auditId") UUID auditId);
+
     @Query("""
             select a from InventoryAudit a
             where a.warehouse.id in :warehouseIds
@@ -45,6 +49,39 @@ public interface InventoryAuditRepository extends JpaRepository<InventoryAudit, 
             """)
     List<InventoryAudit> findActiveOperationsByWarehouseIds(
             @Param("warehouseIds") Collection<UUID> warehouseIds);
+
+    @Query("""
+            SELECT COUNT(a) FROM InventoryAudit a
+            WHERE a.status IN :statuses
+              AND a.isActive = true
+              AND a.isDeleted = false
+              AND (
+                    a.requestedBy.id = :tenantId
+                    OR EXISTS (
+                        SELECT m.id
+                        FROM TenantMember m
+                        WHERE m.user.id = a.requestedBy.id
+                          AND m.tenant.id = :tenantId
+                    )
+              )
+              AND EXISTS (
+                    SELECT c.id
+                    FROM RentalContract c
+                    WHERE c.tenant.id = :tenantId
+                      AND c.warehouse.id = a.warehouse.id
+                      AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
+                      AND c.isActive = true
+                      AND c.isDeleted = false
+                      AND c.startDate IS NOT NULL
+                      AND c.endDate IS NOT NULL
+                      AND c.startDate <= :today
+                      AND c.endDate >= :today
+              )
+            """)
+    long countPendingForTenant(
+            @Param("tenantId") UUID tenantId,
+            @Param("statuses") Collection<AuditStatus> statuses,
+            @Param("today") java.time.LocalDate today);
 
     @Query("""
             SELECT a FROM InventoryAudit a
@@ -63,6 +100,25 @@ public interface InventoryAuditRepository extends JpaRepository<InventoryAudit, 
               )
             """)
     Page<InventoryAudit> findAuditsForTenant(
+            @Param("warehouseId") UUID warehouseId,
+            @Param("warehouseIds") Collection<UUID> warehouseIds,
+            @Param("tenantId") UUID tenantId,
+            Pageable pageable
+    );
+
+    @Query("""
+            SELECT a FROM InventoryAudit a
+            WHERE a.workflowVersion = 2
+              AND a.isDeleted = false
+              AND ((:warehouseId IS NOT NULL AND a.warehouse.id = :warehouseId)
+                   OR (:warehouseId IS NULL AND a.warehouse.id IN :warehouseIds))
+              AND (a.tenant.id = :tenantId
+                   OR a.requestedBy.id = :tenantId
+                   OR EXISTS (SELECT m.id FROM TenantMember m
+                              WHERE m.user.id = a.requestedBy.id AND m.tenant.id = :tenantId
+                                AND m.isActive = true AND m.isDeleted = false))
+            """)
+    Page<InventoryAudit> findV2AuditsForTenant(
             @Param("warehouseId") UUID warehouseId,
             @Param("warehouseIds") Collection<UUID> warehouseIds,
             @Param("tenantId") UUID tenantId,

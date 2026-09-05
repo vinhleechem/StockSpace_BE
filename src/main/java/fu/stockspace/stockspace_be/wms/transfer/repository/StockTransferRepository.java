@@ -74,6 +74,17 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, UU
             @Param("warehouseIds") Collection<UUID> warehouseIds);
 
     @Query("""
+            SELECT COUNT(t) FROM StockTransfer t
+            WHERE t.tenant.id = :tenantId
+              AND t.status IN :statuses
+              AND t.isActive = true
+              AND t.isDeleted = false
+            """)
+    long countPendingForTenant(
+            @Param("tenantId") UUID tenantId,
+            @Param("statuses") Collection<StockTransferStatus> statuses);
+
+    @Query("""
             select t from StockTransfer t
             where t.id = :transferId
               and t.tenant.id = :tenantId

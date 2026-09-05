@@ -111,7 +111,7 @@ class CurrentTenantWmsChatToolsTest {
                         InventoryAuditItemResponse.builder().discrepancy(5).build(),
                         InventoryAuditItemResponse.builder().discrepancy(0).build()))
                 .build();
-        when(auditService.getMyAudits(eq(userId), eq(warehouseId), any(Pageable.class)))
+        when(auditService.getAuditsV2(eq(userId), eq(warehouseId), any(Pageable.class)))
                 .thenReturn(page(List.of(audit), 1));
 
         JsonNode result = objectMapper.readTree(new GetInventoryAuditsTool(objectMapper, auditService)

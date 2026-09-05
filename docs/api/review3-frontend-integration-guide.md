@@ -332,10 +332,22 @@ receipt. Both fields are optional and limited to 255 characters so existing and
 system-generated receipts remain compatible.
 
 `type` is `INBOUND` or `OUTBOUND`. Every item requires a positive integer
-`quantity`, `skuId`, `rackId` and `binId`. New receipts start at
-`PENDING`; stock changes only when the receipt is approved. Capacity is checked
-again during the mutation, so a previously displayed suggestion can become
-stale.
+`quantity` and a `skuId`. Location handling depends on the receipt type:
+
+- `INBOUND`: every item requires `rackId` and `binId`. The frontend may call the
+  put-away suggestion endpoint first, but the user can accept or manually edit
+  those locations before creating the receipt.
+- `OUTBOUND` automatic mode (default): omit both `rackId` and `binId` from every
+  item. The backend creates a FIFO pick list across the warehouse.
+- `OUTBOUND` manual-location mode: provide both `rackId` and `binId` for every
+  item. The backend uses only stock in the selected bin and allocates its stock
+  batches FIFO. The response pick list has strategy
+  `MANUAL_LOCATION_FIFO_V1`.
+
+Do not mix automatic and manual outbound items in one request, and do not send
+only one of `rackId`/`binId`. New receipts start at `PENDING`; stock changes only
+when the receipt is approved. Capacity/stock is checked again during the
+mutation, so a previously displayed suggestion or pick list can become stale.
 
 Receipt response fields are `id`, `warehouseId`, `warehouseName`, creator data,
 `type`, `signatureData`, `senderName`, `receiverName`, `status`, `rejectReason`,

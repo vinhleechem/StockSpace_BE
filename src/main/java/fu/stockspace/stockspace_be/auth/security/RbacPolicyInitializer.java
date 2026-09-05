@@ -27,7 +27,7 @@ import java.util.Set;
 @Slf4j
 public class RbacPolicyInitializer implements CommandLineRunner {
 
-    private static final String POLICY_VERSION = "2026-09-04.1";
+    private static final String POLICY_VERSION = "2026-09-04.2";
     private static final String POLICY_VERSION_KEY = "rbac_policy_version";
 
     private final PermissionRepository permissionRepository;

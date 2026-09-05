@@ -37,6 +37,7 @@ public class StockBatchService {
     private final WarehouseRepository warehouseRepository;
     private final ProductSkuRepository productSkuRepository;
     private final TenantWarehouseAccessService accessService;
+    private final InventoryAuditLockService inventoryAuditLockService;
 
 
 
@@ -203,6 +204,13 @@ public class StockBatchService {
     public void adjustQuantity(UUID batchId, int delta) {
         StockBatch batch = stockBatchRepository.findByIdAndIsDeletedFalse(batchId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STOCK_BATCH_NOT_FOUND));
+        if (inventoryAuditLockService != null && batch.getWarehouse() != null) {
+            inventoryAuditLockService.assertMovementAllowed(batch.getWarehouse().getId());
+            // Re-read after the warehouse lock is acquired so two direct stock
+            // mutations cannot calculate from the same stale quantity.
+            batch = stockBatchRepository.findByIdForUpdate(batchId)
+                    .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STOCK_BATCH_NOT_FOUND));
+        }
         int newQty = batch.getQuantity() + delta;
         if (newQty < 0) {
             throw new BadRequestException(ErrorCode.STOCK_INSUFFICIENT_QUANTITY);

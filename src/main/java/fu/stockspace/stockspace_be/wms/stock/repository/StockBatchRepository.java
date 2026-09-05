@@ -104,6 +104,47 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
     );
 
     @Query("""
+            SELECT COUNT(DISTINCT b.skuId) AS productCount,
+                   COUNT(b.id) AS batchCount,
+                   COALESCE(SUM(b.quantity), 0) AS totalQuantity
+            FROM StockBatch b
+            JOIN ProductSku s ON s.id = b.skuId
+            WHERE b.isActive = true
+              AND b.isDeleted = false
+              AND s.isActive = true
+              AND s.isDeleted = false
+              AND (
+                    s.tenant.id = :tenantId
+                    OR (
+                        s.tenant IS NULL
+                        AND NOT EXISTS (
+                            SELECT 1
+                            FROM ProductSku sub
+                            WHERE sub.tenant.id = :tenantId
+                              AND sub.skuCode = s.skuCode
+                              AND sub.isDeleted = false
+                        )
+                    )
+              )
+              AND EXISTS (
+                    SELECT c.id
+                    FROM RentalContract c
+                    WHERE c.tenant.id = :tenantId
+                      AND c.warehouse.id = b.warehouse.id
+                      AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
+                      AND c.isActive = true
+                      AND c.isDeleted = false
+                      AND c.startDate IS NOT NULL
+                      AND c.endDate IS NOT NULL
+                      AND c.startDate <= :today
+                      AND c.endDate >= :today
+              )
+            """)
+    TenantStockSummaryProjection summarizeForTenant(
+            @Param("tenantId") UUID tenantId,
+            @Param("today") java.time.LocalDate today);
+
+    @Query("""
             SELECT b FROM StockBatch b
             WHERE b.skuId = :skuId
               AND b.isActive = true
@@ -165,6 +206,14 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
     Optional<StockBatch> findByIdForUpdate(@Param("id") UUID id);
 
     interface WarehouseStockSummaryProjection {
+        Long getProductCount();
+
+        Long getBatchCount();
+
+        Long getTotalQuantity();
+    }
+
+    interface TenantStockSummaryProjection {
         Long getProductCount();
 
         Long getBatchCount();
