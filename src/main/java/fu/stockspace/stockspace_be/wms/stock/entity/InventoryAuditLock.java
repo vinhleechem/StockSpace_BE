@@ -9,7 +9,7 @@ import lombok.experimental.SuperBuilder;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/** Movement lock held while a v2 audit is actively counting. */
+/** Movement lock held while an audit is actively counting. */
 @Entity
 @Table(name = "inventory_audit_locks", indexes = {
         @Index(name = "idx_inventory_audit_locks_warehouse", columnList = "warehouse_id"),

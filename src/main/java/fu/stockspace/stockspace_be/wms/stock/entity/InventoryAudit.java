@@ -34,7 +34,7 @@ public class InventoryAudit extends BaseEntity {
     @JoinColumn(name = "warehouse_id", nullable = false)
     private Warehouse warehouse;
 
-    /** Immutable tenant owner. Nullable only for legacy rows created before v2. */
+    /** Immutable tenant owner of the audit. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tenant_id")
     private User tenant;
@@ -67,14 +67,10 @@ public class InventoryAudit extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     @Builder.Default
-    private AuditStatus status = AuditStatus.PENDING;
+    private AuditStatus status = AuditStatus.DRAFT;
 
     @Column(name = "note", columnDefinition = "text")
     private String note;
-
-    @Column(name = "workflow_version", nullable = false)
-    @Builder.Default
-    private int workflowVersion = 1;
 
     @Column(name = "count_round", nullable = false)
     @Builder.Default

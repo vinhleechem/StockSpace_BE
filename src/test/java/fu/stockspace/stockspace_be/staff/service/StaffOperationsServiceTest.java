@@ -81,7 +81,7 @@ class StaffOperationsServiceTest {
         InventoryAudit pendingAudit = InventoryAudit.builder()
                 .id(UUID.randomUUID())
                 .warehouse(warehouseA)
-                .status(AuditStatus.PENDING)
+                .status(AuditStatus.DRAFT)
                 .createdAt(LocalDateTime.of(2026, 8, 27, 11, 0))
                 .build();
         StockTransfer pendingTransfer = StockTransfer.builder()

@@ -11,7 +11,6 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundE
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
-import fu.stockspace.stockspace_be.staff.entity.TenantMember;
 import fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseBin;
@@ -74,288 +73,13 @@ public class InventoryAuditService {
     private final InventoryAuditLockService auditLockService;
     private final InventoryAuditAdjustmentRepository auditAdjustmentRepository;
 
-    @Transactional
-    public InventoryAuditResponse createAudit(UUID userId, CreateInventoryAuditRequest request) {
-        User requestedBy = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
-        Warehouse warehouse = warehouseRepository.findById(request.getWarehouseId())
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
-        UUID tenantId = resolveTenantId(userId);
-        requireWarehouseMutationAccess(requestedBy, tenantId, warehouse.getId());
-
-        InventoryAudit audit = InventoryAudit.builder()
-                .warehouse(warehouse)
-                .requestedBy(requestedBy)
-                .status(AuditStatus.PENDING)
-                .note(request.getNote())
-                .build();
-        audit = auditRepository.save(audit);
-
-        List<StockBatch> batches = stockBatchRepository.findByWarehouseIdAndTenantId(
-                warehouse.getId(), tenantId, Pageable.unpaged()).getContent();
-
-        final InventoryAudit savedAudit = audit;
-        List<InventoryAuditItem> items = batches.stream()
-                .map(batch -> InventoryAuditItem.builder()
-                        .audit(savedAudit)
-                        .batch(batch)
-                        .expectedQuantity(batch.getQuantity())
-                        .actualQuantity(null)
-                        .discrepancy(null)
-                        .build())
-                .collect(Collectors.toList());
-        auditItemRepository.saveAll(items);
-
-        try {
-            final String whName = warehouse.getName();
-            if (userId.equals(tenantId)) {
-                // Tenant tạo phiếu -> thông báo cho các Staff
-                List<TenantMember> staffList = tenantMemberRepository.findActiveStaffsOrderByJoinedAtAsc(tenantId);
-                for (TenantMember staff : staffList) {
-                    if (staff.getUser() != null) {
-                        notificationService.push(
-                                staff.getUser().getId(),
-                                "Lệnh kiểm kê kho mới",
-                                "Có phiếu kiểm kê mới cho kho '" + whName + "'. Vui lòng tiến hành kiểm đếm hàng hóa.",
-                                "AUDIT"
-                        );
-                    }
-                }
-            } else {
-                // Staff tạo phiếu -> thông báo cho Tenant
-                String creatorName = requestedBy.getFullName() != null ? requestedBy.getFullName() : requestedBy.getEmail();
-                notificationService.push(
-                        tenantId,
-                        "Phiếu kiểm kê kho mới",
-                        "Nhân viên '" + creatorName + "' vừa tạo phiếu kiểm kê cho kho '" + whName + "'.",
-                        "AUDIT"
-                );
-            }
-        } catch (Exception e) {
-            log.warn("Failed to push create audit notification: {}", e.getMessage());
-        }
-
-        log.info("InventoryAudit: Created audit {} for warehouse {} ({} batch lines snapshotted)",
-                audit.getId(), warehouse.getId(), items.size());
-        return mapToResponse(audit, items);
-    }
-
-    @Transactional
-    public InventoryAuditResponse submitAudit(UUID userId, UUID auditId, SubmitAuditRequest request) {
-        InventoryAudit audit = getAuditForUserForUpdate(auditId, userId);
-        User actor = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
-        requireWarehouseMutationAccess(actor, resolveTenantId(userId), audit.getWarehouse().getId());
-
-        if (audit.getStatus() != AuditStatus.PENDING) {
-            throw new BadRequestException(ErrorCode.AUDIT_INVALID_STATUS);
-        }
-
-        List<InventoryAuditItem> items = auditItemRepository.findByAuditId(auditId);
-
-        for (SubmitAuditItemRequest itemReq : request.getItems()) {
-            items.stream()
-                    .filter(i -> i.getBatch().getId().equals(itemReq.getBatchId()))
-                    .findFirst()
-                    .ifPresent(auditItem -> {
-                        auditItem.setActualQuantity(itemReq.getActualQuantity());
-                        auditItem.setDiscrepancy(itemReq.getActualQuantity() - auditItem.getExpectedQuantity());
-                        auditItem.setNote(itemReq.getNote());
-                        auditItemRepository.save(auditItem);
-                    });
-        }
-
-        audit.setStatus(AuditStatus.SUBMITTED);
-        audit = auditRepository.save(audit);
-
-        try {
-            final String whName = audit.getWarehouse().getName();
-            UUID tenantId = tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(userId)
-                    .map(member -> member.getTenant().getId())
-                    .orElse(userId);
-
-            notificationService.push(
-                    tenantId,
-                    "Kết quả kiểm kê đã được nộp",
-                    "Kết quả kiểm đếm cho kho '" + whName + "' đã được nộp. Vui lòng kiểm tra đối soát và phê duyệt.",
-                    "AUDIT"
-            );
-        } catch (Exception e) {
-            log.warn("Failed to push submit audit notification: {}", e.getMessage());
-        }
-
-        List<InventoryAuditItem> updatedItems = auditItemRepository.findByAuditId(auditId);
-        log.info("InventoryAudit: Audit {} submitted by user {}", auditId, userId);
-        return mapToResponse(audit, updatedItems);
-    }
-
-    @Transactional
-    public InventoryAuditResponse approveAudit(UUID approverId, UUID auditId) {
-        InventoryAudit audit = auditRepository.findByIdForUpdate(auditId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.AUDIT_NOT_FOUND));
-
-        if (audit.getStatus() != AuditStatus.SUBMITTED) {
-            throw new BadRequestException(ErrorCode.AUDIT_INVALID_STATUS);
-        }
-
-        User approver = userRepository.findById(approverId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
-        ensureApproverIsTenant(approver);
-        UUID tenantId = resolveTenantId(approverId);
-        requireAuditTenantAccess(audit, tenantId);
-        requireWarehouseMutationAccess(approver, tenantId, audit.getWarehouse().getId());
-
-        List<InventoryAuditItem> items = auditItemRepository.findByAuditId(auditId);
-        UUID warehouseId = audit.getWarehouse().getId();
-
-        for (InventoryAuditItem item : items) {
-            if (item.getDiscrepancy() == null || item.getDiscrepancy() == 0)
-                continue;
-
-            int absDiscrepancy = Math.abs(item.getDiscrepancy());
-            DocumentType type = item.getDiscrepancy() > 0 ? DocumentType.INBOUND : DocumentType.OUTBOUND;
-
-            inventoryReceiptService.createAdjustmentReceipt(
-                    approverId, auditId, warehouseId,
-                    type, item.getBatch().getId(), absDiscrepancy);
-        }
-
-        audit.setApprovedBy(approver);
-        audit.setStatus(AuditStatus.APPROVED);
-        audit = auditRepository.save(audit);
-
-        String warehouseName = audit.getWarehouse().getName();
-        notificationService.push(
-                audit.getRequestedBy().getId(),
-                "Phiếu kiểm kê đã được duyệt",
-                "Phiếu kiểm kê kho " + warehouseName + " đã được duyệt. Tồn kho đã được điều chỉnh tự động.",
-                "AUDIT");
-
-        log.info("InventoryAudit: Audit {} approved by user {}", auditId, approverId);
-        return mapToResponse(audit, items);
-    }
-
-    @Transactional
-    public InventoryAuditResponse rejectAudit(UUID approverId, UUID auditId, String reason) {
-        InventoryAudit audit = auditRepository.findByIdForUpdate(auditId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.AUDIT_NOT_FOUND));
-
-        if (audit.getStatus() != AuditStatus.SUBMITTED && audit.getStatus() != AuditStatus.PENDING) {
-            throw new BadRequestException(ErrorCode.AUDIT_ALREADY_PROCESSED);
-        }
-
-        User approver = userRepository.findById(approverId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
-        ensureApproverIsTenant(approver);
-        UUID tenantId = resolveTenantId(approverId);
-        requireAuditTenantAccess(audit, tenantId);
-        requireWarehouseMutationAccess(approver, tenantId, audit.getWarehouse().getId());
-
-        audit.setApprovedBy(approver);
-        audit.setStatus(AuditStatus.REJECTED);
-        if (reason != null && !reason.isBlank()) {
-            audit.setNote(audit.getNote() != null
-                    ? audit.getNote() + " | Lý do từ chối: " + reason
-                    : "Lý do từ chối: " + reason);
-        }
-        audit = auditRepository.save(audit);
-
-        String warehouseName = audit.getWarehouse().getName();
-        notificationService.push(
-                audit.getRequestedBy().getId(),
-                "Phiếu kiểm kê bị từ chối",
-                "Phiếu kiểm kê kho " + warehouseName + " bị từ chối. Lý do: "
-                        + (reason != null ? reason : "Không có lý do cụ thể"),
-                "AUDIT");
-
-        log.info("InventoryAudit: Audit {} rejected by user {} (reason: {})", auditId, approverId, reason);
-        List<InventoryAuditItem> items = auditItemRepository.findByAuditId(auditId);
-        return mapToResponse(audit, items);
-    }
-
-    @Transactional(readOnly = true)
-    public PagedResponse<InventoryAuditResponse> getMyAudits(UUID userId, Pageable pageable) {
-        return getMyAudits(userId, null, pageable);
-    }
-
-    @Transactional(readOnly = true)
-    public PagedResponse<InventoryAuditResponse> getMyAudits(UUID userId, UUID warehouseId, Pageable pageable) {
-        User actor = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
-        UUID tenantId = resolveTenantId(userId);
-        List<UUID> accessibleWarehouseIds = (isStaff(actor)
-                ? accessService.findAccessibleContractWarehouses(tenantId, userId)
-                : accessService.findActiveContractWarehouses(tenantId))
-                .stream()
-                .map(Warehouse::getId)
-                .toList();
-
-        Page<InventoryAudit> page;
-        if (warehouseId != null) {
-            requireWarehouseObservationAccess(actor, tenantId, warehouseId);
-            page = auditRepository.findAuditsForTenant(
-                    warehouseId, List.of(warehouseId), tenantId, pageable);
-        } else if (!accessibleWarehouseIds.isEmpty()) {
-            page = auditRepository.findAuditsForTenant(null, accessibleWarehouseIds, tenantId, pageable);
-        } else {
-            page = Page.empty(pageable);
-        }
-
-        return PagedResponse.fromPage(page, audit -> {
-            List<InventoryAuditItem> items = auditItemRepository.findByAuditId(audit.getId());
-            return mapToResponse(audit, items);
-        });
-    }
-
-    @Transactional(readOnly = true)
-    public InventoryAuditResponse getAuditDetail(UUID userId, UUID auditId) {
-        InventoryAudit audit = getAuditForUser(auditId, userId);
-        List<InventoryAuditItem> items = auditItemRepository.findByAuditId(auditId);
-        return mapToResponse(audit, items);
-    }
-
     @Transactional(readOnly = true)
     public PagedResponse<InventoryAuditResponse> getAllAudits(Pageable pageable) {
-        Page<InventoryAudit> page = auditRepository.findByIsDeletedFalse(pageable);
+        Page<InventoryAudit> page = auditRepository.findCanonicalAudits(pageable);
         return PagedResponse.fromPage(page, audit -> {
             List<InventoryAuditItem> items = auditItemRepository.findByAuditId(audit.getId());
             return mapToResponse(audit, items);
         });
-    }
-
-    private InventoryAudit getAuditForUser(UUID auditId, UUID userId) {
-        InventoryAudit audit = auditRepository.findById(auditId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.AUDIT_NOT_FOUND));
-        User actor = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
-        UUID tenantId = resolveTenantId(userId);
-        requireAuditTenantAccess(audit, tenantId);
-        requireWarehouseObservationAccess(actor, tenantId, audit.getWarehouse().getId());
-        return audit;
-    }
-
-    private InventoryAudit getAuditForUserForUpdate(UUID auditId, UUID userId) {
-        InventoryAudit audit = auditRepository.findByIdForUpdate(auditId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.AUDIT_NOT_FOUND));
-        User actor = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
-        UUID tenantId = resolveTenantId(userId);
-        requireAuditTenantAccess(audit, tenantId);
-        requireWarehouseObservationAccess(actor, tenantId, audit.getWarehouse().getId());
-        return audit;
-    }
-
-    private void requireAuditTenantAccess(InventoryAudit audit, UUID tenantId) {
-        UUID requesterId = audit.getRequestedBy().getId();
-        boolean requestedByTenant = requesterId.equals(tenantId);
-        boolean requestedByStaffOfTenant = tenantMemberRepository
-                .findByUserIdOrderByJoinedAtDesc(requesterId)
-                .stream()
-                .anyMatch(member -> member.getTenant() != null
-                        && tenantId.equals(member.getTenant().getId()));
-        if (!requestedByTenant && !requestedByStaffOfTenant) {
-            throw new ForbiddenException(ErrorCode.FORBIDDEN);
-        }
     }
 
     private UUID resolveTenantId(UUID userId) {
@@ -448,10 +172,10 @@ public class InventoryAuditService {
                 .build();
     }
 
-    /* ----------------------------- v2 workflow ----------------------------- */
+    /* -------------------------- canonical workflow ------------------------- */
 
     @Transactional
-    public InventoryAuditResponse createAuditV2(UUID userId, CreateInventoryAuditPlanRequest request) {
+    public InventoryAuditResponse createAudit(UUID userId, CreateInventoryAuditPlanRequest request) {
         User actor = findUser(userId);
         UUID tenantId = resolveTenantId(userId);
         Warehouse warehouse = warehouseRepository.findById(request.getWarehouseId())
@@ -503,7 +227,6 @@ public class InventoryAuditService {
                 .scopeType(request.getScopeType() == null ? AuditScopeType.WAREHOUSE : request.getScopeType())
                 .scopeRack(rack)
                 .scopeBin(bin)
-                .workflowVersion(2)
                 .countRound(1)
                 .status(AuditStatus.DRAFT)
                 .note(request.getNote())
@@ -513,10 +236,10 @@ public class InventoryAuditService {
     }
 
     @Transactional
-    public InventoryAuditResponse startAuditV2(UUID userId, UUID auditId) {
-        InventoryAudit audit = getV2ForUpdate(auditId);
+    public InventoryAuditResponse startAudit(UUID userId, UUID auditId) {
+        InventoryAudit audit = getAuditForUpdate(auditId);
         User actor = findUser(userId);
-        requireV2CountAccess(audit, actor);
+        requireAuditCountAccess(audit, actor);
         if (audit.getStatus() != AuditStatus.DRAFT && audit.getStatus() != AuditStatus.RECOUNT_REQUIRED) {
             throw new BadRequestException(ErrorCode.AUDIT_INVALID_STATUS);
         }
@@ -563,14 +286,14 @@ public class InventoryAuditService {
     }
 
     @Transactional
-    public InventoryAuditResponse saveAuditCountsV2(UUID userId, UUID auditId, SaveAuditCountsRequest request) {
-        InventoryAudit audit = getV2ForUpdate(auditId);
+    public InventoryAuditResponse saveAuditCounts(UUID userId, UUID auditId, SaveAuditCountsRequest request) {
+        InventoryAudit audit = getAuditForUpdate(auditId);
         User actor = findUser(userId);
-        requireV2CountAccess(audit, actor);
+        requireAuditCountAccess(audit, actor);
         if (audit.getStatus() != AuditStatus.IN_PROGRESS) {
             throw new BadRequestException(ErrorCode.AUDIT_INVALID_STATUS);
         }
-        List<InventoryAuditItem> items = currentV2Items(audit);
+        List<InventoryAuditItem> items = currentAuditItems(audit);
         Set<UUID> knownIds = items.stream().map(InventoryAuditItem::getId).collect(Collectors.toSet());
         Set<UUID> submittedIds = new HashSet<>();
         for (SaveAuditCountItemRequest requestItem : request.getItems()) {
@@ -589,15 +312,15 @@ public class InventoryAuditService {
             item.setCountedAt(LocalDateTime.now());
             auditItemRepository.save(item);
         }
-        return maskCounterResponse(mapToResponse(audit, currentV2Items(audit)), actor);
+        return maskCounterResponse(mapToResponse(audit, currentAuditItems(audit)), actor);
     }
 
     @Transactional
-    public InventoryAuditResponse addUnexpectedItemV2(
+    public InventoryAuditResponse addUnexpectedItem(
             UUID userId, UUID auditId, AddUnexpectedAuditItemRequest request) {
-        InventoryAudit audit = getV2ForUpdate(auditId);
+        InventoryAudit audit = getAuditForUpdate(auditId);
         User actor = findUser(userId);
-        requireV2CountAccess(audit, actor);
+        requireAuditCountAccess(audit, actor);
         if (audit.getStatus() != AuditStatus.IN_PROGRESS) {
             throw new BadRequestException(ErrorCode.AUDIT_INVALID_STATUS);
         }
@@ -638,7 +361,7 @@ public class InventoryAuditService {
 
         final WarehouseRack resolvedRack = rack;
         final WarehouseBin resolvedBin = bin;
-        List<InventoryAuditItem> current = currentV2Items(audit);
+        List<InventoryAuditItem> current = currentAuditItems(audit);
         boolean duplicate = current.stream().anyMatch(item -> request.getSkuId().equals(item.getSkuId())
                 && ((item.getBin() == null && resolvedBin == null)
                 || (item.getBin() != null && resolvedBin != null && item.getBin().getId().equals(resolvedBin.getId())))
@@ -659,14 +382,14 @@ public class InventoryAuditService {
     }
 
     @Transactional
-    public InventoryAuditResponse submitAuditV2(UUID userId, UUID auditId) {
-        InventoryAudit audit = getV2ForUpdate(auditId);
+    public InventoryAuditResponse submitAudit(UUID userId, UUID auditId) {
+        InventoryAudit audit = getAuditForUpdate(auditId);
         User actor = findUser(userId);
-        requireV2CountAccess(audit, actor);
+        requireAuditCountAccess(audit, actor);
         if (audit.getStatus() != AuditStatus.IN_PROGRESS) {
             throw new BadRequestException(ErrorCode.AUDIT_INVALID_STATUS);
         }
-        List<InventoryAuditItem> items = currentV2Items(audit);
+        List<InventoryAuditItem> items = currentAuditItems(audit);
         if (items.stream().anyMatch(item -> item.getActualQuantity() == null
                 || item.getCountStatus() != AuditCountStatus.COUNTED)) {
             throw new BadRequestException(ErrorCode.AUDIT_COUNT_INCOMPLETE);
@@ -681,10 +404,10 @@ public class InventoryAuditService {
     }
 
     @Transactional
-    public InventoryAuditResponse requestRecountV2(UUID userId, UUID auditId, String reason) {
-        InventoryAudit audit = getV2ForUpdate(auditId);
+    public InventoryAuditResponse requestRecount(UUID userId, UUID auditId, String reason) {
+        InventoryAudit audit = getAuditForUpdate(auditId);
         User actor = findUser(userId);
-        requireV2TenantReviewer(audit, actor);
+        requireAuditTenantReviewer(audit, actor);
         if (audit.getStatus() != AuditStatus.SUBMITTED || reason == null || reason.isBlank()) {
             throw new BadRequestException(ErrorCode.AUDIT_INVALID_STATUS);
         }
@@ -696,14 +419,14 @@ public class InventoryAuditService {
         pushAuditNotification(audit.getAssignedTo() != null ? audit.getAssignedTo().getId() : audit.getRequestedBy().getId(),
                 "Yêu cầu kiểm kê lại", "Phiếu kiểm kê kho " + audit.getWarehouse().getName()
                         + " cần được đếm lại: " + reason.trim());
-        return maskCounterResponse(mapToResponse(audit, currentV2Items(audit)), actor);
+        return maskCounterResponse(mapToResponse(audit, currentAuditItems(audit)), actor);
     }
 
     @Transactional
-    public InventoryAuditResponse cancelAuditV2(UUID userId, UUID auditId, String reason) {
-        InventoryAudit audit = getV2ForUpdate(auditId);
+    public InventoryAuditResponse cancelAudit(UUID userId, UUID auditId, String reason) {
+        InventoryAudit audit = getAuditForUpdate(auditId);
         User actor = findUser(userId);
-        requireV2TenantReviewer(audit, actor);
+        requireAuditTenantReviewer(audit, actor);
         if (audit.getStatus() == AuditStatus.APPROVED || audit.getStatus() == AuditStatus.CANCELLED) {
             throw new BadRequestException(ErrorCode.AUDIT_ALREADY_PROCESSED);
         }
@@ -713,14 +436,14 @@ public class InventoryAuditService {
         audit.setReviewReason(reason == null ? null : reason.trim());
         audit = auditRepository.save(audit);
         auditLockService.release(auditId);
-        return maskCounterResponse(mapToResponse(audit, currentV2Items(audit)), actor);
+        return maskCounterResponse(mapToResponse(audit, currentAuditItems(audit)), actor);
     }
 
     @Transactional
-    public InventoryAuditResponse approveAuditV2(UUID userId, UUID auditId) {
-        InventoryAudit audit = getV2ForUpdate(auditId);
+    public InventoryAuditResponse approveAudit(UUID userId, UUID auditId) {
+        InventoryAudit audit = getAuditForUpdate(auditId);
         User approver = findUser(userId);
-        requireV2TenantReviewer(audit, approver);
+        requireAuditTenantReviewer(audit, approver);
         if (audit.getStatus() != AuditStatus.SUBMITTED) {
             throw new BadRequestException(ErrorCode.AUDIT_INVALID_STATUS);
         }
@@ -732,7 +455,7 @@ public class InventoryAuditService {
                     "Phiếu kiểm kê không còn giữ khóa kho; cần mở một vòng kiểm kê mới.");
         }
 
-        List<InventoryAuditItem> items = currentV2Items(audit);
+        List<InventoryAuditItem> items = currentAuditItems(audit);
         for (InventoryAuditItem item : items) {
             if (item.getActualQuantity() == null) {
                 throw new BadRequestException(ErrorCode.AUDIT_COUNT_INCOMPLETE);
@@ -750,15 +473,15 @@ public class InventoryAuditService {
     }
 
     @Transactional(readOnly = true)
-    public InventoryAuditResponse getAuditDetailV2(UUID userId, UUID auditId) {
-        InventoryAudit audit = getV2ForRead(auditId);
+    public InventoryAuditResponse getAuditDetail(UUID userId, UUID auditId) {
+        InventoryAudit audit = getAuditForRead(auditId);
         User actor = findUser(userId);
-        requireV2ReadAccess(audit, actor);
-        return maskCounterResponse(mapToResponse(audit, currentV2Items(audit)), actor);
+        requireAuditReadAccess(audit, actor);
+        return maskCounterResponse(mapToResponse(audit, currentAuditItems(audit)), actor);
     }
 
     @Transactional(readOnly = true)
-    public PagedResponse<InventoryAuditResponse> getAuditsV2(UUID userId, UUID warehouseId, Pageable pageable) {
+    public PagedResponse<InventoryAuditResponse> getAudits(UUID userId, UUID warehouseId, Pageable pageable) {
         User actor = findUser(userId);
         UUID tenantId = resolveTenantId(userId);
         List<UUID> accessibleWarehouseIds = (isStaff(actor)
@@ -768,28 +491,28 @@ public class InventoryAuditService {
         Page<InventoryAudit> page;
         if (warehouseId != null) {
             requireWarehouseObservationAccess(actor, tenantId, warehouseId);
-            page = auditRepository.findV2AuditsForTenant(warehouseId, List.of(warehouseId), tenantId, pageable);
+            page = auditRepository.findAuditsForTenant(warehouseId, List.of(warehouseId), tenantId, pageable);
         } else if (accessibleWarehouseIds.isEmpty()) {
             page = Page.empty(pageable);
         } else {
-            page = auditRepository.findV2AuditsForTenant(null, accessibleWarehouseIds, tenantId, pageable);
+            page = auditRepository.findAuditsForTenant(null, accessibleWarehouseIds, tenantId, pageable);
         }
         return PagedResponse.fromPage(page, audit ->
-                maskCounterResponse(mapToResponse(audit, currentV2Items(audit)), actor));
+                maskCounterResponse(mapToResponse(audit, currentAuditItems(audit)), actor));
     }
 
-    private InventoryAudit getV2ForUpdate(UUID auditId) {
-        return auditRepository.findV2ByIdForUpdate(auditId)
+    private InventoryAudit getAuditForUpdate(UUID auditId) {
+        return auditRepository.findByIdForUpdate(auditId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.AUDIT_NOT_FOUND));
     }
 
-    private InventoryAudit getV2ForRead(UUID auditId) {
+    private InventoryAudit getAuditForRead(UUID auditId) {
         return auditRepository.findById(auditId)
-                .filter(audit -> audit.getWorkflowVersion() == 2 && !audit.isDeleted())
+                .filter(audit -> !audit.isDeleted())
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.AUDIT_NOT_FOUND));
     }
 
-    private List<InventoryAuditItem> currentV2Items(InventoryAudit audit) {
+    private List<InventoryAuditItem> currentAuditItems(InventoryAudit audit) {
         return auditItemRepository.findByAuditIdAndCountRoundOrderById(audit.getId(), audit.getCountRound());
     }
 
@@ -802,7 +525,7 @@ public class InventoryAuditService {
 
         List<StockBatch> candidates;
         if (item.getBatch() != null) {
-            candidates = List.of(item.getBatch()); // compatibility with legacy/manual v2 rows
+            candidates = List.of(item.getBatch()); // compatibility with historical/manual rows
         } else {
             candidates = stockBatchRepository
                     .findAllBySkuIdAndWarehouseIdAndIsActiveTrueAndIsDeletedFalse(
@@ -922,7 +645,7 @@ public class InventoryAuditService {
                 && audit.getScopeBin().getId().equals(batch.getBin().getId());
     }
 
-    private void requireV2ReadAccess(InventoryAudit audit, User actor) {
+    private void requireAuditReadAccess(InventoryAudit audit, User actor) {
         UUID tenantId = resolveTenantId(actor.getId());
         if (!tenantId.equals(resolveAuditTenantId(audit))) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
@@ -934,15 +657,15 @@ public class InventoryAuditService {
         requireWarehouseObservationAccess(actor, tenantId, audit.getWarehouse().getId());
     }
 
-    private void requireV2CountAccess(InventoryAudit audit, User actor) {
-        requireV2ReadAccess(audit, actor);
+    private void requireAuditCountAccess(InventoryAudit audit, User actor) {
+        requireAuditReadAccess(audit, actor);
         if (isStaff(actor) && (audit.getAssignedTo() == null
                 || !actor.getId().equals(audit.getAssignedTo().getId()))) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
     }
 
-    private void requireV2TenantReviewer(InventoryAudit audit, User actor) {
+    private void requireAuditTenantReviewer(InventoryAudit audit, User actor) {
         ensureApproverIsTenant(actor);
         if (!resolveTenantId(actor.getId()).equals(resolveAuditTenantId(audit))) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
@@ -959,7 +682,7 @@ public class InventoryAuditService {
         try {
             notificationService.push(recipientId, title, message, "AUDIT");
         } catch (Exception e) {
-            log.warn("Failed to push v2 audit notification: {}", e.getMessage());
+            log.warn("Failed to push audit notification: {}", e.getMessage());
         }
     }
 

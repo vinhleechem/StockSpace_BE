@@ -51,7 +51,7 @@ public class InventoryAuditController {
     public ResponseEntity<ApiResponse<InventoryAuditResponse>> create(
             @Valid @RequestBody CreateInventoryAuditPlanRequest request) {
         return ResponseEntity.ok(ApiResponse.success("Inventory audit plan created",
-                auditService.createAuditV2(currentUserId(), request)));
+                auditService.createAudit(currentUserId(), request)));
     }
 
     @GetMapping
@@ -62,14 +62,14 @@ public class InventoryAuditController {
             @RequestParam(defaultValue = "10") int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         return ResponseEntity.ok(ApiResponse.success("Inventory audits loaded",
-                auditService.getAuditsV2(currentUserId(), warehouseId, pageable)));
+                auditService.getAudits(currentUserId(), warehouseId, pageable)));
     }
 
     @PostMapping("/{id}/start")
     @Operation(summary = "Start an inventory audit and snapshot stock")
     public ResponseEntity<ApiResponse<InventoryAuditResponse>> start(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success("Inventory audit started",
-                auditService.startAuditV2(currentUserId(), id)));
+                auditService.startAudit(currentUserId(), id)));
     }
 
     @PutMapping("/{id}/counts")
@@ -77,14 +77,14 @@ public class InventoryAuditController {
     public ResponseEntity<ApiResponse<InventoryAuditResponse>> saveCounts(
             @PathVariable UUID id, @Valid @RequestBody SaveAuditCountsRequest request) {
         return ResponseEntity.ok(ApiResponse.success("Count results saved",
-                auditService.saveAuditCountsV2(currentUserId(), id, request)));
+                auditService.saveAuditCounts(currentUserId(), id, request)));
     }
 
     @PostMapping("/{id}/submit")
     @Operation(summary = "Submit an inventory audit")
     public ResponseEntity<ApiResponse<InventoryAuditResponse>> submit(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success("Inventory audit submitted",
-                auditService.submitAuditV2(currentUserId(), id)));
+                auditService.submitAudit(currentUserId(), id)));
     }
 
     @PostMapping("/{id}/unexpected-items")
@@ -92,7 +92,7 @@ public class InventoryAuditController {
     public ResponseEntity<ApiResponse<InventoryAuditResponse>> addUnexpectedItem(
             @PathVariable UUID id, @Valid @RequestBody AddUnexpectedAuditItemRequest request) {
         return ResponseEntity.ok(ApiResponse.success("Unexpected item added",
-                auditService.addUnexpectedItemV2(currentUserId(), id, request)));
+                auditService.addUnexpectedItem(currentUserId(), id, request)));
     }
 
     @PostMapping("/{id}/recount")
@@ -100,14 +100,14 @@ public class InventoryAuditController {
     public ResponseEntity<ApiResponse<InventoryAuditResponse>> recount(
             @PathVariable UUID id, @Valid @RequestBody AuditReviewReasonRequest request) {
         return ResponseEntity.ok(ApiResponse.success("Recount requested",
-                auditService.requestRecountV2(currentUserId(), id, request.getReason())));
+                auditService.requestRecount(currentUserId(), id, request.getReason())));
     }
 
     @PostMapping("/{id}/approve")
     @Operation(summary = "Approve an inventory audit and adjust stock")
     public ResponseEntity<ApiResponse<InventoryAuditResponse>> approve(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success("Inventory audit approved",
-                auditService.approveAuditV2(currentUserId(), id)));
+                auditService.approveAudit(currentUserId(), id)));
     }
 
     @PostMapping("/{id}/cancel")
@@ -117,13 +117,13 @@ public class InventoryAuditController {
             @RequestBody(required = false) AuditReviewReasonRequest request) {
         String reason = request == null ? null : request.getReason();
         return ResponseEntity.ok(ApiResponse.success("Inventory audit cancelled",
-                auditService.cancelAuditV2(currentUserId(), id, reason)));
+                auditService.cancelAudit(currentUserId(), id, reason)));
     }
 
     @GetMapping("/{id}")
     @Operation(summary = "Get inventory audit details")
     public ResponseEntity<ApiResponse<InventoryAuditResponse>> detail(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success("Inventory audit loaded",
-                auditService.getAuditDetailV2(currentUserId(), id)));
+                auditService.getAuditDetail(currentUserId(), id)));
     }
 }

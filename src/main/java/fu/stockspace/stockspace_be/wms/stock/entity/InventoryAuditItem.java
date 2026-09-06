@@ -35,7 +35,7 @@ public class InventoryAuditItem extends BaseEntity {
     @JoinColumn(name = "batch_id")
     private StockBatch batch;
 
-    /** Used by v2 for a counted SKU that was not present in the system snapshot. */
+    /** Used for a counted SKU that was not present in the system snapshot. */
     @Column(name = "sku_id")
     private UUID skuId;
 
