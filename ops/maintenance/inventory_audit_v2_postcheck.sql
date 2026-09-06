@@ -4,6 +4,7 @@ DO $$
 DECLARE
     missing_columns TEXT;
     missing_tables TEXT;
+    status_constraint TEXT;
 BEGIN
     SELECT string_agg(format('%s.%s', required.table_name, required.column_name), ', ')
     INTO missing_columns
@@ -50,6 +51,20 @@ BEGIN
     END IF;
     IF missing_columns IS NOT NULL THEN
         RAISE EXCEPTION 'Inventory audit schema is missing columns: %', missing_columns;
+    END IF;
+
+    SELECT pg_get_constraintdef(oid)
+    INTO status_constraint
+    FROM pg_constraint
+    WHERE conrelid = 'public.inventory_audits'::regclass
+      AND conname = 'inventory_audits_status_check';
+
+    IF status_constraint IS NULL
+       OR status_constraint NOT LIKE '%DRAFT%'
+       OR status_constraint NOT LIKE '%IN_PROGRESS%'
+       OR status_constraint NOT LIKE '%RECOUNT_REQUIRED%'
+       OR status_constraint NOT LIKE '%CANCELLED%' THEN
+        RAISE EXCEPTION 'Inventory audit status constraint is missing canonical statuses';
     END IF;
 END $$;
 
