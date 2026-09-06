@@ -121,6 +121,18 @@ deploy() {
     fi
     log_success "Production migrations completed."
 
+    log_info "Kiểm tra schema Inventory Audit v2 trước khi khởi động app..."
+    if ! docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+        exec -T postgres psql \
+        -X -v ON_ERROR_STOP=1 \
+        -U "${DB_USERNAME:-postgres}" \
+        -d "${DB_NAME:-stockspace}" \
+        < "$APP_DIR/ops/maintenance/inventory_audit_v2_postcheck.sql"
+    then
+        log_error "Inventory Audit v2 schema chưa đồng bộ; app chưa được khởi động."
+    fi
+    log_success "Inventory Audit v2 schema verified."
+
     log_info "Build image và khởi động containers..."
     docker compose pull postgres nginx 2>/dev/null || true  # Pull image mới nhất từ registry
     docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build --remove-orphans

@@ -4,16 +4,17 @@ package fu.stockspace.stockspace_be.wms.stock.entity;
 
 
 public enum AuditStatus {
-    /** Legacy state: created and already snapshotted by the v1 endpoint. */
+    /** Historical state retained only so old rows can still be read safely. */
     PENDING,
-    /** v2 plan has been created but counting has not started. */
+    /** Plan has been created but counting has not started. */
     DRAFT,
-    /** v2 counting is in progress and its scope is movement-locked. */
+    /** Counting is in progress and its scope is movement-locked. */
     IN_PROGRESS,
     SUBMITTED,
     /** Reviewer asked the counter to perform another count round. */
     RECOUNT_REQUIRED,
     APPROVED,
+    /** Historical terminal state; the canonical flow uses CANCELLED/RECOUNT_REQUIRED. */
     REJECTED,
     CANCELLED
 }

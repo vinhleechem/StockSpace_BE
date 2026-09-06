@@ -143,7 +143,8 @@ public class StaffOperationsService {
     private boolean matchesAuditStatus(InventoryAudit audit, String status) {
         String current = audit.getStatus().name();
         return status == null
-                ? EnumSet.of(AuditStatus.PENDING, AuditStatus.SUBMITTED).contains(audit.getStatus())
+                ? EnumSet.of(AuditStatus.DRAFT, AuditStatus.IN_PROGRESS,
+                        AuditStatus.SUBMITTED, AuditStatus.RECOUNT_REQUIRED).contains(audit.getStatus())
                 : current.equals(status);
     }
 
@@ -170,7 +171,9 @@ public class StaffOperationsService {
 
     private StaffOperationResponse toAuditOperation(InventoryAudit audit) {
         Warehouse warehouse = audit.getWarehouse();
-        List<String> actions = audit.getStatus() == AuditStatus.PENDING
+        List<String> actions = audit.getStatus() == AuditStatus.DRAFT
+                || audit.getStatus() == AuditStatus.IN_PROGRESS
+                || audit.getStatus() == AuditStatus.RECOUNT_REQUIRED
                 ? List.of(VIEW, SUBMIT)
                 : List.of(VIEW);
         return StaffOperationResponse.builder()

@@ -60,7 +60,7 @@ public class TenantDashboardService {
                 .pendingInboundReceiptCount(countPendingReceipts(tenantId, DocumentType.INBOUND))
                 .pendingOutboundReceiptCount(countPendingReceipts(tenantId, DocumentType.OUTBOUND))
                 .pendingAuditCount(auditRepository.countPendingForTenant(
-                        tenantId, EnumSet.of(AuditStatus.PENDING, AuditStatus.DRAFT,
+                        tenantId, EnumSet.of(AuditStatus.DRAFT,
                                 AuditStatus.IN_PROGRESS, AuditStatus.SUBMITTED,
                                 AuditStatus.RECOUNT_REQUIRED), today))
                 .pendingTransferCount(transferRepository.countPendingForTenant(

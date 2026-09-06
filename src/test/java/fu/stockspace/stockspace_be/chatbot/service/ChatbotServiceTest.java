@@ -36,6 +36,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -81,7 +82,7 @@ class ChatbotServiceTest {
                 new AuthenticatedChatRateLimiter(),
                 chatStreamRuntime
         );
-        when(subscriptionService.hasActiveSubscription(any(UUID.class))).thenReturn(true);
+        lenient().when(subscriptionService.hasActiveSubscription(any(UUID.class))).thenReturn(true);
         ReflectionTestUtils.setField(service, "maxAgentIterations", 4);
         ReflectionTestUtils.setField(service, "requestDeadline", Duration.ofSeconds(10));
         ReflectionTestUtils.setField(service, "maxToolResultChars", 16_000);

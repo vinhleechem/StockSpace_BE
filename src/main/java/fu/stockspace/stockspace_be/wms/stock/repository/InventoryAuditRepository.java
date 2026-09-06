@@ -26,7 +26,15 @@ public interface InventoryAuditRepository extends JpaRepository<InventoryAudit, 
 
     Page<InventoryAudit> findByStatusAndIsDeletedFalse(AuditStatus status, Pageable pageable);
 
-    Page<InventoryAudit> findByIsDeletedFalse(Pageable pageable);
+    @Query("""
+            select a from InventoryAudit a
+            where a.isDeleted = false
+              and a.status not in (
+                  fu.stockspace.stockspace_be.wms.stock.entity.AuditStatus.PENDING,
+                  fu.stockspace.stockspace_be.wms.stock.entity.AuditStatus.REJECTED
+              )
+            """)
+    Page<InventoryAudit> findCanonicalAudits(Pageable pageable);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
@@ -35,10 +43,6 @@ public interface InventoryAuditRepository extends JpaRepository<InventoryAudit, 
               and a.isDeleted = false
             """)
     Optional<InventoryAudit> findByIdForUpdate(@Param("auditId") UUID auditId);
-
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select a from InventoryAudit a where a.id = :auditId and a.workflowVersion = 2 and a.isDeleted = false")
-    Optional<InventoryAudit> findV2ByIdForUpdate(@Param("auditId") UUID auditId);
 
     @Query("""
             select a from InventoryAudit a
@@ -86,30 +90,8 @@ public interface InventoryAuditRepository extends JpaRepository<InventoryAudit, 
     @Query("""
             SELECT a FROM InventoryAudit a
             WHERE a.isDeleted = false
-              AND (
-                (:warehouseId IS NOT NULL AND a.warehouse.id = :warehouseId)
-                OR (:warehouseId IS NULL AND a.warehouse.id IN :warehouseIds)
-              )
-              AND (
-                a.requestedBy.id = :tenantId
-                OR EXISTS (
-                    SELECT m.id FROM TenantMember m
-                    WHERE m.user.id = a.requestedBy.id
-                      AND m.tenant.id = :tenantId
-                )
-              )
-            """)
-    Page<InventoryAudit> findAuditsForTenant(
-            @Param("warehouseId") UUID warehouseId,
-            @Param("warehouseIds") Collection<UUID> warehouseIds,
-            @Param("tenantId") UUID tenantId,
-            Pageable pageable
-    );
-
-    @Query("""
-            SELECT a FROM InventoryAudit a
-            WHERE a.workflowVersion = 2
-              AND a.isDeleted = false
+              AND a.status NOT IN (fu.stockspace.stockspace_be.wms.stock.entity.AuditStatus.PENDING,
+                                   fu.stockspace.stockspace_be.wms.stock.entity.AuditStatus.REJECTED)
               AND ((:warehouseId IS NOT NULL AND a.warehouse.id = :warehouseId)
                    OR (:warehouseId IS NULL AND a.warehouse.id IN :warehouseIds))
               AND (a.tenant.id = :tenantId
@@ -118,7 +100,7 @@ public interface InventoryAuditRepository extends JpaRepository<InventoryAudit, 
                               WHERE m.user.id = a.requestedBy.id AND m.tenant.id = :tenantId
                                 AND m.isActive = true AND m.isDeleted = false))
             """)
-    Page<InventoryAudit> findV2AuditsForTenant(
+    Page<InventoryAudit> findAuditsForTenant(
             @Param("warehouseId") UUID warehouseId,
             @Param("warehouseIds") Collection<UUID> warehouseIds,
             @Param("tenantId") UUID tenantId,

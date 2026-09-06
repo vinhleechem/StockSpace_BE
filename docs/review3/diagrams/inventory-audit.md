@@ -1,5 +1,8 @@
 # Inventory Audit UML Sources
 
+These diagrams describe the single canonical audit workflow. The historical
+snapshot/submit/reject flow is no longer exposed or writable.
+
 ## Inventory Audit Class Diagram
 
 ```plantuml
@@ -14,19 +17,27 @@ left to right direction
 
 class InventoryAuditController {
   +createAudit()
-  +getMyAudits()
-  +getAuditDetail()
+  +startAudit()
+  +saveAuditCounts()
+  +addUnexpectedItem()
   +submitAudit()
+  +requestRecount()
+  +cancelAudit()
   +approveAudit()
-  +rejectAudit()
+  +getAudits()
+  +getAuditDetail()
 }
 
 class InventoryAuditService {
   +createAudit()
+  +startAudit()
+  +saveAuditCounts()
+  +addUnexpectedItem()
   +submitAudit()
+  +requestRecount()
+  +cancelAudit()
   +approveAudit()
-  +rejectAudit()
-  +getMyAudits()
+  +getAudits()
   +getAuditDetail()
 }
 
@@ -36,10 +47,12 @@ interface StockBatchRepository
 class InventoryAudit
 class InventoryAuditItem
 enum AuditStatus {
-  PENDING
+  DRAFT
+  IN_PROGRESS
   SUBMITTED
+  RECOUNT_REQUIRED
   APPROVED
-  REJECTED
+  CANCELLED
 }
 
 InventoryAuditController ..> InventoryAuditService
@@ -51,11 +64,11 @@ InventoryAudit --> AuditStatus
 @enduml
 ```
 
-## Submit and Approve Inventory Audit Sequence Diagram
+## Count and Reconcile Inventory Audit Sequence Diagram
 
 ```plantuml
 @startuml
-title Submit and Approve Inventory Audit Sequence Diagram
+title Count and Reconcile Inventory Audit Sequence Diagram
 skinparam monochrome true
 skinparam shadowing false
 skinparam backgroundColor transparent
@@ -71,25 +84,43 @@ database "StockBatchRepository" as StockRepo
 database "InventoryAuditItemRepository" as ItemRepo
 participant "InventoryReceiptService" as ReceiptService
 
-Tenant -> Controller: createAudit(CreateInventoryAuditRequest)
+Tenant -> Controller: createAudit(CreateInventoryAuditPlanRequest)
 activate Controller
 Controller -> Service: createAudit(userId, request)
 activate Service
-Service -> AuditRepo: save audit PENDING
-AuditRepo --> Service: audit PENDING
-Service -> StockRepo: load current warehouse batches
-StockRepo --> Service: batch snapshot
-Service -> ItemRepo: save audit items with expected quantities
-ItemRepo --> Service: audit items
-Service --> Controller: InventoryAuditResponse(PENDING)
+Service -> AuditRepo: save audit DRAFT
+AuditRepo --> Service: audit DRAFT
+Service --> Controller: InventoryAuditResponse(DRAFT)
 deactivate Service
 Controller --> Tenant: success(data)
 deactivate Controller
 
-Staff -> Controller: submitAudit(auditId, actual quantities)
-Controller -> Service: submitAudit(userId, auditId, request)
+Staff -> Controller: startAudit(auditId)
+Controller -> Service: startAudit(userId, auditId)
 activate Service
-Service -> AuditRepo: save actual quantities and discrepancies
+Service -> StockRepo: snapshot scoped stock and acquire movement lock
+StockRepo --> Service: current stock
+Service -> ItemRepo: save count items with expected quantities
+ItemRepo --> Service: audit items
+Service -> AuditRepo: mark audit IN_PROGRESS
+AuditRepo --> Service: audit IN_PROGRESS
+Service --> Controller: InventoryAuditResponse(IN_PROGRESS)
+deactivate Service
+Controller --> Staff: success(data)
+
+Staff -> Controller: saveAuditCounts(auditId, counts)
+Controller -> Service: saveAuditCounts(userId, auditId, request)
+activate Service
+Service -> ItemRepo: save actual quantities and discrepancies
+ItemRepo --> Service: count items
+Service --> Controller: InventoryAuditResponse(IN_PROGRESS)
+deactivate Service
+Controller --> Staff: success(data)
+
+Staff -> Controller: submitAudit(auditId)
+Controller -> Service: submitAudit(userId, auditId)
+activate Service
+Service -> AuditRepo: mark audit SUBMITTED
 AuditRepo --> Service: audit SUBMITTED
 Service --> Controller: InventoryAuditResponse(SUBMITTED)
 deactivate Service
@@ -122,15 +153,20 @@ skinparam state {
   FontColor black
 }
 
-[*] --> PENDING : create audit
-PENDING --> SUBMITTED : submit actual quantities
-PENDING --> REJECTED : reject audit
+[*] --> DRAFT : create plan
+DRAFT --> IN_PROGRESS : start count
+IN_PROGRESS --> SUBMITTED : submit complete counts
 SUBMITTED --> APPROVED : approve reconciliation
-SUBMITTED --> REJECTED : reject audit
+SUBMITTED --> RECOUNT_REQUIRED : request recount
+RECOUNT_REQUIRED --> IN_PROGRESS : start recount
+DRAFT --> CANCELLED : cancel audit
+IN_PROGRESS --> CANCELLED : cancel audit
+SUBMITTED --> CANCELLED : cancel audit
 APPROVED --> [*]
-REJECTED --> [*]
+CANCELLED --> [*]
 @enduml
 ```
 
-The states are the actual `AuditStatus` enum. Approval is the stock-adjustment
-boundary; the state diagram does not imply a separate task or ticket entity.
+The states are the actual canonical `AuditStatus` enum. Approval is the
+stock-adjustment boundary; the state diagram does not imply a separate task or
+ticket entity.

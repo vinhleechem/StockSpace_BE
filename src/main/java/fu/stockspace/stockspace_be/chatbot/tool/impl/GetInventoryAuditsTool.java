@@ -69,7 +69,7 @@ public class GetInventoryAuditsTool implements ChatTool {
         try {
             UUID auditId = optionalUuid(params, "auditId");
             if (auditId != null) {
-                return objectMapper.writeValueAsString(toDetail(auditService.getAuditDetailV2(userId, auditId)));
+                return objectMapper.writeValueAsString(toDetail(auditService.getAuditDetail(userId, auditId)));
             }
             UUID warehouseId = resolveWarehouseId(params, context);
             if (warehouseId == null) {
@@ -77,7 +77,7 @@ public class GetInventoryAuditsTool implements ChatTool {
             }
             int pageNumber = ChatToolParameters.page(params);
             int pageSize = ChatToolParameters.pageSize(params, 10, 30);
-            PagedResponse<InventoryAuditResponse> page = auditService.getAuditsV2(
+            PagedResponse<InventoryAuditResponse> page = auditService.getAudits(
                     userId, warehouseId,
                     PageRequest.of(pageNumber, pageSize, Sort.by(Sort.Direction.DESC, "createdAt")));
             Map<String, Object> result = new LinkedHashMap<>();
