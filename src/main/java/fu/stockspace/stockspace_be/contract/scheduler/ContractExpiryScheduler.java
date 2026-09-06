@@ -29,6 +29,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ContractExpiryScheduler {
 
+    private static final int EXPIRY_REMINDER_WINDOW_DAYS = 30;
+
     private final RentalContractRepository contractRepository;
     private final WarehouseLayoutService warehouseLayoutService;
     private final StockBatchRepository stockBatchRepository;
@@ -56,9 +58,13 @@ public class ContractExpiryScheduler {
     }
 
     private void sendExpiryReminders(LocalDate today) {
-        LocalDate reminderDate = today.plusDays(30);
+        // Query a window instead of only the exact 30-day boundary. If the app
+        // is down on the boundary date, the tenant must still receive the
+        // reminder on the next scheduler run.
+        LocalDate reminderFrom = today;
+        LocalDate reminderTo = today.plusDays(EXPIRY_REMINDER_WINDOW_DAYS);
         List<RentalContract> contracts = contractRepository.findActiveContractsEndingBetween(
-                reminderDate, reminderDate);
+                reminderFrom, reminderTo);
 
         for (RentalContract contract : contracts) {
             if (contract.isExpiryReminderSent()) {
@@ -67,18 +73,24 @@ public class ContractExpiryScheduler {
             User tenant = contract.getTenant();
             User owner = contract.getOwner();
             String warehouseName = contract.getWarehouse().getName();
-            sendReminderBestEffort(tenant, warehouseName, contract.getEndDate(), true);
+            boolean tenantReminderSent = sendReminderBestEffort(
+                    tenant, warehouseName, contract.getEndDate(), true);
             sendReminderBestEffort(owner, warehouseName, contract.getEndDate(), false);
 
-            contract.setExpiryReminderSent(true);
-            contractRepository.save(contract);
+            if (tenantReminderSent) {
+                contract.setExpiryReminderSent(true);
+                contractRepository.save(contract);
+            } else {
+                log.warn("Tenant expiry reminder was not delivered for contract {}; will retry on the next run",
+                        contract.getId());
+            }
         }
     }
 
-    private void sendReminderBestEffort(
+    private boolean sendReminderBestEffort(
             User recipient, String warehouseName, LocalDate endDate, boolean tenant) {
         if (recipient == null) {
-            return;
+            return false;
         }
         try {
             emailService.sendContractExpiryReminderEmail(
@@ -94,9 +106,11 @@ public class ContractExpiryScheduler {
                     (tenant ? "Your" : "The") + " rental contract for " + warehouseName
                             + " expires on " + endDate + ".",
                     "CONTRACT_EXPIRY_REMINDER");
+            return true;
         } catch (RuntimeException exception) {
             log.warn("Failed to push contract expiry reminder to user {}: {}",
                     recipient.getId(), exception.getMessage());
+            return false;
         }
     }
 
