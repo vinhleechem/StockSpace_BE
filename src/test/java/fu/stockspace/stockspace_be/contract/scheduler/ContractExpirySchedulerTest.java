@@ -81,10 +81,10 @@ class ContractExpirySchedulerTest {
     }
 
     @Test
-    void reminderUsesExactThirtyDayBoundaryAndIsMarkedOnce() {
+    void reminderCatchesContractsWithinThirtyDayWindowAndNotifiesTenant() {
         LocalDate today = LocalDate.now();
-        RentalContract contract = activeContract(today.plusDays(30));
-        when(contractRepository.findActiveContractsEndingBetween(today.plusDays(30), today.plusDays(30)))
+        RentalContract contract = activeContract(today.plusDays(7));
+        when(contractRepository.findActiveContractsEndingBetween(today, today.plusDays(30)))
                 .thenReturn(List.of(contract));
         when(contractRepository.findActiveContractsEndingBefore(today)).thenReturn(List.of());
 
@@ -93,9 +93,34 @@ class ContractExpirySchedulerTest {
         assertTrue(contract.isExpiryReminderSent());
         verify(emailService, times(2)).sendContractExpiryReminderEmail(
                 any(), any(), eq(warehouse.getName()), eq(contract.getEndDate()));
-        verify(notificationService, times(2)).push(
-                any(), eq("Warehouse contract expiry reminder"), any(), eq("CONTRACT_EXPIRY_REMINDER"));
+        verify(notificationService).push(
+                eq(tenant.getId()), eq("Warehouse contract expiry reminder"), any(),
+                eq("CONTRACT_EXPIRY_REMINDER"));
+        verify(notificationService).push(
+                eq(owner.getId()), eq("Warehouse contract expiry reminder"), any(),
+                eq("CONTRACT_EXPIRY_REMINDER"));
         verify(contractRepository).save(contract);
+    }
+
+    @Test
+    void failedTenantReminderRemainsPendingForRetry() {
+        LocalDate today = LocalDate.now();
+        RentalContract contract = activeContract(today.plusDays(7));
+        when(contractRepository.findActiveContractsEndingBetween(today, today.plusDays(30)))
+                .thenReturn(List.of(contract));
+        when(contractRepository.findActiveContractsEndingBefore(today)).thenReturn(List.of());
+        doThrow(new RuntimeException("notification unavailable"))
+                .when(notificationService).push(eq(tenant.getId()),
+                        eq("Warehouse contract expiry reminder"), any(),
+                        eq("CONTRACT_EXPIRY_REMINDER"));
+
+        scheduler.expireContracts();
+
+        assertFalse(contract.isExpiryReminderSent());
+        verify(contractRepository, never()).save(contract);
+        verify(notificationService).push(eq(owner.getId()),
+                eq("Warehouse contract expiry reminder"), any(),
+                eq("CONTRACT_EXPIRY_REMINDER"));
     }
 
     @Test
