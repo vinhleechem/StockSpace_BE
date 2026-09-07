@@ -706,6 +706,71 @@ class WarehouseLayoutServiceTest {
     }
 
     @Test
+    void testSaveLayoutBulk_DerivesCapacityPerShelfFromActualBinCount() {
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)).thenReturn(Optional.of(defaultLayout));
+        when(layoutRepository.save(defaultLayout)).thenReturn(defaultLayout);
+        when(rackRepository.findAllByLayoutId(defaultLayout.getId())).thenReturn(Collections.emptyList());
+        when(binRepository.findAllByRackLayoutId(defaultLayout.getId())).thenReturn(Collections.emptyList());
+        when(rackRepository.save(any(WarehouseRack.class))).thenAnswer(invocation -> {
+            WarehouseRack savedRack = invocation.getArgument(0);
+            savedRack.setId(UUID.randomUUID());
+            return savedRack;
+        });
+        List<WarehouseBin> savedBins = new ArrayList<>();
+        when(binRepository.save(any(WarehouseBin.class))).thenAnswer(invocation -> {
+            WarehouseBin savedBin = invocation.getArgument(0);
+            savedBins.add(savedBin);
+            return savedBin;
+        });
+
+        List<BinSaveRequest> bins = new ArrayList<>();
+        for (int index = 0; index < 2; index++) {
+            bins.add(BinSaveRequest.builder()
+                    .name("Shelf 1 Bin " + index).code("S1_B" + index).shelfLevel(1)
+                    .coordinateX(BigDecimal.valueOf(index * 2L)).coordinateY(BigDecimal.ZERO)
+                    .positionZ(new BigDecimal("999")).width(new BigDecimal("2"))
+                    .length(new BigDecimal("2")).height(BigDecimal.ONE)
+                    .maxWeight(new BigDecimal("9999")).maxVolume(new BigDecimal("9999"))
+                    .build());
+        }
+        for (int index = 0; index < 4; index++) {
+            bins.add(BinSaveRequest.builder()
+                    .name("Shelf 2 Bin " + index).code("S2_B" + index).shelfLevel(2)
+                    .coordinateX(BigDecimal.valueOf(index * 2L)).coordinateY(BigDecimal.ZERO)
+                    .positionZ(new BigDecimal("999")).width(new BigDecimal("2"))
+                    .length(new BigDecimal("2")).height(BigDecimal.ONE)
+                    .maxWeight(new BigDecimal("9999")).maxVolume(new BigDecimal("9999"))
+                    .build());
+        }
+        RackSaveRequest rack = RackSaveRequest.builder()
+                .name("Rack A").code("R_A")
+                .coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
+                .width(new BigDecimal("10")).length(new BigDecimal("4")).height(new BigDecimal("4"))
+                .shelfCount(4).maxWeight(new BigDecimal("480")).maxVolume(new BigDecimal("64"))
+                .bins(bins).build();
+        BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
+                .width(new BigDecimal("100")).length(new BigDecimal("100")).height(new BigDecimal("10"))
+                .racks(List.of(rack)).build();
+
+        assertDoesNotThrow(() -> layoutService.saveLayoutBulk(warehouseId, userId, "OWNER", request));
+
+        assertEquals(6, savedBins.size());
+        assertEquals(2, savedBins.stream()
+                .filter(bin -> bin.getShelfLevel() == 1
+                        && new BigDecimal("60.000000").compareTo(bin.getMaxWeight()) == 0
+                        && BigDecimal.ZERO.compareTo(bin.getPositionZ()) == 0)
+                .count());
+        assertEquals(4, savedBins.stream()
+                .filter(bin -> bin.getShelfLevel() == 2
+                        && new BigDecimal("30.000000").compareTo(bin.getMaxWeight()) == 0
+                        && new BigDecimal("1.000000000000").compareTo(bin.getPositionZ()) == 0)
+                .count());
+        assertTrue(savedBins.stream().allMatch(bin ->
+                new BigDecimal("4.000000").compareTo(bin.getMaxVolume()) == 0));
+    }
+
+    @Test
     void testSaveLayoutBulk_RejectsCapacityReductionBelowCurrentTenantBinLoadBeforePersistence() {
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
         doNothing().when(tenantWarehouseAccessService).requireWmsAccess(userId, warehouseId);
@@ -1372,6 +1437,60 @@ class WarehouseLayoutServiceTest {
 
         assertTrue(ex.getMessage().contains("parent bounds"));
         verify(layoutRepository, never()).save(any(WarehouseLayout.class));
+    }
+
+    @Test
+    void testSaveContractLayoutPersistsCanonicalBinGeometryAndCapacity() {
+        WarehouseLayout tenantLayout = WarehouseLayout.builder()
+                .id(UUID.randomUUID())
+                .warehouse(warehouse)
+                .tenant(owner)
+                .isDefault(false)
+                .width(new BigDecimal("100"))
+                .length(new BigDecimal("100"))
+                .height(new BigDecimal("10"))
+                .build();
+        when(layoutRepository.findByWarehouseIdAndTenantId(warehouseId, userId))
+                .thenReturn(Optional.of(tenantLayout));
+        when(rackRepository.findAllByLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
+        when(binRepository.findAllByRackLayoutId(tenantLayout.getId())).thenReturn(Collections.emptyList());
+        when(rackRepository.save(any(WarehouseRack.class))).thenAnswer(invocation -> {
+            WarehouseRack savedRack = invocation.getArgument(0);
+            savedRack.setId(UUID.randomUUID());
+            return savedRack;
+        });
+        List<WarehouseBin> savedBins = new ArrayList<>();
+        when(binRepository.save(any(WarehouseBin.class))).thenAnswer(invocation -> {
+            WarehouseBin savedBin = invocation.getArgument(0);
+            savedBins.add(savedBin);
+            return savedBin;
+        });
+
+        RackSaveRequest rack = RackSaveRequest.builder()
+                .name("Contract Rack").code("CONTRACT_RACK")
+                .coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
+                .width(new BigDecimal("10")).length(new BigDecimal("10")).height(new BigDecimal("4"))
+                .shelfCount(2).maxWeight(new BigDecimal("100")).maxVolume(new BigDecimal("10"))
+                .bins(List.of(BinSaveRequest.builder()
+                        .name("Contract Bin").code("CONTRACT_BIN").shelfLevel(2)
+                        .coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
+                        .positionZ(new BigDecimal("999")).width(new BigDecimal("2"))
+                        .length(new BigDecimal("2")).height(BigDecimal.ONE)
+                        .maxWeight(new BigDecimal("9999")).maxVolume(new BigDecimal("9999"))
+                        .build()))
+                .build();
+        BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
+                .width(new BigDecimal("100")).length(new BigDecimal("100")).height(new BigDecimal("10"))
+                .racks(List.of(rack)).build();
+
+        assertDoesNotThrow(() -> layoutService.saveContractLayout(warehouseId, userId, request));
+
+        assertEquals(1, savedBins.size());
+        WarehouseBin savedBin = savedBins.get(0);
+        assertEquals(2, savedBin.getShelfLevel());
+        assertEquals(new BigDecimal("2.000000000000"), savedBin.getPositionZ());
+        assertEquals(new BigDecimal("50.000000"), savedBin.getMaxWeight());
+        assertEquals(new BigDecimal("4.000000"), savedBin.getMaxVolume());
     }
 
     @Test
