@@ -148,7 +148,7 @@ class WarehouseServiceTest {
     }
 
     @Test
-    void createWarehouseStartsAsDraftWithoutAdminNotification() {
+    void createWarehouseStartsPendingAndNotifiesAdmin() {
         UUID typeId = UUID.randomUUID();
         WarehouseType type = WarehouseType.builder().id(typeId).name("Warehouse").build();
         SystemPolicy policy = SystemPolicy.builder().id(UUID.randomUUID()).version("v1").content("policy").build();
@@ -169,8 +169,8 @@ class WarehouseServiceTest {
 
         WarehouseResponse response = warehouseService.createWarehouse(ownerId, request);
 
-        assertEquals(WarehouseStatus.DRAFT.name(), response.getStatus());
-        verify(notificationService, never()).push(any(), any(), any(), any());
+        assertEquals(WarehouseStatus.PENDING_APPROVAL.name(), response.getStatus());
+        verify(approvalNotifier).notifyAdmin(any(Warehouse.class));
     }
 
     @Test
