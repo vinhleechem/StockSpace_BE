@@ -68,4 +68,8 @@ public class WarehouseRack extends BaseEntity {
     @Column(name = "shelf_count", nullable = false)
     @Builder.Default
     private Integer shelfCount = 1;
+
+    @Column(name = "max_bin_count", nullable = false)
+    @Builder.Default
+    private Integer maxBinCount = 1;
 }

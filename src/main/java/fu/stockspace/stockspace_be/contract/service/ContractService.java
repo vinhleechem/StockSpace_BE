@@ -583,6 +583,10 @@ public class ContractService {
                                 .orElse(1);
                         rack.setShelfCount(Math.max(1, shelfCount));
                     }
+                    if (rack.getMaxBinCount() == null) {
+                        rack.setMaxBinCount(Math.max(1,
+                                rack.getBins() == null ? 0 : rack.getBins().size()));
+                    }
                 });
             }
             return layout;

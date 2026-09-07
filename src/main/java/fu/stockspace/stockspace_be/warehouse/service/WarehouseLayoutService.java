@@ -208,6 +208,9 @@ public class WarehouseLayoutService {
                     .shelfCount(rack.getShelfCount() != null
                             ? rack.getShelfCount()
                             : inferShelfCount(rackBins))
+                    .maxBinCount(rack.getMaxBinCount() != null
+                            ? rack.getMaxBinCount()
+                            : Math.max(1, rackBins.size()))
                     .build();
             cloneRack = rackRepository.save(cloneRack);
 
@@ -555,6 +558,9 @@ public class WarehouseLayoutService {
                     rack.setShelfCount(rReq.getShelfCount() != null
                             ? rReq.getShelfCount()
                             : resolveExistingRackShelfCount(rack, dbBins));
+                    rack.setMaxBinCount(rReq.getMaxBinCount() != null
+                            ? rReq.getMaxBinCount()
+                            : resolveExistingRackMaxBinCount(rack, dbBins));
                 } else {
                     rack = WarehouseRack.builder()
                             .layout(layout)
@@ -570,6 +576,7 @@ public class WarehouseLayoutService {
                             .length(rReq.getLength() != null ? rReq.getLength() : BigDecimal.ONE)
                             .height(rReq.getHeight())
                             .shelfCount(resolveNewRackShelfCount(rReq))
+                            .maxBinCount(resolveNewRackMaxBinCount(rReq))
                             .build();
                 }
                 rack = rackRepository.save(rack);
@@ -695,6 +702,7 @@ public class WarehouseLayoutService {
                         .length(rack.getLength())
                         .height(rack.getHeight())
                         .shelfCount(rack.getShelfCount())
+                        .maxBinCount(rack.getMaxBinCount())
                         .bins(rack.getBins() == null
                                 ? List.of()
                                 : rack.getBins().stream()
@@ -792,6 +800,9 @@ public class WarehouseLayoutService {
                     .shelfCount(rack.getShelfCount() != null
                             ? rack.getShelfCount()
                             : inferShelfCount(rackBins))
+                    .maxBinCount(rack.getMaxBinCount() != null
+                            ? rack.getMaxBinCount()
+                            : Math.max(1, rackBins.size()))
                     .occupiedPositions(rackOccupiedPositions)
                     .bins(binResponses)
                     .build());
@@ -845,6 +856,7 @@ public class WarehouseLayoutService {
                         .length(rack.getLength())
                         .height(rack.getHeight())
                         .shelfCount(resolveSnapshotShelfCount(rack))
+                        .maxBinCount(resolveSnapshotMaxBinCount(rack))
                         .occupiedPositions(sortedValues(rack.getOccupiedPositions()))
                         .bins(rack.getBins() == null
                                 ? List.of()
@@ -909,6 +921,14 @@ public class WarehouseLayoutService {
         return Math.max(1, inferredShelfCount);
     }
 
+    private int resolveNewRackMaxBinCount(RackSaveRequest request) {
+        if (request.getMaxBinCount() != null) {
+            return request.getMaxBinCount();
+        }
+        int requestedBinCount = request.getBins() == null ? 0 : request.getBins().size();
+        return Math.max(1, requestedBinCount);
+    }
+
     private int inferShelfCount(Collection<WarehouseBin> bins) {
         if (bins == null || bins.isEmpty()) {
             return 1;
@@ -932,6 +952,20 @@ public class WarehouseLayoutService {
                         && rack.getId().equals(bin.getRack().getId()))
                 .toList();
         return inferShelfCount(rackBins);
+    }
+
+    private int resolveExistingRackMaxBinCount(WarehouseRack rack, Collection<WarehouseBin> dbBins) {
+        if (rack.getMaxBinCount() != null) {
+            return rack.getMaxBinCount();
+        }
+        if (rack.getId() == null || dbBins == null) {
+            return 1;
+        }
+        long activeBinCount = dbBins.stream()
+                .filter(bin -> bin.getRack() != null && rack.getId().equals(bin.getRack().getId())
+                        && !bin.isDeleted())
+                .count();
+        return Math.max(1, Math.toIntExact(activeBinCount));
     }
 
     private void validateShelfConfigurationBeforePersistence(WarehouseLayout layout,
@@ -1103,6 +1137,12 @@ public class WarehouseLayoutService {
                 .map(level -> level == null ? 1 : level)
                 .max(Integer::compareTo)
                 .orElse(1);
+    }
+
+    private int resolveSnapshotMaxBinCount(RackResponse rack) {
+        return rack.getMaxBinCount() != null
+                ? rack.getMaxBinCount()
+                : Math.max(1, rack.getBins() == null ? 0 : rack.getBins().size());
     }
 
     private List<String> sortedValues(List<String> values) {
