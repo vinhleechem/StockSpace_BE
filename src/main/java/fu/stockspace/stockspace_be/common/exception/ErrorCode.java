@@ -101,6 +101,7 @@ public enum ErrorCode {
     WAREHOUSE_BIN_NOT_FOUND("Ô chứa không tồn tại trong hệ thống", HttpStatus.NOT_FOUND),
     LAYOUT_NOT_FOUND("Sơ đồ layout không tồn tại", HttpStatus.NOT_FOUND),
     LAYOUT_INVALID_COORDINATES("Tọa độ hoặc kích thước vượt giới hạn cho phép", HttpStatus.BAD_REQUEST),
+    WAREHOUSE_RACK_BIN_LIMIT_EXCEEDED("Số lượng Bin vượt quá giới hạn của Rack", HttpStatus.BAD_REQUEST),
     WAREHOUSE_BIN_NOT_EMPTY("Không thể xóa khu vực, kệ hoặc ô chứa này vì vẫn còn hàng tồn kho", HttpStatus.BAD_REQUEST),
     ZONE_NOT_FOUND("Khu vực không tồn tại trong hệ thống", HttpStatus.NOT_FOUND),
     RACK_NOT_FOUND("Kệ hàng không tồn tại trong hệ thống", HttpStatus.NOT_FOUND),
