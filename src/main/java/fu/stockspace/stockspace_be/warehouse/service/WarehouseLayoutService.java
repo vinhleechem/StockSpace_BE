@@ -968,6 +968,19 @@ public class WarehouseLayoutService {
         return Math.max(1, Math.toIntExact(activeBinCount));
     }
 
+    private int resolveEffectiveMaxBinCount(RackSaveRequest request,
+                                             WarehouseRack existingRack,
+                                             Map<UUID, WarehouseBin> dbBinMap) {
+        if (request.getMaxBinCount() != null) {
+            return request.getMaxBinCount();
+        }
+        if (existingRack != null) {
+            return resolveExistingRackMaxBinCount(existingRack,
+                    dbBinMap == null ? Collections.emptyList() : dbBinMap.values());
+        }
+        return resolveNewRackMaxBinCount(request);
+    }
+
     private void validateShelfConfigurationBeforePersistence(WarehouseLayout layout,
                                                                BulkLayoutSaveRequest request) {
         List<WarehouseRack> dbRacks = layout.getId() == null
@@ -1003,6 +1016,15 @@ public class WarehouseLayoutService {
             List<BinSaveRequest> bins = rackRequest.getBins() == null
                     ? Collections.emptyList()
                     : rackRequest.getBins();
+            int maxBinCount = resolveEffectiveMaxBinCount(rackRequest, existingRack, dbBinMap);
+            if (maxBinCount < 1) {
+                throw invalidGeometry("Rack " + rackRequest.getName() + " maxBinCount must be at least 1");
+            }
+            if (bins.size() > maxBinCount) {
+                throw new BadRequestException(ErrorCode.WAREHOUSE_RACK_BIN_LIMIT_EXCEEDED,
+                        "Rack " + rackRequest.getName() + " cannot contain more than " + maxBinCount + " bins");
+            }
+            rackRequest.setMaxBinCount(maxBinCount);
             for (BinSaveRequest binRequest : bins) {
                 int shelfLevel = resolveEffectiveShelfLevel(binRequest, dbBinMap);
                 if (shelfLevel < 1) {

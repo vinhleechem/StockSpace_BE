@@ -628,7 +628,7 @@ class WarehouseLayoutServiceTest {
     }
 
     @Test
-    void testSaveLayoutBulk_DerivesBinCapacitiesFromRackAndActualBinsPerShelf() {
+    void testSaveLayoutBulk_DerivesBinCapacitiesFromConfiguredMaximumBinCount() {
         when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
         when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)).thenReturn(Optional.of(defaultLayout));
         when(layoutRepository.save(defaultLayout)).thenReturn(defaultLayout);
@@ -656,6 +656,7 @@ class WarehouseLayoutServiceTest {
                 .coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
                 .width(new BigDecimal("10")).length(new BigDecimal("2")).height(new BigDecimal("5"))
                 .shelfCount(5).maxWeight(new BigDecimal("500")).maxVolume(new BigDecimal("100"))
+                .maxBinCount(20)
                 .bins(bins).build();
         BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
                 .width(new BigDecimal("100")).length(new BigDecimal("100")).height(new BigDecimal("10"))
@@ -706,7 +707,7 @@ class WarehouseLayoutServiceTest {
     }
 
     @Test
-    void testSaveLayoutBulk_DerivesCapacityPerShelfFromActualBinCount() {
+    void testSaveLayoutBulk_DerivesStableCapacityAcrossShelves() {
         when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
         when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)).thenReturn(Optional.of(defaultLayout));
         when(layoutRepository.save(defaultLayout)).thenReturn(defaultLayout);
@@ -748,6 +749,7 @@ class WarehouseLayoutServiceTest {
                 .coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
                 .width(new BigDecimal("10")).length(new BigDecimal("4")).height(new BigDecimal("4"))
                 .shelfCount(4).maxWeight(new BigDecimal("480")).maxVolume(new BigDecimal("64"))
+                .maxBinCount(8)
                 .bins(bins).build();
         BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
                 .width(new BigDecimal("100")).length(new BigDecimal("100")).height(new BigDecimal("10"))
@@ -763,7 +765,7 @@ class WarehouseLayoutServiceTest {
                 .count());
         assertEquals(4, savedBins.stream()
                 .filter(bin -> bin.getShelfLevel() == 2
-                        && new BigDecimal("30.000000").compareTo(bin.getMaxWeight()) == 0
+                        && new BigDecimal("60.000000").compareTo(bin.getMaxWeight()) == 0
                         && new BigDecimal("1.000000000000").compareTo(bin.getPositionZ()) == 0)
                 .count());
         assertTrue(savedBins.stream().allMatch(bin ->
@@ -1471,6 +1473,7 @@ class WarehouseLayoutServiceTest {
                 .coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
                 .width(new BigDecimal("10")).length(new BigDecimal("10")).height(new BigDecimal("4"))
                 .shelfCount(2).maxWeight(new BigDecimal("100")).maxVolume(new BigDecimal("10"))
+                .maxBinCount(2)
                 .bins(List.of(BinSaveRequest.builder()
                         .name("Contract Bin").code("CONTRACT_BIN").shelfLevel(2)
                         .coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
