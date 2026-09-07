@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.*;
@@ -48,6 +49,9 @@ class WarehouseLayoutServiceTest {
     private WarehousePublicationEditPolicy publicationEditPolicy;
     @Mock
     private WarehouseApprovalNotifier approvalNotifier;
+
+    @Spy
+    private RackBinGeometryPolicy rackBinGeometryPolicy;
 
     @InjectMocks
     private WarehouseLayoutService layoutService;
@@ -507,6 +511,115 @@ class WarehouseLayoutServiceTest {
 
         assertDoesNotThrow(() -> layoutService.saveLayoutBulk(warehouseId, userId, "OWNER", request));
         verify(rackRepository).save(argThat(savedRack -> savedRack.getShelfCount() == 2));
+    }
+
+    @Test
+    void testSaveLayoutBulk_AllowsSameBinCoordinatesOnDifferentShelvesAndCanonicalizesPositionZ() {
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)).thenReturn(Optional.of(defaultLayout));
+        when(layoutRepository.save(defaultLayout)).thenReturn(defaultLayout);
+        when(rackRepository.findAllByLayoutId(defaultLayout.getId())).thenReturn(Collections.emptyList());
+        when(binRepository.findAllByRackLayoutId(defaultLayout.getId())).thenReturn(Collections.emptyList());
+        when(rackRepository.save(any(WarehouseRack.class))).thenAnswer(invocation -> {
+            WarehouseRack savedRack = invocation.getArgument(0);
+            savedRack.setId(UUID.randomUUID());
+            return savedRack;
+        });
+        when(binRepository.save(any(WarehouseBin.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        RackSaveRequest rack = RackSaveRequest.builder()
+                .name("Rack A").code("R_A")
+                .coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
+                .width(new BigDecimal("5")).length(new BigDecimal("5")).height(new BigDecimal("4"))
+                .shelfCount(2)
+                .bins(List.of(
+                        BinSaveRequest.builder()
+                                .name("Bin A1").code("B_A1").shelfLevel(1)
+                                .coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
+                                .positionZ(new BigDecimal("99"))
+                                .width(new BigDecimal("2")).length(new BigDecimal("2")).height(BigDecimal.ONE)
+                                .build(),
+                        BinSaveRequest.builder()
+                                .name("Bin A2").code("B_A2").shelfLevel(2)
+                                .coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
+                                .positionZ(new BigDecimal("99"))
+                                .width(new BigDecimal("2")).length(new BigDecimal("2")).height(BigDecimal.ONE)
+                                .build()))
+                .build();
+        BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
+                .width(new BigDecimal("100")).length(new BigDecimal("100")).height(new BigDecimal("10"))
+                .racks(List.of(rack)).build();
+
+        assertDoesNotThrow(() -> layoutService.saveLayoutBulk(warehouseId, userId, "OWNER", request));
+
+        verify(binRepository).save(argThat(bin -> bin.getShelfLevel() == 1
+                && BigDecimal.ZERO.compareTo(bin.getPositionZ()) == 0));
+        verify(binRepository).save(argThat(bin -> bin.getShelfLevel() == 2
+                && new BigDecimal("2.000000000000").compareTo(bin.getPositionZ()) == 0));
+    }
+
+    @Test
+    void testSaveLayoutBulk_RejectsOverlapBetweenBinsOnTheSameShelf() {
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)).thenReturn(Optional.of(defaultLayout));
+
+        List<BinSaveRequest> bins = List.of(
+                BinSaveRequest.builder()
+                        .name("Bin A1").code("B_A1").shelfLevel(1)
+                        .coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
+                        .width(new BigDecimal("2")).length(new BigDecimal("2")).height(BigDecimal.ONE)
+                        .build(),
+                BinSaveRequest.builder()
+                        .name("Bin A2").code("B_A2").shelfLevel(1)
+                        .coordinateX(new BigDecimal("1")).coordinateY(BigDecimal.ZERO)
+                        .width(new BigDecimal("2")).length(new BigDecimal("2")).height(BigDecimal.ONE)
+                        .build());
+        RackSaveRequest rack = RackSaveRequest.builder()
+                .name("Rack A").code("R_A")
+                .coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
+                .width(new BigDecimal("5")).length(new BigDecimal("5")).height(new BigDecimal("4"))
+                .shelfCount(2).bins(bins).build();
+        BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
+                .width(new BigDecimal("100")).length(new BigDecimal("100")).height(new BigDecimal("10"))
+                .racks(List.of(rack)).build();
+
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> layoutService.saveLayoutBulk(warehouseId, userId, "OWNER", request));
+
+        assertTrue(ex.getMessage().contains("overlaps"));
+        verify(layoutRepository, never()).save(any(WarehouseLayout.class));
+        verify(rackRepository, never()).save(any(WarehouseRack.class));
+        verify(binRepository, never()).save(any(WarehouseBin.class));
+    }
+
+    @Test
+    void testSaveLayoutBulk_RejectsBinTallerThanItsRackShelf() {
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)).thenReturn(Optional.of(defaultLayout));
+
+        RackSaveRequest rack = RackSaveRequest.builder()
+                .name("Rack A").code("R_A")
+                .coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
+                .width(new BigDecimal("5")).length(new BigDecimal("5")).height(new BigDecimal("4"))
+                .shelfCount(2)
+                .bins(List.of(BinSaveRequest.builder()
+                        .name("Tall Bin").code("B_TALL").shelfLevel(1)
+                        .coordinateX(BigDecimal.ZERO).coordinateY(BigDecimal.ZERO)
+                        .width(new BigDecimal("2")).length(new BigDecimal("2"))
+                        .height(new BigDecimal("2.01"))
+                        .build()))
+                .build();
+        BulkLayoutSaveRequest request = BulkLayoutSaveRequest.builder()
+                .width(new BigDecimal("100")).length(new BigDecimal("100")).height(new BigDecimal("10"))
+                .racks(List.of(rack)).build();
+
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> layoutService.saveLayoutBulk(warehouseId, userId, "OWNER", request));
+
+        assertTrue(ex.getMessage().contains("height cannot exceed shelf height"));
+        verify(layoutRepository, never()).save(any(WarehouseLayout.class));
+        verify(rackRepository, never()).save(any(WarehouseRack.class));
+        verify(binRepository, never()).save(any(WarehouseBin.class));
     }
 
     @Test

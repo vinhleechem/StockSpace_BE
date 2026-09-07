@@ -51,6 +51,7 @@ public class WarehouseLayoutService {
     private final ObjectMapper objectMapper;
     private final WarehousePublicationEditPolicy publicationEditPolicy;
     private final WarehouseApprovalNotifier approvalNotifier;
+    private final RackBinGeometryPolicy rackBinGeometryPolicy;
 
 
 
@@ -380,8 +381,8 @@ public class WarehouseLayoutService {
         if (isTenantRole) {
             validateTenantSnapshotDimensions(layout, request);
         }
-        validateRequestGeometry(layout, request, isTenantRole);
         validateShelfConfigurationBeforePersistence(layout, request);
+        validateRequestGeometry(layout, request, isTenantRole);
         boolean approvalRequired = isOwnerRole && publicationEditPolicy.prepareOwnerEdit(warehouse);
 
         layout.setPositions(serializePositions(request.getPositions()));
@@ -466,8 +467,8 @@ public class WarehouseLayoutService {
         Map<UUID, WarehouseRack> dbRackMap = dbRacks.stream().collect(Collectors.toMap(WarehouseRack::getId, r -> r));
         Map<UUID, WarehouseBin> dbBinMap = dbBins.stream().collect(Collectors.toMap(WarehouseBin::getId, b -> b));
 
-        validateRequestGeometry(layout, request, isTenantRole);
         validateShelfConfiguration(request, dbRackMap, dbBinMap);
+        validateRequestGeometry(layout, request, isTenantRole);
 
         Set<UUID> reqRackIds = new HashSet<>();
         Set<UUID> reqBinIds = new HashSet<>();
@@ -666,8 +667,8 @@ public class WarehouseLayoutService {
                 .height(expectedHeight)
                 .build();
         BulkLayoutSaveRequest validationRequest = toValidationRequest(layout);
-        validateRequestGeometry(validationLayout, validationRequest, false);
         validateShelfConfiguration(validationRequest, Collections.emptyMap(), Collections.emptyMap());
+        validateRequestGeometry(validationLayout, validationRequest, false);
     }
 
     private BulkLayoutSaveRequest toValidationRequest(WarehouseLayoutResponse layout) {
@@ -957,6 +958,7 @@ public class WarehouseLayoutService {
             if (shelfCount < 1) {
                 throw invalidGeometry("Rack " + rackRequest.getName() + " shelfCount must be at least 1");
             }
+            rackRequest.setShelfCount(shelfCount);
 
             List<BinSaveRequest> bins = rackRequest.getBins() == null
                     ? Collections.emptyList()
@@ -969,6 +971,10 @@ public class WarehouseLayoutService {
                 if (shelfLevel > shelfCount) {
                     throw invalidGeometry("Bin " + binRequest.getName()
                             + " shelfLevel cannot exceed rack shelfCount");
+                }
+                binRequest.setShelfLevel(shelfLevel);
+                if (rackRequest.getHeight() != null && rackRequest.getHeight().signum() > 0) {
+                    rackBinGeometryPolicy.normalizePositionZ(binRequest, rackRequest.getHeight(), shelfCount);
                 }
             }
         }
@@ -1109,6 +1115,12 @@ public class WarehouseLayoutService {
                 requirePositive("bin.width", bin.getWidth());
                 requirePositive("bin.length", bin.getLength());
                 requirePositive("bin.height", bin.getHeight());
+                BigDecimal shelfHeight = rackBinGeometryPolicy.shelfHeight(
+                        rack.getHeight(), rack.getShelfCount());
+                if (bin.getHeight().compareTo(shelfHeight) > 0) {
+                    throw invalidGeometry("Bin " + bin.getName() + " height cannot exceed shelf height "
+                            + shelfHeight + " in rack " + rack.getName());
+                }
 
                 BigDecimal binZ = bin.getPositionZ() == null ? BigDecimal.ZERO : bin.getPositionZ();
                 ensureInside("Bin " + bin.getName() + " in rack " + rack.getName(),
@@ -1119,12 +1131,7 @@ public class WarehouseLayoutService {
 
                 for (int previousIndex = 0; previousIndex < binIndex; previousIndex++) {
                     BinSaveRequest previous = bins.get(previousIndex);
-                    if (overlaps(
-                            bin.getCoordinateX(), bin.getCoordinateY(), binZ,
-                            bin.getWidth(), bin.getLength(), bin.getHeight(),
-                            previous.getCoordinateX(), previous.getCoordinateY(),
-                            previous.getPositionZ() == null ? BigDecimal.ZERO : previous.getPositionZ(),
-                            previous.getWidth(), previous.getLength(), previous.getHeight())) {
+                    if (rackBinGeometryPolicy.overlapsOnSameShelf(bin, previous)) {
                         throw invalidGeometry("Bin " + bin.getName() + " overlaps bin " + previous.getName()
                                 + " in rack " + rack.getName());
                     }
