@@ -17,6 +17,9 @@ import fu.stockspace.stockspace_be.warehouse.repository.WarehouseBinRepository;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseLayoutRepository;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRackRepository;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
+import fu.stockspace.stockspace_be.wms.capacity.PhysicalLoad;
+import fu.stockspace.stockspace_be.wms.capacity.PhysicalLoadCalculator;
+import fu.stockspace.stockspace_be.wms.capacity.PhysicalLoadLine;
 import fu.stockspace.stockspace_be.wms.stock.repository.StockBatchRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -52,6 +55,7 @@ public class WarehouseLayoutService {
     private final WarehousePublicationEditPolicy publicationEditPolicy;
     private final WarehouseApprovalNotifier approvalNotifier;
     private final RackBinGeometryPolicy rackBinGeometryPolicy;
+    private final PhysicalLoadCalculator physicalLoadCalculator;
 
 
 
@@ -383,6 +387,7 @@ public class WarehouseLayoutService {
         }
         validateShelfConfigurationBeforePersistence(layout, request);
         validateRequestGeometry(layout, request, isTenantRole);
+        validateCurrentPhysicalLoadBeforePersistence(layout, request);
         boolean approvalRequired = isOwnerRole && publicationEditPolicy.prepareOwnerEdit(warehouse);
 
         layout.setPositions(serializePositions(request.getPositions()));
@@ -469,6 +474,7 @@ public class WarehouseLayoutService {
 
         validateShelfConfiguration(request, dbRackMap, dbBinMap);
         validateRequestGeometry(layout, request, isTenantRole);
+        validateCurrentPhysicalLoadBeforePersistence(layout, request, dbBinMap);
 
         Set<UUID> reqRackIds = new HashSet<>();
         Set<UUID> reqBinIds = new HashSet<>();
@@ -979,6 +985,88 @@ public class WarehouseLayoutService {
             }
             rackBinGeometryPolicy.normalizeCapacities(rackRequest);
         }
+    }
+
+    private void validateCurrentPhysicalLoadBeforePersistence(WarehouseLayout layout,
+                                                               BulkLayoutSaveRequest request) {
+        List<WarehouseBin> dbBins = layout.getId() == null
+                ? Collections.emptyList()
+                : binRepository.findAllByRackLayoutId(layout.getId());
+        Map<UUID, WarehouseBin> dbBinMap = dbBins.stream()
+                .collect(Collectors.toMap(WarehouseBin::getId, bin -> bin));
+        validateCurrentPhysicalLoadBeforePersistence(layout, request, dbBinMap);
+    }
+
+    private void validateCurrentPhysicalLoadBeforePersistence(WarehouseLayout layout,
+                                                               BulkLayoutSaveRequest request,
+                                                               Map<UUID, WarehouseBin> dbBinMap) {
+        if (layout.getWarehouse() == null || layout.getTenant() == null
+                || layout.getTenant().getId() == null) {
+            return;
+        }
+
+        List<PhysicalLoadLine> currentLoads = stockBatchRepository
+                .findActivePhysicalLoadsByWarehouseIdAndTenantId(
+                        layout.getWarehouse().getId(), layout.getTenant().getId());
+        if (currentLoads == null || currentLoads.isEmpty()) {
+            return;
+        }
+
+        Map<UUID, List<PhysicalLoadLine>> loadsByRack = currentLoads.stream()
+                .filter(line -> line != null && line.rackId() != null)
+                .collect(Collectors.groupingBy(PhysicalLoadLine::rackId));
+        Map<UUID, List<PhysicalLoadLine>> loadsByBin = currentLoads.stream()
+                .filter(line -> line != null && line.binId() != null && line.quantity() > 0)
+                .collect(Collectors.groupingBy(PhysicalLoadLine::binId));
+
+        List<RackSaveRequest> racks = request.getRacks() == null
+                ? Collections.emptyList()
+                : request.getRacks();
+        for (RackSaveRequest rackRequest : racks) {
+            if (rackRequest.getId() != null) {
+                PhysicalLoad rackLoad = calculateCurrentLoad(
+                        loadsByRack.getOrDefault(rackRequest.getId(), Collections.emptyList()),
+                        rackRequest.getMaxWeight(), rackRequest.getMaxVolume());
+                physicalLoadCalculator.assertWithinCapacity(
+                        "Rack", rackRequest.getName(), rackRequest.getMaxWeight(),
+                        rackRequest.getMaxVolume(), rackLoad);
+            }
+
+            List<BinSaveRequest> bins = rackRequest.getBins() == null
+                    ? Collections.emptyList()
+                    : rackRequest.getBins();
+            for (BinSaveRequest binRequest : bins) {
+                WarehouseBin existingBin = binRequest.getId() == null
+                        ? null
+                        : dbBinMap.get(binRequest.getId());
+                if (existingBin != null && existingBin.getRack() != null
+                        && (rackRequest.getId() == null
+                        || !rackRequest.getId().equals(existingBin.getRack().getId()))
+                        && stockBatchRepository.existsByBinIdAndQuantityGreaterThanAndIsDeletedFalse(
+                        binRequest.getId(), 0)) {
+                    throw new BadRequestException(ErrorCode.WAREHOUSE_BIN_NOT_EMPTY,
+                            "Không thể chuyển Bin đang có hàng sang Rack khác");
+                }
+
+                if (binRequest.getId() != null) {
+                    PhysicalLoad binLoad = calculateCurrentLoad(
+                            loadsByBin.getOrDefault(binRequest.getId(), Collections.emptyList()),
+                            binRequest.getMaxWeight(), binRequest.getMaxVolume());
+                    physicalLoadCalculator.assertWithinCapacity(
+                            "Bin", binRequest.getName(), binRequest.getMaxWeight(),
+                            binRequest.getMaxVolume(), binLoad);
+                }
+            }
+        }
+    }
+
+    private PhysicalLoad calculateCurrentLoad(List<PhysicalLoadLine> loads,
+                                              BigDecimal maxWeight,
+                                              BigDecimal maxVolume) {
+        return physicalLoadCalculator.calculate(
+                loads,
+                physicalLoadCalculator.isLimited(maxWeight),
+                physicalLoadCalculator.isLimited(maxVolume));
     }
 
     private int resolveEffectiveShelfCount(RackSaveRequest request,
