@@ -977,6 +977,7 @@ public class WarehouseLayoutService {
                     rackBinGeometryPolicy.normalizePositionZ(binRequest, rackRequest.getHeight(), shelfCount);
                 }
             }
+            rackBinGeometryPolicy.normalizeCapacities(rackRequest);
         }
     }
 
@@ -1108,7 +1109,6 @@ public class WarehouseLayoutService {
                     throw invalidGeometry("Bin code must be unique within rack " + rack.getName()
                             + ": " + bin.getCode());
                 }
-                validateCapacity("bin", bin.getName(), bin.getMaxWeight(), bin.getMaxVolume());
                 requireNonNegative("bin.coordinateX", bin.getCoordinateX());
                 requireNonNegative("bin.coordinateY", bin.getCoordinateY());
                 requireNonNegative("bin.positionZ", bin.getPositionZ() == null ? BigDecimal.ZERO : bin.getPositionZ());
@@ -1127,7 +1127,6 @@ public class WarehouseLayoutService {
                         bin.getCoordinateX(), bin.getCoordinateY(), binZ,
                         bin.getWidth(), bin.getLength(), bin.getHeight(),
                         rackWidth, rackLength, rack.getHeight());
-                validateGeometricCapacity("bin", bin.getName(), bin.getWidth(), bin.getLength(), bin.getHeight(), bin.getMaxVolume());
 
                 for (int previousIndex = 0; previousIndex < binIndex; previousIndex++) {
                     BinSaveRequest previous = bins.get(previousIndex);
