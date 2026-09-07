@@ -55,6 +55,9 @@ public class RackSaveRequest {
     @Min(value = 1, message = "Rack shelfCount must be at least 1")
     private Integer shelfCount;
 
+    @Min(value = 1, message = "Rack maxBinCount must be at least 1")
+    private Integer maxBinCount;
+
     @Valid
     private List<BinSaveRequest> bins;
 }

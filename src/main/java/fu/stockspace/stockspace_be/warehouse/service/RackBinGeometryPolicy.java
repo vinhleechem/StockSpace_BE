@@ -6,7 +6,6 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.Map;
 
 /**
  * Provides the canonical vertical geometry for bins inside a rack.
@@ -42,31 +41,15 @@ public class RackBinGeometryPolicy {
     }
 
     public void normalizeCapacities(RackSaveRequest rack) {
-        if (rack == null || rack.getShelfCount() == null || rack.getShelfCount() < 1
+        if (rack == null || rack.getMaxBinCount() == null || rack.getMaxBinCount() < 1
                 || rack.getBins() == null || rack.getBins().isEmpty()) {
             return;
         }
 
-        int shelfCount = rack.getShelfCount();
-        Map<Integer, Integer> binsPerShelf = rack.getBins().stream()
-                .filter(bin -> bin.getShelfLevel() != null)
-                .collect(java.util.stream.Collectors.groupingBy(
-                        BinSaveRequest::getShelfLevel,
-                        java.util.stream.Collectors.summingInt(bin -> 1)));
-
+        int maxBinCount = rack.getMaxBinCount();
         for (BinSaveRequest bin : rack.getBins()) {
-            Integer shelfLevel = bin.getShelfLevel();
-            if (shelfLevel == null) {
-                continue;
-            }
-            int binCount = binsPerShelf.getOrDefault(shelfLevel, 0);
-            if (binCount < 1) {
-                continue;
-            }
-
-            int divisor = shelfCount * binCount;
-            bin.setMaxWeight(divideCapacity(rack.getMaxWeight(), divisor));
-            bin.setMaxVolume(calculateVolumeCapacity(rack.getMaxVolume(), divisor, bin));
+            bin.setMaxWeight(divideCapacity(rack.getMaxWeight(), maxBinCount));
+            bin.setMaxVolume(calculateVolumeCapacity(rack.getMaxVolume(), maxBinCount, bin));
         }
     }
 
