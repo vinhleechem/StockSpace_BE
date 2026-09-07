@@ -124,7 +124,11 @@ public class WarehouseService {
                 .capacity(request.getCapacity())
                 .rentalPricingType(pricingType)
                 .rentalPrice(rentalPrice)
-                .status(WarehouseStatus.DRAFT)
+                // A warehouse is submitted for Admin review as soon as the
+                // owner starts the create + layout flow. There is no
+                // warehouse-level draft state; the layout is saved by the
+                // next request before Admin can approve it.
+                .status(WarehouseStatus.PENDING_APPROVAL)
                 .isVerified(false)
                 .policy(policy)
                 .build();
@@ -142,6 +146,11 @@ public class WarehouseService {
         if (request.getImageUrls() != null && !request.getImageUrls().isEmpty()) {
             attachImages(warehouse, request.getImageUrls());
         }
+
+        // Notify after the warehouse row and its images have been persisted.
+        // Notification delivery is best-effort and is isolated by the
+        // notifier so a mail/WebSocket failure cannot roll back creation.
+        approvalNotifier.notifyAdmin(warehouse);
 
         log.info("Warehouse created: {} (ID: {})", warehouse.getName(), warehouse.getId());
         return mapToResponse(warehouse);
@@ -411,8 +420,10 @@ public class WarehouseService {
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
         requireWarehouseOwner(warehouse, ownerId);
 
-        if (warehouse.getStatus() != WarehouseStatus.DRAFT
-                && warehouse.getStatus() != WarehouseStatus.INACTIVE) {
+        // New warehouses are submitted automatically by createWarehouse. This
+        // endpoint remains only for an Admin-rejected warehouse that the owner
+        // edited and wants to send again.
+        if (warehouse.getStatus() != WarehouseStatus.INACTIVE) {
             throw new BadRequestException(ErrorCode.WAREHOUSE_INVALID_STATUS_TRANSITION);
         }
 
