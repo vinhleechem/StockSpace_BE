@@ -55,14 +55,14 @@ class WarehousePublicationEditPolicyTest {
     }
 
     @Test
-    void nonApprovedWarehouseCanBeEditedWithoutChangingItsLifecycleState() {
+    void pendingWarehouseCanBeEditedWithoutChangingItsLifecycleState() {
         Warehouse warehouse = Warehouse.builder()
-                .status(WarehouseStatus.DRAFT)
+                .status(WarehouseStatus.PENDING_APPROVAL)
                 .build();
 
         boolean approvalRequired = policy.prepareOwnerEdit(warehouse);
 
         assertEquals(false, approvalRequired);
-        assertEquals(WarehouseStatus.DRAFT, warehouse.getStatus());
+        assertEquals(WarehouseStatus.PENDING_APPROVAL, warehouse.getStatus());
     }
 }

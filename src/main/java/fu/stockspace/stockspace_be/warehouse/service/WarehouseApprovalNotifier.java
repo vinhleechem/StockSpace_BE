@@ -7,7 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-/** Sends the single Admin notification used by owner approval submissions. */
+/** Sends the Admin notification used by new and resubmitted warehouse approvals. */
 @Component
 @RequiredArgsConstructor
 @Slf4j
