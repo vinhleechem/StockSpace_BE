@@ -51,10 +51,11 @@ public class AuthController {
 
         @PostMapping("/register")
         @Operation(summary = "Đăng ký tài khoản mới (OWNER / TENANT). Gửi email chào mừng sau khi đăng ký thành công.")
-        public ResponseEntity<ApiResponse<LoginResponse>> register(
+        public ResponseEntity<ApiResponse<Void>> register(
                         @Valid @RequestBody RegisterRequest request) {
-                AuthService.AuthResult result = authService.register(request);
-                return buildAuthResponse(result, HttpStatus.CREATED, "Registration successful");
+                authService.register(request);
+                return ResponseEntity.status(HttpStatus.CREATED)
+                                .body(ApiResponse.success("Registration successful", null));
         }
 
 

@@ -77,7 +77,7 @@ public class AuthService {
 
 
     @Transactional
-    public AuthResult register(RegisterRequest request) {
+    public void register(RegisterRequest request) {
         if (!SELF_REGISTER_ROLES.contains(request.getRole())) {
             throw new BadRequestException(ErrorCode.ROLE_NOT_SUPPORTED);
         }
@@ -108,7 +108,6 @@ public class AuthService {
 
         emailService.sendWelcomeEmail(user.getEmail(), user.getFullName());
 
-        return buildAuthResult(user);
     }
 
 
