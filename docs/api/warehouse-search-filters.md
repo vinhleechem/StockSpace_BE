@@ -14,8 +14,8 @@ GET /api/warehouses
 
 All parameters are optional unless stated otherwise. The endpoint is public
 and returns only warehouses that are active, not deleted, in `AVAILABLE`
-listing status, published and not past `visibleUntil`. Verification is an
-optional filter, not a public visibility gate.
+listing status, at or after `publishedAt`, and not past `visibleUntil`.
+Verification is an optional filter, not a public visibility gate.
 
 ### Query parameters
 
@@ -188,6 +188,7 @@ WHERE w.is_active = true
   AND w.is_deleted = false
   AND w.status = 'AVAILABLE'
   AND w.published_at IS NOT NULL
+  AND w.published_at <= CURRENT_TIMESTAMP
   AND w.visible_until IS NOT NULL
   AND w.visible_until >= CURRENT_TIMESTAMP
   AND w.province_code = '79'

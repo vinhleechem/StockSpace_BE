@@ -60,6 +60,8 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class WarehouseServiceTest {
 
+    private static final LocalDateTime NOW = LocalDateTime.of(2026, 8, 31, 8, 0);
+
     @Mock
     private WarehouseRepository warehouseRepository;
 
@@ -255,8 +257,8 @@ class WarehouseServiceTest {
     void submitRejectedWarehouseReturnsToPendingApprovalWithoutChargingWallet() {
         warehouse.setStatus(WarehouseStatus.INACTIVE);
         warehouse.setRejectReason("Thiếu thông tin hồ sơ");
-        warehouse.setPublishedAt(LocalDateTime.now().minusDays(1));
-        warehouse.setVisibleUntil(LocalDateTime.now().plusDays(5));
+        warehouse.setPublishedAt(NOW.minusDays(1));
+        warehouse.setVisibleUntil(NOW.plusDays(5));
 
         WarehouseLayout defaultLayout = WarehouseLayout.builder()
                 .warehouse(warehouse)
@@ -499,8 +501,8 @@ class WarehouseServiceTest {
     void authenticatedContactRequestReturnsOwnerPhoneForVerifiedActiveWarehouse() {
         warehouse.setStatus(WarehouseStatus.AVAILABLE);
         warehouse.setVerified(true);
-        warehouse.setPublishedAt(LocalDateTime.now().minusDays(1));
-        warehouse.setVisibleUntil(LocalDateTime.now().plusDays(10));
+        warehouse.setPublishedAt(NOW.minusDays(1));
+        warehouse.setVisibleUntil(NOW.plusDays(10));
         when(warehouseRepository.findPublicAvailableById(warehouseId)).thenReturn(Optional.of(warehouse));
 
         WarehouseOwnerContactResponse response = warehouseService.getOwnerContact(warehouseId);
@@ -525,8 +527,8 @@ class WarehouseServiceTest {
     void contactRequestAllowsUnverifiedPublishedWarehouse() {
         warehouse.setStatus(WarehouseStatus.AVAILABLE);
         warehouse.setVerified(false);
-        warehouse.setPublishedAt(LocalDateTime.now().minusDays(1));
-        warehouse.setVisibleUntil(LocalDateTime.now().plusDays(10));
+        warehouse.setPublishedAt(NOW.minusDays(1));
+        warehouse.setVisibleUntil(NOW.plusDays(10));
         when(warehouseRepository.findPublicAvailableById(warehouseId)).thenReturn(Optional.of(warehouse));
 
         WarehouseOwnerContactResponse response = warehouseService.getOwnerContact(warehouseId);
@@ -564,8 +566,8 @@ class WarehouseServiceTest {
     void publicWarehouseResponseDoesNotExposeOwnerPhone() throws Exception {
         warehouse.setStatus(WarehouseStatus.AVAILABLE);
         warehouse.setVerified(true);
-        warehouse.setPublishedAt(LocalDateTime.now().minusDays(1));
-        warehouse.setVisibleUntil(LocalDateTime.now().plusDays(10));
+        warehouse.setPublishedAt(NOW.minusDays(1));
+        warehouse.setVisibleUntil(NOW.plusDays(10));
         when(warehouseRepository.findPublicAvailableById(warehouseId)).thenReturn(Optional.of(warehouse));
 
         WarehouseResponse response = warehouseService.getWarehouseDetail(warehouseId);
@@ -579,8 +581,8 @@ class WarehouseServiceTest {
     void publicWarehouseDetailRejectsExpiredPublication() {
         warehouse.setStatus(WarehouseStatus.AVAILABLE);
         warehouse.setVerified(true);
-        warehouse.setPublishedAt(LocalDateTime.now().minusDays(20));
-        warehouse.setVisibleUntil(LocalDateTime.now().minusDays(1));
+        warehouse.setPublishedAt(NOW.minusDays(20));
+        warehouse.setVisibleUntil(NOW.minusDays(1));
         when(warehouseRepository.findPublicAvailableById(warehouseId)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class,
@@ -591,8 +593,8 @@ class WarehouseServiceTest {
     void ownerWarehouseResponseIncludesPublicationStatusAndActionFlags() {
         warehouse.setStatus(WarehouseStatus.AVAILABLE);
         warehouse.setVerified(true);
-        warehouse.setPublishedAt(LocalDateTime.now().minusDays(1));
-        warehouse.setVisibleUntil(LocalDateTime.now().plusDays(10));
+        warehouse.setPublishedAt(NOW.minusDays(1));
+        warehouse.setVisibleUntil(NOW.plusDays(10));
         when(warehouseRepository.findByOwnerId(eq(ownerId), any()))
                 .thenReturn(new PageImpl<>(List.of(warehouse)));
 
@@ -607,11 +609,30 @@ class WarehouseServiceTest {
     }
 
     @Test
+    void scheduledWarehouseIsNotReportedAsPublishedBeforeItsStartTime() {
+        warehouse.setStatus(WarehouseStatus.AVAILABLE);
+        warehouse.setVerified(true);
+        warehouse.setPublishedAt(LocalDateTime.of(2026, 9, 2, 0, 0));
+        warehouse.setVisibleUntil(LocalDateTime.of(2026, 9, 12, 0, 0));
+        when(warehouseRepository.findByOwnerId(eq(ownerId), any()))
+                .thenReturn(new PageImpl<>(List.of(warehouse)));
+
+        WarehouseResponse response = warehouseService
+                .getMyWarehouses(ownerId, 0, 10, "createdAt", "desc")
+                .getContent()
+                .get(0);
+
+        assertEquals("SCHEDULED", response.getPublicationStatus());
+        assertFalse(response.isCanPublish());
+        assertFalse(response.isCanRenew());
+    }
+
+    @Test
     void expiredWarehouseCanBeRenewedButCannotBeInitiallyPublished() {
         warehouse.setStatus(WarehouseStatus.AVAILABLE);
         warehouse.setVerified(true);
-        warehouse.setPublishedAt(LocalDateTime.now().minusDays(20));
-        warehouse.setVisibleUntil(LocalDateTime.now().minusDays(1));
+        warehouse.setPublishedAt(NOW.minusDays(20));
+        warehouse.setVisibleUntil(NOW.minusDays(1));
         when(warehouseRepository.findByOwnerId(eq(ownerId), any()))
                 .thenReturn(new PageImpl<>(List.of(warehouse)));
 

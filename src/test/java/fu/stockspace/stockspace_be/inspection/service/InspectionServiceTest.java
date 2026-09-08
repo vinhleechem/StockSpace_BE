@@ -20,13 +20,16 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -91,5 +94,25 @@ class InspectionServiceTest {
                 () -> inspectionService.requestInspection(ownerId, warehouseId));
 
         verify(inspectionRepository, never()).save(any());
+    }
+
+    @Test
+    void inspectionResponseCopiesImagesFromPersistenceCollection() {
+        List<String> persistedImages = new ArrayList<>(List.of("https://example.com/report.jpg"));
+        InspectionReport report = InspectionReport.builder()
+                .id(UUID.randomUUID())
+                .warehouse(warehouse)
+                .status(InspectionStatus.PENDING)
+                .images(persistedImages)
+                .build();
+        when(inspectionRepository.findAllWithFilter(any(), any()))
+                .thenReturn(new PageImpl<>(List.of(report)));
+
+        var response = inspectionService.getAllInspections(null, 0, 10)
+                .getContent()
+                .get(0);
+
+        assertEquals(persistedImages, response.getImages());
+        assertNotSame(persistedImages, response.getImages());
     }
 }

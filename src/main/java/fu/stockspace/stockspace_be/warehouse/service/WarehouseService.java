@@ -48,6 +48,7 @@ public class WarehouseService {
     private static final int MAX_IMAGES_PER_WAREHOUSE = 10;
     private static final String PUBLICATION_DRAFT = "DRAFT";
     private static final String PUBLICATION_PENDING_APPROVAL = "PENDING_APPROVAL";
+    private static final String PUBLICATION_SCHEDULED = "SCHEDULED";
     private static final String PUBLICATION_PUBLISHED = "PUBLISHED";
     private static final String PUBLICATION_EXPIRED = "EXPIRED";
     private static final String PUBLICATION_REFUNDED = "REFUNDED";
@@ -754,7 +755,11 @@ public class WarehouseService {
         if (warehouse.getPublishedAt() == null || warehouse.getVisibleUntil() == null) {
             return PUBLICATION_DRAFT;
         }
-        return warehouse.getVisibleUntil().isBefore(LocalDateTime.now())
+        LocalDateTime now = LocalDateTime.now(publicationClock);
+        if (warehouse.getPublishedAt().isAfter(now)) {
+            return PUBLICATION_SCHEDULED;
+        }
+        return warehouse.getVisibleUntil().isBefore(now)
                 ? PUBLICATION_EXPIRED
                 : PUBLICATION_PUBLISHED;
     }

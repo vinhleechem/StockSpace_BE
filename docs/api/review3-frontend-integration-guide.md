@@ -862,13 +862,14 @@ Owner/admin warehouse responses include:
 }
 ```
 
-`publicationStatus` is one of `DRAFT`, `PENDING_APPROVAL`, `PUBLISHED`,
-`EXPIRED` or `REFUNDED`.
+`publicationStatus` is one of `DRAFT`, `PENDING_APPROVAL`, `SCHEDULED`,
+`PUBLISHED`, `EXPIRED` or `REFUNDED`.
 
 | State | Meaning | `canPublish` | `canRenew` |
 |---|---|---:|---:|
 | `DRAFT` | No paid pending publication; a first purchase may be started | `true` when warehouse is active and not deleted | `false` |
 | `PENDING_APPROVAL` | Payment succeeded and Admin decision is pending | `false` | `false` |
+| `SCHEDULED` | Publication is paid but its selected start time is still in the future | `false` | `false` |
 | `PUBLISHED` | Approved publication is within its period | `false` | `true` |
 | `EXPIRED` | Approved publication period has ended | `false` | `true` |
 | `REFUNDED` | Rejected publication was refunded and has not been resubmitted | `false` | `false` |
