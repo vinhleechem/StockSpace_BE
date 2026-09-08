@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 
 
 
@@ -286,7 +287,9 @@ public class InspectionService {
                 .status(r.getStatus().name())
                 .checklistData(r.getChecklistData())
                 .notes(r.getNotes())
-                .images(r.getImages())
+                .images(r.getImages() == null
+                        ? new ArrayList<>()
+                        : new ArrayList<>(r.getImages()))
                 .inspectedAt(r.getInspectedAt())
                 .warehouseId(warehouse != null ? warehouse.getId() : null)
                 .warehouseName(warehouse != null ? warehouse.getName() : null)

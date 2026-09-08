@@ -42,6 +42,7 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
               AND w.isDeleted = false
               AND w.status = fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus.AVAILABLE
               AND w.publishedAt IS NOT NULL
+              AND w.publishedAt <= CURRENT_TIMESTAMP
               AND w.visibleUntil IS NOT NULL
               AND w.visibleUntil >= CURRENT_TIMESTAMP
             """)
@@ -54,6 +55,7 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
                 AND w.isDeleted = false
                 AND ((:status IS NULL AND w.status = fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus.AVAILABLE) OR (:status IS NOT NULL AND w.status = :status))
               AND w.publishedAt IS NOT NULL
+              AND w.publishedAt <= CURRENT_TIMESTAMP
               AND w.visibleUntil IS NOT NULL
               AND w.visibleUntil >= CURRENT_TIMESTAMP
               AND (:keyword IS NULL OR LOWER(w.name) LIKE :keyword

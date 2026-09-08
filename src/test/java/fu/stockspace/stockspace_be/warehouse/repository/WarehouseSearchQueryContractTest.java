@@ -39,6 +39,7 @@ class WarehouseSearchQueryContractTest {
         assertTrue(query.contains(":isVerified IS NULL OR w.isVerified = :isVerified"));
         assertTrue(query.contains("w.status = fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus.AVAILABLE"));
         assertTrue(query.contains("w.publishedAt IS NOT NULL"));
+        assertTrue(query.contains("w.publishedAt <= CURRENT_TIMESTAMP"));
         assertTrue(query.contains("w.visibleUntil >= CURRENT_TIMESTAMP"));
         assertTrue(query.contains(":provinceCode"));
         assertTrue(query.contains(":districtCode"));
@@ -49,6 +50,19 @@ class WarehouseSearchQueryContractTest {
         assertTrue(query.contains(":maxPrice"));
         assertFalse(query.contains("LOWER(w.provinceCode) LIKE"));
         assertFalse(query.contains("LOWER(w.districtCode) LIKE"));
+    }
+
+    @Test
+    void publicDetailRequiresPublicationPeriodToHaveStarted() throws Exception {
+        Method detailMethod = WarehouseRepository.class.getMethod(
+                "findPublicAvailableById",
+                java.util.UUID.class
+        );
+        String query = detailMethod.getAnnotation(Query.class).value().replaceAll("\\s+", " ");
+
+        assertTrue(query.contains("w.publishedAt IS NOT NULL"));
+        assertTrue(query.contains("w.publishedAt <= CURRENT_TIMESTAMP"));
+        assertTrue(query.contains("w.visibleUntil >= CURRENT_TIMESTAMP"));
     }
 
     @Test

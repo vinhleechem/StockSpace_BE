@@ -44,7 +44,7 @@ public class WarehouseResponse {
     private String policyVersion;
     private LocalDateTime publishedAt;
     private LocalDateTime visibleUntil;
-    @Schema(description = "Current publication state", allowableValues = {"DRAFT", "PENDING_APPROVAL", "PUBLISHED", "EXPIRED", "REFUNDED"})
+    @Schema(description = "Current publication state", allowableValues = {"DRAFT", "PENDING_APPROVAL", "SCHEDULED", "PUBLISHED", "EXPIRED", "REFUNDED"})
     private String publicationStatus;
     private boolean canPublish;
     private boolean canRenew;
