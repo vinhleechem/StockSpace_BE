@@ -34,6 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
@@ -50,6 +51,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class ContractService {
     private static final long MIN_RENTAL_DURATION_DAYS = 7;
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final RentalContractRepository contractRepository;
     private final WarehouseService warehouseService;
@@ -897,6 +899,10 @@ public class ContractService {
         if (owner == null && warehouse != null) {
             owner = warehouse.getOwner();
         }
+        RentalContract sourceContract = c.getRenewedFromContract();
+        List<RentalContract> blockingRenewals = sourceContract == null && c.getId() != null
+                ? contractRepository.findBlockingRenewalsBySourceId(c.getId())
+                : List.of();
         List<String> paperContractFiles = deserializePaperContractFiles(c.getPaperContractFiles());
         ActionFlags actionFlags = calculateActionFlags(c, viewerId, tenant, owner);
         return RentalContractResponse.builder()
@@ -938,6 +944,9 @@ public class ContractService {
                 .layoutSnapshot(c.getLayoutSnapshot())
                 .changeRequestReason(c.getChangeRequestReason())
                 .rejectionReason(c.getRejectionReason())
+                .renewedFromContractId(sourceContract != null ? sourceContract.getId() : null)
+                .renewalContractId(blockingRenewals.isEmpty() ? null : blockingRenewals.get(0).getId())
+                .canCreateRenewal(actionFlags.canCreateRenewal())
                 .confirmedAt(c.getConfirmedAt())
                 .createdAt(c.getCreatedAt())
                 .updatedAt(c.getUpdatedAt())
@@ -979,6 +988,7 @@ public class ContractService {
                 && status == ContractStatus.ACTIVE
                 && subscriptionService != null
                 && subscriptionService.hasActiveSubscription(tenant.getId());
+        boolean canCreateRenewal = ownerViewer && isRenewalEligible(contract, owner);
         return new ActionFlags(
                 ownerCanEdit,
                 ownerViewer && status == ContractStatus.DRAFT,
@@ -989,7 +999,63 @@ public class ContractService {
                 (ownerViewer && contract.isActive() && !contract.isDeleted()) || tenantCanViewLayout,
                 canManageWms,
                 layoutSetupRequired,
-                canEditContractLayout);
+                canEditContractLayout,
+                canCreateRenewal);
+    }
+
+    private boolean isRenewalEligible(RentalContract sourceContract, User owner) {
+        if (sourceContract.getRenewedFromContract() != null
+                || sourceContract.getStatus() != ContractStatus.ACTIVE
+                || !sourceContract.isActive()
+                || sourceContract.isDeleted()
+                || owner == null
+                || sourceContract.getOwner() == null
+                || !owner.getId().equals(sourceContract.getOwner().getId())
+                || sourceContract.getTenant() == null
+                || sourceContract.getWarehouse() == null) {
+            return false;
+        }
+
+        LocalDate today = LocalDate.now(BUSINESS_ZONE);
+        if (sourceContract.getStartDate() == null || sourceContract.getEndDate() == null
+                || today.isBefore(sourceContract.getStartDate())
+                || today.isAfter(sourceContract.getEndDate())) {
+            return false;
+        }
+
+        Warehouse warehouse = sourceContract.getWarehouse();
+        User tenant = sourceContract.getTenant();
+        if (!warehouse.isActive() || warehouse.isDeleted()
+                || !tenant.isActive() || tenant.isDeleted()) {
+            return false;
+        }
+        if (contractRepository.findBlockingRenewalsBySourceId(sourceContract.getId()).size() > 0) {
+            return false;
+        }
+        if (warehouseLayoutService.findActiveTenantLayoutForContract(
+                warehouse.getId(), tenant.getId()).isEmpty()) {
+            return false;
+        }
+
+        RentalPricingType warehousePricingType = warehouse.getRentalPricingType() != null
+                ? warehouse.getRentalPricingType()
+                : RentalPricingType.FIXED_MONTHLY;
+        if (sourceContract.getPricingType() != warehousePricingType) {
+            return false;
+        }
+        WarehouseLayoutResponse defaultLayout = warehouseLayoutService
+                .getDefaultLayoutForContract(warehouse.getId());
+        try {
+            RentalAreaAllocationPolicy.validatePreservedDimensions(
+                    sourceContract.getPricingType(),
+                    sourceContract.getLeasedWidth(),
+                    sourceContract.getLeasedLength(),
+                    sourceContract.getLeasedHeight(),
+                    defaultLayout);
+        } catch (BadRequestException exception) {
+            return false;
+        }
+        return true;
     }
 
     private record ActionFlags(boolean canEdit,
@@ -1001,9 +1067,10 @@ public class ContractService {
                                boolean canViewLayout,
                                boolean canManageWms,
                                boolean layoutSetupRequired,
-                               boolean canEditContractLayout) {
+                               boolean canEditContractLayout,
+                               boolean canCreateRenewal) {
         private static final ActionFlags NONE = new ActionFlags(
-                false, false, false, false, false, false, false, false, false, false);
+                false, false, false, false, false, false, false, false, false, false, false);
     }
 
 
