@@ -26,9 +26,12 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.time.ZoneId;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -41,6 +44,9 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class ContractLayoutServiceTest {
 
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+    private static final Instant FIXED_INSTANT = Instant.parse("2026-09-09T17:00:00Z");
+
     @Mock private RentalContractRepository contractRepository;
     @Mock private WarehouseService warehouseService;
     @Mock private UserRepository userRepository;
@@ -49,6 +55,7 @@ class ContractLayoutServiceTest {
     @Mock private WarehouseRentalAvailabilityService warehouseRentalAvailabilityService;
     @Mock private NotificationService notificationService;
     @Spy private ObjectMapper objectMapper = new ObjectMapper();
+    @Mock private Clock businessClock;
 
     @InjectMocks
     private ContractService contractService;
@@ -65,6 +72,9 @@ class ContractLayoutServiceTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(businessClock.instant()).thenReturn(FIXED_INSTANT);
+        lenient().when(businessClock.getZone()).thenReturn(BUSINESS_ZONE);
+
         ownerId = UUID.randomUUID();
         tenantId = UUID.randomUUID();
         warehouseId = UUID.randomUUID();
