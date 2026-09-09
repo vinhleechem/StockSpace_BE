@@ -30,6 +30,7 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
     @Query("""
             SELECT c FROM RentalContract c
             WHERE c.tenant.id = :tenantId
+              AND c.status <> fu.stockspace.stockspace_be.contract.entity.ContractStatus.DRAFT
               AND c.isDeleted = false
             ORDER BY c.createdAt DESC
             """)
@@ -44,11 +45,32 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
             """)
     Page<RentalContract> findByOwnerId(@Param("ownerId") UUID ownerId, Pageable pageable);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT c FROM RentalContract c WHERE c.id = :contractId")
+    Optional<RentalContract> findByIdForUpdate(@Param("contractId") UUID contractId);
+
+    @Query("""
+            SELECT c FROM RentalContract c
+            WHERE c.renewedFromContract.id = :sourceContractId
+              AND c.status IN (
+                    fu.stockspace.stockspace_be.contract.entity.ContractStatus.DRAFT,
+                    fu.stockspace.stockspace_be.contract.entity.ContractStatus.PENDING_TENANT_CONFIRM,
+                    fu.stockspace.stockspace_be.contract.entity.ContractStatus.CHANGES_REQUESTED,
+                    fu.stockspace.stockspace_be.contract.entity.ContractStatus.SCHEDULED,
+                    fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE,
+                    fu.stockspace.stockspace_be.contract.entity.ContractStatus.EXPIRED)
+              AND c.isActive = true
+              AND c.isDeleted = false
+            ORDER BY c.createdAt ASC
+            """)
+    List<RentalContract> findBlockingRenewalsBySourceId(
+            @Param("sourceContractId") UUID sourceContractId);
+
     @Query("SELECT c FROM RentalContract c WHERE c.status = :status AND c.submittedAt < :dateTime")
     java.util.List<RentalContract> findByStatusAndSubmittedAtBefore(@Param("status") fu.stockspace.stockspace_be.contract.entity.ContractStatus status, @Param("dateTime") java.time.LocalDateTime dateTime);
 
     @Query("""
-            SELECT c FROM RentalContract c
+            SELECT c.id FROM RentalContract c
             WHERE c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
               AND c.isActive = true
               AND c.isDeleted = false
@@ -56,32 +78,29 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
               AND c.endDate <= :toDate
               AND c.expiryReminderSent = false
             """)
-    java.util.List<RentalContract> findActiveContractsEndingBetween(
+    List<UUID> findActiveContractIdsEndingBetween(
             @Param("fromDate") java.time.LocalDate fromDate,
             @Param("toDate") java.time.LocalDate toDate);
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
-            SELECT c FROM RentalContract c
+            SELECT c.id FROM RentalContract c
+            WHERE c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.SCHEDULED
+              AND c.isActive = true
+              AND c.isDeleted = false
+              AND c.startDate <= :today
+            """)
+    List<UUID> findScheduledContractIdsDueOnOrBefore(
+            @Param("today") java.time.LocalDate today);
+
+    @Query("""
+            SELECT c.id FROM RentalContract c
             WHERE c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
               AND c.isActive = true
               AND c.isDeleted = false
               AND c.endDate < :today
             """)
-    java.util.List<RentalContract> findActiveContractsEndingBefore(
+    List<UUID> findActiveContractIdsEndingBefore(
             @Param("today") java.time.LocalDate today);
-
-    @Query("""
-            SELECT COUNT(c) > 0 FROM RentalContract c
-            WHERE c.tenant.id = :tenantId
-              AND c.warehouse.id = :warehouseId
-              AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
-              AND c.isActive = true
-              AND c.isDeleted = false
-              AND c.startDate <= CURRENT_DATE
-              AND c.endDate >= CURRENT_DATE
-            """)
-    boolean existsByTenantIdAndWarehouseIdAndStatusActive(@Param("tenantId") UUID tenantId, @Param("warehouseId") UUID warehouseId);
 
     @Query("""
             SELECT COUNT(c) > 0 FROM RentalContract c
@@ -112,6 +131,7 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
               AND c.warehouse.id = :warehouseId
               AND c.status IN (
                     fu.stockspace.stockspace_be.contract.entity.ContractStatus.PENDING_TENANT_CONFIRM,
+                    fu.stockspace.stockspace_be.contract.entity.ContractStatus.SCHEDULED,
                     fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE)
               AND c.isActive = true
               AND c.isDeleted = false
@@ -134,6 +154,7 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
               AND (:excludedContractId IS NULL OR c.id <> :excludedContractId)
               AND c.status IN (
                     fu.stockspace.stockspace_be.contract.entity.ContractStatus.PENDING_TENANT_CONFIRM,
+                    fu.stockspace.stockspace_be.contract.entity.ContractStatus.SCHEDULED,
                     fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE)
               AND c.isActive = true
               AND c.isDeleted = false

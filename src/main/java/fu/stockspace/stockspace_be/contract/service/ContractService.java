@@ -28,12 +28,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
@@ -50,6 +52,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class ContractService {
     private static final long MIN_RENTAL_DURATION_DAYS = 7;
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final RentalContractRepository contractRepository;
     private final WarehouseService warehouseService;
@@ -92,6 +95,9 @@ public class ContractService {
         if (!userId.equals(tenantId) && !userId.equals(ownerId)) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
+        if (contract.getStatus() == ContractStatus.DRAFT && userId.equals(tenantId)) {
+            throw new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND);
+        }
         return mapToResponse(contract, userId);
     }
 
@@ -128,6 +134,88 @@ public class ContractService {
     }
 
     /**
+     * Creates the owner-editable successor draft for an active direct contract.
+     * All identity, scope and layout fields are copied from the locked source;
+     * the owner can only provide the new end date and renewal-specific terms.
+     */
+    @Transactional
+    public RentalContractResponse createRenewalDraft(UUID ownerId,
+                                                     UUID sourceContractId,
+                                                     CreateContractRenewalRequest request) {
+        if (request == null || request.getEndDate() == null) {
+            throw new BadRequestException("Renewal end date is required");
+        }
+
+        RentalContract source = contractRepository.findByIdForUpdate(sourceContractId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
+        requireRenewalEligibility(ownerId, source);
+
+        LocalDate renewalStartDate = source.getEndDate().plusDays(1);
+        validateContractDates(renewalStartDate, request.getEndDate());
+
+        Warehouse warehouse = source.getWarehouse();
+        User tenant = source.getTenant();
+        DraftTerms terms = resolveContractTerms(
+                warehouse,
+                tenant,
+                renewalStartDate,
+                request.getEndDate(),
+                source.getLeasedWidth(),
+                source.getLeasedLength(),
+                source.getLeasedHeight(),
+                request.getNegotiatedMonthlyRent());
+        if (source.getLeasedAreaM2() == null
+                || source.getLeasedAreaM2().compareTo(terms.leasedAreaM2()) != 0) {
+            throw new BadRequestException(ErrorCode.CONTRACT_RENEWAL_NOT_ALLOWED,
+                    "The source contract area is inconsistent with its dimensions");
+        }
+
+        WarehouseLayoutResponse layout = warehouseLayoutService
+                .findActiveTenantLayoutForContract(warehouse.getId(), tenant.getId())
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.LAYOUT_NOT_FOUND));
+        warehouseLayoutService.validateContractLayout(
+                layout,
+                warehouse.getId(),
+                tenant.getId(),
+                terms.leasedWidth(),
+                terms.leasedLength(),
+                terms.leasedHeight());
+
+        RentalContract renewal = RentalContract.builder()
+                .owner(source.getOwner())
+                .tenant(source.getTenant())
+                .warehouse(source.getWarehouse())
+                .renewedFromContract(source)
+                .status(ContractStatus.DRAFT)
+                .startDate(terms.startDate())
+                .endDate(terms.endDate())
+                .pricingType(terms.pricingType())
+                .rentalPriceSnapshot(terms.rentalPriceSnapshot())
+                .finalMonthlyRent(terms.finalMonthlyRent())
+                .leasedWidth(terms.leasedWidth())
+                .leasedLength(terms.leasedLength())
+                .leasedHeight(terms.leasedHeight())
+                .leasedAreaM2(terms.leasedAreaM2())
+                .ownerNote(normalizeOptionalText(request.getOwnerNote()))
+                .layoutSnapshot(serializeLayoutSnapshot(layout))
+                .build();
+        if (request.getPaperContractFiles() != null) {
+            renewal.setPaperContractFiles(serializeJson(
+                    request.getPaperContractFiles(), "Paper contract files must be valid JSON"));
+        }
+
+        try {
+            renewal = contractRepository.save(renewal);
+        } catch (DataIntegrityViolationException exception) {
+            throw new ResourceConflictException(ErrorCode.CONTRACT_RENEWAL_ALREADY_EXISTS,
+                    "The source contract already has a renewal draft or successor");
+        }
+        log.info("Owner {} created renewal draft {} from source contract {}",
+                ownerId, renewal.getId(), source.getId());
+        return mapToResponse(renewal, ownerId);
+    }
+
+    /**
      * Updates only the mutable terms of a direct owner-created contract. The
      * owner, tenant and warehouse are deliberately taken from the persisted
      * contract and cannot be changed through this API.
@@ -144,6 +232,10 @@ public class ContractService {
         }
         if (request == null) {
             throw new BadRequestException("Contract update request is required");
+        }
+
+        if (contract.getRenewedFromContract() != null) {
+            return updateRenewalDraft(ownerId, contract, request);
         }
 
         Warehouse warehouse = contract.getWarehouse();
@@ -181,6 +273,51 @@ public class ContractService {
         return mapToResponse(contract, ownerId);
     }
 
+    private RentalContractResponse updateRenewalDraft(UUID ownerId,
+                                                      RentalContract renewal,
+                                                      UpdateRentalContractRequest request) {
+        RentalContract source = renewal.getRenewedFromContract();
+        requireRenewalMutationDeadline(renewal);
+        if (!java.util.Objects.equals(renewal.getStartDate(), request.getStartDate())
+                || !sameDimensions(
+                renewal.getLeasedWidth(), renewal.getLeasedLength(), renewal.getLeasedHeight(),
+                request.getLeasedWidth(), request.getLeasedLength(), request.getLeasedHeight())) {
+            throw new BadRequestException(ErrorCode.CONTRACT_RENEWAL_NOT_ALLOWED,
+                    "Renewal start date and leased dimensions are inherited from the source contract");
+        }
+
+        Warehouse warehouse = renewal.getWarehouse();
+        if (source == null || source.getPricingType() != renewal.getPricingType()
+                || renewal.getPricingType() != currentPricingType(warehouse)) {
+            throw new ResourceConflictException(ErrorCode.CONTRACT_RENEWAL_PRICING_CHANGED);
+        }
+        DraftTerms terms = resolveContractTerms(
+                warehouse,
+                renewal.getTenant(),
+                renewal.getStartDate(),
+                request.getEndDate(),
+                renewal.getLeasedWidth(),
+                renewal.getLeasedLength(),
+                renewal.getLeasedHeight(),
+                request.getNegotiatedMonthlyRent());
+        if (renewal.getLeasedAreaM2() == null
+                || renewal.getLeasedAreaM2().compareTo(terms.leasedAreaM2()) != 0) {
+            throw new BadRequestException(ErrorCode.CONTRACT_RENEWAL_NOT_ALLOWED,
+                    "Renewal leased area cannot be changed");
+        }
+
+        renewal.setEndDate(terms.endDate());
+        renewal.setRentalPriceSnapshot(terms.rentalPriceSnapshot());
+        renewal.setFinalMonthlyRent(terms.finalMonthlyRent());
+        renewal.setOwnerNote(normalizeOptionalText(request.getOwnerNote()));
+        if (request.getPaperContractFiles() != null) {
+            renewal.setPaperContractFiles(serializeJson(
+                    request.getPaperContractFiles(), "Paper contract files must be valid JSON"));
+        }
+        contractRepository.save(renewal);
+        return mapToResponse(renewal, ownerId);
+    }
+
     /**
      * Revalidates and submits a direct contract.
      * The warehouse row is locked before the overlap query so two concurrent
@@ -193,6 +330,9 @@ public class ContractService {
                 && contract.getStatus() != ContractStatus.CHANGES_REQUESTED) {
             throw new BadRequestException(ErrorCode.INVALID_CONTRACT_STATUS,
                     "Only DRAFT or CHANGES_REQUESTED contracts can be submitted");
+        }
+        if (contract.getRenewedFromContract() != null) {
+            return submitRenewalContract(ownerId, contract);
         }
 
         Warehouse lockedWarehouse = warehouseService.lockWarehouseForContractSubmit(
@@ -269,6 +409,127 @@ public class ContractService {
         return mapToResponse(contract, ownerId, availability);
     }
 
+    /**
+     * Revalidates and submits a renewal successor. Lock order is deliberately
+     * warehouse, source contract, successor so concurrent renewal operations
+     * serialize around the same physical warehouse and source lifecycle.
+     */
+    private RentalContractResponse submitRenewalContract(UUID ownerId,
+                                                          RentalContract candidate) {
+        UUID sourceContractId = candidate.getRenewedFromContract().getId();
+        Warehouse lockedWarehouse = warehouseService.lockWarehouseForContractSubmit(
+                candidate.getWarehouse().getId());
+        RentalContract source = contractRepository.findByIdForUpdate(sourceContractId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
+        RentalContract renewal = contractRepository.findByIdForUpdate(candidate.getId())
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
+        renewal.setRenewedFromContract(source);
+
+        if (renewal.getOwner() == null || !ownerId.equals(renewal.getOwner().getId())
+                || renewal.getTenant() == null || renewal.getWarehouse() == null
+                || !lockedWarehouse.getId().equals(renewal.getWarehouse().getId())) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        }
+        if (renewal.getStatus() != ContractStatus.DRAFT
+                && renewal.getStatus() != ContractStatus.CHANGES_REQUESTED) {
+            throw new BadRequestException(ErrorCode.INVALID_CONTRACT_STATUS,
+                    "Only DRAFT or CHANGES_REQUESTED renewal contracts can be submitted");
+        }
+        requireRenewalMutationDeadline(renewal);
+        if (source.getRenewedFromContract() != null
+                || source.getStatus() != ContractStatus.ACTIVE
+                || !source.isActive() || source.isDeleted()
+                || source.getEndDate() == null
+                || !source.getEndDate().plusDays(1).equals(renewal.getStartDate())) {
+            throw new BadRequestException(ErrorCode.CONTRACT_RENEWAL_NOT_ALLOWED,
+                    "The renewal successor no longer matches the source contract lifecycle");
+        }
+        if (renewal.getPricingType() != source.getPricingType()
+                || renewal.getPricingType() != currentPricingType(lockedWarehouse)) {
+            throw new ResourceConflictException(ErrorCode.CONTRACT_RENEWAL_PRICING_CHANGED);
+        }
+        if (contractRepository.findBlockingRenewalsBySourceId(source.getId()).stream()
+                .anyMatch(other -> !candidate.getId().equals(other.getId()))) {
+            throw new ResourceConflictException(ErrorCode.CONTRACT_RENEWAL_ALREADY_EXISTS);
+        }
+
+        WarehouseLayoutResponse defaultLayout = warehouseLayoutService
+                .getDefaultLayoutForContract(lockedWarehouse.getId());
+        RentalAreaAllocationPolicy.LeasedDimensions dimensions;
+        try {
+            dimensions = RentalAreaAllocationPolicy.validatePreservedDimensions(
+                    source.getPricingType(),
+                    source.getLeasedWidth(),
+                    source.getLeasedLength(),
+                    source.getLeasedHeight(),
+                    defaultLayout);
+        } catch (BadRequestException exception) {
+            throw new BadRequestException(ErrorCode.CONTRACT_RENEWAL_NOT_ALLOWED,
+                    "The source contract dimensions are no longer valid for the warehouse");
+        }
+        if (source.getLeasedAreaM2() == null
+                || source.getLeasedAreaM2().compareTo(dimensions.areaM2()) != 0
+                || renewal.getLeasedAreaM2() == null
+                || renewal.getLeasedAreaM2().compareTo(source.getLeasedAreaM2()) != 0
+                || !sameDimensions(
+                renewal.getLeasedWidth(), renewal.getLeasedLength(), renewal.getLeasedHeight(),
+                source.getLeasedWidth(), source.getLeasedLength(), source.getLeasedHeight())) {
+            throw new BadRequestException(ErrorCode.CONTRACT_RENEWAL_NOT_ALLOWED,
+                    "Renewal scope must remain identical to the source contract");
+        }
+
+        DraftTerms terms = resolveContractTerms(
+                lockedWarehouse,
+                renewal.getTenant(),
+                renewal.getStartDate(),
+                renewal.getEndDate(),
+                source.getLeasedWidth(),
+                source.getLeasedLength(),
+                source.getLeasedHeight(),
+                renewal.getPricingType() == RentalPricingType.NEGOTIATED
+                        ? renewal.getFinalMonthlyRent() : null);
+        if (contractRepository.existsDirectDateOverlapForSubmit(
+                renewal.getId(), renewal.getTenant().getId(), lockedWarehouse.getId(),
+                renewal.getStartDate(), renewal.getEndDate())) {
+            throw new ResourceConflictException(ErrorCode.CONTRACT_DATE_OVERLAP,
+                    "The tenant already has an overlapping contract for this warehouse");
+        }
+        RentalAreaAvailability availability = warehouseRentalAvailabilityService.calculate(
+                lockedWarehouse.getId(),
+                renewal.getId(),
+                renewal.getStartDate(),
+                renewal.getEndDate(),
+                terms.leasedAreaM2());
+        if (!availability.sufficient()) {
+            throw new ResourceConflictException(
+                    ErrorCode.WAREHOUSE_AREA_UNAVAILABLE,
+                    "The requested leased area is not available for the selected dates");
+        }
+
+        requirePaperContractFiles(renewal);
+        WarehouseLayoutResponse layout = warehouseLayoutService
+                .findActiveTenantLayoutForContract(lockedWarehouse.getId(), renewal.getTenant().getId())
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.LAYOUT_NOT_FOUND));
+        warehouseLayoutService.validateContractLayout(
+                layout,
+                lockedWarehouse.getId(),
+                renewal.getTenant().getId(),
+                terms.leasedWidth(),
+                terms.leasedLength(),
+                terms.leasedHeight());
+
+        applyDraftTerms(renewal, terms, renewal.getOwnerNote());
+        renewal.setLayoutSnapshot(serializeLayoutSnapshot(layout));
+        renewal.setChangeRequestReason(null);
+        renewal.setRejectionReason(null);
+        renewal.setSubmittedAt(LocalDateTime.now());
+        renewal.setStatus(ContractStatus.PENDING_TENANT_CONFIRM);
+        renewal = contractRepository.save(renewal);
+
+        notifyTenantOfSubmission(renewal, renewal.getTenant(), lockedWarehouse);
+        return mapToResponse(renewal, ownerId, availability);
+    }
+
     private RentalContract findDirectContractForOwnerEdit(UUID ownerId, UUID contractId) {
         RentalContract contract = contractRepository.findById(contractId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
@@ -314,7 +575,7 @@ public class ContractService {
     private void requirePaperContractFiles(RentalContract contract) {
         String files = contract.getPaperContractFiles();
         if (files == null || files.isBlank()) {
-            throw new BadRequestException("At least one paper contract file is required before submission");
+            throw new BadRequestException(ErrorCode.PAPER_CONTRACT_REQUIRED);
         }
         try {
             JsonNode node = objectMapper.readTree(files);
@@ -328,10 +589,10 @@ public class ContractService {
                 }
             }
             if (!node.isArray() || node.isEmpty() || hasInvalidFile) {
-                throw new BadRequestException("At least one valid paper contract file is required before submission");
+                throw new BadRequestException(ErrorCode.PAPER_CONTRACT_REQUIRED);
             }
         } catch (JsonProcessingException e) {
-            throw new BadRequestException("Paper contract files must be valid JSON");
+            throw new BadRequestException(ErrorCode.PAPER_CONTRACT_REQUIRED);
         }
     }
 
@@ -341,7 +602,9 @@ public class ContractService {
                     tenant.getId(),
                     "Rental contract requires confirmation",
                     "The owner submitted a rental contract for warehouse " + warehouse.getName() + ".",
-                    "CONTRACT_SUBMITTED");
+                    contract.getRenewedFromContract() == null
+                            ? "CONTRACT_SUBMITTED"
+                            : "CONTRACT_RENEWAL_SUBMITTED");
         } catch (Exception e) {
             log.warn("Failed to push direct contract notification for {}: {}",
                     contract.getId(), e.getMessage());
@@ -359,8 +622,20 @@ public class ContractService {
         RentalContract contract = findDirectContractForTenantReview(tenantId, contractId);
         requirePendingTenantConfirmation(contract);
 
+        if (contract.getRenewedFromContract() != null) {
+            return confirmRenewalContract(tenantId, contract);
+        }
+
         Warehouse lockedWarehouse = warehouseService.lockWarehouseForContractSubmit(
                 contract.getWarehouse().getId());
+        contract = contractRepository.findByIdForUpdate(contractId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
+        if (contract.getTenant() == null || !tenantId.equals(contract.getTenant().getId())
+                || contract.getWarehouse() == null
+                || !lockedWarehouse.getId().equals(contract.getWarehouse().getId())) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        }
+        requirePendingTenantConfirmation(contract);
         validateContractDates(contract.getStartDate(), contract.getEndDate());
         if (contractRepository.existsDirectDateOverlapForSubmit(
                 contract.getId(), tenantId, lockedWarehouse.getId(),
@@ -382,7 +657,7 @@ public class ContractService {
         }
 
         contract.setConfirmedAt(LocalDateTime.now());
-        contract.setStatus(ContractStatus.ACTIVE);
+        contract.setStatus(startsInFuture(contract) ? ContractStatus.SCHEDULED : ContractStatus.ACTIVE);
         contract = contractRepository.save(contract);
 
         notifyOwnerOfTenantDecision(
@@ -392,6 +667,159 @@ public class ContractService {
                         + lockedWarehouse.getName() + ".",
                 "CONTRACT_CONFIRMED");
         return mapToResponse(contract, tenantId, availability);
+    }
+
+    private RentalContractResponse confirmRenewalContract(UUID tenantId,
+                                                           RentalContract candidate) {
+        UUID sourceContractId = candidate.getRenewedFromContract().getId();
+        Warehouse lockedWarehouse = warehouseService.lockWarehouseForContractSubmit(
+                candidate.getWarehouse().getId());
+        RentalContract source = contractRepository.findByIdForUpdate(sourceContractId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
+        RentalContract renewal = contractRepository.findByIdForUpdate(candidate.getId())
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
+        renewal.setRenewedFromContract(source);
+
+        if (renewal.getTenant() == null || !tenantId.equals(renewal.getTenant().getId())
+                || renewal.getWarehouse() == null
+                || !lockedWarehouse.getId().equals(renewal.getWarehouse().getId())) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        }
+        if (renewal.getStatus() != ContractStatus.PENDING_TENANT_CONFIRM) {
+            throw new BadRequestException(ErrorCode.INVALID_CONTRACT_STATUS,
+                    "Only a submitted renewal contract can be confirmed");
+        }
+        requireRenewalMutationDeadline(renewal);
+        if (source.getRenewedFromContract() != null
+                || source.getStatus() != ContractStatus.ACTIVE
+                || !source.isActive() || source.isDeleted()
+                || source.getEndDate() == null
+                || !source.getEndDate().plusDays(1).equals(renewal.getStartDate())) {
+            throw new BadRequestException(ErrorCode.CONTRACT_RENEWAL_NOT_ALLOWED,
+                    "The renewal successor no longer matches the source contract lifecycle");
+        }
+        if (renewal.getPricingType() != source.getPricingType()
+                || renewal.getPricingType() != currentPricingType(lockedWarehouse)) {
+            throw new ResourceConflictException(ErrorCode.CONTRACT_RENEWAL_PRICING_CHANGED);
+        }
+        if (contractRepository.findBlockingRenewalsBySourceId(source.getId()).stream()
+                .anyMatch(other -> !candidate.getId().equals(other.getId()))) {
+            throw new ResourceConflictException(ErrorCode.CONTRACT_RENEWAL_ALREADY_EXISTS);
+        }
+
+        WarehouseLayoutResponse defaultLayout = warehouseLayoutService
+                .getDefaultLayoutForContract(lockedWarehouse.getId());
+        RentalAreaAllocationPolicy.LeasedDimensions dimensions;
+        try {
+            dimensions = RentalAreaAllocationPolicy.validatePreservedDimensions(
+                    source.getPricingType(),
+                    source.getLeasedWidth(),
+                    source.getLeasedLength(),
+                    source.getLeasedHeight(),
+                    defaultLayout);
+        } catch (BadRequestException exception) {
+            throw new BadRequestException(ErrorCode.CONTRACT_RENEWAL_NOT_ALLOWED,
+                    "The source contract dimensions are no longer valid for the warehouse");
+        }
+        if (source.getLeasedAreaM2() == null
+                || source.getLeasedAreaM2().compareTo(dimensions.areaM2()) != 0
+                || renewal.getLeasedAreaM2() == null
+                || renewal.getLeasedAreaM2().compareTo(source.getLeasedAreaM2()) != 0
+                || !sameDimensions(
+                renewal.getLeasedWidth(), renewal.getLeasedLength(), renewal.getLeasedHeight(),
+                source.getLeasedWidth(), source.getLeasedLength(), source.getLeasedHeight())) {
+            throw new BadRequestException(ErrorCode.CONTRACT_RENEWAL_NOT_ALLOWED,
+                    "Renewal scope must remain identical to the source contract");
+        }
+        validateContractDates(renewal.getStartDate(), renewal.getEndDate());
+        if (contractRepository.existsDirectDateOverlapForSubmit(
+                renewal.getId(), tenantId, lockedWarehouse.getId(),
+                renewal.getStartDate(), renewal.getEndDate())) {
+            throw new ResourceConflictException(ErrorCode.CONTRACT_DATE_OVERLAP,
+                    "The tenant already has an overlapping contract for this warehouse");
+        }
+        RentalAreaAvailability availability = warehouseRentalAvailabilityService.calculate(
+                lockedWarehouse.getId(), renewal.getId(), renewal.getStartDate(),
+                renewal.getEndDate(), renewal.getLeasedAreaM2());
+        if (!availability.sufficient()) {
+            throw new ResourceConflictException(
+                    ErrorCode.WAREHOUSE_AREA_UNAVAILABLE,
+                    "The requested leased area is not available for the selected dates");
+        }
+
+        WarehouseLayoutResponse layout = warehouseLayoutService
+                .findActiveTenantLayoutForContract(lockedWarehouse.getId(), tenantId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.LAYOUT_NOT_FOUND));
+        warehouseLayoutService.validateContractLayout(
+                layout,
+                lockedWarehouse.getId(),
+                tenantId,
+                renewal.getLeasedWidth(),
+                renewal.getLeasedLength(),
+                renewal.getLeasedHeight());
+
+        renewal.setConfirmedAt(LocalDateTime.now());
+        boolean scheduled = startsInFuture(renewal);
+        renewal.setStatus(scheduled ? ContractStatus.SCHEDULED : ContractStatus.ACTIVE);
+        renewal = contractRepository.save(renewal);
+
+        if (scheduled) {
+            notifyRenewalScheduled(renewal, lockedWarehouse);
+        } else {
+            notifyRenewalActivated(renewal, lockedWarehouse);
+        }
+        return mapToResponse(renewal, tenantId, availability);
+    }
+
+    private boolean startsInFuture(RentalContract contract) {
+        return contract.getStartDate().isAfter(LocalDate.now(BUSINESS_ZONE));
+    }
+
+    private void notifyRenewalScheduled(RentalContract renewal, Warehouse warehouse) {
+        String message = "The rental contract renewal for warehouse "
+                + warehouse.getName() + " is scheduled to start on "
+                + renewal.getStartDate() + ".";
+        try {
+            notificationService.push(
+                    renewal.getOwner().getId(),
+                    "Rental contract renewal scheduled",
+                    message,
+                    "CONTRACT_RENEWAL_SCHEDULED");
+        } catch (Exception exception) {
+            log.warn("Failed to notify owner about scheduled renewal {}: {}",
+                    renewal.getId(), exception.getMessage());
+        }
+        try {
+            notificationService.push(
+                    renewal.getTenant().getId(),
+                    "Rental contract renewal scheduled",
+                    message,
+                    "CONTRACT_RENEWAL_SCHEDULED");
+        } catch (Exception exception) {
+            log.warn("Failed to notify tenant about scheduled renewal {}: {}",
+                    renewal.getId(), exception.getMessage());
+        }
+    }
+
+    private void notifyRenewalActivated(RentalContract renewal, Warehouse warehouse) {
+        String message = "The rental contract renewal for warehouse "
+                + warehouse.getName() + " is now active.";
+        notifyRenewalParticipant(
+                renewal.getOwner().getId(), renewal.getId(),
+                "Rental contract renewal activated", message);
+        notifyRenewalParticipant(
+                renewal.getTenant().getId(), renewal.getId(),
+                "Rental contract renewal activated", message);
+    }
+
+    private void notifyRenewalParticipant(
+            UUID recipientId, UUID contractId, String title, String message) {
+        try {
+            notificationService.push(recipientId, title, message, "CONTRACT_RENEWAL_ACTIVATED");
+        } catch (Exception exception) {
+            log.warn("Failed to notify participant about renewal {}: {}",
+                    contractId, exception.getMessage());
+        }
     }
 
     /**
@@ -406,6 +834,9 @@ public class ContractService {
             TenantContractDecisionRequest request) {
         RentalContract contract = findDirectContractForTenantReview(tenantId, contractId);
         requirePendingTenantConfirmation(contract);
+        if (contract.getRenewedFromContract() != null) {
+            requireRenewalMutationDeadline(contract);
+        }
         String reason = normalizeRequiredDecisionReason(request);
 
         contract.setChangeRequestReason(reason);
@@ -419,7 +850,9 @@ public class ContractService {
                 "Rental contract changes requested",
                 "The tenant requested changes to the rental contract for warehouse "
                         + contract.getWarehouse().getName() + ". Reason: " + reason,
-                "CONTRACT_CHANGES_REQUESTED");
+                contract.getRenewedFromContract() == null
+                        ? "CONTRACT_CHANGES_REQUESTED"
+                        : "CONTRACT_RENEWAL_CHANGES_REQUESTED");
         return mapToResponse(contract, tenantId);
     }
 
@@ -435,6 +868,9 @@ public class ContractService {
             TenantContractDecisionRequest request) {
         RentalContract contract = findDirectContractForTenantReview(tenantId, contractId);
         requirePendingTenantConfirmation(contract);
+        if (contract.getRenewedFromContract() != null) {
+            requireRenewalMutationDeadline(contract);
+        }
         String reason = normalizeRequiredDecisionReason(request);
 
         contract.setRejectionReason(reason);
@@ -443,8 +879,9 @@ public class ContractService {
         contract.setStatus(ContractStatus.REJECTED);
         contract = contractRepository.save(contract);
 
-        if (!contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(
-                tenantId, contract.getWarehouse().getId())) {
+        if (contract.getRenewedFromContract() == null
+                && !contractRepository.existsCurrentDirectActiveContract(
+                tenantId, contract.getWarehouse().getId(), LocalDate.now(BUSINESS_ZONE))) {
             warehouseLayoutService.archiveTenantLayout(
                     contract.getWarehouse().getId(), tenantId);
         }
@@ -454,7 +891,9 @@ public class ContractService {
                 "Rental contract rejected",
                 "The tenant rejected the rental contract for warehouse "
                         + contract.getWarehouse().getName() + ". Reason: " + reason,
-                "CONTRACT_REJECTED");
+                contract.getRenewedFromContract() == null
+                        ? "CONTRACT_REJECTED"
+                        : "CONTRACT_RENEWAL_REJECTED");
         return mapToResponse(contract, tenantId);
     }
 
@@ -524,6 +963,10 @@ public class ContractService {
             throw new BadRequestException(ErrorCode.INVALID_CONTRACT_STATUS,
                     "Contract layout can only be edited in DRAFT or CHANGES_REQUESTED");
         }
+        if (contract.getRenewedFromContract() != null) {
+            throw new BadRequestException(ErrorCode.INVALID_CONTRACT_STATUS,
+                    "Renewal contract layout is inherited from the active tenant layout");
+        }
         if (contract.getPricingType() == RentalPricingType.FIXED_MONTHLY) {
             throw new BadRequestException(ErrorCode.INVALID_CONTRACT_STATUS,
                     "FIXED_MONTHLY contract layout is derived from the warehouse default layout");
@@ -583,8 +1026,8 @@ public class ContractService {
         boolean preferSnapshot = contract.getStatus() == ContractStatus.REJECTED
                 || contract.getStatus() == ContractStatus.EXPIRED
                 || (contract.getStatus() != ContractStatus.ACTIVE
-                && contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(
-                tenant.getId(), warehouse.getId()));
+                && contractRepository.existsCurrentDirectActiveContract(
+                tenant.getId(), warehouse.getId(), LocalDate.now(BUSINESS_ZONE)));
         if (preferSnapshot && hasLayoutSnapshot(contract)) {
             return readLayoutSnapshot(contract.getLayoutSnapshot());
         }
@@ -650,6 +1093,7 @@ public class ContractService {
     private boolean isTenantLayoutReadable(ContractStatus status) {
         return status == ContractStatus.PENDING_TENANT_CONFIRM
                 || status == ContractStatus.CHANGES_REQUESTED
+                || status == ContractStatus.SCHEDULED
                 || status == ContractStatus.ACTIVE
                 || status == ContractStatus.REJECTED
                 || status == ContractStatus.EXPIRED;
@@ -674,6 +1118,14 @@ public class ContractService {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
 
+        if (contract.getRenewedFromContract() != null) {
+            requireRenewalMutationDeadline(contract);
+            contract.setActive(false);
+            contract.setDeleted(true);
+            contractRepository.save(contract);
+            return;
+        }
+
         contract.setActive(false);
         contract.setDeleted(true);
         contractRepository.save(contract);
@@ -681,8 +1133,8 @@ public class ContractService {
         Warehouse warehouse = contract.getWarehouse();
         User tenant = contract.getTenant();
         if (warehouse != null && tenant != null
-                && !contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(
-                tenant.getId(), warehouse.getId())) {
+                && !contractRepository.existsCurrentDirectActiveContract(
+                tenant.getId(), warehouse.getId(), LocalDate.now(BUSINESS_ZONE))) {
             warehouseLayoutService.archiveTenantLayout(warehouse.getId(), tenant.getId());
         }
     }
@@ -737,9 +1189,7 @@ public class ContractService {
             throw new BadRequestException("Warehouse must be active");
         }
 
-        RentalPricingType pricingType = warehouse.getRentalPricingType() != null
-                ? warehouse.getRentalPricingType()
-                : RentalPricingType.FIXED_MONTHLY;
+        RentalPricingType pricingType = currentPricingType(warehouse);
         WarehouseLayoutResponse defaultLayout = warehouseLayoutService
                 .getDefaultLayoutForContract(warehouse.getId());
         RentalAreaAllocationPolicy.LeasedDimensions dimensions =
@@ -799,9 +1249,15 @@ public class ContractService {
         if (ChronoUnit.DAYS.between(startDate, endDate) < MIN_RENTAL_DURATION_DAYS) {
             throw new BadRequestException("Rental duration must be at least 7 days");
         }
-        if (endDate.isBefore(LocalDate.now())) {
+        if (endDate.isBefore(LocalDate.now(BUSINESS_ZONE))) {
             throw new BadRequestException("Contract end date must not be in the past");
         }
+    }
+
+    private RentalPricingType currentPricingType(Warehouse warehouse) {
+        return warehouse.getRentalPricingType() != null
+                ? warehouse.getRentalPricingType()
+                : RentalPricingType.FIXED_MONTHLY;
     }
 
 
@@ -897,6 +1353,10 @@ public class ContractService {
         if (owner == null && warehouse != null) {
             owner = warehouse.getOwner();
         }
+        RentalContract sourceContract = c.getRenewedFromContract();
+        List<RentalContract> blockingRenewals = sourceContract == null && c.getId() != null
+                ? contractRepository.findBlockingRenewalsBySourceId(c.getId())
+                : List.of();
         List<String> paperContractFiles = deserializePaperContractFiles(c.getPaperContractFiles());
         ActionFlags actionFlags = calculateActionFlags(c, viewerId, tenant, owner);
         return RentalContractResponse.builder()
@@ -938,6 +1398,9 @@ public class ContractService {
                 .layoutSnapshot(c.getLayoutSnapshot())
                 .changeRequestReason(c.getChangeRequestReason())
                 .rejectionReason(c.getRejectionReason())
+                .renewedFromContractId(sourceContract != null ? sourceContract.getId() : null)
+                .renewalContractId(blockingRenewals.isEmpty() ? null : blockingRenewals.get(0).getId())
+                .canCreateRenewal(actionFlags.canCreateRenewal())
                 .confirmedAt(c.getConfirmedAt())
                 .createdAt(c.getCreatedAt())
                 .updatedAt(c.getUpdatedAt())
@@ -971,14 +1434,19 @@ public class ContractService {
                 || status == ContractStatus.CHANGES_REQUESTED;
         boolean ownerCanEdit = ownerViewer && mutableStatus;
         boolean canEditContractLayout = ownerCanEdit
+                && contract.getRenewedFromContract() == null
                 && contract.getPricingType() != RentalPricingType.FIXED_MONTHLY;
         boolean layoutSetupRequired = canEditContractLayout;
         boolean tenantCanReview = tenantViewer && status == ContractStatus.PENDING_TENANT_CONFIRM;
         boolean tenantCanViewLayout = tenantViewer && isTenantLayoutReadable(status);
         boolean canManageWms = tenantViewer
                 && status == ContractStatus.ACTIVE
+                && contract.isActive()
+                && !contract.isDeleted()
+                && isWithinContractPeriod(contract, LocalDate.now(BUSINESS_ZONE))
                 && subscriptionService != null
                 && subscriptionService.hasActiveSubscription(tenant.getId());
+        boolean canCreateRenewal = ownerViewer && isRenewalEligible(contract, owner);
         return new ActionFlags(
                 ownerCanEdit,
                 ownerViewer && status == ContractStatus.DRAFT,
@@ -989,7 +1457,160 @@ public class ContractService {
                 (ownerViewer && contract.isActive() && !contract.isDeleted()) || tenantCanViewLayout,
                 canManageWms,
                 layoutSetupRequired,
-                canEditContractLayout);
+                canEditContractLayout,
+                canCreateRenewal);
+    }
+
+    private boolean isWithinContractPeriod(RentalContract contract, LocalDate today) {
+        return contract.getStartDate() != null
+                && contract.getEndDate() != null
+                && !today.isBefore(contract.getStartDate())
+                && !today.isAfter(contract.getEndDate());
+    }
+
+    private void requireRenewalEligibility(UUID ownerId, RentalContract sourceContract) {
+        if (sourceContract.getOwner() == null || sourceContract.getTenant() == null
+                || sourceContract.getWarehouse() == null) {
+            throw new BadRequestException(ErrorCode.CONTRACT_RENEWAL_NOT_ALLOWED,
+                    "Only a complete direct rental contract can be renewed");
+        }
+        if (!ownerId.equals(sourceContract.getOwner().getId())) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        }
+        if (sourceContract.getRenewedFromContract() != null
+                || sourceContract.getStatus() != ContractStatus.ACTIVE
+                || !sourceContract.isActive()
+                || sourceContract.isDeleted()) {
+            throw new BadRequestException(ErrorCode.CONTRACT_RENEWAL_NOT_ALLOWED,
+                    "Only an active source contract without an existing renewal can be renewed");
+        }
+
+        LocalDate today = LocalDate.now(BUSINESS_ZONE);
+        if (sourceContract.getStartDate() == null || sourceContract.getEndDate() == null
+                || today.isBefore(sourceContract.getStartDate())) {
+            throw new BadRequestException(ErrorCode.CONTRACT_RENEWAL_NOT_ALLOWED,
+                    "The source contract is not currently active");
+        }
+        if (today.isAfter(sourceContract.getEndDate())) {
+            throw new BadRequestException(ErrorCode.CONTRACT_RENEWAL_DEADLINE_PASSED,
+                    "The renewal deadline has passed");
+        }
+
+        Warehouse warehouse = sourceContract.getWarehouse();
+        User tenant = sourceContract.getTenant();
+        if (!warehouse.isActive() || warehouse.isDeleted()
+                || !tenant.isActive() || tenant.isDeleted()) {
+            throw new BadRequestException(ErrorCode.CONTRACT_RENEWAL_NOT_ALLOWED,
+                    "The owner, tenant and warehouse must remain active");
+        }
+        if (!contractRepository.findBlockingRenewalsBySourceId(sourceContract.getId()).isEmpty()) {
+            throw new ResourceConflictException(ErrorCode.CONTRACT_RENEWAL_ALREADY_EXISTS);
+        }
+
+        WarehouseLayoutResponse defaultLayout = warehouseLayoutService
+                .getDefaultLayoutForContract(warehouse.getId());
+        RentalAreaAllocationPolicy.LeasedDimensions preservedDimensions;
+        try {
+            preservedDimensions = RentalAreaAllocationPolicy.validatePreservedDimensions(
+                    sourceContract.getPricingType(),
+                    sourceContract.getLeasedWidth(),
+                    sourceContract.getLeasedLength(),
+                    sourceContract.getLeasedHeight(),
+                    defaultLayout);
+        } catch (BadRequestException exception) {
+            throw new BadRequestException(ErrorCode.CONTRACT_RENEWAL_NOT_ALLOWED,
+                    "The source contract dimensions are no longer valid for the warehouse");
+        }
+        if (sourceContract.getLeasedAreaM2() == null
+                || sourceContract.getLeasedAreaM2().compareTo(preservedDimensions.areaM2()) != 0) {
+            throw new BadRequestException(ErrorCode.CONTRACT_RENEWAL_NOT_ALLOWED,
+                    "The source contract area is inconsistent with its dimensions");
+        }
+
+        if (sourceContract.getPricingType() != currentPricingType(warehouse)) {
+            throw new ResourceConflictException(ErrorCode.CONTRACT_RENEWAL_PRICING_CHANGED);
+        }
+        if (warehouseLayoutService.findActiveTenantLayoutForContract(
+                warehouse.getId(), tenant.getId()).isEmpty()) {
+            throw new BadRequestException(ErrorCode.CONTRACT_RENEWAL_NOT_ALLOWED,
+                    "The active tenant layout is required before renewal");
+        }
+    }
+
+    private void requireRenewalMutationDeadline(RentalContract renewal) {
+        RentalContract source = renewal.getRenewedFromContract();
+        if (source == null || source.getEndDate() == null) {
+            throw new BadRequestException(ErrorCode.CONTRACT_RENEWAL_NOT_ALLOWED,
+                    "Renewal source contract is missing");
+        }
+        if (source.getStatus() != ContractStatus.ACTIVE
+                || !source.isActive() || source.isDeleted()) {
+            throw new BadRequestException(ErrorCode.CONTRACT_RENEWAL_NOT_ALLOWED,
+                    "The source contract is no longer active");
+        }
+        if (LocalDate.now(BUSINESS_ZONE).isAfter(source.getEndDate())) {
+            throw new BadRequestException(ErrorCode.CONTRACT_RENEWAL_DEADLINE_PASSED,
+                    "The renewal deadline has passed");
+        }
+    }
+
+    private boolean isRenewalEligible(RentalContract sourceContract, User owner) {
+        if (sourceContract.getRenewedFromContract() != null
+                || sourceContract.getStatus() != ContractStatus.ACTIVE
+                || !sourceContract.isActive()
+                || sourceContract.isDeleted()
+                || owner == null
+                || sourceContract.getOwner() == null
+                || !owner.getId().equals(sourceContract.getOwner().getId())
+                || sourceContract.getTenant() == null
+                || sourceContract.getWarehouse() == null) {
+            return false;
+        }
+
+        LocalDate today = LocalDate.now(BUSINESS_ZONE);
+        if (sourceContract.getStartDate() == null || sourceContract.getEndDate() == null
+                || today.isBefore(sourceContract.getStartDate())
+                || today.isAfter(sourceContract.getEndDate())) {
+            return false;
+        }
+
+        Warehouse warehouse = sourceContract.getWarehouse();
+        User tenant = sourceContract.getTenant();
+        if (!warehouse.isActive() || warehouse.isDeleted()
+                || !tenant.isActive() || tenant.isDeleted()) {
+            return false;
+        }
+        if (contractRepository.findBlockingRenewalsBySourceId(sourceContract.getId()).size() > 0) {
+            return false;
+        }
+        if (warehouseLayoutService.findActiveTenantLayoutForContract(
+                warehouse.getId(), tenant.getId()).isEmpty()) {
+            return false;
+        }
+
+        RentalPricingType warehousePricingType = warehouse.getRentalPricingType() != null
+                ? warehouse.getRentalPricingType()
+                : RentalPricingType.FIXED_MONTHLY;
+        if (sourceContract.getPricingType() != warehousePricingType) {
+            return false;
+        }
+        WarehouseLayoutResponse defaultLayout = warehouseLayoutService
+                .getDefaultLayoutForContract(warehouse.getId());
+        try {
+            RentalAreaAllocationPolicy.LeasedDimensions dimensions = RentalAreaAllocationPolicy.validatePreservedDimensions(
+                    sourceContract.getPricingType(),
+                    sourceContract.getLeasedWidth(),
+                    sourceContract.getLeasedLength(),
+                    sourceContract.getLeasedHeight(),
+                    defaultLayout);
+            if (sourceContract.getLeasedAreaM2() == null
+                    || sourceContract.getLeasedAreaM2().compareTo(dimensions.areaM2()) != 0) {
+                return false;
+            }
+        } catch (BadRequestException exception) {
+            return false;
+        }
+        return true;
     }
 
     private record ActionFlags(boolean canEdit,
@@ -1001,9 +1622,10 @@ public class ContractService {
                                boolean canViewLayout,
                                boolean canManageWms,
                                boolean layoutSetupRequired,
-                               boolean canEditContractLayout) {
+                               boolean canEditContractLayout,
+                               boolean canCreateRenewal) {
         private static final ActionFlags NONE = new ActionFlags(
-                false, false, false, false, false, false, false, false, false, false);
+                false, false, false, false, false, false, false, false, false, false, false);
     }
 
 

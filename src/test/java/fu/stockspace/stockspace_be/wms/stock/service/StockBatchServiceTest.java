@@ -294,7 +294,8 @@ class StockBatchServiceTest {
 
         when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, tenantId))
                 .thenReturn(Optional.of(productSku));
-        when(stockBatchRepository.findBySkuIdInActiveTenantWarehouses(skuId, tenantId))
+        when(stockBatchRepository.findBySkuIdInActiveTenantWarehouses(
+                eq(skuId), eq(tenantId), any(java.time.LocalDate.class)))
                 .thenReturn(List.of(batch1, batch2));
 
 
@@ -332,7 +333,8 @@ class StockBatchServiceTest {
 
         when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, tenantId))
                 .thenReturn(Optional.of(productSku));
-        when(stockBatchRepository.findBySkuIdInActiveTenantWarehouses(skuId, tenantId))
+        when(stockBatchRepository.findBySkuIdInActiveTenantWarehouses(
+                eq(skuId), eq(tenantId), any(java.time.LocalDate.class)))
                 .thenReturn(List.of(firstBatch, secondBatch));
 
         StockSummaryResponse summary = stockBatchService.getStockSummaryBySku(tenantId, skuId);
@@ -357,15 +359,17 @@ class StockBatchServiceTest {
         when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, tenantId))
                 .thenReturn(Optional.of(productSku));
         when(stockBatchRepository.findBySkuIdInActiveAssignedTenantWarehouses(
-                skuId, tenantId, staffId)).thenReturn(List.of(assignedBatch));
+                eq(skuId), eq(tenantId), eq(staffId), any(java.time.LocalDate.class)))
+                .thenReturn(List.of(assignedBatch));
 
         StockSummaryResponse summary = stockBatchService.getStockSummaryBySku(tenantId, skuId, staffId);
 
         assertEquals(12, summary.getTotalQuantity());
         assertEquals(1, summary.getLocations().size());
         verify(stockBatchRepository).findBySkuIdInActiveAssignedTenantWarehouses(
-                skuId, tenantId, staffId);
-        verify(stockBatchRepository, never()).findBySkuIdInActiveTenantWarehouses(skuId, tenantId);
+                eq(skuId), eq(tenantId), eq(staffId), any(java.time.LocalDate.class));
+        verify(stockBatchRepository, never()).findBySkuIdInActiveTenantWarehouses(
+                eq(skuId), eq(tenantId), any(java.time.LocalDate.class));
     }
 
 
@@ -382,7 +386,8 @@ class StockBatchServiceTest {
     void testGetStockSummaryBySku_NoStock() {
         when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, tenantId))
                 .thenReturn(Optional.of(productSku));
-        when(stockBatchRepository.findBySkuIdInActiveTenantWarehouses(skuId, tenantId))
+        when(stockBatchRepository.findBySkuIdInActiveTenantWarehouses(
+                eq(skuId), eq(tenantId), any(java.time.LocalDate.class)))
                 .thenReturn(Collections.emptyList());
 
         StockSummaryResponse summary = stockBatchService.getStockSummaryBySku(tenantId, skuId);

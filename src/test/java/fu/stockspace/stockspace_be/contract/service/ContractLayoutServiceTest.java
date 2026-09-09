@@ -187,6 +187,18 @@ class ContractLayoutServiceTest {
     }
 
     @Test
+    void tenantCanReadScheduledRenewalLayoutWithoutWmsAccess() {
+        contract.setStatus(ContractStatus.SCHEDULED);
+        when(warehouseLayoutService.findActiveTenantLayoutForContract(warehouseId, tenantId))
+                .thenReturn(Optional.of(layout));
+
+        WarehouseLayoutResponse response = contractService.getTenantContractLayout(tenantId, contractId);
+
+        assertEquals(layout, response);
+        verify(warehouseLayoutService).findActiveTenantLayoutForContract(warehouseId, tenantId);
+    }
+
+    @Test
     void tenantCanReadExpiredSnapshotAfterOperationalLayoutIsArchived() throws Exception {
         contract.setStatus(ContractStatus.EXPIRED);
         contract.setLayoutSnapshot(objectMapper.writeValueAsString(layout));

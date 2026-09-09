@@ -43,6 +43,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.ArrayList;
 import java.util.List;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -721,7 +722,8 @@ class WarehouseServiceTest {
         warehouse.setStatus(WarehouseStatus.AVAILABLE);
         when(warehouseRepository.findByIdForUpdate(warehouseId))
                 .thenReturn(Optional.of(warehouse));
-        when(warehouseRepository.hasCurrentActiveContract(warehouseId)).thenReturn(true);
+        when(warehouseRepository.hasCurrentActiveContract(eq(warehouseId), any(LocalDate.class)))
+                .thenReturn(true);
 
         BadRequestException exception = assertThrows(
                 BadRequestException.class,
@@ -735,7 +737,8 @@ class WarehouseServiceTest {
     void deleteWarehouseSucceedsWhenNoActiveContractExists() {
         when(warehouseRepository.findByIdForUpdate(warehouseId))
                 .thenReturn(Optional.of(warehouse));
-        when(warehouseRepository.hasCurrentActiveContract(warehouseId)).thenReturn(false);
+        when(warehouseRepository.hasCurrentActiveContract(eq(warehouseId), any(LocalDate.class)))
+                .thenReturn(false);
 
         warehouseService.deleteWarehouse(ownerId, warehouseId);
 

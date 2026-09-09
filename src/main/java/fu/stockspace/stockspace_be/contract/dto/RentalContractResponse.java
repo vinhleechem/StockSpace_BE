@@ -17,7 +17,7 @@ import java.util.UUID;
 public class RentalContractResponse {
 
     private UUID id;
-    @Schema(allowableValues = {"DRAFT", "PENDING_TENANT_CONFIRM", "CHANGES_REQUESTED", "ACTIVE", "REJECTED", "EXPIRED"})
+    @Schema(allowableValues = {"DRAFT", "PENDING_TENANT_CONFIRM", "CHANGES_REQUESTED", "SCHEDULED", "ACTIVE", "REJECTED", "EXPIRED"})
     private String status;
     private LocalDate startDate;
     private LocalDate endDate;
@@ -77,6 +77,9 @@ public class RentalContractResponse {
     private String layoutSnapshot;
     private String changeRequestReason;
     private String rejectionReason;
+    private UUID renewedFromContractId;
+    private UUID renewalContractId;
+    private boolean canCreateRenewal;
     private LocalDateTime confirmedAt;
 
     private LocalDateTime createdAt;

@@ -156,13 +156,14 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
                     AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
                     AND c.isActive = true
                     AND c.isDeleted = false
-                    AND c.startDate <= CURRENT_DATE
-                    AND c.endDate >= CURRENT_DATE
+                    AND c.startDate <= :today
+                    AND c.endDate >= :today
               )
             """)
     List<StockBatch> findBySkuIdInActiveTenantWarehouses(
             @Param("skuId") UUID skuId,
-            @Param("tenantId") UUID tenantId
+            @Param("tenantId") UUID tenantId,
+            @Param("today") java.time.LocalDate today
     );
 
     @Query("""
@@ -177,8 +178,8 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
                     AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
                     AND c.isActive = true
                     AND c.isDeleted = false
-                    AND c.startDate <= CURRENT_DATE
-                    AND c.endDate >= CURRENT_DATE
+                    AND c.startDate <= :today
+                    AND c.endDate >= :today
               )
               AND EXISTS (
                   SELECT a.id FROM StaffWarehouseAssignment a
@@ -193,7 +194,8 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
     List<StockBatch> findBySkuIdInActiveAssignedTenantWarehouses(
             @Param("skuId") UUID skuId,
             @Param("tenantId") UUID tenantId,
-            @Param("staffId") UUID staffId
+            @Param("staffId") UUID staffId,
+            @Param("today") java.time.LocalDate today
     );
 
     @Query("SELECT COALESCE(SUM(b.quantity), 0) FROM StockBatch b WHERE b.bin.id = :binId AND b.isDeleted = false")
