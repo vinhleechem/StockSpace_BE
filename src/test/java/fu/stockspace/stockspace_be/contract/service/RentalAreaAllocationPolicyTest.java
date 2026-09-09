@@ -97,4 +97,15 @@ class RentalAreaAllocationPolicyTest {
                         new BigDecimal("5"),
                         defaultLayout));
     }
+
+    @Test
+    void partialRentalRejectsAnAreaJustAboveTheWholeWarehouseBoundary() {
+        assertThrows(BadRequestException.class, () ->
+                RentalAreaAllocationPolicy.resolveDimensions(
+                        RentalPricingType.NEGOTIATED,
+                        new BigDecimal("10.01"),
+                        new BigDecimal("20"),
+                        new BigDecimal("5"),
+                        defaultLayout));
+    }
 }

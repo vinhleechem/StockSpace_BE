@@ -187,6 +187,9 @@ class DirectContractSubmissionServiceTest {
         assertNotNull(contract.getSubmittedAt());
         assertEquals(ownerId, response.getOwnerId());
         assertEquals(Boolean.TRUE, response.isCanViewLayout());
+        assertEquals(new BigDecimal("400"), response.getWarehouseTotalAreaM2());
+        assertEquals(new BigDecimal("400"), response.getWarehouseAvailableAreaM2());
+        assertEquals(Boolean.TRUE, response.getAreaAvailabilitySufficient());
         verify(warehouseService).lockWarehouseForContractSubmit(warehouseId);
         verify(contractRepository).existsDirectDateOverlapForSubmit(
                 eq(contractId), eq(tenantId), eq(warehouseId),

@@ -121,6 +121,19 @@ class ContractDraftServiceTest {
     }
 
     @Test
+    void previewFixedDoesNotRequireClientDimensions() {
+        stubDraftValidation();
+        CreateRentalContractRequest request = request(null, null, null);
+
+        RentalContractResponse response = contractService.previewOwnerDraft(ownerId, request);
+
+        assertEquals(new BigDecimal("10"), response.getLeasedWidth());
+        assertEquals(new BigDecimal("20"), response.getLeasedLength());
+        assertEquals(new BigDecimal("5"), response.getLeasedHeight());
+        assertEquals(new BigDecimal("200"), response.getLeasedAreaM2());
+    }
+
+    @Test
     void previewAllowsWarehouseWithoutInspectionVerification() {
         warehouse.setVerified(false);
         stubDraftValidation();
@@ -292,9 +305,9 @@ class ContractDraftServiceTest {
         request.setTenantEmail("tenant@example.com");
         request.setStartDate(LocalDate.now());
         request.setEndDate(LocalDate.now().plusDays(7));
-        request.setLeasedWidth(new BigDecimal(width));
-        request.setLeasedLength(new BigDecimal(length));
-        request.setLeasedHeight(new BigDecimal(height));
+        request.setLeasedWidth(width == null ? null : new BigDecimal(width));
+        request.setLeasedLength(length == null ? null : new BigDecimal(length));
+        request.setLeasedHeight(height == null ? null : new BigDecimal(height));
         return request;
     }
 

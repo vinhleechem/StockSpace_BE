@@ -15,7 +15,9 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -95,5 +97,58 @@ class WarehouseRentalAvailabilityServiceTest {
                 LocalDate.of(2026, 10, 2),
                 LocalDate.of(2026, 10, 1),
                 new BigDecimal("20")));
+    }
+
+    @Test
+    void acceptsExactFitAndRejectsAnAreaOverageOfPointZeroOne() {
+        UUID warehouseId = UUID.randomUUID();
+        LocalDate startDate = LocalDate.of(2026, 10, 1);
+        LocalDate endDate = LocalDate.of(2026, 10, 31);
+        when(warehouseLayoutService.getDefaultLayoutForContract(warehouseId))
+                .thenReturn(WarehouseLayoutResponse.builder()
+                        .warehouseId(warehouseId)
+                        .width(new BigDecimal("10"))
+                        .length(new BigDecimal("20"))
+                        .height(new BigDecimal("5"))
+                        .build());
+        when(contractRepository.sumReservedAreaForDateRange(
+                warehouseId, null, startDate, endDate))
+                .thenReturn(new BigDecimal("100"));
+
+        WarehouseRentalAvailabilityService service =
+                new WarehouseRentalAvailabilityService(contractRepository, warehouseLayoutService);
+
+        RentalAreaAvailability exactFit = service.calculate(
+                warehouseId, null, startDate, endDate, new BigDecimal("100"));
+        RentalAreaAvailability overage = service.calculate(
+                warehouseId, null, startDate, endDate, new BigDecimal("100.01"));
+
+        assertTrue(exactFit.sufficient());
+        assertEquals(new BigDecimal("100"), exactFit.availableAreaM2());
+        assertFalse(overage.sufficient());
+    }
+
+    @Test
+    void reportsUnavailableWhenExistingReservationsAlreadyExceedTheArea() {
+        UUID warehouseId = UUID.randomUUID();
+        LocalDate startDate = LocalDate.of(2026, 10, 1);
+        LocalDate endDate = LocalDate.of(2026, 10, 31);
+        when(warehouseLayoutService.getDefaultLayoutForContract(warehouseId))
+                .thenReturn(WarehouseLayoutResponse.builder()
+                        .warehouseId(warehouseId)
+                        .width(new BigDecimal("10"))
+                        .length(new BigDecimal("20"))
+                        .height(new BigDecimal("5"))
+                        .build());
+        when(contractRepository.sumReservedAreaForDateRange(
+                warehouseId, null, startDate, endDate))
+                .thenReturn(new BigDecimal("200.01"));
+
+        RentalAreaAvailability result = new WarehouseRentalAvailabilityService(
+                contractRepository, warehouseLayoutService)
+                .calculate(warehouseId, null, startDate, endDate, BigDecimal.ZERO);
+
+        assertEquals(new BigDecimal("-0.01"), result.availableAreaM2());
+        assertFalse(result.sufficient());
     }
 }
