@@ -707,10 +707,15 @@ public class ContractService {
                 : RentalPricingType.FIXED_MONTHLY;
         WarehouseLayoutResponse defaultLayout = warehouseLayoutService
                 .getDefaultLayoutForContract(warehouse.getId());
-        validateLeasedDimensions(
-                leasedWidth, leasedLength, leasedHeight, defaultLayout, pricingType);
+        RentalAreaAllocationPolicy.LeasedDimensions dimensions =
+                RentalAreaAllocationPolicy.resolveDimensions(
+                        pricingType,
+                        leasedWidth,
+                        leasedLength,
+                        leasedHeight,
+                        defaultLayout);
         BigDecimal rentalPrice = warehouse.getRentalPrice();
-        BigDecimal area = leasedWidth.multiply(leasedLength);
+        BigDecimal area = dimensions.areaM2();
         BigDecimal finalMonthlyRent;
         BigDecimal rentalPriceSnapshot;
 
@@ -743,9 +748,9 @@ public class ContractService {
                 finalMonthlyRent,
                 startDate,
                 endDate,
-                leasedWidth,
-                leasedLength,
-                leasedHeight,
+                dimensions.width(),
+                dimensions.length(),
+                dimensions.height(),
                 area);
     }
 
@@ -764,36 +769,6 @@ public class ContractService {
         }
     }
 
-    private void validateLeasedDimensions(BigDecimal width,
-                                           BigDecimal length,
-                                           BigDecimal height,
-                                           WarehouseLayoutResponse defaultLayout,
-                                           RentalPricingType pricingType) {
-        if (width == null || length == null || height == null
-                || width.signum() <= 0 || length.signum() <= 0 || height.signum() <= 0) {
-            throw new BadRequestException(ErrorCode.INVALID_LEASE_DIMENSIONS,
-                    "Leased dimensions must be greater than 0");
-        }
-        if (defaultLayout.getWidth() == null || defaultLayout.getLength() == null
-                || defaultLayout.getHeight() == null) {
-            throw new BadRequestException(ErrorCode.INVALID_LEASE_DIMENSIONS,
-                    "Warehouse default layout dimensions are incomplete");
-        }
-        if (width.compareTo(defaultLayout.getWidth()) > 0
-                || length.compareTo(defaultLayout.getLength()) > 0
-                || height.compareTo(defaultLayout.getHeight()) > 0) {
-            throw new BadRequestException(ErrorCode.INVALID_LEASE_DIMENSIONS,
-                    "Leased dimensions cannot exceed the warehouse default layout");
-        }
-
-        if (pricingType == RentalPricingType.FIXED_MONTHLY
-                && (defaultLayout.getWidth().compareTo(width) != 0
-                || defaultLayout.getLength().compareTo(length) != 0
-                || defaultLayout.getHeight().compareTo(height) != 0)) {
-            throw new BadRequestException(ErrorCode.INVALID_LEASE_DIMENSIONS,
-                    "FIXED_MONTHLY contracts must use the complete default layout dimensions");
-        }
-    }
 
     private User resolveTenantLookupFailure(String tenantEmail) {
         User user = userRepository.findByEmailIgnoreCase(tenantEmail)
