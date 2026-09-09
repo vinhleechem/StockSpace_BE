@@ -393,16 +393,27 @@ public class WarehouseLayoutService {
         validateCurrentPhysicalLoadBeforePersistence(layout, request);
         boolean approvalRequired = isOwnerRole && publicationEditPolicy.prepareOwnerEdit(warehouse);
 
+        if (isOwnerRole) {
+            synchronizeWarehouseCapacity(warehouse, request);
+        }
+
         layout.setPositions(serializePositions(request.getPositions()));
         WarehouseLayout savedLayout = layoutRepository.save(layout);
         if (savedLayout != null) layout = savedLayout;
 
         WarehouseLayoutResponse response = saveLayoutContents(layout, request, isTenantRole);
         if (approvalRequired) {
-            warehouseRepository.save(warehouse);
             approvalNotifier.notifyAdmin(warehouse);
         }
         return response;
+    }
+
+    private void synchronizeWarehouseCapacity(Warehouse warehouse, BulkLayoutSaveRequest request) {
+        BigDecimal area = request.getWidth()
+                .multiply(request.getLength())
+                .setScale(2, RoundingMode.HALF_UP);
+        warehouse.setCapacity(area);
+        warehouseRepository.save(warehouse);
     }
 
     /**

@@ -37,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -49,6 +50,7 @@ class TenantContractReviewServiceTest {
     @Mock private fu.stockspace.stockspace_be.auth.repository.UserRepository userRepository;
     @Mock private WalletService walletService;
     @Mock private WarehouseLayoutService warehouseLayoutService;
+    @Mock private WarehouseRentalAvailabilityService warehouseRentalAvailabilityService;
     @Mock private NotificationService notificationService;
     @Mock private SubscriptionService subscriptionService;
     @Spy private ObjectMapper objectMapper = new ObjectMapper();
@@ -96,6 +98,10 @@ class TenantContractReviewServiceTest {
                 .leasedAreaM2(new BigDecimal("200"))
                 .layoutSnapshot("{}")
                 .build();
+        lenient().when(warehouseRentalAvailabilityService.calculate(
+                any(UUID.class), any(), any(LocalDate.class), any(LocalDate.class), any(BigDecimal.class)))
+                .thenReturn(RentalAreaAvailability.of(
+                        new BigDecimal("200"), BigDecimal.ZERO, new BigDecimal("200")));
     }
 
     @Test
@@ -186,6 +192,28 @@ class TenantContractReviewServiceTest {
                 () -> contractService.confirmDirectContract(tenantId, contractId));
 
         assertEquals(ErrorCode.CONTRACT_DATE_OVERLAP, exception.getErrorCode());
+        assertEquals(ContractStatus.PENDING_TENANT_CONFIRM, contract.getStatus());
+        verify(contractRepository, never()).save(any());
+    }
+
+    @Test
+    void confirmationRejectsWhenAreaWasReservedAfterSubmission() {
+        stubContractLookup();
+        when(warehouseService.lockWarehouseForContractSubmit(warehouseId)).thenReturn(warehouse);
+        when(contractRepository.existsDirectDateOverlapForSubmit(
+                eq(contractId), eq(tenantId), eq(warehouseId),
+                eq(contract.getStartDate()), eq(contract.getEndDate())))
+                .thenReturn(false);
+        when(warehouseRentalAvailabilityService.calculate(
+                eq(warehouseId), eq(contractId), eq(contract.getStartDate()),
+                eq(contract.getEndDate()), eq(contract.getLeasedAreaM2())))
+                .thenReturn(RentalAreaAvailability.of(
+                        new BigDecimal("200"), new BigDecimal("1"), new BigDecimal("200")));
+
+        ResourceConflictException exception = assertThrows(ResourceConflictException.class,
+                () -> contractService.confirmDirectContract(tenantId, contractId));
+
+        assertEquals(ErrorCode.WAREHOUSE_AREA_UNAVAILABLE, exception.getErrorCode());
         assertEquals(ContractStatus.PENDING_TENANT_CONFIRM, contract.getStatus());
         verify(contractRepository, never()).save(any());
     }
