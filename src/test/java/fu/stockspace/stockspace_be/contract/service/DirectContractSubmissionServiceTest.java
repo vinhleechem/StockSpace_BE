@@ -39,6 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
@@ -126,6 +127,10 @@ class DirectContractSubmissionServiceTest {
                 .racks(List.of())
                 .positions(List.of())
                 .build();
+        lenient().when(warehouseRentalAvailabilityService.calculate(
+                any(UUID.class), any(), any(LocalDate.class), any(LocalDate.class), any(BigDecimal.class)))
+                .thenReturn(RentalAreaAvailability.of(
+                        new BigDecimal("400"), BigDecimal.ZERO, new BigDecimal("200")));
 
     }
 
@@ -235,6 +240,30 @@ class DirectContractSubmissionServiceTest {
         verify(warehouseLayoutService, never()).validateContractLayout(
                 any(), any(), any(), any(), any(), any());
         verify(contractRepository, never()).save(contract);
+    }
+
+    @Test
+    void submitRejectsWhenTheRequestedAreaIsNoLongerAvailable() {
+        stubContractLookup();
+        when(warehouseService.lockWarehouseForContractSubmit(warehouseId)).thenReturn(warehouse);
+        when(warehouseLayoutService.getDefaultLayoutForContract(warehouseId)).thenReturn(defaultLayout);
+        when(contractRepository.existsDirectDateOverlapForSubmit(
+                eq(contractId), eq(tenantId), eq(warehouseId), any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(false);
+        when(warehouseRentalAvailabilityService.calculate(
+                eq(warehouseId), eq(contractId), eq(contract.getStartDate()),
+                eq(contract.getEndDate()), eq(contract.getLeasedAreaM2())))
+                .thenReturn(RentalAreaAvailability.of(
+                        new BigDecimal("400"), new BigDecimal("201"), new BigDecimal("200")));
+
+        ResourceConflictException exception = assertThrows(ResourceConflictException.class,
+                () -> contractService.submitOwnerContract(ownerId, contractId));
+
+        assertEquals(ErrorCode.WAREHOUSE_AREA_UNAVAILABLE, exception.getErrorCode());
+        assertEquals(ContractStatus.DRAFT, contract.getStatus());
+        verify(contractRepository, never()).save(contract);
+        verify(warehouseLayoutService, never()).validateContractLayout(
+                any(), any(), any(), any(), any(), any());
     }
 
     @Test

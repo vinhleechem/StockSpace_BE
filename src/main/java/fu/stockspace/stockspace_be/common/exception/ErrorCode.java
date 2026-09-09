@@ -67,6 +67,7 @@ public enum ErrorCode {
     INVALID_ROLE("Người dùng không có vai trò phù hợp cho thao tác này", HttpStatus.BAD_REQUEST),
     INVALID_CONTRACT_STATUS("Trạng thái hợp đồng không cho phép thực hiện thao tác này", HttpStatus.BAD_REQUEST),
     CONTRACT_DATE_OVERLAP("Kho đã có hợp đồng trùng khoảng thời gian yêu cầu", HttpStatus.CONFLICT),
+    WAREHOUSE_AREA_UNAVAILABLE("Diện tích kho không đủ trong khoảng thời gian yêu cầu", HttpStatus.CONFLICT),
     INVALID_LEASE_DIMENSIONS("Kích thước khu vực thuê không hợp lệ", HttpStatus.BAD_REQUEST),
 
 

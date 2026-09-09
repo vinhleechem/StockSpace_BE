@@ -221,6 +221,18 @@ public class ContractService {
                     "The tenant already has an overlapping contract for this warehouse");
         }
 
+        RentalAreaAvailability availability = warehouseRentalAvailabilityService.calculate(
+                lockedWarehouse.getId(),
+                contract.getId(),
+                contract.getStartDate(),
+                contract.getEndDate(),
+                terms.leasedAreaM2());
+        if (!availability.sufficient()) {
+            throw new ResourceConflictException(
+                    ErrorCode.WAREHOUSE_AREA_UNAVAILABLE,
+                    "The requested leased area is not available for the selected dates");
+        }
+
         requirePaperContractFiles(contract);
         Optional<WarehouseLayoutResponse> currentLayout = warehouseLayoutService
                 .findActiveTenantLayoutForContract(lockedWarehouse.getId(), tenant.getId());
@@ -254,7 +266,7 @@ public class ContractService {
         contract = contractRepository.save(contract);
 
         notifyTenantOfSubmission(contract, tenant, lockedWarehouse);
-        return mapToResponse(contract, ownerId);
+        return mapToResponse(contract, ownerId, availability);
     }
 
     private RentalContract findDirectContractForOwnerEdit(UUID ownerId, UUID contractId) {
