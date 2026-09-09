@@ -32,7 +32,7 @@ if grep -Eiq 'WHOLE_WAREHOUSE|PARTIAL_AREA|RENTAL_SCOPE' "$MIGRATION" "$PREFLIGH
 fi
 
 grep -Fq 'WITH active_default_area AS' "$PREFLIGHT"
-grep -Fq "status IN ('PENDING_TENANT_CONFIRM', 'ACTIVE')" "$PREFLIGHT"
+grep -Fq "status IN ('PENDING_TENANT_CONFIRM', 'SCHEDULED', 'ACTIVE')" "$PREFLIGHT"
 grep -Fq 'End dates are inclusive' "$PREFLIGHT"
 
 printf 'PASS: rental area allocation migration and preflight guard checks passed\n'

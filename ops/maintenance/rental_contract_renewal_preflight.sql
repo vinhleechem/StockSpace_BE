@@ -6,7 +6,7 @@ FROM public.rental_contracts
 GROUP BY status
 HAVING status NOT IN (
     'DRAFT', 'PENDING_TENANT_CONFIRM', 'CHANGES_REQUESTED',
-    'ACTIVE', 'REJECTED', 'EXPIRED'
+    'SCHEDULED', 'ACTIVE', 'REJECTED', 'EXPIRED'
 );
 
 SELECT 'invalid_direct_contract_terms' AS check_name, COUNT(*) AS row_count
@@ -35,8 +35,8 @@ JOIN public.rental_contracts c2
  AND c1.warehouse_id = c2.warehouse_id
  AND c1.start_date <= c2.end_date
  AND c1.end_date >= c2.start_date
-WHERE c1.status IN ('PENDING_TENANT_CONFIRM', 'ACTIVE')
-  AND c2.status IN ('PENDING_TENANT_CONFIRM', 'ACTIVE')
+WHERE c1.status IN ('PENDING_TENANT_CONFIRM', 'SCHEDULED', 'ACTIVE')
+  AND c2.status IN ('PENDING_TENANT_CONFIRM', 'SCHEDULED', 'ACTIVE')
   AND c1.is_active = TRUE AND c1.is_deleted = FALSE
   AND c2.is_active = TRUE AND c2.is_deleted = FALSE;
 
