@@ -28,7 +28,10 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -49,6 +52,10 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class DirectContractSubmissionServiceTest {
 
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+    private static final Instant FIXED_INSTANT = Instant.parse("2026-09-09T17:00:00Z");
+    private static final LocalDate TODAY = LocalDate.of(2026, 9, 10);
+
     @Mock private RentalContractRepository contractRepository;
     @Mock private WarehouseService warehouseService;
     @Mock private fu.stockspace.stockspace_be.auth.repository.UserRepository userRepository;
@@ -58,6 +65,7 @@ class DirectContractSubmissionServiceTest {
     @Mock private NotificationService notificationService;
     @Mock private SubscriptionService subscriptionService;
     @Spy private ObjectMapper objectMapper = new ObjectMapper();
+    @Mock private Clock businessClock;
 
     @InjectMocks
     private ContractService contractService;
@@ -75,6 +83,9 @@ class DirectContractSubmissionServiceTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(businessClock.instant()).thenReturn(FIXED_INSTANT);
+        lenient().when(businessClock.getZone()).thenReturn(BUSINESS_ZONE);
+
         ownerId = UUID.randomUUID();
         tenantId = UUID.randomUUID();
         warehouseId = UUID.randomUUID();
@@ -352,8 +363,8 @@ class DirectContractSubmissionServiceTest {
                 .tenant(tenant)
                 .warehouse(warehouse)
                 .status(ContractStatus.ACTIVE)
-                .startDate(LocalDate.now().minusDays(30))
-                .endDate(LocalDate.now())
+                .startDate(TODAY.minusDays(30))
+                .endDate(TODAY)
                 .pricingType(RentalPricingType.PER_SQUARE_METER_MONTHLY)
                 .rentalPriceSnapshot(warehouse.getRentalPrice())
                 .finalMonthlyRent(new BigDecimal("40000"))
@@ -397,8 +408,8 @@ class DirectContractSubmissionServiceTest {
                 .tenant(tenant)
                 .warehouse(warehouse)
                 .status(ContractStatus.ACTIVE)
-                .startDate(LocalDate.now().minusDays(30))
-                .endDate(LocalDate.now())
+                .startDate(TODAY.minusDays(30))
+                .endDate(TODAY)
                 .pricingType(RentalPricingType.PER_SQUARE_METER_MONTHLY)
                 .rentalPriceSnapshot(warehouse.getRentalPrice())
                 .finalMonthlyRent(new BigDecimal("40000"))
@@ -447,8 +458,8 @@ class DirectContractSubmissionServiceTest {
     @Test
     void tenantCannotManageWmsBeforeContractStartDate() {
         contract.setStatus(ContractStatus.ACTIVE);
-        contract.setStartDate(LocalDate.now().plusDays(1));
-        contract.setEndDate(LocalDate.now().plusDays(30));
+        contract.setStartDate(TODAY.plusDays(1));
+        contract.setEndDate(TODAY.plusDays(30));
 
         RentalContractResponse response = contractService.mapToResponse(contract, tenantId);
 
@@ -458,8 +469,8 @@ class DirectContractSubmissionServiceTest {
     @Test
     void tenantCannotManageWmsAfterContractEndDate() {
         contract.setStatus(ContractStatus.ACTIVE);
-        contract.setStartDate(LocalDate.now().minusDays(30));
-        contract.setEndDate(LocalDate.now().minusDays(1));
+        contract.setStartDate(TODAY.minusDays(30));
+        contract.setEndDate(TODAY.minusDays(1));
 
         RentalContractResponse response = contractService.mapToResponse(contract, tenantId);
 
@@ -469,8 +480,8 @@ class DirectContractSubmissionServiceTest {
     @Test
     void scheduledContractDoesNotGrantWmsAccess() {
         contract.setStatus(ContractStatus.SCHEDULED);
-        contract.setStartDate(LocalDate.now().plusDays(1));
-        contract.setEndDate(LocalDate.now().plusDays(30));
+        contract.setStartDate(TODAY.plusDays(1));
+        contract.setEndDate(TODAY.plusDays(30));
 
         RentalContractResponse response = contractService.mapToResponse(contract, tenantId);
 

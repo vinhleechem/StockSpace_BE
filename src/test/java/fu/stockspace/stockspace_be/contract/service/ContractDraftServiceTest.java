@@ -34,7 +34,10 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -47,11 +50,16 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ContractDraftServiceTest {
+
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+    private static final Instant FIXED_INSTANT = Instant.parse("2026-09-09T17:00:00Z");
+    private static final LocalDate TODAY = LocalDate.of(2026, 9, 10);
 
     @Mock private RentalContractRepository contractRepository;
     @Mock private WarehouseService warehouseService;
@@ -61,6 +69,7 @@ class ContractDraftServiceTest {
     @Mock private WarehouseRentalAvailabilityService warehouseRentalAvailabilityService;
     @Mock private NotificationService notificationService;
     @Spy private ObjectMapper objectMapper = new ObjectMapper();
+    @Mock private Clock businessClock;
 
     @InjectMocks
     private ContractService contractService;
@@ -74,6 +83,9 @@ class ContractDraftServiceTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(businessClock.instant()).thenReturn(FIXED_INSTANT);
+        lenient().when(businessClock.getZone()).thenReturn(BUSINESS_ZONE);
+
         ownerId = UUID.randomUUID();
         tenantId = UUID.randomUUID();
         warehouseId = UUID.randomUUID();
@@ -485,8 +497,8 @@ class ContractDraftServiceTest {
         CreateRentalContractRequest request = new CreateRentalContractRequest();
         request.setWarehouseId(warehouseId);
         request.setTenantEmail("tenant@example.com");
-        request.setStartDate(LocalDate.now());
-        request.setEndDate(LocalDate.now().plusDays(7));
+        request.setStartDate(TODAY);
+        request.setEndDate(TODAY.plusDays(7));
         request.setLeasedWidth(width == null ? null : new BigDecimal(width));
         request.setLeasedLength(length == null ? null : new BigDecimal(length));
         request.setLeasedHeight(height == null ? null : new BigDecimal(height));
@@ -507,8 +519,8 @@ class ContractDraftServiceTest {
                 .tenant(tenant)
                 .warehouse(warehouse)
                 .status(ContractStatus.ACTIVE)
-                .startDate(LocalDate.now().minusDays(30))
-                .endDate(LocalDate.now().plusDays(7))
+                .startDate(TODAY.minusDays(30))
+                .endDate(TODAY.plusDays(7))
                 .pricingType(RentalPricingType.FIXED_MONTHLY)
                 .rentalPriceSnapshot(warehouse.getRentalPrice())
                 .finalMonthlyRent(warehouse.getRentalPrice())
