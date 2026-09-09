@@ -50,6 +50,10 @@ public class RentalContractResponse {
     private boolean canViewLayout;
     @Schema(description = "True only for the contract tenant when the contract and subscription are both ACTIVE")
     private boolean canManageWms;
+    @Schema(description = "True when a partial-rental contract still requires the owner to configure its layout")
+    private boolean layoutSetupRequired;
+    @Schema(description = "Current owner may edit the partial-rental layout while the contract is mutable")
+    private boolean canEditContractLayout;
 
     @Schema(allowableValues = {"FIXED_MONTHLY", "PER_SQUARE_METER_MONTHLY", "NEGOTIATED"})
     private RentalPricingType pricingType;
@@ -61,6 +65,14 @@ public class RentalContractResponse {
     private BigDecimal leasedLength;
     private BigDecimal leasedHeight;
     private BigDecimal leasedAreaM2;
+    @Schema(description = "Default layout width multiplied by length")
+    private BigDecimal warehouseTotalAreaM2;
+    @Schema(description = "Area reserved by overlapping active or tenant-confirmation contracts")
+    private BigDecimal warehouseReservedAreaM2;
+    @Schema(description = "Warehouse total area minus overlapping reserved area")
+    private BigDecimal warehouseAvailableAreaM2;
+    @Schema(description = "Whether the requested leased area fits the calculated availability")
+    private Boolean areaAvailabilitySufficient;
     private String ownerNote;
     private String layoutSnapshot;
     private String changeRequestReason;

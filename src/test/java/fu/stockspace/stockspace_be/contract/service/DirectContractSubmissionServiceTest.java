@@ -39,6 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
@@ -52,6 +53,7 @@ class DirectContractSubmissionServiceTest {
     @Mock private fu.stockspace.stockspace_be.auth.repository.UserRepository userRepository;
     @Mock private WalletService walletService;
     @Mock private WarehouseLayoutService warehouseLayoutService;
+    @Mock private WarehouseRentalAvailabilityService warehouseRentalAvailabilityService;
     @Mock private NotificationService notificationService;
     @Mock private SubscriptionService subscriptionService;
     @Spy private ObjectMapper objectMapper = new ObjectMapper();
@@ -68,6 +70,7 @@ class DirectContractSubmissionServiceTest {
     private Warehouse warehouse;
     private RentalContract contract;
     private WarehouseLayoutResponse layout;
+    private WarehouseLayoutResponse defaultLayout;
 
     @BeforeEach
     void setUp() {
@@ -114,6 +117,20 @@ class DirectContractSubmissionServiceTest {
                 .racks(List.of())
                 .positions(List.of())
                 .build();
+        defaultLayout = WarehouseLayoutResponse.builder()
+                .id(UUID.randomUUID())
+                .warehouseId(warehouseId)
+                .isDefault(true)
+                .width(new BigDecimal("20"))
+                .length(new BigDecimal("20"))
+                .height(new BigDecimal("5"))
+                .racks(List.of())
+                .positions(List.of())
+                .build();
+        lenient().when(warehouseRentalAvailabilityService.calculate(
+                any(UUID.class), any(), any(LocalDate.class), any(LocalDate.class), any(BigDecimal.class)))
+                .thenReturn(RentalAreaAvailability.of(
+                        new BigDecimal("400"), BigDecimal.ZERO, new BigDecimal("200")));
 
     }
 
@@ -142,7 +159,7 @@ class DirectContractSubmissionServiceTest {
                 warehouseId, tenantId, new BigDecimal("5"), new BigDecimal("10"),
                 new BigDecimal("5"), false)).thenReturn(resizedLayout);
         when(warehouseLayoutService.stabilizeLayoutSnapshot(resizedLayout)).thenReturn(resizedLayout);
-        when(warehouseLayoutService.getDefaultLayoutForContract(warehouseId)).thenReturn(layout);
+        when(warehouseLayoutService.getDefaultLayoutForContract(warehouseId)).thenReturn(defaultLayout);
         when(contractRepository.save(contract)).thenReturn(contract);
 
         RentalContractResponse response = contractService.updateOwnerDraft(ownerId, contractId, request);
@@ -170,6 +187,9 @@ class DirectContractSubmissionServiceTest {
         assertNotNull(contract.getSubmittedAt());
         assertEquals(ownerId, response.getOwnerId());
         assertEquals(Boolean.TRUE, response.isCanViewLayout());
+        assertEquals(new BigDecimal("400"), response.getWarehouseTotalAreaM2());
+        assertEquals(new BigDecimal("400"), response.getWarehouseAvailableAreaM2());
+        assertEquals(Boolean.TRUE, response.getAreaAvailabilitySufficient());
         verify(warehouseService).lockWarehouseForContractSubmit(warehouseId);
         verify(contractRepository).existsDirectDateOverlapForSubmit(
                 eq(contractId), eq(tenantId), eq(warehouseId),
@@ -196,7 +216,7 @@ class DirectContractSubmissionServiceTest {
                 .thenReturn(false);
         when(warehouseLayoutService.findActiveTenantLayoutForContract(warehouseId, secondTenant.getId()))
                 .thenReturn(Optional.of(layout));
-        when(warehouseLayoutService.getDefaultLayoutForContract(warehouseId)).thenReturn(layout);
+        when(warehouseLayoutService.getDefaultLayoutForContract(warehouseId)).thenReturn(defaultLayout);
 
         contractService.submitOwnerContract(ownerId, contractId);
 
@@ -210,7 +230,7 @@ class DirectContractSubmissionServiceTest {
     void submitRejectsInclusiveDateOverlapBeforeChangingState() {
         stubContractLookup();
         when(warehouseService.lockWarehouseForContractSubmit(warehouseId)).thenReturn(warehouse);
-        when(warehouseLayoutService.getDefaultLayoutForContract(warehouseId)).thenReturn(layout);
+        when(warehouseLayoutService.getDefaultLayoutForContract(warehouseId)).thenReturn(defaultLayout);
         when(contractRepository.existsDirectDateOverlapForSubmit(
                 eq(contractId), eq(tenantId), eq(warehouseId), any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(true);
@@ -226,10 +246,34 @@ class DirectContractSubmissionServiceTest {
     }
 
     @Test
+    void submitRejectsWhenTheRequestedAreaIsNoLongerAvailable() {
+        stubContractLookup();
+        when(warehouseService.lockWarehouseForContractSubmit(warehouseId)).thenReturn(warehouse);
+        when(warehouseLayoutService.getDefaultLayoutForContract(warehouseId)).thenReturn(defaultLayout);
+        when(contractRepository.existsDirectDateOverlapForSubmit(
+                eq(contractId), eq(tenantId), eq(warehouseId), any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(false);
+        when(warehouseRentalAvailabilityService.calculate(
+                eq(warehouseId), eq(contractId), eq(contract.getStartDate()),
+                eq(contract.getEndDate()), eq(contract.getLeasedAreaM2())))
+                .thenReturn(RentalAreaAvailability.of(
+                        new BigDecimal("400"), new BigDecimal("201"), new BigDecimal("200")));
+
+        ResourceConflictException exception = assertThrows(ResourceConflictException.class,
+                () -> contractService.submitOwnerContract(ownerId, contractId));
+
+        assertEquals(ErrorCode.WAREHOUSE_AREA_UNAVAILABLE, exception.getErrorCode());
+        assertEquals(ContractStatus.DRAFT, contract.getStatus());
+        verify(contractRepository, never()).save(contract);
+        verify(warehouseLayoutService, never()).validateContractLayout(
+                any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
     void submitRequiresPaperContractFiles() {
         stubContractLookup();
         when(warehouseService.lockWarehouseForContractSubmit(warehouseId)).thenReturn(warehouse);
-        when(warehouseLayoutService.getDefaultLayoutForContract(warehouseId)).thenReturn(layout);
+        when(warehouseLayoutService.getDefaultLayoutForContract(warehouseId)).thenReturn(defaultLayout);
         when(contractRepository.existsDirectDateOverlapForSubmit(
                 eq(contractId), eq(tenantId), eq(warehouseId), any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(false);
@@ -260,7 +304,7 @@ class DirectContractSubmissionServiceTest {
     void submitRejectsInvalidLayoutBeforeSaving() {
         stubContractLookup();
         when(warehouseService.lockWarehouseForContractSubmit(warehouseId)).thenReturn(warehouse);
-        when(warehouseLayoutService.getDefaultLayoutForContract(warehouseId)).thenReturn(layout);
+        when(warehouseLayoutService.getDefaultLayoutForContract(warehouseId)).thenReturn(defaultLayout);
         when(warehouseLayoutService.findActiveTenantLayoutForContract(warehouseId, tenantId))
                 .thenReturn(Optional.of(layout));
         when(contractRepository.existsDirectDateOverlapForSubmit(
@@ -285,7 +329,7 @@ class DirectContractSubmissionServiceTest {
                 .id(UUID.randomUUID())
                 .warehouseId(warehouseId)
                 .tenantId(null)
-                .width(new BigDecimal("10"))
+                .width(new BigDecimal("20"))
                 .length(new BigDecimal("20"))
                 .height(new BigDecimal("5"))
                 .racks(List.of())
@@ -314,7 +358,7 @@ class DirectContractSubmissionServiceTest {
     private void stubSubmitPrerequisites() {
         when(contractRepository.save(contract)).thenReturn(contract);
         when(warehouseService.lockWarehouseForContractSubmit(warehouseId)).thenReturn(warehouse);
-        when(warehouseLayoutService.getDefaultLayoutForContract(warehouseId)).thenReturn(layout);
+        when(warehouseLayoutService.getDefaultLayoutForContract(warehouseId)).thenReturn(defaultLayout);
         when(warehouseLayoutService.findActiveTenantLayoutForContract(warehouseId, tenantId))
                 .thenReturn(Optional.of(layout));
         when(warehouseLayoutService.stabilizeLayoutSnapshot(layout)).thenReturn(layout);
