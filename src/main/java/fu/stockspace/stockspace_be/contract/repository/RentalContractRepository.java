@@ -44,6 +44,27 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
             """)
     Page<RentalContract> findByOwnerId(@Param("ownerId") UUID ownerId, Pageable pageable);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT c FROM RentalContract c WHERE c.id = :contractId")
+    Optional<RentalContract> findByIdForUpdate(@Param("contractId") UUID contractId);
+
+    @Query("""
+            SELECT c FROM RentalContract c
+            WHERE c.renewedFromContract.id = :sourceContractId
+              AND c.status IN (
+                    fu.stockspace.stockspace_be.contract.entity.ContractStatus.DRAFT,
+                    fu.stockspace.stockspace_be.contract.entity.ContractStatus.PENDING_TENANT_CONFIRM,
+                    fu.stockspace.stockspace_be.contract.entity.ContractStatus.CHANGES_REQUESTED,
+                    fu.stockspace.stockspace_be.contract.entity.ContractStatus.SCHEDULED,
+                    fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE,
+                    fu.stockspace.stockspace_be.contract.entity.ContractStatus.EXPIRED)
+              AND c.isActive = true
+              AND c.isDeleted = false
+            ORDER BY c.createdAt ASC
+            """)
+    List<RentalContract> findBlockingRenewalsBySourceId(
+            @Param("sourceContractId") UUID sourceContractId);
+
     @Query("SELECT c FROM RentalContract c WHERE c.status = :status AND c.submittedAt < :dateTime")
     java.util.List<RentalContract> findByStatusAndSubmittedAtBefore(@Param("status") fu.stockspace.stockspace_be.contract.entity.ContractStatus status, @Param("dateTime") java.time.LocalDateTime dateTime);
 
@@ -112,6 +133,7 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
               AND c.warehouse.id = :warehouseId
               AND c.status IN (
                     fu.stockspace.stockspace_be.contract.entity.ContractStatus.PENDING_TENANT_CONFIRM,
+                    fu.stockspace.stockspace_be.contract.entity.ContractStatus.SCHEDULED,
                     fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE)
               AND c.isActive = true
               AND c.isDeleted = false
@@ -134,6 +156,7 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
               AND (:excludedContractId IS NULL OR c.id <> :excludedContractId)
               AND c.status IN (
                     fu.stockspace.stockspace_be.contract.entity.ContractStatus.PENDING_TENANT_CONFIRM,
+                    fu.stockspace.stockspace_be.contract.entity.ContractStatus.SCHEDULED,
                     fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE)
               AND c.isActive = true
               AND c.isDeleted = false
