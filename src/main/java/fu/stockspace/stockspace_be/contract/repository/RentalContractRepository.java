@@ -13,6 +13,7 @@ import java.util.Optional;
 import java.util.List;
 import java.util.UUID;
 import jakarta.persistence.LockModeType;
+import java.math.BigDecimal;
 
 public interface RentalContractRepository extends JpaRepository<RentalContract, UUID> {
 
@@ -123,6 +124,27 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
             @Param("contractId") UUID contractId,
             @Param("tenantId") UUID tenantId,
             @Param("warehouseId") UUID warehouseId,
+            @Param("startDate") java.time.LocalDate startDate,
+            @Param("endDate") java.time.LocalDate endDate);
+
+    @Query("""
+            SELECT COALESCE(SUM(c.leasedAreaM2), 0)
+            FROM RentalContract c
+            WHERE c.warehouse.id = :warehouseId
+              AND (:excludedContractId IS NULL OR c.id <> :excludedContractId)
+              AND c.status IN (
+                    fu.stockspace.stockspace_be.contract.entity.ContractStatus.PENDING_TENANT_CONFIRM,
+                    fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE)
+              AND c.isActive = true
+              AND c.isDeleted = false
+              AND c.startDate IS NOT NULL
+              AND c.endDate IS NOT NULL
+              AND c.startDate <= :endDate
+              AND c.endDate >= :startDate
+            """)
+    BigDecimal sumReservedAreaForDateRange(
+            @Param("warehouseId") UUID warehouseId,
+            @Param("excludedContractId") UUID excludedContractId,
             @Param("startDate") java.time.LocalDate startDate,
             @Param("endDate") java.time.LocalDate endDate);
 

@@ -1487,6 +1487,8 @@ class WarehouseLayoutServiceTest {
 
         assertDoesNotThrow(() ->
                 layoutService.saveLayoutBulk(warehouseId, userId, "OWNER", request));
+        assertEquals(new BigDecimal("10000.00"), warehouse.getCapacity());
+        verify(warehouseRepository).save(warehouse);
     }
 
     @Test
@@ -1514,6 +1516,7 @@ class WarehouseLayoutServiceTest {
         layoutService.saveLayoutBulk(warehouseId, userId, "OWNER", request);
 
         assertEquals(WarehouseStatus.PENDING_APPROVAL, warehouse.getStatus());
+        assertEquals(new BigDecimal("10000.00"), warehouse.getCapacity());
         verify(warehouseRepository).save(warehouse);
         verify(approvalNotifier).notifyAdmin(warehouse);
     }

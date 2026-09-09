@@ -54,6 +54,7 @@ class ContractDraftServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private WalletService walletService;
     @Mock private WarehouseLayoutService warehouseLayoutService;
+    @Mock private WarehouseRentalAvailabilityService warehouseRentalAvailabilityService;
     @Mock private NotificationService notificationService;
     @Spy private ObjectMapper objectMapper = new ObjectMapper();
 
@@ -117,6 +118,19 @@ class ContractDraftServiceTest {
         verify(contractRepository, never()).save(any(RentalContract.class));
         verify(warehouseLayoutService, never()).prepareTenantLayoutForDraft(
                 any(), any(), any(), any(), any(), anyBoolean());
+    }
+
+    @Test
+    void previewFixedDoesNotRequireClientDimensions() {
+        stubDraftValidation();
+        CreateRentalContractRequest request = request(null, null, null);
+
+        RentalContractResponse response = contractService.previewOwnerDraft(ownerId, request);
+
+        assertEquals(new BigDecimal("10"), response.getLeasedWidth());
+        assertEquals(new BigDecimal("20"), response.getLeasedLength());
+        assertEquals(new BigDecimal("5"), response.getLeasedHeight());
+        assertEquals(new BigDecimal("200"), response.getLeasedAreaM2());
     }
 
     @Test
@@ -291,9 +305,9 @@ class ContractDraftServiceTest {
         request.setTenantEmail("tenant@example.com");
         request.setStartDate(LocalDate.now());
         request.setEndDate(LocalDate.now().plusDays(7));
-        request.setLeasedWidth(new BigDecimal(width));
-        request.setLeasedLength(new BigDecimal(length));
-        request.setLeasedHeight(new BigDecimal(height));
+        request.setLeasedWidth(width == null ? null : new BigDecimal(width));
+        request.setLeasedLength(length == null ? null : new BigDecimal(length));
+        request.setLeasedHeight(height == null ? null : new BigDecimal(height));
         return request;
     }
 
