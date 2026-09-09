@@ -5,6 +5,7 @@ import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
+import fu.stockspace.stockspace_be.contract.dto.RentalContractResponse;
 import fu.stockspace.stockspace_be.contract.entity.ContractStatus;
 import fu.stockspace.stockspace_be.contract.entity.RentalContract;
 import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
@@ -12,6 +13,7 @@ import fu.stockspace.stockspace_be.notification.service.NotificationService;
 import fu.stockspace.stockspace_be.warehouse.dto.BulkLayoutSaveRequest;
 import fu.stockspace.stockspace_be.warehouse.dto.WarehouseLayoutResponse;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
+import fu.stockspace.stockspace_be.warehouse.entity.RentalPricingType;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseLayoutService;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseService;
 import fu.stockspace.stockspace_be.wallet.service.WalletService;
@@ -31,6 +33,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -75,6 +78,7 @@ class ContractLayoutServiceTest {
                 .tenant(tenant)
                 .warehouse(warehouse)
                 .status(ContractStatus.DRAFT)
+                .pricingType(RentalPricingType.PER_SQUARE_METER_MONTHLY)
                 .leasedWidth(new BigDecimal("10"))
                 .leasedLength(new BigDecimal("20"))
                 .leasedHeight(new BigDecimal("5"))
@@ -89,7 +93,7 @@ class ContractLayoutServiceTest {
                 .racks(List.of())
                 .positions(List.of())
                 .build();
-        when(contractRepository.findById(contractId)).thenReturn(Optional.of(contract));
+        lenient().when(contractRepository.findById(contractId)).thenReturn(Optional.of(contract));
     }
 
     @Test
@@ -142,6 +146,32 @@ class ContractLayoutServiceTest {
         assertThrows(BadRequestException.class,
                 () -> contractService.updateOwnerContractLayout(ownerId, contractId, request));
         verify(warehouseLayoutService, never()).saveContractLayout(any(), any(), any());
+    }
+
+    @Test
+    void ownerCannotUpdateLayoutForFixedMonthlyContract() {
+        contract.setPricingType(RentalPricingType.FIXED_MONTHLY);
+
+        assertThrows(BadRequestException.class,
+                () -> contractService.updateOwnerContractLayout(
+                        ownerId, contractId, requestWithContractDimensions()));
+
+        verify(warehouseLayoutService, never()).saveContractLayout(any(), any(), any());
+        verify(contractRepository, never()).save(any(RentalContract.class));
+    }
+
+    @Test
+    void actionFlagsExposeLayoutSetupOnlyForMutablePartialContracts() {
+        RentalContractResponse partialResponse = contractService.mapToResponse(contract, ownerId);
+
+        org.junit.jupiter.api.Assertions.assertTrue(partialResponse.isLayoutSetupRequired());
+        org.junit.jupiter.api.Assertions.assertTrue(partialResponse.isCanEditContractLayout());
+
+        contract.setPricingType(RentalPricingType.FIXED_MONTHLY);
+        RentalContractResponse fixedResponse = contractService.mapToResponse(contract, ownerId);
+
+        org.junit.jupiter.api.Assertions.assertFalse(fixedResponse.isLayoutSetupRequired());
+        org.junit.jupiter.api.Assertions.assertFalse(fixedResponse.isCanEditContractLayout());
     }
 
     @Test

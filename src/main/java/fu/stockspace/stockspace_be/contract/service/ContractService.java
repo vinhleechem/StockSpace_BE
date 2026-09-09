@@ -524,6 +524,10 @@ public class ContractService {
             throw new BadRequestException(ErrorCode.INVALID_CONTRACT_STATUS,
                     "Contract layout can only be edited in DRAFT or CHANGES_REQUESTED");
         }
+        if (contract.getPricingType() == RentalPricingType.FIXED_MONTHLY) {
+            throw new BadRequestException(ErrorCode.INVALID_CONTRACT_STATUS,
+                    "FIXED_MONTHLY contract layout is derived from the warehouse default layout");
+        }
         validateContractLayoutDimensions(contract, request);
 
         Warehouse warehouse = contract.getWarehouse();
@@ -917,6 +921,8 @@ public class ContractService {
                 .canReject(actionFlags.canReject())
                 .canViewLayout(actionFlags.canViewLayout())
                 .canManageWms(actionFlags.canManageWms())
+                .layoutSetupRequired(actionFlags.layoutSetupRequired())
+                .canEditContractLayout(actionFlags.canEditContractLayout())
                 .pricingType(c.getPricingType())
                 .rentalPriceSnapshot(c.getRentalPriceSnapshot())
                 .finalMonthlyRent(c.getFinalMonthlyRent())
@@ -961,8 +967,12 @@ public class ContractService {
         boolean ownerViewer = owner != null && viewerId.equals(owner.getId());
         boolean tenantViewer = tenant != null && viewerId.equals(tenant.getId());
         ContractStatus status = contract.getStatus();
-        boolean ownerCanEdit = ownerViewer
-                && (status == ContractStatus.DRAFT || status == ContractStatus.CHANGES_REQUESTED);
+        boolean mutableStatus = status == ContractStatus.DRAFT
+                || status == ContractStatus.CHANGES_REQUESTED;
+        boolean ownerCanEdit = ownerViewer && mutableStatus;
+        boolean canEditContractLayout = ownerCanEdit
+                && contract.getPricingType() != RentalPricingType.FIXED_MONTHLY;
+        boolean layoutSetupRequired = canEditContractLayout;
         boolean tenantCanReview = tenantViewer && status == ContractStatus.PENDING_TENANT_CONFIRM;
         boolean tenantCanViewLayout = tenantViewer && isTenantLayoutReadable(status);
         boolean canManageWms = tenantViewer
@@ -977,7 +987,9 @@ public class ContractService {
                 tenantCanReview,
                 tenantCanReview,
                 (ownerViewer && contract.isActive() && !contract.isDeleted()) || tenantCanViewLayout,
-                canManageWms);
+                canManageWms,
+                layoutSetupRequired,
+                canEditContractLayout);
     }
 
     private record ActionFlags(boolean canEdit,
@@ -987,9 +999,11 @@ public class ContractService {
                                boolean canRequestChanges,
                                boolean canReject,
                                boolean canViewLayout,
-                               boolean canManageWms) {
+                               boolean canManageWms,
+                               boolean layoutSetupRequired,
+                               boolean canEditContractLayout) {
         private static final ActionFlags NONE = new ActionFlags(
-                false, false, false, false, false, false, false, false);
+                false, false, false, false, false, false, false, false, false, false);
     }
 
 

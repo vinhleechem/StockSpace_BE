@@ -50,6 +50,10 @@ public class RentalContractResponse {
     private boolean canViewLayout;
     @Schema(description = "True only for the contract tenant when the contract and subscription are both ACTIVE")
     private boolean canManageWms;
+    @Schema(description = "True when a partial-rental contract still requires the owner to configure its layout")
+    private boolean layoutSetupRequired;
+    @Schema(description = "Current owner may edit the partial-rental layout while the contract is mutable")
+    private boolean canEditContractLayout;
 
     @Schema(allowableValues = {"FIXED_MONTHLY", "PER_SQUARE_METER_MONTHLY", "NEGOTIATED"})
     private RentalPricingType pricingType;
