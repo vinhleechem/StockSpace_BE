@@ -69,6 +69,10 @@ public enum ErrorCode {
     CONTRACT_DATE_OVERLAP("Kho đã có hợp đồng trùng khoảng thời gian yêu cầu", HttpStatus.CONFLICT),
     WAREHOUSE_AREA_UNAVAILABLE("Diện tích kho không đủ trong khoảng thời gian yêu cầu", HttpStatus.CONFLICT),
     INVALID_LEASE_DIMENSIONS("Kích thước khu vực thuê không hợp lệ", HttpStatus.BAD_REQUEST),
+    CONTRACT_RENEWAL_NOT_ALLOWED("Hợp đồng hiện tại không đủ điều kiện để gia hạn", HttpStatus.BAD_REQUEST),
+    CONTRACT_RENEWAL_DEADLINE_PASSED("Đã quá hạn tạo hoặc xử lý yêu cầu gia hạn", HttpStatus.BAD_REQUEST),
+    CONTRACT_RENEWAL_ALREADY_EXISTS("Hợp đồng đã có một yêu cầu gia hạn đang được xử lý", HttpStatus.CONFLICT),
+    CONTRACT_RENEWAL_PRICING_CHANGED("Kiểu giá của kho đã thay đổi, không thể gia hạn hợp đồng này", HttpStatus.CONFLICT),
 
 
     INSPECTION_NOT_FOUND("Yêu cầu kiểm định không tồn tại", HttpStatus.NOT_FOUND),

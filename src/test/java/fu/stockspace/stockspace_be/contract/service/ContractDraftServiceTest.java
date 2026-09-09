@@ -9,6 +9,8 @@ import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
+import fu.stockspace.stockspace_be.contract.dto.CreateContractRenewalRequest;
 import fu.stockspace.stockspace_be.contract.dto.CreateRentalContractRequest;
 import fu.stockspace.stockspace_be.contract.dto.RentalContractResponse;
 import fu.stockspace.stockspace_be.contract.entity.ContractStatus;
@@ -222,6 +224,73 @@ class ContractDraftServiceTest {
     }
 
     @Test
+    void renewalDraftCopiesSourceTermsAndCurrentTenantLayoutWithoutMutatingSource() {
+        RentalContract source = activeSourceContract();
+        WarehouseLayoutResponse tenantLayout = tenantLayout();
+        CreateContractRenewalRequest request = renewalRequest(
+                source.getEndDate().plusDays(8));
+        when(contractRepository.findByIdForUpdate(source.getId())).thenReturn(Optional.of(source));
+        when(contractRepository.findBlockingRenewalsBySourceId(source.getId())).thenReturn(List.of());
+        when(warehouseLayoutService.getDefaultLayoutForContract(warehouseId)).thenReturn(defaultLayout);
+        when(warehouseLayoutService.findActiveTenantLayoutForContract(warehouseId, tenantId))
+                .thenReturn(Optional.of(tenantLayout));
+        when(warehouseLayoutService.stabilizeLayoutSnapshot(tenantLayout)).thenReturn(tenantLayout);
+        when(contractRepository.save(any(RentalContract.class)))
+                .thenAnswer(invocation -> {
+                    RentalContract saved = invocation.getArgument(0);
+                    saved.setId(UUID.randomUUID());
+                    return saved;
+                });
+
+        RentalContractResponse response = contractService.createRenewalDraft(
+                ownerId, source.getId(), request);
+
+        assertEquals(ContractStatus.DRAFT.name(), response.getStatus());
+        assertEquals(source.getId(), response.getRenewedFromContractId());
+        assertEquals(source.getEndDate().plusDays(1), response.getStartDate());
+        assertEquals(request.getEndDate(), response.getEndDate());
+        assertEquals(source.getLeasedWidth(), response.getLeasedWidth());
+        assertEquals(source.getLeasedLength(), response.getLeasedLength());
+        assertEquals(source.getLeasedHeight(), response.getLeasedHeight());
+        assertEquals(source.getLeasedAreaM2(), response.getLeasedAreaM2());
+        assertEquals(source.getFinalMonthlyRent(), response.getFinalMonthlyRent());
+        assertEquals(ContractStatus.ACTIVE, source.getStatus());
+        verify(contractRepository).findByIdForUpdate(source.getId());
+        verify(warehouseLayoutService).validateContractLayout(
+                tenantLayout, warehouseId, tenantId,
+                source.getLeasedWidth(), source.getLeasedLength(), source.getLeasedHeight());
+    }
+
+    @Test
+    void renewalDraftRejectsOwnerWhoDoesNotOwnTheSource() {
+        RentalContract source = activeSourceContract();
+        when(contractRepository.findByIdForUpdate(source.getId())).thenReturn(Optional.of(source));
+
+        assertThrows(ForbiddenException.class,
+                () -> contractService.createRenewalDraft(
+                        UUID.randomUUID(), source.getId(), renewalRequest(source.getEndDate().plusDays(8))));
+        verify(contractRepository, never()).save(any(RentalContract.class));
+    }
+
+    @Test
+    void renewalDraftRejectsWhenSourceAlreadyHasBlockingSuccessor() {
+        RentalContract source = activeSourceContract();
+        RentalContract existingSuccessor = RentalContract.builder()
+                .id(UUID.randomUUID())
+                .status(ContractStatus.DRAFT)
+                .build();
+        when(contractRepository.findByIdForUpdate(source.getId())).thenReturn(Optional.of(source));
+        when(contractRepository.findBlockingRenewalsBySourceId(source.getId()))
+                .thenReturn(List.of(existingSuccessor));
+
+        ResourceConflictException exception = assertThrows(ResourceConflictException.class,
+                () -> contractService.createRenewalDraft(
+                        ownerId, source.getId(), renewalRequest(source.getEndDate().plusDays(8))));
+        assertEquals(ErrorCode.CONTRACT_RENEWAL_ALREADY_EXISTS, exception.getErrorCode());
+        verify(contractRepository, never()).save(any(RentalContract.class));
+    }
+
+    @Test
     void previewRejectsWarehouseNotOwnedByTheCurrentOwner() {
         when(warehouseService.getOwnedWarehouseForContract(ownerId, warehouseId))
                 .thenThrow(new ForbiddenException("Warehouse is not owned by the current owner"));
@@ -309,6 +378,46 @@ class ContractDraftServiceTest {
         request.setLeasedLength(length == null ? null : new BigDecimal(length));
         request.setLeasedHeight(height == null ? null : new BigDecimal(height));
         return request;
+    }
+
+    private CreateContractRenewalRequest renewalRequest(LocalDate endDate) {
+        CreateContractRenewalRequest request = new CreateContractRenewalRequest();
+        request.setEndDate(endDate);
+        request.setOwnerNote("Renewal terms agreed outside StockSpace");
+        return request;
+    }
+
+    private RentalContract activeSourceContract() {
+        return RentalContract.builder()
+                .id(UUID.randomUUID())
+                .owner(warehouse.getOwner())
+                .tenant(tenant)
+                .warehouse(warehouse)
+                .status(ContractStatus.ACTIVE)
+                .startDate(LocalDate.now().minusDays(30))
+                .endDate(LocalDate.now().plusDays(7))
+                .pricingType(RentalPricingType.FIXED_MONTHLY)
+                .rentalPriceSnapshot(warehouse.getRentalPrice())
+                .finalMonthlyRent(warehouse.getRentalPrice())
+                .leasedWidth(defaultLayout.getWidth())
+                .leasedLength(defaultLayout.getLength())
+                .leasedHeight(defaultLayout.getHeight())
+                .leasedAreaM2(defaultLayout.getWidth().multiply(defaultLayout.getLength()))
+                .layoutSnapshot("{}")
+                .build();
+    }
+
+    private WarehouseLayoutResponse tenantLayout() {
+        return WarehouseLayoutResponse.builder()
+                .id(UUID.randomUUID())
+                .warehouseId(warehouseId)
+                .tenantId(tenantId)
+                .width(defaultLayout.getWidth())
+                .length(defaultLayout.getLength())
+                .height(defaultLayout.getHeight())
+                .racks(List.of())
+                .positions(List.of())
+                .build();
     }
 
     private void stubDraftValidation() {

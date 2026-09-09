@@ -5,6 +5,7 @@ import fu.stockspace.stockspace_be.auth.util.SecurityUtil;
 import fu.stockspace.stockspace_be.common.dto.ApiResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.UnauthorizedException;
+import fu.stockspace.stockspace_be.contract.dto.CreateContractRenewalRequest;
 import fu.stockspace.stockspace_be.contract.dto.CreateRentalContractRequest;
 import fu.stockspace.stockspace_be.contract.dto.RentalContractResponse;
 import fu.stockspace.stockspace_be.contract.dto.UpdateRentalContractRequest;
@@ -77,6 +78,18 @@ public class OwnerContractController {
         RentalContractResponse response = contractService.createOwnerDraft(getCurrentUserId(), request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Rental contract draft created", response));
+    }
+
+    @PostMapping("/{sourceContractId}/renewal-draft")
+    @PreAuthorize("@rbac.hasPermission('CONTRACT_OWNER_MANAGE')")
+    @Operation(summary = "Create a rental contract renewal draft")
+    public ResponseEntity<ApiResponse<RentalContractResponse>> createRenewalDraft(
+            @PathVariable UUID sourceContractId,
+            @Valid @RequestBody CreateContractRenewalRequest request) {
+        RentalContractResponse response = contractService.createRenewalDraft(
+                getCurrentUserId(), sourceContractId, request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Rental contract renewal draft created", response));
     }
 
     @PutMapping("/{contractId}")
