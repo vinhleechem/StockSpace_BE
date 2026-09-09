@@ -369,6 +369,18 @@ public class ContractService {
                     "The tenant already has an overlapping contract for this warehouse");
         }
 
+        RentalAreaAvailability availability = warehouseRentalAvailabilityService.calculate(
+                lockedWarehouse.getId(),
+                contract.getId(),
+                contract.getStartDate(),
+                contract.getEndDate(),
+                contract.getLeasedAreaM2());
+        if (!availability.sufficient()) {
+            throw new ResourceConflictException(
+                    ErrorCode.WAREHOUSE_AREA_UNAVAILABLE,
+                    "The requested leased area is not available for the selected dates");
+        }
+
         contract.setConfirmedAt(LocalDateTime.now());
         contract.setStatus(ContractStatus.ACTIVE);
         contract = contractRepository.save(contract);
@@ -379,7 +391,7 @@ public class ContractService {
                 "The tenant confirmed the rental contract for warehouse "
                         + lockedWarehouse.getName() + ".",
                 "CONTRACT_CONFIRMED");
-        return mapToResponse(contract, tenantId);
+        return mapToResponse(contract, tenantId, availability);
     }
 
     /**
