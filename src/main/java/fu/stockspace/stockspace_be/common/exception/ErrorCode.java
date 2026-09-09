@@ -73,6 +73,7 @@ public enum ErrorCode {
     CONTRACT_RENEWAL_DEADLINE_PASSED("Đã quá hạn tạo hoặc xử lý yêu cầu gia hạn", HttpStatus.BAD_REQUEST),
     CONTRACT_RENEWAL_ALREADY_EXISTS("Hợp đồng đã có một yêu cầu gia hạn đang được xử lý", HttpStatus.CONFLICT),
     CONTRACT_RENEWAL_PRICING_CHANGED("Kiểu giá của kho đã thay đổi, không thể gia hạn hợp đồng này", HttpStatus.CONFLICT),
+    PAPER_CONTRACT_REQUIRED("Cần ít nhất một file hợp đồng giấy hợp lệ trước khi gửi", HttpStatus.BAD_REQUEST),
 
 
     INSPECTION_NOT_FOUND("Yêu cầu kiểm định không tồn tại", HttpStatus.NOT_FOUND),

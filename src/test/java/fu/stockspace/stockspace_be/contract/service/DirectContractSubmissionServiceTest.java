@@ -344,6 +344,92 @@ class DirectContractSubmissionServiceTest {
     }
 
     @Test
+    void renewalSubmitLocksSourceAndSuccessorAndRevalidatesTheRenewal() {
+        RentalContract source = RentalContract.builder()
+                .id(UUID.randomUUID())
+                .owner(owner)
+                .tenant(tenant)
+                .warehouse(warehouse)
+                .status(ContractStatus.ACTIVE)
+                .startDate(LocalDate.now().minusDays(30))
+                .endDate(LocalDate.now())
+                .pricingType(RentalPricingType.PER_SQUARE_METER_MONTHLY)
+                .rentalPriceSnapshot(warehouse.getRentalPrice())
+                .finalMonthlyRent(new BigDecimal("40000"))
+                .leasedWidth(new BigDecimal("10"))
+                .leasedLength(new BigDecimal("20"))
+                .leasedHeight(new BigDecimal("5"))
+                .leasedAreaM2(new BigDecimal("200"))
+                .layoutSnapshot("{}")
+                .build();
+        contract.setStatus(ContractStatus.DRAFT);
+        contract.setStartDate(source.getEndDate().plusDays(1));
+        contract.setEndDate(source.getEndDate().plusDays(8));
+        contract.setRenewedFromContract(source);
+        when(contractRepository.findByIdForUpdate(source.getId())).thenReturn(Optional.of(source));
+        when(contractRepository.findByIdForUpdate(contractId)).thenReturn(Optional.of(contract));
+        when(contractRepository.findBlockingRenewalsBySourceId(source.getId()))
+                .thenReturn(List.of(contract));
+        stubContractLookup();
+        stubSubmitPrerequisites();
+
+        RentalContractResponse response = contractService.submitOwnerContract(ownerId, contractId);
+
+        assertEquals(ContractStatus.PENDING_TENANT_CONFIRM, contract.getStatus());
+        assertEquals(source.getId(), contract.getRenewedFromContract().getId());
+        assertEquals(ownerId, response.getOwnerId());
+        verify(warehouseService).lockWarehouseForContractSubmit(warehouseId);
+        verify(contractRepository).findByIdForUpdate(source.getId());
+        verify(contractRepository).findByIdForUpdate(contractId);
+        verify(contractRepository).existsDirectDateOverlapForSubmit(
+                eq(contractId), eq(tenantId), eq(warehouseId),
+                eq(contract.getStartDate()), eq(contract.getEndDate()));
+    }
+
+    @Test
+    void renewalSubmitUsesStablePaperContractErrorCode() {
+        RentalContract source = RentalContract.builder()
+                .id(UUID.randomUUID())
+                .owner(owner)
+                .tenant(tenant)
+                .warehouse(warehouse)
+                .status(ContractStatus.ACTIVE)
+                .startDate(LocalDate.now().minusDays(30))
+                .endDate(LocalDate.now())
+                .pricingType(RentalPricingType.PER_SQUARE_METER_MONTHLY)
+                .rentalPriceSnapshot(warehouse.getRentalPrice())
+                .finalMonthlyRent(new BigDecimal("40000"))
+                .leasedWidth(new BigDecimal("10"))
+                .leasedLength(new BigDecimal("20"))
+                .leasedHeight(new BigDecimal("5"))
+                .leasedAreaM2(new BigDecimal("200"))
+                .layoutSnapshot("{}")
+                .build();
+        contract.setStatus(ContractStatus.DRAFT);
+        contract.setStartDate(source.getEndDate().plusDays(1));
+        contract.setEndDate(source.getEndDate().plusDays(8));
+        contract.setRenewedFromContract(source);
+        contract.setPaperContractFiles(null);
+        when(contractRepository.findByIdForUpdate(source.getId())).thenReturn(Optional.of(source));
+        when(contractRepository.findByIdForUpdate(contractId)).thenReturn(Optional.of(contract));
+        when(contractRepository.findBlockingRenewalsBySourceId(source.getId()))
+                .thenReturn(List.of(contract));
+        stubContractLookup();
+        when(warehouseService.lockWarehouseForContractSubmit(warehouseId)).thenReturn(warehouse);
+        when(warehouseLayoutService.getDefaultLayoutForContract(warehouseId)).thenReturn(defaultLayout);
+        when(contractRepository.existsDirectDateOverlapForSubmit(
+                eq(contractId), eq(tenantId), eq(warehouseId), any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(false);
+
+        BadRequestException exception = assertThrows(BadRequestException.class,
+                () -> contractService.submitOwnerContract(ownerId, contractId));
+
+        assertEquals(ErrorCode.PAPER_CONTRACT_REQUIRED, exception.getErrorCode());
+        assertEquals(ContractStatus.DRAFT, contract.getStatus());
+        verify(contractRepository, never()).save(contract);
+    }
+
+    @Test
     void tenantCannotManageWmsUntilActiveContractAndSubscription() {
         contract.setStatus(ContractStatus.ACTIVE);
         when(subscriptionService.hasActiveSubscription(tenantId)).thenReturn(true);
