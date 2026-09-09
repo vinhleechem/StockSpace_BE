@@ -602,7 +602,9 @@ public class ContractService {
                     tenant.getId(),
                     "Rental contract requires confirmation",
                     "The owner submitted a rental contract for warehouse " + warehouse.getName() + ".",
-                    "CONTRACT_SUBMITTED");
+                    contract.getRenewedFromContract() == null
+                            ? "CONTRACT_SUBMITTED"
+                            : "CONTRACT_RENEWAL_SUBMITTED");
         } catch (Exception e) {
             log.warn("Failed to push direct contract notification for {}: {}",
                     contract.getId(), e.getMessage());
@@ -764,12 +766,7 @@ public class ContractService {
         if (scheduled) {
             notifyRenewalScheduled(renewal, lockedWarehouse);
         } else {
-            notifyOwnerOfTenantDecision(
-                    renewal,
-                    "Rental contract renewal confirmed",
-                    "The tenant confirmed the rental contract renewal for warehouse "
-                            + lockedWarehouse.getName() + ".",
-                    "CONTRACT_RENEWAL_ACTIVATED");
+            notifyRenewalActivated(renewal, lockedWarehouse);
         }
         return mapToResponse(renewal, tenantId, availability);
     }
@@ -804,6 +801,27 @@ public class ContractService {
         }
     }
 
+    private void notifyRenewalActivated(RentalContract renewal, Warehouse warehouse) {
+        String message = "The rental contract renewal for warehouse "
+                + warehouse.getName() + " is now active.";
+        notifyRenewalParticipant(
+                renewal.getOwner().getId(), renewal.getId(),
+                "Rental contract renewal activated", message);
+        notifyRenewalParticipant(
+                renewal.getTenant().getId(), renewal.getId(),
+                "Rental contract renewal activated", message);
+    }
+
+    private void notifyRenewalParticipant(
+            UUID recipientId, UUID contractId, String title, String message) {
+        try {
+            notificationService.push(recipientId, title, message, "CONTRACT_RENEWAL_ACTIVATED");
+        } catch (Exception exception) {
+            log.warn("Failed to notify participant about renewal {}: {}",
+                    contractId, exception.getMessage());
+        }
+    }
+
     /**
      * Moves a submitted direct contract back to the owner for correction.
      * Tenant review does not mutate the submitted terms or layout; the owner
@@ -832,7 +850,9 @@ public class ContractService {
                 "Rental contract changes requested",
                 "The tenant requested changes to the rental contract for warehouse "
                         + contract.getWarehouse().getName() + ". Reason: " + reason,
-                "CONTRACT_CHANGES_REQUESTED");
+                contract.getRenewedFromContract() == null
+                        ? "CONTRACT_CHANGES_REQUESTED"
+                        : "CONTRACT_RENEWAL_CHANGES_REQUESTED");
         return mapToResponse(contract, tenantId);
     }
 
@@ -871,7 +891,9 @@ public class ContractService {
                 "Rental contract rejected",
                 "The tenant rejected the rental contract for warehouse "
                         + contract.getWarehouse().getName() + ". Reason: " + reason,
-                "CONTRACT_REJECTED");
+                contract.getRenewedFromContract() == null
+                        ? "CONTRACT_REJECTED"
+                        : "CONTRACT_RENEWAL_REJECTED");
         return mapToResponse(contract, tenantId);
     }
 

@@ -59,6 +59,11 @@ public class ContractExpiryProcessor {
                 || contract.getEndDate().isAfter(today.plusDays(30))) {
             return;
         }
+        if (contract.getRenewedFromContract() == null
+                && contractRepository.findBlockingRenewalsBySourceId(contract.getId()).stream()
+                .anyMatch(renewal -> renewal.getStatus() == ContractStatus.SCHEDULED)) {
+            return;
+        }
 
         boolean tenantReminderSent = sendReminderBestEffort(
                 tenant, warehouse.getName(), contract.getEndDate(), true);
@@ -117,6 +122,7 @@ public class ContractExpiryProcessor {
         }
         contractRepository.save(successor);
         contractRepository.save(source);
+        notifyRenewalActivatedBestEffort(successor, warehouse);
         log.info("Activated renewal successor {} and expired source {} for warehouse {}",
                 successor.getId(), source.getId(), warehouse.getId());
     }
@@ -254,6 +260,33 @@ public class ContractExpiryProcessor {
         } catch (RuntimeException exception) {
             log.warn("Failed to push contract expiry notification to user {}: {}",
                     recipient.getId(), exception.getMessage());
+        }
+    }
+
+    private void notifyRenewalActivatedBestEffort(
+            RentalContract renewal, Warehouse warehouse) {
+        String message = "The rental contract renewal for warehouse "
+                + warehouse.getName() + " is now active.";
+        notifyRenewalParticipantBestEffort(
+                renewal.getOwner(), renewal.getId(), message);
+        notifyRenewalParticipantBestEffort(
+                renewal.getTenant(), renewal.getId(), message);
+    }
+
+    private void notifyRenewalParticipantBestEffort(
+            User recipient, UUID contractId, String message) {
+        if (recipient == null) {
+            return;
+        }
+        try {
+            notificationService.push(
+                    recipient.getId(),
+                    "Rental contract renewal activated",
+                    message,
+                    "CONTRACT_RENEWAL_ACTIVATED");
+        } catch (RuntimeException exception) {
+            log.warn("Failed to push renewal activation notification for contract {} to user {}: {}",
+                    contractId, recipient.getId(), exception.getMessage());
         }
     }
 }

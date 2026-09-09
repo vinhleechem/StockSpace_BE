@@ -385,6 +385,8 @@ class DirectContractSubmissionServiceTest {
         verify(contractRepository).existsDirectDateOverlapForSubmit(
                 eq(contractId), eq(tenantId), eq(warehouseId),
                 eq(contract.getStartDate()), eq(contract.getEndDate()));
+        verify(notificationService).push(
+                eq(tenantId), any(), any(), eq("CONTRACT_RENEWAL_SUBMITTED"));
     }
 
     @Test

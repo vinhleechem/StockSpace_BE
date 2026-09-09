@@ -160,6 +160,22 @@ class ContractExpiryProcessorTest {
     }
 
     @Test
+    void reminderSkipsSourceWhenRenewalIsAlreadyScheduled() {
+        LocalDate today = LocalDate.now(ContractExpiryScheduler.BUSINESS_ZONE);
+        RentalContract source = activeContract(today.plusDays(7));
+        RentalContract renewal = scheduledContract(source.getEndDate().plusDays(1));
+        renewal.setRenewedFromContract(source);
+        when(contractRepository.findByIdForUpdate(source.getId())).thenReturn(Optional.of(source));
+        when(contractRepository.findBlockingRenewalsBySourceId(source.getId()))
+                .thenReturn(List.of(renewal));
+
+        processor.sendExpiryReminder(source.getId(), today);
+
+        verifyNoInteractions(emailService, notificationService);
+        verify(contractRepository, never()).save(source);
+    }
+
+    @Test
     void failedTenantReminderRemainsPendingForRetry() {
         LocalDate today = LocalDate.now(ContractExpiryScheduler.BUSINESS_ZONE);
         RentalContract contract = activeContract(today.plusDays(7));
@@ -212,7 +228,34 @@ class ContractExpiryProcessorTest {
         verify(contractRepository).save(successor);
         verify(contractRepository).save(source);
         verifyNoInteractions(stockBatchRepository, warehouseLayoutService, assignmentRepository,
-                notificationService, emailService);
+                emailService);
+        verify(notificationService, times(2)).push(
+                any(), eq("Rental contract renewal activated"), any(),
+                eq("CONTRACT_RENEWAL_ACTIVATED"));
+    }
+
+    @Test
+    void renewalActivationNotificationFailureDoesNotUndoHandover() {
+        LocalDate today = LocalDate.now(ContractExpiryScheduler.BUSINESS_ZONE);
+        RentalContract source = activeContract(today.minusDays(1));
+        RentalContract successor = scheduledContract(today);
+        successor.setRenewedFromContract(source);
+        successor.setEndDate(today.plusMonths(1));
+
+        when(contractRepository.findById(successor.getId())).thenReturn(Optional.of(successor));
+        when(warehouseRepository.findByIdForUpdate(warehouse.getId())).thenReturn(Optional.of(warehouse));
+        when(contractRepository.findByIdForUpdate(source.getId())).thenReturn(Optional.of(source));
+        when(contractRepository.findByIdForUpdate(successor.getId())).thenReturn(Optional.of(successor));
+        doThrow(new RuntimeException("websocket unavailable"))
+                .when(notificationService).push(any(), eq("Rental contract renewal activated"), any(),
+                        eq("CONTRACT_RENEWAL_ACTIVATED"));
+
+        assertDoesNotThrow(() -> processor.activateScheduledContract(successor.getId(), today));
+
+        assertEquals(ContractStatus.ACTIVE, successor.getStatus());
+        assertEquals(ContractStatus.EXPIRED, source.getStatus());
+        verify(contractRepository).save(successor);
+        verify(contractRepository).save(source);
     }
 
     @Test

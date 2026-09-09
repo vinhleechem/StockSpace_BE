@@ -220,6 +220,8 @@ class TenantContractReviewServiceTest {
         assertEquals(ContractStatus.REJECTED, contract.getStatus());
         verify(warehouseLayoutService, never()).archiveTenantLayout(any(), any());
         verify(contractRepository, never()).existsCurrentDirectActiveContract(any(), any(), any());
+        verify(notificationService).push(
+                eq(ownerId), eq("Rental contract rejected"), any(), eq("CONTRACT_RENEWAL_REJECTED"));
     }
 
     @Test
@@ -235,6 +237,21 @@ class TenantContractReviewServiceTest {
         verify(notificationService).push(
                 eq(ownerId), eq("Rental contract changes requested"), any(), eq("CONTRACT_CHANGES_REQUESTED"));
         verifyNoInteractions(walletService);
+    }
+
+    @Test
+    void renewalChangeRequestUsesRenewalNotificationType() {
+        RentalContract source = renewalSource();
+        contract.setRenewedFromContract(source);
+        when(contractRepository.findById(contractId)).thenReturn(java.util.Optional.of(contract));
+        when(contractRepository.save(contract)).thenReturn(contract);
+
+        contractService.requestDirectContractChanges(
+                tenantId, contractId, decision("Please update the renewal terms"));
+
+        verify(notificationService).push(
+                eq(ownerId), eq("Rental contract changes requested"), any(),
+                eq("CONTRACT_RENEWAL_CHANGES_REQUESTED"));
     }
 
     @Test

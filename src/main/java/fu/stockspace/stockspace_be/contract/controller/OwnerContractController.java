@@ -43,7 +43,10 @@ import java.util.UUID;
                 content = @Content(schema = @Schema(implementation = ApiResponse.class), examples = {
                         @ExampleObject(name = "Invalid role", value = "{\"success\":false,\"code\":\"INVALID_ROLE\",\"message\":\"The supplied account does not have the TENANT role\"}"),
                         @ExampleObject(name = "Invalid status", value = "{\"success\":false,\"code\":\"INVALID_CONTRACT_STATUS\",\"message\":\"Only DRAFT or CHANGES_REQUESTED contracts can be submitted\"}"),
-                        @ExampleObject(name = "Invalid dimensions", value = "{\"success\":false,\"code\":\"INVALID_LEASE_DIMENSIONS\",\"message\":\"Leased dimensions cannot exceed the warehouse default layout\"}")
+                        @ExampleObject(name = "Invalid dimensions", value = "{\"success\":false,\"code\":\"INVALID_LEASE_DIMENSIONS\",\"message\":\"Leased dimensions cannot exceed the warehouse default layout\"}"),
+                        @ExampleObject(name = "Renewal is not allowed", value = "{\"success\":false,\"code\":\"CONTRACT_RENEWAL_NOT_ALLOWED\",\"message\":\"The active source contract is not eligible for renewal\"}"),
+                        @ExampleObject(name = "Renewal deadline passed", value = "{\"success\":false,\"code\":\"CONTRACT_RENEWAL_DEADLINE_PASSED\",\"message\":\"The renewal deadline has passed\"}"),
+                        @ExampleObject(name = "Paper contract required", value = "{\"success\":false,\"code\":\"PAPER_CONTRACT_REQUIRED\",\"message\":\"At least one valid paper contract file is required before submission\"}")
                 })),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Warehouse or contract is not owned by the caller",
                 content = @Content(schema = @Schema(implementation = ApiResponse.class),
@@ -53,9 +56,14 @@ import java.util.UUID;
                         @ExampleObject(name = "Tenant not found", value = "{\"success\":false,\"code\":\"TENANT_NOT_FOUND\",\"message\":\"Active tenant account was not found for the supplied email\"}"),
                         @ExampleObject(name = "Contract not found", value = "{\"success\":false,\"code\":\"CONTRACT_NOT_FOUND\",\"message\":\"Rental contract not found\"}")
                 })),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Same tenant and warehouse have an overlapping contract",
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Contract dates, area, or renewal source conflict",
                 content = @Content(schema = @Schema(implementation = ApiResponse.class),
-                        examples = @ExampleObject(value = "{\"success\":false,\"code\":\"CONTRACT_DATE_OVERLAP\",\"message\":\"The tenant already has an overlapping contract for this warehouse\"}")))
+                        examples = {
+                                @ExampleObject(name = "Date overlap", value = "{\"success\":false,\"code\":\"CONTRACT_DATE_OVERLAP\",\"message\":\"The tenant already has an overlapping contract for this warehouse\"}"),
+                                @ExampleObject(name = "Renewal already exists", value = "{\"success\":false,\"code\":\"CONTRACT_RENEWAL_ALREADY_EXISTS\",\"message\":\"The source contract already has a renewal request in progress\"}"),
+                                @ExampleObject(name = "Pricing changed", value = "{\"success\":false,\"code\":\"CONTRACT_RENEWAL_PRICING_CHANGED\",\"message\":\"The warehouse pricing type changed and this renewal is no longer valid\"}"),
+                                @ExampleObject(name = "Area unavailable", value = "{\"success\":false,\"code\":\"WAREHOUSE_AREA_UNAVAILABLE\",\"message\":\"The requested leased area is not available for the selected dates\"}")
+                        }))
 })
 public class OwnerContractController {
 
