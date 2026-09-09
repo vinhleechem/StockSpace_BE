@@ -15,6 +15,7 @@ import java.util.Optional;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
+import java.time.LocalDateTime;
 
 @Repository
 public interface StockTransferRepository extends JpaRepository<StockTransfer, UUID> {
@@ -25,10 +26,13 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, UU
               and t.isActive = true
               and t.isDeleted = false
               and (:sourceWarehouseId is null or t.sourceWarehouse.id = :sourceWarehouseId)
-              and (:destinationWarehouseId is null or t.destinationWarehouse.id = :destinationWarehouseId)
+              and (:destinationWarehouseId is null or coalesce(t.activeDestinationWarehouse.id, t.destinationWarehouse.id) = :destinationWarehouseId)
               and (:status is null or t.status = :status)
               and (
                     :staffId is null
+                    or (
+                        t.sourceStaff.id = :staffId
+                    )
                     or (
                         exists (
                             select sourceAssignment.id from StaffWarehouseAssignment sourceAssignment
@@ -43,7 +47,7 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, UU
                             select destinationAssignment.id from StaffWarehouseAssignment destinationAssignment
                             where destinationAssignment.staff.id = :staffId
                               and destinationAssignment.tenant.id = :tenantId
-                              and destinationAssignment.warehouse.id = t.destinationWarehouse.id
+                              and destinationAssignment.warehouse.id = coalesce(t.activeDestinationWarehouse.id, t.destinationWarehouse.id)
                               and destinationAssignment.status = fu.stockspace.stockspace_be.staff.entity.AssignmentStatus.ACTIVE
                               and destinationAssignment.isActive = true
                               and destinationAssignment.isDeleted = false
@@ -64,7 +68,7 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, UU
             select t from StockTransfer t
             where t.tenant.id = :tenantId
               and t.sourceWarehouse.id in :warehouseIds
-              and t.destinationWarehouse.id in :warehouseIds
+              and coalesce(t.activeDestinationWarehouse.id, t.destinationWarehouse.id) in :warehouseIds
               and t.isActive = true
               and t.isDeleted = false
             order by t.createdAt desc, t.id desc
@@ -72,6 +76,18 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, UU
     List<StockTransfer> findActiveOperationsForStaff(
             @Param("tenantId") UUID tenantId,
             @Param("warehouseIds") Collection<UUID> warehouseIds);
+
+    @Query("""
+            select t from StockTransfer t
+            where t.tenant.id = :tenantId
+              and t.sourceStaff.id = :staffId
+              and t.isActive = true
+              and t.isDeleted = false
+            order by t.createdAt desc, t.id desc
+            """)
+    List<StockTransfer> findAssignedSourceOperationsForStaff(
+            @Param("tenantId") UUID tenantId,
+            @Param("staffId") UUID staffId);
 
     @Query("""
             SELECT COUNT(t) FROM StockTransfer t
@@ -94,6 +110,17 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, UU
     Optional<StockTransfer> findByIdAndTenantIdAndIsDeletedFalse(
             @Param("transferId") UUID transferId,
             @Param("tenantId") UUID tenantId);
+
+    @Query("""
+            select t from StockTransfer t
+            where t.isActive = true and t.isDeleted = false
+              and t.expectedArrivalAt is not null
+              and t.expectedArrivalAt < :now
+              and t.status in (fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferStatus.IN_TRANSIT,
+                               fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferStatus.ARRIVED_AT_DESTINATION,
+                               fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferStatus.PARTIALLY_RECEIVED)
+            """)
+    List<StockTransfer> findOverdueTransfers(@Param("now") LocalDateTime now);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select t from StockTransfer t where t.id = :id and t.isDeleted = false")

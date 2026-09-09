@@ -1,5 +1,7 @@
 package fu.stockspace.stockspace_be.wms.transfer.dto;
 
+import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferReceiptDisposition;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -20,4 +22,5 @@ public class StockTransferDestinationAllocationResponse {
     private UUID destinationBinId;
     private String destinationBinName;
     private int quantity;
+    private StockTransferReceiptDisposition disposition;
 }

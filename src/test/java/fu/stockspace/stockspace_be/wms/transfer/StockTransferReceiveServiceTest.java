@@ -30,6 +30,7 @@ import fu.stockspace.stockspace_be.wms.receipt.repository.InventoryTransactionRe
 import fu.stockspace.stockspace_be.wms.stock.entity.StockBatch;
 import fu.stockspace.stockspace_be.wms.stock.repository.StockBatchRepository;
 import fu.stockspace.stockspace_be.wms.transfer.dto.ReceiveStockTransferRequest;
+import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferDecisionRequest;
 import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferDestinationAllocationRequest;
 import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferResponse;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransfer;
@@ -37,6 +38,9 @@ import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferDestinationA
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferItem;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferSourceAllocation;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferStatus;
+import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferReceiptDisposition;
+import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferReconcileRequest;
+import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferReconciliationResolution;
 import fu.stockspace.stockspace_be.wms.transfer.repository.StockTransferRepository;
 import fu.stockspace.stockspace_be.wms.transfer.service.StockTransferService;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
@@ -62,6 +66,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -229,6 +234,56 @@ class StockTransferReceiveServiceTest {
     }
 
     @Test
+    void receiveTransfer_allowsPartialSessionsAndCompletesOnRemainder() {
+        stubReceiveDependencies();
+
+        ReceiveStockTransferRequest first = ReceiveStockTransferRequest.builder()
+                .allowPartial(true)
+                .destinationAllocations(List.of(StockTransferDestinationAllocationRequest.builder()
+                        .itemId(itemId).destinationRackId(rackId).destinationBinId(binId).quantity(2).build()))
+                .build();
+        StockTransferResponse firstResponse = transferService.receiveTransfer(
+                tenantId, transfer.getId(), first);
+        assertEquals(StockTransferStatus.PARTIALLY_RECEIVED, firstResponse.getStatus());
+        assertEquals(2, item.getReceivedQuantity());
+
+        ReceiveStockTransferRequest second = ReceiveStockTransferRequest.builder()
+                .allowPartial(true)
+                .destinationAllocations(List.of(StockTransferDestinationAllocationRequest.builder()
+                        .itemId(itemId).destinationRackId(rackId).destinationBinId(binId).quantity(3).build()))
+                .build();
+        StockTransferResponse secondResponse = transferService.receiveTransfer(
+                tenantId, transfer.getId(), second);
+        assertEquals(StockTransferStatus.COMPLETED, secondResponse.getStatus());
+        assertEquals(5, item.getReceivedQuantity());
+        assertEquals(5, item.getDestinationAllocations().get(0).getQuantity());
+    }
+
+    @Test
+    void receiveTransfer_marksDamagedStockForReconciliation() {
+        stubReceiveDependencies();
+
+        ReceiveStockTransferRequest request = ReceiveStockTransferRequest.builder()
+                .allowPartial(true)
+                .destinationAllocations(List.of(StockTransferDestinationAllocationRequest.builder()
+                        .itemId(itemId).destinationRackId(rackId).destinationBinId(binId).quantity(5)
+                        .disposition(StockTransferReceiptDisposition.DAMAGED).build()))
+                .build();
+        StockTransferResponse response = transferService.receiveTransfer(
+                tenantId, transfer.getId(), request);
+        assertEquals(StockTransferStatus.RECONCILING, response.getStatus());
+        assertEquals(5, item.getReceivedDamagedQuantity());
+        verify(stockBatchRepository, never()).save(any(StockBatch.class));
+
+        StockTransferResponse reconciled = transferService.reconcileTransfer(
+                tenantId, transfer.getId(), StockTransferReconcileRequest.builder()
+                        .resolution(StockTransferReconciliationResolution.ACCEPT_AS_IS)
+                        .reason("Damaged stock moved to quarantine")
+                        .build());
+        assertEquals(StockTransferStatus.COMPLETED, reconciled.getStatus());
+    }
+
+    @Test
     void receiveTransfer_rejectsRetryAfterCompletionWithoutMutation() {
         transfer.setStatus(StockTransferStatus.COMPLETED);
         when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
@@ -335,6 +390,45 @@ class StockTransferReceiveServiceTest {
         verify(receiptRepository, never()).save(any());
     }
 
+    @Test
+    void rejectReceipt_keepsInventoryUntouchedAndOpensRecoveryWorkflow() {
+        when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+        when(transferRepository.findByIdForUpdate(transfer.getId())).thenReturn(Optional.of(transfer));
+        when(transferRepository.save(any(StockTransfer.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        StockTransferResponse response = transferService.rejectReceipt(
+                tenantId, transfer.getId(), StockTransferDecisionRequest.builder()
+                        .reason("Kho đích hết sức chứa")
+                        .build(), null);
+
+        assertEquals(StockTransferStatus.RECEIVE_REJECTED, response.getStatus());
+        assertEquals(StockTransferStatus.RECEIVE_REJECTED, transfer.getStatus());
+        verify(receiptRepository, never()).save(any());
+        verify(stockBatchRepository, never()).save(any());
+    }
+
+    @Test
+    void closeShortReceipt_closesPartialSessionWithoutCreatingInventoryAgain() {
+        transfer.setStatus(StockTransferStatus.PARTIALLY_RECEIVED);
+        item.setReceivedQuantity(2);
+        item.setReceivedGoodQuantity(2);
+        item.setShippedQuantity(5);
+        when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+        when(transferRepository.findByIdForUpdate(transfer.getId())).thenReturn(Optional.of(transfer));
+        when(transferRepository.save(any(StockTransfer.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        StockTransferResponse response = transferService.closeShortReceipt(
+                tenantId, transfer.getId(), StockTransferDecisionRequest.builder()
+                        .reason("Kho đích không nhận phần còn lại")
+                        .build(), null);
+
+        assertEquals(StockTransferStatus.SHORT_RECEIVED, response.getStatus());
+        assertEquals(2, item.getReceivedQuantity());
+        verify(receiptRepository, never()).save(any());
+    }
+
     private void stubReceiveDependencies() {
         stubDestinationValidationDependencies();
         when(rackRepository.findByIdForUpdate(rackId)).thenReturn(Optional.of(destinationRack));
@@ -344,9 +438,9 @@ class StockTransferReceiveServiceTest {
         when(receiptRepository.save(any(InventoryReceipt.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(receiptItemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        when(transactionRepository.save(any(InventoryTransaction.class)))
+        lenient().when(transactionRepository.save(any(InventoryTransaction.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
-        when(stockBatchRepository.save(any(StockBatch.class)))
+        lenient().when(stockBatchRepository.save(any(StockBatch.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(transferRepository.save(any(StockTransfer.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));

@@ -15,13 +15,8 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ReceiveStockTransferRequest {
-
-    /** New clients may receive several sessions; legacy clients stay atomic. */
-    @Builder.Default
-    private boolean allowPartial = false;
-
-    @NotEmpty(message = "Destination allocations must not be empty")
+public class StockTransferPickRequest {
+    @NotEmpty
     @Valid
-    private List<StockTransferDestinationAllocationRequest> destinationAllocations;
+    private List<StockTransferPickLineRequest> lines;
 }

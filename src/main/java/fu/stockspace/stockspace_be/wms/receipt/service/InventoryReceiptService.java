@@ -37,6 +37,8 @@ import fu.stockspace.stockspace_be.wms.receipt.repository.InventoryTransactionRe
 import fu.stockspace.stockspace_be.wms.stock.entity.StockBatch;
 import fu.stockspace.stockspace_be.wms.stock.repository.StockBatchRepository;
 import fu.stockspace.stockspace_be.wms.stock.service.InventoryAuditLockService;
+import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferReservationStatus;
+import fu.stockspace.stockspace_be.wms.transfer.repository.StockTransferReservationRepository;
 import fu.stockspace.stockspace_be.wms.picking.OutboundPickingInputItem;
 import fu.stockspace.stockspace_be.wms.picking.OutboundPickingSuggestionService;
 import fu.stockspace.stockspace_be.wms.picking.dto.OutboundPickLineResponse;
@@ -85,6 +87,7 @@ public class InventoryReceiptService {
     private final PhysicalLoadCalculator physicalLoadCalculator;
     private final OutboundPickingSuggestionService pickingSuggestionService;
     private final InventoryAuditLockService inventoryAuditLockService;
+    private final StockTransferReservationRepository transferReservationRepository;
 
     @Transactional
     public InventoryReceiptResponse createReceipt(UUID userId, CreateInventoryReceiptRequest request) {
@@ -623,6 +626,15 @@ public class InventoryReceiptService {
             StockBatch batch = lockedBatches.get(entry.getKey());
             if (batch == null || batch.getQuantity() < entry.getValue()) {
                 throw new ResourceConflictException(ErrorCode.OUTBOUND_PICK_LIST_STALE);
+            }
+            if (transferReservationRepository != null) {
+                UUID transferId = receipt.getReferenceId();
+                long reservedByOtherTransfers = transferReservationRepository
+                        .sumQuantityByBatchAndStatusExcludingTransfer(
+                                entry.getKey(), StockTransferReservationStatus.ACTIVE, transferId);
+                if ((long) batch.getQuantity() - reservedByOtherTransfers < entry.getValue()) {
+                    throw new ResourceConflictException(ErrorCode.OUTBOUND_PICK_LIST_STALE);
+                }
             }
         }
         return lockedBatches;

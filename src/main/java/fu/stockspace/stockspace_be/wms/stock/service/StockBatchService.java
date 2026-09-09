@@ -5,6 +5,7 @@ import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
@@ -17,6 +18,8 @@ import fu.stockspace.stockspace_be.wms.stock.dto.StockSummaryResponse;
 import fu.stockspace.stockspace_be.wms.stock.dto.WarehouseStockOverviewResponse;
 import fu.stockspace.stockspace_be.wms.stock.entity.StockBatch;
 import fu.stockspace.stockspace_be.wms.stock.repository.StockBatchRepository;
+import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferReservationStatus;
+import fu.stockspace.stockspace_be.wms.transfer.repository.StockTransferReservationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -38,6 +41,7 @@ public class StockBatchService {
     private final ProductSkuRepository productSkuRepository;
     private final TenantWarehouseAccessService accessService;
     private final InventoryAuditLockService inventoryAuditLockService;
+    private final StockTransferReservationRepository transferReservationRepository;
 
 
 
@@ -81,7 +85,11 @@ public class StockBatchService {
         Page<ProductSkuRepository.WarehouseStockOverviewProjection> page =
                 productSkuRepository.findWarehouseStockOverview(tenantId, warehouseId, pageable);
 
-        return PagedResponse.fromPage(page, row -> WarehouseStockOverviewResponse.builder()
+        return PagedResponse.fromPage(page, row -> {
+            long reserved = transferReservationRepository == null ? 0L
+                    : transferReservationRepository.sumActiveQuantityBySkuAndWarehouse(
+                    row.getSkuId(), warehouseId);
+            return WarehouseStockOverviewResponse.builder()
                 .skuId(row.getSkuId())
                 .skuCode(row.getSkuCode())
                 .skuName(row.getSkuName())
@@ -94,9 +102,12 @@ public class StockBatchService {
                 .warehouseId(warehouse.getId())
                 .warehouseName(warehouse.getName())
                 .totalQuantity(row.getTotalQuantity())
+                .reservedQuantity(reserved)
+                .availableQuantity(Math.max(0L, row.getTotalQuantity() - reserved))
                 .totalWeightKg(row.getTotalWeightKg())
                 .totalVolumeM3(row.getTotalVolumeM3())
-                .build());
+                .build();
+        });
     }
 
 
@@ -123,12 +134,26 @@ public class StockBatchService {
         StockBatchRepository.WarehouseStockSummaryProjection summary =
                 stockBatchRepository.summarizeByWarehouseIdAndTenantId(warehouseId, tenantId);
 
+        long totalQuantity = valueOrZero(summary == null ? null : summary.getTotalQuantity());
+        List<StockBatch> warehouseBatches = transferReservationRepository == null
+                ? List.of() : stockBatchRepository.findAllByWarehouseIdAndTenantId(warehouseId, tenantId);
+        if (warehouseBatches == null) {
+            warehouseBatches = List.of();
+        }
+        long reservedQuantity = transferReservationRepository == null ? 0L
+                : warehouseBatches.stream()
+                .mapToLong(batch -> transferReservationRepository.sumQuantityByBatchAndStatusExcludingTransfer(
+                        batch.getId(), StockTransferReservationStatus.ACTIVE, null))
+                .sum();
+
         return new WarehouseStockSummary(
                 warehouse.getId(),
                 warehouse.getName(),
                 valueOrZero(summary == null ? null : summary.getProductCount()),
                 valueOrZero(summary == null ? null : summary.getBatchCount()),
-                valueOrZero(summary == null ? null : summary.getTotalQuantity())
+                totalQuantity,
+                reservedQuantity,
+                Math.max(0L, totalQuantity - reservedQuantity)
         );
     }
 
@@ -154,6 +179,11 @@ public class StockBatchService {
                 ? stockBatchRepository.findBySkuIdInActiveTenantWarehouses(skuId, tenantId)
                 : stockBatchRepository.findBySkuIdInActiveAssignedTenantWarehouses(skuId, tenantId, staffId);
         int totalQuantity = batches.stream().mapToInt(StockBatch::getQuantity).sum();
+        int reservedQuantity = transferReservationRepository == null ? 0 : batches.stream()
+                .mapToInt(batch -> (int) Math.min(Integer.MAX_VALUE,
+                        transferReservationRepository.sumQuantityByBatchAndStatusExcludingTransfer(
+                                batch.getId(), StockTransferReservationStatus.ACTIVE, null)))
+                .sum();
 
         List<StockLocationDto> locations = batches.stream()
                 .map(b -> StockLocationDto.builder()
@@ -163,6 +193,14 @@ public class StockBatchService {
                         .rackName(b.getRack() != null ? b.getRack().getName() : null)
                         .binName(b.getBin() != null ? b.getBin().getName() : null)
                         .quantity(b.getQuantity())
+                        .reservedQuantity(transferReservationRepository == null ? 0
+                                : (int) Math.min(Integer.MAX_VALUE,
+                                transferReservationRepository.sumQuantityByBatchAndStatusExcludingTransfer(
+                                        b.getId(), StockTransferReservationStatus.ACTIVE, null)))
+                        .availableQuantity(Math.max(0, b.getQuantity() - (transferReservationRepository == null ? 0
+                                : (int) Math.min(Integer.MAX_VALUE,
+                                transferReservationRepository.sumQuantityByBatchAndStatusExcludingTransfer(
+                                        b.getId(), StockTransferReservationStatus.ACTIVE, null)))))
                         .build())
                 .collect(Collectors.toList());
 
@@ -173,6 +211,8 @@ public class StockBatchService {
                 .uomSymbol(uom != null ? uom.getCode() : null)
                 .uomName(uom != null ? uom.getName() : null)
                 .totalQuantity(totalQuantity)
+                .reservedQuantity(reservedQuantity)
+                .availableQuantity(Math.max(0, totalQuantity - reservedQuantity))
                 .locations(locations)
                 .build();
     }
@@ -193,8 +233,16 @@ public class StockBatchService {
             String warehouseName,
             long productCount,
             long batchCount,
-            long totalQuantity
+            long totalQuantity,
+            long reservedQuantity,
+            long availableQuantity
     ) {
+        /** Backward-compatible constructor for existing tool/test callers. */
+        public WarehouseStockSummary(UUID warehouseId, String warehouseName,
+                                     long productCount, long batchCount, long totalQuantity) {
+            this(warehouseId, warehouseName, productCount, batchCount,
+                    totalQuantity, 0L, totalQuantity);
+        }
     }
 
 
@@ -215,6 +263,15 @@ public class StockBatchService {
         if (newQty < 0) {
             throw new BadRequestException(ErrorCode.STOCK_INSUFFICIENT_QUANTITY);
         }
+        if (delta < 0 && transferReservationRepository != null) {
+            long reserved = transferReservationRepository.sumQuantityByBatchAndStatusExcludingTransfer(
+                    batch.getId(), StockTransferReservationStatus.ACTIVE, null);
+            if ((long) batch.getQuantity() - reserved < -((long) delta)) {
+                throw new ResourceConflictException(
+                        ErrorCode.STOCK_TRANSFER_RESERVATION_CONFLICT,
+                        "Không thể giảm tồn kho đã được reservation cho transfer khác");
+            }
+        }
         batch.setQuantity(newQty);
         stockBatchRepository.save(batch);
         log.info("WMS Stock: Adjusted batch {} quantity by {} → new qty={}", batchId, delta, newQty);
@@ -226,6 +283,10 @@ public class StockBatchService {
     public StockBatchResponse mapToResponse(StockBatch b) {
         ProductSku sku = productSkuRepository.findByIdAndIsDeletedFalse(b.getSkuId()).orElse(null);
         UnitOfMeasure uom = sku != null ? sku.getUom() : null;
+        int reservedQuantity = transferReservationRepository == null || b.getId() == null ? 0
+                : (int) Math.min(Integer.MAX_VALUE,
+                transferReservationRepository.sumQuantityByBatchAndStatusExcludingTransfer(
+                        b.getId(), StockTransferReservationStatus.ACTIVE, null));
 
         return StockBatchResponse.builder()
                 .id(b.getId())
@@ -241,6 +302,8 @@ public class StockBatchService {
                 .binId(b.getBin() != null ? b.getBin().getId() : null)
                 .binName(b.getBin() != null ? b.getBin().getName() : null)
                 .quantity(b.getQuantity())
+                .reservedQuantity(reservedQuantity)
+                .availableQuantity(Math.max(0, b.getQuantity() - reservedQuantity))
                 .arrivalDate(b.getArrivalDate())
                 .createdAt(b.getCreatedAt())
                 .updatedAt(b.getUpdatedAt())

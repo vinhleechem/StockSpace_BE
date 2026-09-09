@@ -55,6 +55,34 @@ public class StockTransferItem extends BaseEntity {
     @Column(name = "requested_quantity", nullable = false)
     private int requestedQuantity;
 
+    @Column(name = "reserved_quantity", nullable = false)
+    @Builder.Default
+    private int reservedQuantity = 0;
+
+    @Column(name = "picked_quantity", nullable = false)
+    @Builder.Default
+    private int pickedQuantity = 0;
+
+    @Column(name = "shipped_quantity", nullable = false)
+    @Builder.Default
+    private int shippedQuantity = 0;
+
+    @Column(name = "received_quantity", nullable = false)
+    @Builder.Default
+    private int receivedQuantity = 0;
+
+    @Column(name = "received_good_quantity", nullable = false)
+    @Builder.Default
+    private int receivedGoodQuantity = 0;
+
+    @Column(name = "received_damaged_quantity", nullable = false)
+    @Builder.Default
+    private int receivedDamagedQuantity = 0;
+
+    @Column(name = "returned_quantity", nullable = false)
+    @Builder.Default
+    private int returnedQuantity = 0;
+
     @OneToMany(mappedBy = "item", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<StockTransferSourceAllocation> sourceAllocations = new ArrayList<>();

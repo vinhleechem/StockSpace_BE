@@ -193,6 +193,36 @@ class StockTransferServiceTest {
     }
 
     @Test
+    void createTransfer_assignsSourceStaffForPicking() {
+        stubCreateAccess();
+        UUID sourceStaffId = UUID.randomUUID();
+        User sourceStaff = User.builder()
+                .id(sourceStaffId)
+                .fullName("Source Picker")
+                .roles(Set.of(Role.builder().name(RoleType.ROLE_STAFF.name()).build()))
+                .build();
+        when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+        when(userRepository.findById(sourceStaffId)).thenReturn(Optional.of(sourceStaff));
+        when(tenantMemberRepository.existsByUserIdAndTenantIdAndIsActiveTrueAndIsDeletedFalse(
+                sourceStaffId, tenantId)).thenReturn(true);
+        when(assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
+                sourceStaffId, tenantId, sourceWarehouseId, AssignmentStatus.ACTIVE)).thenReturn(true);
+        when(warehouseRepository.findById(sourceWarehouseId)).thenReturn(Optional.of(sourceWarehouse));
+        when(warehouseRepository.findById(destinationWarehouseId)).thenReturn(Optional.of(destinationWarehouse));
+        when(productSkuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(sku));
+        when(stockBatchRepository.findByIdAndIsDeletedFalse(batchId)).thenReturn(Optional.of(sourceBatch));
+        when(transferRepository.save(any(StockTransfer.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        StockTransferResponse response = transferService.createTransfer(tenantId,
+                request(10, 10, sourceStaffId));
+
+        assertEquals(sourceStaffId, response.getSourceStaff().getId());
+        verify(assignmentRepository).existsActiveByStaffAndTenantAndWarehouse(
+                sourceStaffId, tenantId, sourceWarehouseId, AssignmentStatus.ACTIVE);
+    }
+
+    @Test
     void createTransfer_rejectsAllocationTotalThatDoesNotMatchItemQuantity() {
         stubCreateAccess();
         when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
@@ -321,9 +351,15 @@ class StockTransferServiceTest {
     }
 
     private CreateStockTransferRequest request(int requestedQuantity, int sourceQuantity) {
+        return request(requestedQuantity, sourceQuantity, null);
+    }
+
+    private CreateStockTransferRequest request(int requestedQuantity, int sourceQuantity,
+                                               UUID sourceStaffId) {
         return CreateStockTransferRequest.builder()
                 .sourceWarehouseId(sourceWarehouseId)
                 .destinationWarehouseId(destinationWarehouseId)
+                .sourceStaffId(sourceStaffId)
                 .items(List.of(StockTransferItemRequest.builder()
                         .skuId(skuId)
                         .requestedQuantity(requestedQuantity)

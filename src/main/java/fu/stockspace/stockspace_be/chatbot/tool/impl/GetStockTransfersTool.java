@@ -50,7 +50,9 @@ public class GetStockTransfersTool implements ChatTool {
                                 "description", "UUID kho cần lọc chuyển hàng. Bỏ trống để dùng kho đang mở trên giao diện."),
                         "transferId", Map.of("type", "string", "description", "Mã yêu cầu nếu cần xem chi tiết"),
                         "status", Map.of("type", "string",
-                                "enum", List.of("PENDING", "IN_TRANSIT", "COMPLETED", "REJECTED", "CANCELLED"),
+                                "enum", List.of("DRAFT", "PENDING", "ALLOCATED", "PICKING", "READY_TO_DISPATCH",
+                                        "IN_TRANSIT", "PARTIALLY_RECEIVED", "RECONCILING", "COMPLETED",
+                                        "REJECTED", "CANCELLED"),
                                 "description", "Trạng thái cần lọc"),
                         "page", Map.of("type", "integer", "minimum", 0),
                         "pageSize", Map.of("type", "integer", "minimum", 1, "maximum", 30)
@@ -139,17 +141,26 @@ public class GetStockTransfersTool implements ChatTool {
         List<StockTransferItemResponse> items = transfer.getItems() == null ? List.of() : transfer.getItems();
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("id", transfer.getId());
+        result.put("transferNo", transfer.getTransferNo());
         result.put("status", ChatToolLocalization.transferStatus(transfer.getStatus()));
         result.put("sourceWarehouse", transfer.getSourceWarehouse() == null ? null
                 : transfer.getSourceWarehouse().getName());
         result.put("destinationWarehouse", transfer.getDestinationWarehouse() == null ? null
                 : transfer.getDestinationWarehouse().getName());
+        result.put("currentDestinationWarehouse", transfer.getCurrentDestinationWarehouse() == null ? null
+                : transfer.getCurrentDestinationWarehouse().getName());
+        result.put("sourceStaff", transfer.getSourceStaff() == null ? null
+                : transfer.getSourceStaff().getFullName());
         result.put("note", transfer.getNote());
         result.put("decisionReason", transfer.getDecisionReason());
         result.put("productCount", items.size());
         result.put("totalQuantity", items.stream().mapToInt(StockTransferItemResponse::getRequestedQuantity).sum());
+        result.put("shippedQuantity", items.stream().mapToInt(StockTransferItemResponse::getShippedQuantity).sum());
+        result.put("receivedQuantity", items.stream().mapToInt(StockTransferItemResponse::getReceivedQuantity).sum());
         result.put("createdAt", transfer.getCreatedAt());
         result.put("updatedAt", transfer.getUpdatedAt());
+        result.put("expectedArrivalAt", transfer.getExpectedArrivalAt());
+        result.put("overdueAt", transfer.getOverdueAt());
         return result;
     }
 
@@ -159,6 +170,7 @@ public class GetStockTransfersTool implements ChatTool {
         result.put("receivedAt", transfer.getReceivedAt());
         result.put("rejectedAt", transfer.getRejectedAt());
         result.put("cancelledAt", transfer.getCancelledAt());
+        result.put("attempts", transfer.getAttempts() == null ? List.of() : transfer.getAttempts());
         result.put("items", transfer.getItems() == null ? List.of()
                 : transfer.getItems().stream().map(this::toItem).toList());
         return result;
@@ -169,6 +181,13 @@ public class GetStockTransfersTool implements ChatTool {
         result.put("skuCode", item.getSkuCode());
         result.put("skuName", item.getSkuName());
         result.put("requestedQuantity", item.getRequestedQuantity());
+        result.put("reservedQuantity", item.getReservedQuantity());
+        result.put("pickedQuantity", item.getPickedQuantity());
+        result.put("shippedQuantity", item.getShippedQuantity());
+        result.put("receivedQuantity", item.getReceivedQuantity());
+        result.put("receivedGoodQuantity", item.getReceivedGoodQuantity());
+        result.put("receivedDamagedQuantity", item.getReceivedDamagedQuantity());
+        result.put("returnedQuantity", item.getReturnedQuantity());
         result.put("sourceAllocations", item.getSourceAllocations() == null ? List.of()
                 : item.getSourceAllocations().stream().map(allocation -> {
                     Map<String, Object> location = new LinkedHashMap<>();
@@ -183,6 +202,7 @@ public class GetStockTransfersTool implements ChatTool {
                     location.put("rack", allocation.getDestinationRackName());
                     location.put("bin", allocation.getDestinationBinName());
                     location.put("quantity", allocation.getQuantity());
+                    location.put("disposition", allocation.getDisposition());
                     return location;
                 }).toList());
         return result;

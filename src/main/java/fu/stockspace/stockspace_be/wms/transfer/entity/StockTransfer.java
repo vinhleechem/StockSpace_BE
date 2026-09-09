@@ -17,7 +17,9 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -48,6 +50,15 @@ public class StockTransfer extends BaseEntity {
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
+    /** Human-readable document number, stable across retries and integrations. */
+    @Column(name = "transfer_no", nullable = false, updatable = false, length = 40)
+    private String transferNo;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    @Builder.Default
+    private long version = 0L;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tenant_id", nullable = false)
     private User tenant;
@@ -60,8 +71,18 @@ public class StockTransfer extends BaseEntity {
     @JoinColumn(name = "destination_warehouse_id", nullable = false)
     private Warehouse destinationWarehouse;
 
+    /** Destination of the currently active physical leg; preserves the original route above. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "active_destination_warehouse_id")
+    private Warehouse activeDestinationWarehouse;
+
+    /** Staff explicitly responsible for picking at the source warehouse. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assigned_source_staff_id")
+    private User sourceStaff;
+
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 20)
+    @Column(name = "status", nullable = false, length = 30)
     @Builder.Default
     private StockTransferStatus status = StockTransferStatus.PENDING;
 
@@ -103,6 +124,12 @@ public class StockTransfer extends BaseEntity {
     @Column(name = "cancelled_at")
     private LocalDateTime cancelledAt;
 
+    @Column(name = "expected_arrival_at")
+    private LocalDateTime expectedArrivalAt;
+
+    @Column(name = "overdue_at")
+    private LocalDateTime overdueAt;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "outbound_receipt_id")
     private InventoryReceipt outboundReceipt;
@@ -114,4 +141,12 @@ public class StockTransfer extends BaseEntity {
     @OneToMany(mappedBy = "transfer", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<StockTransferItem> items = new ArrayList<>();
+
+    @PrePersist
+    private void ensureTransferNumber() {
+        if (transferNo == null || transferNo.isBlank()) {
+            transferNo = "TRF-" + UUID.randomUUID().toString().replace("-", "")
+                    .substring(0, 20).toUpperCase();
+        }
+    }
 }

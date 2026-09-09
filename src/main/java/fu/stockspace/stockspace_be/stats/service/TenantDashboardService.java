@@ -64,7 +64,11 @@ public class TenantDashboardService {
                                 AuditStatus.IN_PROGRESS, AuditStatus.SUBMITTED,
                                 AuditStatus.RECOUNT_REQUIRED), today))
                 .pendingTransferCount(transferRepository.countPendingForTenant(
-                        tenantId, EnumSet.of(StockTransferStatus.PENDING, StockTransferStatus.IN_TRANSIT)))
+                        tenantId, EnumSet.of(StockTransferStatus.PENDING, StockTransferStatus.IN_TRANSIT,
+                                StockTransferStatus.OVERDUE, StockTransferStatus.RECEIVE_REJECTED,
+                                StockTransferStatus.SHORT_RECEIVED, StockTransferStatus.RECONCILING,
+                                StockTransferStatus.RETRY_REQUESTED, StockTransferStatus.RETURN_REQUESTED,
+                                StockTransferStatus.RETURN_IN_TRANSIT)))
                 .activeStaffCount(tenantMemberRepository.countByTenantIdAndIsActiveTrueAndIsDeletedFalse(tenantId))
                 .unreadNotificationCount(notificationRepository.countByUserIdAndIsReadFalse(tenantId))
                 .activeSubscription(toSubscriptionSummary(subscription))

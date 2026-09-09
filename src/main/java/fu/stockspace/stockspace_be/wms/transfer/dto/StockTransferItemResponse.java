@@ -20,6 +20,13 @@ public class StockTransferItemResponse {
     private String skuCode;
     private String skuName;
     private int requestedQuantity;
+    private int reservedQuantity;
+    private int pickedQuantity;
+    private int shippedQuantity;
+    private int receivedQuantity;
+    private int receivedGoodQuantity;
+    private int receivedDamagedQuantity;
+    private int returnedQuantity;
     private List<StockTransferSourceAllocationResponse> sourceAllocations;
     private List<StockTransferDestinationAllocationResponse> destinationAllocations;
 }

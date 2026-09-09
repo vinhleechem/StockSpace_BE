@@ -122,6 +122,7 @@ public enum ErrorCode {
     STOCK_TRANSFER_INVALID_STATUS("Trạng thái yêu cầu chuyển kho không cho phép thao tác này", HttpStatus.CONFLICT),
     STOCK_TRANSFER_SOURCE_DESTINATION_SAME("Kho nguồn và kho đích phải khác nhau", HttpStatus.BAD_REQUEST),
     STOCK_TRANSFER_INVALID_ALLOCATION("Phân bổ hàng hóa chuyển kho không hợp lệ", HttpStatus.BAD_REQUEST),
+    STOCK_TRANSFER_RESERVATION_CONFLICT("Tồn khả dụng đã được transfer khác giữ", HttpStatus.CONFLICT),
     STOCK_TRANSFER_DECISION_REASON_REQUIRED("Lý do từ chối hoặc hủy yêu cầu chuyển kho là bắt buộc", HttpStatus.BAD_REQUEST),
     CONFIG_NOT_FOUND("Cấu hình hệ thống không tồn tại", HttpStatus.NOT_FOUND),
     CONFIG_INVALID_VALUE("Giá trị cấu hình không hợp lệ", HttpStatus.BAD_REQUEST),

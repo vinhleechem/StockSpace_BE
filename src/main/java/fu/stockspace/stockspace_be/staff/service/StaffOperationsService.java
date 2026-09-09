@@ -28,6 +28,7 @@ import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -44,6 +45,7 @@ public class StaffOperationsService {
     private static final String TRANSFER = "TRANSFER";
     private static final String VIEW = "VIEW";
     private static final String SUBMIT = "SUBMIT";
+    private static final String PICK = "PICK";
 
     private final TenantMemberRepository tenantMemberRepository;
     private final TenantWarehouseAccessService accessService;
@@ -97,11 +99,24 @@ public class StaffOperationsService {
                     .forEach(operations::add);
         }
         if (normalizedType == null || TRANSFER.equals(normalizedType)) {
-            List<StockTransfer> transfers = transferRepository.findActiveOperationsForStaff(
-                    resolvedTenantId, warehouseIds);
+            List<StockTransfer> transfers = new ArrayList<>(transferRepository.findActiveOperationsForStaff(
+                    resolvedTenantId, warehouseIds));
+            List<StockTransfer> assignedTransfers = transferRepository
+                    .findAssignedSourceOperationsForStaff(resolvedTenantId, staffId);
+            if (assignedTransfers != null && !assignedTransfers.isEmpty()) {
+                if (warehouseId != null) {
+                    assignedTransfers = assignedTransfers.stream()
+                            .filter(transfer -> warehouseId.equals(transfer.getSourceWarehouse().getId()))
+                            .toList();
+                }
+                Map<UUID, StockTransfer> uniqueTransfers = new java.util.LinkedHashMap<>();
+                transfers.forEach(transfer -> uniqueTransfers.put(transfer.getId(), transfer));
+                assignedTransfers.forEach(transfer -> uniqueTransfers.putIfAbsent(transfer.getId(), transfer));
+                transfers = new ArrayList<>(uniqueTransfers.values());
+            }
             transfers.stream()
                     .filter(transfer -> matchesTransferStatus(transfer, normalizedStatus))
-                    .map(this::toTransferOperation)
+                    .map(transfer -> toTransferOperation(transfer, staffId))
                     .forEach(operations::add);
         }
 
@@ -151,8 +166,16 @@ public class StaffOperationsService {
     private boolean matchesTransferStatus(StockTransfer transfer, String status) {
         String current = transfer.getStatus().name();
         return status == null
-                ? EnumSet.of(StockTransferStatus.PENDING, StockTransferStatus.IN_TRANSIT)
-                        .contains(transfer.getStatus())
+                ? EnumSet.of(StockTransferStatus.PENDING, StockTransferStatus.ALLOCATED,
+                        StockTransferStatus.PICKING, StockTransferStatus.READY_TO_DISPATCH,
+                        StockTransferStatus.IN_TRANSIT, StockTransferStatus.OVERDUE,
+                        StockTransferStatus.PARTIALLY_RECEIVED,
+                        StockTransferStatus.ARRIVED_AT_DESTINATION, StockTransferStatus.RECEIVING,
+                        StockTransferStatus.SHORT_RECEIVED, StockTransferStatus.RECEIVE_REJECTED,
+                        StockTransferStatus.RECONCILING, StockTransferStatus.RETRY_REQUESTED,
+                        StockTransferStatus.RETURN_REQUESTED, StockTransferStatus.RETURN_IN_TRANSIT,
+                        StockTransferStatus.PARTIALLY_RETURNED)
+                .contains(transfer.getStatus())
                 : current.equals(status);
     }
 
@@ -187,9 +210,10 @@ public class StaffOperationsService {
                 .build();
     }
 
-    private StaffOperationResponse toTransferOperation(StockTransfer transfer) {
+    private StaffOperationResponse toTransferOperation(StockTransfer transfer, UUID staffId) {
         Warehouse source = transfer.getSourceWarehouse();
-        Warehouse destination = transfer.getDestinationWarehouse();
+        Warehouse destination = transfer.getActiveDestinationWarehouse() == null
+                ? transfer.getDestinationWarehouse() : transfer.getActiveDestinationWarehouse();
         return StaffOperationResponse.builder()
                 .operationType(TRANSFER)
                 .operationId(transfer.getId())
@@ -201,7 +225,11 @@ public class StaffOperationsService {
                 .destinationWarehouseName(destination.getName())
                 .status(transfer.getStatus().name())
                 .createdAt(transfer.getCreatedAt())
-                .allowedActions(List.of(VIEW))
+                .allowedActions(transfer.getSourceStaff() != null
+                        && staffId.equals(transfer.getSourceStaff().getId())
+                        && (transfer.getStatus() == StockTransferStatus.ALLOCATED
+                        || transfer.getStatus() == StockTransferStatus.PICKING)
+                        ? List.of(VIEW, PICK) : List.of(VIEW))
                 .build();
     }
 
