@@ -30,6 +30,7 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
     @Query("""
             SELECT c FROM RentalContract c
             WHERE c.tenant.id = :tenantId
+              AND c.status <> fu.stockspace.stockspace_be.contract.entity.ContractStatus.DRAFT
               AND c.isDeleted = false
             ORDER BY c.createdAt DESC
             """)

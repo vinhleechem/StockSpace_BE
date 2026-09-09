@@ -95,6 +95,9 @@ public class ContractService {
         if (!userId.equals(tenantId) && !userId.equals(ownerId)) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
+        if (contract.getStatus() == ContractStatus.DRAFT && userId.equals(tenantId)) {
+            throw new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND);
+        }
         return mapToResponse(contract, userId);
     }
 
@@ -617,8 +620,20 @@ public class ContractService {
         RentalContract contract = findDirectContractForTenantReview(tenantId, contractId);
         requirePendingTenantConfirmation(contract);
 
+        if (contract.getRenewedFromContract() != null) {
+            return confirmRenewalContract(tenantId, contract);
+        }
+
         Warehouse lockedWarehouse = warehouseService.lockWarehouseForContractSubmit(
                 contract.getWarehouse().getId());
+        contract = contractRepository.findByIdForUpdate(contractId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
+        if (contract.getTenant() == null || !tenantId.equals(contract.getTenant().getId())
+                || contract.getWarehouse() == null
+                || !lockedWarehouse.getId().equals(contract.getWarehouse().getId())) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        }
+        requirePendingTenantConfirmation(contract);
         validateContractDates(contract.getStartDate(), contract.getEndDate());
         if (contractRepository.existsDirectDateOverlapForSubmit(
                 contract.getId(), tenantId, lockedWarehouse.getId(),
@@ -640,7 +655,7 @@ public class ContractService {
         }
 
         contract.setConfirmedAt(LocalDateTime.now());
-        contract.setStatus(ContractStatus.ACTIVE);
+        contract.setStatus(startsInFuture(contract) ? ContractStatus.SCHEDULED : ContractStatus.ACTIVE);
         contract = contractRepository.save(contract);
 
         notifyOwnerOfTenantDecision(
@@ -650,6 +665,143 @@ public class ContractService {
                         + lockedWarehouse.getName() + ".",
                 "CONTRACT_CONFIRMED");
         return mapToResponse(contract, tenantId, availability);
+    }
+
+    private RentalContractResponse confirmRenewalContract(UUID tenantId,
+                                                           RentalContract candidate) {
+        UUID sourceContractId = candidate.getRenewedFromContract().getId();
+        Warehouse lockedWarehouse = warehouseService.lockWarehouseForContractSubmit(
+                candidate.getWarehouse().getId());
+        RentalContract source = contractRepository.findByIdForUpdate(sourceContractId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
+        RentalContract renewal = contractRepository.findByIdForUpdate(candidate.getId())
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
+        renewal.setRenewedFromContract(source);
+
+        if (renewal.getTenant() == null || !tenantId.equals(renewal.getTenant().getId())
+                || renewal.getWarehouse() == null
+                || !lockedWarehouse.getId().equals(renewal.getWarehouse().getId())) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        }
+        if (renewal.getStatus() != ContractStatus.PENDING_TENANT_CONFIRM) {
+            throw new BadRequestException(ErrorCode.INVALID_CONTRACT_STATUS,
+                    "Only a submitted renewal contract can be confirmed");
+        }
+        requireRenewalMutationDeadline(renewal);
+        if (source.getRenewedFromContract() != null
+                || source.getStatus() != ContractStatus.ACTIVE
+                || !source.isActive() || source.isDeleted()
+                || source.getEndDate() == null
+                || !source.getEndDate().plusDays(1).equals(renewal.getStartDate())) {
+            throw new BadRequestException(ErrorCode.CONTRACT_RENEWAL_NOT_ALLOWED,
+                    "The renewal successor no longer matches the source contract lifecycle");
+        }
+        if (renewal.getPricingType() != source.getPricingType()
+                || renewal.getPricingType() != currentPricingType(lockedWarehouse)) {
+            throw new ResourceConflictException(ErrorCode.CONTRACT_RENEWAL_PRICING_CHANGED);
+        }
+        if (contractRepository.findBlockingRenewalsBySourceId(source.getId()).stream()
+                .anyMatch(other -> !candidate.getId().equals(other.getId()))) {
+            throw new ResourceConflictException(ErrorCode.CONTRACT_RENEWAL_ALREADY_EXISTS);
+        }
+
+        WarehouseLayoutResponse defaultLayout = warehouseLayoutService
+                .getDefaultLayoutForContract(lockedWarehouse.getId());
+        RentalAreaAllocationPolicy.LeasedDimensions dimensions;
+        try {
+            dimensions = RentalAreaAllocationPolicy.validatePreservedDimensions(
+                    source.getPricingType(),
+                    source.getLeasedWidth(),
+                    source.getLeasedLength(),
+                    source.getLeasedHeight(),
+                    defaultLayout);
+        } catch (BadRequestException exception) {
+            throw new BadRequestException(ErrorCode.CONTRACT_RENEWAL_NOT_ALLOWED,
+                    "The source contract dimensions are no longer valid for the warehouse");
+        }
+        if (source.getLeasedAreaM2() == null
+                || source.getLeasedAreaM2().compareTo(dimensions.areaM2()) != 0
+                || renewal.getLeasedAreaM2() == null
+                || renewal.getLeasedAreaM2().compareTo(source.getLeasedAreaM2()) != 0
+                || !sameDimensions(
+                renewal.getLeasedWidth(), renewal.getLeasedLength(), renewal.getLeasedHeight(),
+                source.getLeasedWidth(), source.getLeasedLength(), source.getLeasedHeight())) {
+            throw new BadRequestException(ErrorCode.CONTRACT_RENEWAL_NOT_ALLOWED,
+                    "Renewal scope must remain identical to the source contract");
+        }
+        validateContractDates(renewal.getStartDate(), renewal.getEndDate());
+        if (contractRepository.existsDirectDateOverlapForSubmit(
+                renewal.getId(), tenantId, lockedWarehouse.getId(),
+                renewal.getStartDate(), renewal.getEndDate())) {
+            throw new ResourceConflictException(ErrorCode.CONTRACT_DATE_OVERLAP,
+                    "The tenant already has an overlapping contract for this warehouse");
+        }
+        RentalAreaAvailability availability = warehouseRentalAvailabilityService.calculate(
+                lockedWarehouse.getId(), renewal.getId(), renewal.getStartDate(),
+                renewal.getEndDate(), renewal.getLeasedAreaM2());
+        if (!availability.sufficient()) {
+            throw new ResourceConflictException(
+                    ErrorCode.WAREHOUSE_AREA_UNAVAILABLE,
+                    "The requested leased area is not available for the selected dates");
+        }
+
+        WarehouseLayoutResponse layout = warehouseLayoutService
+                .findActiveTenantLayoutForContract(lockedWarehouse.getId(), tenantId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.LAYOUT_NOT_FOUND));
+        warehouseLayoutService.validateContractLayout(
+                layout,
+                lockedWarehouse.getId(),
+                tenantId,
+                renewal.getLeasedWidth(),
+                renewal.getLeasedLength(),
+                renewal.getLeasedHeight());
+
+        renewal.setConfirmedAt(LocalDateTime.now());
+        boolean scheduled = startsInFuture(renewal);
+        renewal.setStatus(scheduled ? ContractStatus.SCHEDULED : ContractStatus.ACTIVE);
+        renewal = contractRepository.save(renewal);
+
+        if (scheduled) {
+            notifyRenewalScheduled(renewal, lockedWarehouse);
+        } else {
+            notifyOwnerOfTenantDecision(
+                    renewal,
+                    "Rental contract renewal confirmed",
+                    "The tenant confirmed the rental contract renewal for warehouse "
+                            + lockedWarehouse.getName() + ".",
+                    "CONTRACT_RENEWAL_ACTIVATED");
+        }
+        return mapToResponse(renewal, tenantId, availability);
+    }
+
+    private boolean startsInFuture(RentalContract contract) {
+        return contract.getStartDate().isAfter(LocalDate.now(BUSINESS_ZONE));
+    }
+
+    private void notifyRenewalScheduled(RentalContract renewal, Warehouse warehouse) {
+        String message = "The rental contract renewal for warehouse "
+                + warehouse.getName() + " is scheduled to start on "
+                + renewal.getStartDate() + ".";
+        try {
+            notificationService.push(
+                    renewal.getOwner().getId(),
+                    "Rental contract renewal scheduled",
+                    message,
+                    "CONTRACT_RENEWAL_SCHEDULED");
+        } catch (Exception exception) {
+            log.warn("Failed to notify owner about scheduled renewal {}: {}",
+                    renewal.getId(), exception.getMessage());
+        }
+        try {
+            notificationService.push(
+                    renewal.getTenant().getId(),
+                    "Rental contract renewal scheduled",
+                    message,
+                    "CONTRACT_RENEWAL_SCHEDULED");
+        } catch (Exception exception) {
+            log.warn("Failed to notify tenant about scheduled renewal {}: {}",
+                    renewal.getId(), exception.getMessage());
+        }
     }
 
     /**
@@ -664,6 +816,9 @@ public class ContractService {
             TenantContractDecisionRequest request) {
         RentalContract contract = findDirectContractForTenantReview(tenantId, contractId);
         requirePendingTenantConfirmation(contract);
+        if (contract.getRenewedFromContract() != null) {
+            requireRenewalMutationDeadline(contract);
+        }
         String reason = normalizeRequiredDecisionReason(request);
 
         contract.setChangeRequestReason(reason);
@@ -693,6 +848,9 @@ public class ContractService {
             TenantContractDecisionRequest request) {
         RentalContract contract = findDirectContractForTenantReview(tenantId, contractId);
         requirePendingTenantConfirmation(contract);
+        if (contract.getRenewedFromContract() != null) {
+            requireRenewalMutationDeadline(contract);
+        }
         String reason = normalizeRequiredDecisionReason(request);
 
         contract.setRejectionReason(reason);
@@ -701,7 +859,8 @@ public class ContractService {
         contract.setStatus(ContractStatus.REJECTED);
         contract = contractRepository.save(contract);
 
-        if (!contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(
+        if (contract.getRenewedFromContract() == null
+                && !contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(
                 tenantId, contract.getWarehouse().getId())) {
             warehouseLayoutService.archiveTenantLayout(
                     contract.getWarehouse().getId(), tenantId);
@@ -912,6 +1071,7 @@ public class ContractService {
     private boolean isTenantLayoutReadable(ContractStatus status) {
         return status == ContractStatus.PENDING_TENANT_CONFIRM
                 || status == ContractStatus.CHANGES_REQUESTED
+                || status == ContractStatus.SCHEDULED
                 || status == ContractStatus.ACTIVE
                 || status == ContractStatus.REJECTED
                 || status == ContractStatus.EXPIRED;
