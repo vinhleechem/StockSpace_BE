@@ -49,6 +49,7 @@ class TenantContractReviewServiceTest {
     @Mock private fu.stockspace.stockspace_be.auth.repository.UserRepository userRepository;
     @Mock private WalletService walletService;
     @Mock private WarehouseLayoutService warehouseLayoutService;
+    @Mock private WarehouseRentalAvailabilityService warehouseRentalAvailabilityService;
     @Mock private NotificationService notificationService;
     @Mock private SubscriptionService subscriptionService;
     @Spy private ObjectMapper objectMapper = new ObjectMapper();

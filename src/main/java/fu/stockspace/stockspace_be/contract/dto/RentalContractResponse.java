@@ -61,6 +61,14 @@ public class RentalContractResponse {
     private BigDecimal leasedLength;
     private BigDecimal leasedHeight;
     private BigDecimal leasedAreaM2;
+    @Schema(description = "Default layout width multiplied by length")
+    private BigDecimal warehouseTotalAreaM2;
+    @Schema(description = "Area reserved by overlapping active or tenant-confirmation contracts")
+    private BigDecimal warehouseReservedAreaM2;
+    @Schema(description = "Warehouse total area minus overlapping reserved area")
+    private BigDecimal warehouseAvailableAreaM2;
+    @Schema(description = "Whether the requested leased area fits the calculated availability")
+    private Boolean areaAvailabilitySufficient;
     private String ownerNote;
     private String layoutSnapshot;
     private String changeRequestReason;

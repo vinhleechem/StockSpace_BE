@@ -68,6 +68,11 @@ public final class RentalAreaAllocationPolicy {
         return pricingType == RentalPricingType.FIXED_MONTHLY;
     }
 
+    public static BigDecimal calculateDefaultArea(WarehouseLayoutResponse defaultLayout) {
+        Dimensions dimensions = readDefaultDimensions(defaultLayout);
+        return dimensions.width().multiply(dimensions.length());
+    }
+
     private static Dimensions readDefaultDimensions(WarehouseLayoutResponse defaultLayout) {
         if (defaultLayout == null
                 || defaultLayout.getWidth() == null

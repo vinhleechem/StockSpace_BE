@@ -58,6 +58,7 @@ public class ContractService {
     private final NotificationService notificationService;
     private final SubscriptionService subscriptionService;
     private final ObjectMapper objectMapper;
+    private final WarehouseRentalAvailabilityService warehouseRentalAvailabilityService;
 
 
 
@@ -98,7 +99,13 @@ public class ContractService {
     public RentalContractResponse previewOwnerDraft(UUID ownerId, CreateRentalContractRequest request) {
         DraftTerms terms = resolveDraftTerms(ownerId, request);
         RentalContract draft = buildDraftContract(terms, request);
-        return mapToResponse(draft);
+        RentalAreaAvailability availability = warehouseRentalAvailabilityService.calculate(
+                terms.warehouse().getId(),
+                null,
+                terms.startDate(),
+                terms.endDate(),
+                terms.leasedAreaM2());
+        return mapToResponse(draft, null, availability);
     }
 
     @Transactional
@@ -846,10 +853,16 @@ public class ContractService {
 
 
     public RentalContractResponse mapToResponse(RentalContract c) {
-        return mapToResponse(c, null);
+        return mapToResponse(c, null, null);
     }
 
     public RentalContractResponse mapToResponse(RentalContract c, UUID viewerId) {
+        return mapToResponse(c, viewerId, null);
+    }
+
+    private RentalContractResponse mapToResponse(RentalContract c,
+                                                  UUID viewerId,
+                                                  RentalAreaAvailability availability) {
         var tenant = c.getTenant();
         var warehouse = c.getWarehouse();
         var owner = c.getOwner();
@@ -887,6 +900,10 @@ public class ContractService {
                 .leasedLength(c.getLeasedLength())
                 .leasedHeight(c.getLeasedHeight())
                 .leasedAreaM2(c.getLeasedAreaM2())
+                .warehouseTotalAreaM2(availability != null ? availability.totalAreaM2() : null)
+                .warehouseReservedAreaM2(availability != null ? availability.reservedAreaM2() : null)
+                .warehouseAvailableAreaM2(availability != null ? availability.availableAreaM2() : null)
+                .areaAvailabilitySufficient(availability != null ? availability.sufficient() : null)
                 .ownerNote(c.getOwnerNote())
                 .layoutSnapshot(c.getLayoutSnapshot())
                 .changeRequestReason(c.getChangeRequestReason())
