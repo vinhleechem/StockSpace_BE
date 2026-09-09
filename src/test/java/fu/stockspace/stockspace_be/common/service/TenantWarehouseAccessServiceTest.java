@@ -15,7 +15,10 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -36,6 +39,9 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class TenantWarehouseAccessServiceTest {
 
+    private static final Instant FIXED_INSTANT = Instant.parse("2026-09-09T17:00:00Z");
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+
     @Mock
     private RentalContractRepository contractRepository;
 
@@ -45,11 +51,20 @@ class TenantWarehouseAccessServiceTest {
     @Mock
     private StaffWarehouseAssignmentRepository assignmentRepository;
 
+    @Mock
+    private Clock businessClock;
+
     @InjectMocks
     private TenantWarehouseAccessService accessService;
 
     private final UUID tenantId = UUID.randomUUID();
     private final UUID warehouseId = UUID.randomUUID();
+
+    @org.junit.jupiter.api.BeforeEach
+    void setUp() {
+        org.mockito.Mockito.lenient().when(businessClock.instant()).thenReturn(FIXED_INSTANT);
+        org.mockito.Mockito.lenient().when(businessClock.getZone()).thenReturn(BUSINESS_ZONE);
+    }
 
     @Test
     void activeContractAllowsObservationWithoutSubscription() {

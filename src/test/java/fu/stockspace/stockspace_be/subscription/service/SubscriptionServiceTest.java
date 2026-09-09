@@ -24,7 +24,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -34,6 +37,10 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class SubscriptionServiceTest {
+
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+    private static final Instant FIXED_INSTANT = Instant.parse("2026-09-09T17:00:00Z");
+    private static final LocalDate TODAY = LocalDate.of(2026, 9, 10);
 
     @Mock
     private SubscriptionRepository subscriptionRepository;
@@ -53,6 +60,9 @@ class SubscriptionServiceTest {
     @Mock
     private TenantStaffService tenantStaffService;
 
+    @Mock
+    private Clock businessClock;
+
     @InjectMocks
     private SubscriptionService subscriptionService;
 
@@ -65,6 +75,9 @@ class SubscriptionServiceTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(businessClock.instant()).thenReturn(FIXED_INSTANT);
+        lenient().when(businessClock.getZone()).thenReturn(BUSINESS_ZONE);
+
         tenantId = UUID.randomUUID();
         packageBasicId = UUID.randomUUID();
         packageProId = UUID.randomUUID();
@@ -146,8 +159,8 @@ class SubscriptionServiceTest {
                 .id(UUID.randomUUID())
                 .tenant(tenantUser)
                 .servicePackage(packageBasic)
-                .startDate(LocalDate.now().minusDays(10))
-                .endDate(LocalDate.now().plusDays(20))
+                .startDate(TODAY.minusDays(10))
+                .endDate(TODAY.plusDays(20))
                 .status(SubscriptionStatus.ACTIVE)
                 .snapshotMaxStaff(3)
                 .snapshotPrice(packageBasic.getPrice())
@@ -168,7 +181,7 @@ class SubscriptionServiceTest {
         SubscriptionResponse response = subscriptionService.purchasePackage(tenantId, request);
 
         assertNotNull(response);
-        assertEquals(LocalDate.now().plusDays(50), activeSub.getEndDate());
+        assertEquals(TODAY.plusDays(50), activeSub.getEndDate());
         verify(walletService, times(1)).deductBalance(eq(tenantId), eq(packageBasic.getPrice()), any(), any(), any(), any());
     }
 
@@ -181,8 +194,8 @@ class SubscriptionServiceTest {
                 .id(UUID.randomUUID())
                 .tenant(tenantUser)
                 .servicePackage(packageBasic)
-                .startDate(LocalDate.now().minusDays(5))
-                .endDate(LocalDate.now().plusDays(25))
+                .startDate(TODAY.minusDays(5))
+                .endDate(TODAY.plusDays(25))
                 .status(SubscriptionStatus.ACTIVE)
                 .snapshotMaxStaff(3)
                 .snapshotPrice(packageBasic.getPrice())
@@ -209,7 +222,7 @@ class SubscriptionServiceTest {
 
         assertNotNull(response);
         assertEquals(SubscriptionStatus.SUPERSEDED, activeSub.getStatus());
-        assertEquals(LocalDate.now(), activeSub.getEndDate());
+        assertEquals(TODAY, activeSub.getEndDate());
         verify(tenantStaffService, times(1)).deactivateExcessStaffs(tenantId, 10);
     }
 
@@ -222,8 +235,8 @@ class SubscriptionServiceTest {
                 .id(UUID.randomUUID())
                 .tenant(tenantUser)
                 .servicePackage(packagePro)
-                .startDate(LocalDate.now().minusDays(5))
-                .endDate(LocalDate.now().plusDays(25))
+                .startDate(TODAY.minusDays(5))
+                .endDate(TODAY.plusDays(25))
                 .status(SubscriptionStatus.ACTIVE)
                 .snapshotMaxStaff(10)
                 .snapshotPrice(packagePro.getPrice())
@@ -254,8 +267,8 @@ class SubscriptionServiceTest {
                 .id(UUID.randomUUID())
                 .tenant(tenantUser)
                 .servicePackage(packagePro)
-                .startDate(LocalDate.now().minusDays(5))
-                .endDate(LocalDate.now().plusDays(25))
+                .startDate(TODAY.minusDays(5))
+                .endDate(TODAY.plusDays(25))
                 .status(SubscriptionStatus.ACTIVE)
                 .snapshotMaxStaff(packagePro.getMaxStaff())
                 .snapshotPrice(packagePro.getPrice())
@@ -281,8 +294,8 @@ class SubscriptionServiceTest {
                 .id(UUID.randomUUID())
                 .tenant(tenantUser)
                 .servicePackage(packageBasic)
-                .startDate(LocalDate.now().minusDays(5))
-                .endDate(LocalDate.now().plusDays(25))
+                .startDate(TODAY.minusDays(5))
+                .endDate(TODAY.plusDays(25))
                 .status(SubscriptionStatus.ACTIVE)
                 .snapshotMaxStaff(3)
                 .snapshotPrice(packageBasic.getPrice())
