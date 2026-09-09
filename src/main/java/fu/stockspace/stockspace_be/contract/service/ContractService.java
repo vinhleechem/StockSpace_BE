@@ -860,8 +860,8 @@ public class ContractService {
         contract = contractRepository.save(contract);
 
         if (contract.getRenewedFromContract() == null
-                && !contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(
-                tenantId, contract.getWarehouse().getId())) {
+                && !contractRepository.existsCurrentDirectActiveContract(
+                tenantId, contract.getWarehouse().getId(), LocalDate.now(BUSINESS_ZONE))) {
             warehouseLayoutService.archiveTenantLayout(
                     contract.getWarehouse().getId(), tenantId);
         }
@@ -1004,8 +1004,8 @@ public class ContractService {
         boolean preferSnapshot = contract.getStatus() == ContractStatus.REJECTED
                 || contract.getStatus() == ContractStatus.EXPIRED
                 || (contract.getStatus() != ContractStatus.ACTIVE
-                && contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(
-                tenant.getId(), warehouse.getId()));
+                && contractRepository.existsCurrentDirectActiveContract(
+                tenant.getId(), warehouse.getId(), LocalDate.now(BUSINESS_ZONE)));
         if (preferSnapshot && hasLayoutSnapshot(contract)) {
             return readLayoutSnapshot(contract.getLayoutSnapshot());
         }
@@ -1111,8 +1111,8 @@ public class ContractService {
         Warehouse warehouse = contract.getWarehouse();
         User tenant = contract.getTenant();
         if (warehouse != null && tenant != null
-                && !contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(
-                tenant.getId(), warehouse.getId())) {
+                && !contractRepository.existsCurrentDirectActiveContract(
+                tenant.getId(), warehouse.getId(), LocalDate.now(BUSINESS_ZONE))) {
             warehouseLayoutService.archiveTenantLayout(warehouse.getId(), tenant.getId());
         }
     }
@@ -1227,7 +1227,7 @@ public class ContractService {
         if (ChronoUnit.DAYS.between(startDate, endDate) < MIN_RENTAL_DURATION_DAYS) {
             throw new BadRequestException("Rental duration must be at least 7 days");
         }
-        if (endDate.isBefore(LocalDate.now())) {
+        if (endDate.isBefore(LocalDate.now(BUSINESS_ZONE))) {
             throw new BadRequestException("Contract end date must not be in the past");
         }
     }
@@ -1418,6 +1418,9 @@ public class ContractService {
         boolean tenantCanViewLayout = tenantViewer && isTenantLayoutReadable(status);
         boolean canManageWms = tenantViewer
                 && status == ContractStatus.ACTIVE
+                && contract.isActive()
+                && !contract.isDeleted()
+                && isWithinContractPeriod(contract, LocalDate.now(BUSINESS_ZONE))
                 && subscriptionService != null
                 && subscriptionService.hasActiveSubscription(tenant.getId());
         boolean canCreateRenewal = ownerViewer && isRenewalEligible(contract, owner);
@@ -1433,6 +1436,13 @@ public class ContractService {
                 layoutSetupRequired,
                 canEditContractLayout,
                 canCreateRenewal);
+    }
+
+    private boolean isWithinContractPeriod(RentalContract contract, LocalDate today) {
+        return contract.getStartDate() != null
+                && contract.getEndDate() != null
+                && !today.isBefore(contract.getStartDate())
+                && !today.isAfter(contract.getEndDate());
     }
 
     private void requireRenewalEligibility(UUID ownerId, RentalContract sourceContract) {

@@ -43,6 +43,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -439,6 +440,40 @@ class DirectContractSubmissionServiceTest {
         assertEquals(Boolean.TRUE, response.isCanManageWms());
         assertEquals(Boolean.TRUE, response.isCanViewLayout());
         verify(subscriptionService).hasActiveSubscription(tenantId);
+    }
+
+    @Test
+    void tenantCannotManageWmsBeforeContractStartDate() {
+        contract.setStatus(ContractStatus.ACTIVE);
+        contract.setStartDate(LocalDate.now().plusDays(1));
+        contract.setEndDate(LocalDate.now().plusDays(30));
+
+        RentalContractResponse response = contractService.mapToResponse(contract, tenantId);
+
+        assertEquals(Boolean.FALSE, response.isCanManageWms());
+    }
+
+    @Test
+    void tenantCannotManageWmsAfterContractEndDate() {
+        contract.setStatus(ContractStatus.ACTIVE);
+        contract.setStartDate(LocalDate.now().minusDays(30));
+        contract.setEndDate(LocalDate.now().minusDays(1));
+
+        RentalContractResponse response = contractService.mapToResponse(contract, tenantId);
+
+        assertEquals(Boolean.FALSE, response.isCanManageWms());
+    }
+
+    @Test
+    void scheduledContractDoesNotGrantWmsAccess() {
+        contract.setStatus(ContractStatus.SCHEDULED);
+        contract.setStartDate(LocalDate.now().plusDays(1));
+        contract.setEndDate(LocalDate.now().plusDays(30));
+
+        RentalContractResponse response = contractService.mapToResponse(contract, tenantId);
+
+        assertEquals(Boolean.FALSE, response.isCanManageWms());
+        verifyNoInteractions(subscriptionService);
     }
 
     private void stubSubmitPrerequisites() {

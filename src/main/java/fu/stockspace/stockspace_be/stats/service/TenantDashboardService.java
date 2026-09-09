@@ -23,12 +23,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.EnumSet;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class TenantDashboardService {
+
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final RentalContractRepository contractRepository;
     private final ProductSkuRepository productSkuRepository;
@@ -42,7 +45,7 @@ public class TenantDashboardService {
 
     @Transactional(readOnly = true)
     public TenantDashboardResponse getDashboard(UUID tenantId) {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(BUSINESS_ZONE);
 
         StockBatchRepository.TenantStockSummaryProjection stockSummary =
                 stockBatchRepository.summarizeForTenant(tenantId, today);

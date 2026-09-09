@@ -29,12 +29,16 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class StockBatchService {
+
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final StockBatchRepository stockBatchRepository;
     private final WarehouseRepository warehouseRepository;
@@ -176,8 +180,10 @@ public class StockBatchService {
 
         UnitOfMeasure uom = sku.getUom();
         List<StockBatch> batches = staffId == null
-                ? stockBatchRepository.findBySkuIdInActiveTenantWarehouses(skuId, tenantId)
-                : stockBatchRepository.findBySkuIdInActiveAssignedTenantWarehouses(skuId, tenantId, staffId);
+                ? stockBatchRepository.findBySkuIdInActiveTenantWarehouses(
+                skuId, tenantId, LocalDate.now(BUSINESS_ZONE))
+                : stockBatchRepository.findBySkuIdInActiveAssignedTenantWarehouses(
+                skuId, tenantId, staffId, LocalDate.now(BUSINESS_ZONE));
         int totalQuantity = batches.stream().mapToInt(StockBatch::getQuantity).sum();
         int reservedQuantity = transferReservationRepository == null ? 0 : batches.stream()
                 .mapToInt(batch -> (int) Math.min(Integer.MAX_VALUE,

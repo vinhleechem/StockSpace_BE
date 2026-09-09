@@ -20,6 +20,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -27,6 +28,8 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class SubscriptionService {
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+
     private final SubscriptionRepository subscriptionRepository;
     private final ServicePackageRepository packageRepository;
     private final UserRepository userRepository;
@@ -53,7 +56,7 @@ public class SubscriptionService {
 
         Optional<Subscription> activeOpt = subscriptionRepository
                 .findFirstByTenantIdAndStatusAndEndDateGreaterThanEqualOrderByEndDateDesc(
-                        tenantId, SubscriptionStatus.ACTIVE, LocalDate.now());
+                tenantId, SubscriptionStatus.ACTIVE, LocalDate.now(BUSINESS_ZONE));
 
         Subscription subscription;
 
@@ -97,11 +100,11 @@ public class SubscriptionService {
                         tenantId, oldPkgName, servicePackage.getName());
 
                 activeSub.setStatus(SubscriptionStatus.SUPERSEDED);
-                activeSub.setEndDate(LocalDate.now());
+                activeSub.setEndDate(LocalDate.now(BUSINESS_ZONE));
                 subscriptionRepository.save(activeSub);
 
 
-                LocalDate startDate = LocalDate.now();
+                LocalDate startDate = LocalDate.now(BUSINESS_ZONE);
                 LocalDate endDate = startDate.plusDays(servicePackage.getDurationDays());
 
                 subscription = Subscription.builder()
@@ -120,7 +123,7 @@ public class SubscriptionService {
             }
         } else {
 
-            LocalDate startDate = LocalDate.now();
+            LocalDate startDate = LocalDate.now(BUSINESS_ZONE);
             LocalDate endDate = startDate.plusDays(servicePackage.getDurationDays());
 
             subscription = Subscription.builder()
@@ -182,7 +185,7 @@ public class SubscriptionService {
     public SubscriptionResponse getMyActiveSubscription(UUID tenantId) {
         Subscription subscription = subscriptionRepository
                 .findFirstByTenantIdAndStatusAndEndDateGreaterThanEqualOrderByEndDateDesc(
-                        tenantId, SubscriptionStatus.ACTIVE, LocalDate.now())
+                        tenantId, SubscriptionStatus.ACTIVE, LocalDate.now(BUSINESS_ZONE))
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.SUBSCRIPTION_NOT_FOUND));
         return mapToResponse(subscription);
     }
@@ -193,7 +196,7 @@ public class SubscriptionService {
     public boolean hasActiveSubscription(UUID tenantId) {
         return subscriptionRepository
                 .findFirstByTenantIdAndStatusAndEndDateGreaterThanEqualOrderByEndDateDesc(
-                        tenantId, SubscriptionStatus.ACTIVE, LocalDate.now())
+                        tenantId, SubscriptionStatus.ACTIVE, LocalDate.now(BUSINESS_ZONE))
                 .isPresent();
     }
 
@@ -215,7 +218,7 @@ public class SubscriptionService {
 
         Optional<Subscription> activeOpt = subscriptionRepository
                 .findFirstByTenantIdAndStatusAndEndDateGreaterThanEqualOrderByEndDateDesc(
-                        tenantId, SubscriptionStatus.ACTIVE, LocalDate.now());
+                        tenantId, SubscriptionStatus.ACTIVE, LocalDate.now(BUSINESS_ZONE));
 
         java.math.BigDecimal newPrice = newPackage.getPrice() != null ? newPackage.getPrice() : java.math.BigDecimal.ZERO;
         int newMaxStaff = newPackage.getMaxStaff() != null ? newPackage.getMaxStaff() : 0;

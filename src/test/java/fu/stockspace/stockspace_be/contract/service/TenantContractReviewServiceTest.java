@@ -219,7 +219,7 @@ class TenantContractReviewServiceTest {
 
         assertEquals(ContractStatus.REJECTED, contract.getStatus());
         verify(warehouseLayoutService, never()).archiveTenantLayout(any(), any());
-        verify(contractRepository, never()).existsByTenantIdAndWarehouseIdAndStatusActive(any(), any());
+        verify(contractRepository, never()).existsCurrentDirectActiveContract(any(), any(), any());
     }
 
     @Test
@@ -241,7 +241,8 @@ class TenantContractReviewServiceTest {
     void tenantCanRejectDirectContractAndProposalIsArchivedWhenNoActiveContractExists() {
         stubContractLookup();
         when(contractRepository.save(contract)).thenReturn(contract);
-        when(contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(tenantId, warehouseId))
+        when(contractRepository.existsCurrentDirectActiveContract(
+                eq(tenantId), eq(warehouseId), any(LocalDate.class)))
                 .thenReturn(false);
 
         contractService.rejectDirectContract(tenantId, contractId, decision("Terms are incorrect"));

@@ -224,7 +224,8 @@ public class WarehouseService {
     public void deleteWarehouse(UUID ownerId, UUID warehouseId) {
         Warehouse warehouse = getOwnedWarehouseForUpdate(ownerId, warehouseId);
 
-        if (warehouseRepository.hasCurrentActiveContract(warehouseId)) {
+        if (warehouseRepository.hasCurrentActiveContract(
+                warehouseId, java.time.LocalDate.now(java.time.ZoneId.of("Asia/Ho_Chi_Minh")))) {
             throw new BadRequestException(ErrorCode.WAREHOUSE_HAS_ACTIVE_CONTRACTS);
         }
         if (warehouseRepository.hasOpenPaidPublication(

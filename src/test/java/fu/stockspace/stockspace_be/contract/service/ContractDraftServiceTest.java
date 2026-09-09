@@ -45,6 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -351,7 +352,7 @@ class ContractDraftServiceTest {
         assertEquals(false, renewal.isActive());
         assertEquals(true, renewal.isDeleted());
         verify(contractRepository).save(renewal);
-        verify(contractRepository, never()).existsByTenantIdAndWarehouseIdAndStatusActive(any(), any());
+        verify(contractRepository, never()).existsCurrentDirectActiveContract(any(), any(), any());
         verify(warehouseLayoutService, never()).archiveTenantLayout(any(), any());
     }
 
@@ -419,7 +420,8 @@ class ContractDraftServiceTest {
                 .status(ContractStatus.DRAFT)
                 .build();
         when(contractRepository.findById(draft.getId())).thenReturn(Optional.of(draft));
-        when(contractRepository.existsByTenantIdAndWarehouseIdAndStatusActive(tenantId, warehouseId))
+        when(contractRepository.existsCurrentDirectActiveContract(
+                eq(tenantId), eq(warehouseId), any(LocalDate.class)))
                 .thenReturn(false);
 
         contractService.deleteOwnerDraft(ownerId, draft.getId());

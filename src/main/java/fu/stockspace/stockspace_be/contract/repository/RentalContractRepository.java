@@ -109,18 +109,6 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
               AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
               AND c.isActive = true
               AND c.isDeleted = false
-              AND c.startDate <= CURRENT_DATE
-              AND c.endDate >= CURRENT_DATE
-            """)
-    boolean existsByTenantIdAndWarehouseIdAndStatusActive(@Param("tenantId") UUID tenantId, @Param("warehouseId") UUID warehouseId);
-
-    @Query("""
-            SELECT COUNT(c) > 0 FROM RentalContract c
-            WHERE c.tenant.id = :tenantId
-              AND c.warehouse.id = :warehouseId
-              AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
-              AND c.isActive = true
-              AND c.isDeleted = false
               AND c.startDate IS NOT NULL
               AND c.endDate IS NOT NULL
               AND c.startDate <= :today
