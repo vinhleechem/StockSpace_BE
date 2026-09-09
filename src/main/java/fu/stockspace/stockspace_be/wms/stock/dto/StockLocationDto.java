@@ -21,4 +21,6 @@ public class StockLocationDto {
     private String rackName;
     private String binName;
     private int quantity;
+    private int reservedQuantity;
+    private int availableQuantity;
 }

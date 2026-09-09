@@ -22,5 +22,7 @@ public class StockSummaryResponse {
     private String uomSymbol;
     private String uomName;
     private int totalQuantity;
+    private int reservedQuantity;
+    private int availableQuantity;
     private List<StockLocationDto> locations;
 }

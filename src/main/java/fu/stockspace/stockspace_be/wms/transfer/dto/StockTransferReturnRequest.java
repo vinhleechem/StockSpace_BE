@@ -1,7 +1,9 @@
 package fu.stockspace.stockspace_be.wms.transfer.dto;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -15,13 +17,15 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ReceiveStockTransferRequest {
+public class StockTransferReturnRequest {
+    @NotBlank
+    @Size(max = 2000)
+    private String reason;
 
-    /** New clients may receive several sessions; legacy clients stay atomic. */
     @Builder.Default
     private boolean allowPartial = false;
 
-    @NotEmpty(message = "Destination allocations must not be empty")
+    @NotEmpty
     @Valid
-    private List<StockTransferDestinationAllocationRequest> destinationAllocations;
+    private List<StockTransferReturnLineRequest> lines;
 }

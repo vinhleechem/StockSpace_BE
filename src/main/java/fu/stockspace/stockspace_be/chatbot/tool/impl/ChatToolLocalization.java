@@ -90,8 +90,25 @@ final class ChatToolLocalization {
             return "Không xác định";
         }
         return switch (status) {
+            case DRAFT -> "Bản nháp";
+            case OVERDUE -> "Quá SLA chưa nhận";
+            case ARRIVED_AT_DESTINATION -> "Đã đến kho đích";
+            case RECEIVING -> "Đang kiểm nhận";
+            case SHORT_RECEIVED -> "Nhận thiếu đã đóng";
+            case RECEIVE_REJECTED -> "Kho đích từ chối nhận";
+            case RETRY_REQUESTED -> "Đang chờ chuyển lại";
+            case RETURN_REQUESTED -> "Đang chờ quay đầu";
+            case RETURN_IN_TRANSIT -> "Đang quay về kho nguồn";
+            case PARTIALLY_RETURNED -> "Đã quay về một phần";
+            case RETURNED -> "Đã quay về kho nguồn";
+            case LOST -> "Đã xác nhận thất lạc";
             case PENDING -> "Chờ duyệt xuất";
+            case ALLOCATED -> "Đã giữ tồn";
+            case PICKING -> "Đang lấy hàng";
+            case READY_TO_DISPATCH -> "Sẵn sàng xuất";
             case IN_TRANSIT -> "Đang vận chuyển";
+            case PARTIALLY_RECEIVED -> "Đã nhận một phần";
+            case RECONCILING -> "Đang đối soát chênh lệch";
             case COMPLETED -> "Đã nhận tại kho đích";
             case REJECTED -> "Đã từ chối";
             case CANCELLED -> "Đã hủy";

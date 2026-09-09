@@ -1,9 +1,26 @@
 package fu.stockspace.stockspace_be.wms.transfer.entity;
 
 public enum StockTransferStatus {
+    DRAFT,
     PENDING,
+    ALLOCATED,
+    PICKING,
+    READY_TO_DISPATCH,
     IN_TRANSIT,
+    OVERDUE,
+    ARRIVED_AT_DESTINATION,
+    RECEIVING,
+    PARTIALLY_RECEIVED,
+    SHORT_RECEIVED,
+    RECEIVE_REJECTED,
+    RECONCILING,
+    RETRY_REQUESTED,
+    RETURN_REQUESTED,
+    RETURN_IN_TRANSIT,
+    PARTIALLY_RETURNED,
+    RETURNED,
     COMPLETED,
+    LOST,
     REJECTED,
     CANCELLED
 }

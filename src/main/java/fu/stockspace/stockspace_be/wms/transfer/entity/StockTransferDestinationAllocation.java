@@ -5,6 +5,8 @@ import fu.stockspace.stockspace_be.warehouse.entity.WarehouseBin;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseRack;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -15,6 +17,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -27,7 +30,8 @@ import java.util.UUID;
         @Index(name = "idx_stock_transfer_destination_alloc_item_id", columnList = "item_id"),
         @Index(name = "idx_stock_transfer_destination_alloc_bin_id", columnList = "destination_bin_id")
 }, uniqueConstraints = {
-        @UniqueConstraint(name = "ux_stock_transfer_dest_alloc_item_location", columnNames = {"item_id", "destination_rack_id", "destination_bin_id"})
+        @UniqueConstraint(name = "ux_stock_transfer_dest_alloc_item_location_disposition",
+                columnNames = {"item_id", "destination_rack_id", "destination_bin_id", "disposition"})
 })
 @Getter
 @Setter
@@ -55,4 +59,9 @@ public class StockTransferDestinationAllocation extends BaseEntity {
 
     @Column(name = "quantity", nullable = false)
     private int quantity;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "disposition", nullable = false, length = 20)
+    @Builder.Default
+    private StockTransferReceiptDisposition disposition = StockTransferReceiptDisposition.GOOD;
 }

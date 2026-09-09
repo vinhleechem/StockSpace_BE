@@ -33,6 +33,8 @@ public class StockBatchResponse {
     private String binName;
 
     private int quantity;
+    private int reservedQuantity;
+    private int availableQuantity;
     private LocalDateTime arrivalDate;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

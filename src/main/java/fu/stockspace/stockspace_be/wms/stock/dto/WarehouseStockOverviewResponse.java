@@ -33,6 +33,8 @@ public class WarehouseStockOverviewResponse {
     private UUID warehouseId;
     private String warehouseName;
     private long totalQuantity;
+    private long reservedQuantity;
+    private long availableQuantity;
     private BigDecimal totalWeightKg;
     private BigDecimal totalVolumeM3;
 }

@@ -94,6 +94,8 @@ public class GetMyStockTool implements ChatTool {
             result.put("productCount", summary.productCount());
             result.put("batchCount", summary.batchCount());
             result.put("totalQuantity", summary.totalQuantity());
+            result.put("reservedQuantity", summary.reservedQuantity());
+            result.put("availableQuantity", summary.availableQuantity());
             result.put("products", overview.getContent().stream().map(this::toProductSummary).toList());
             result.put("productsReturned", overview.getContent().size());
             result.put("productsTotal", overview.getTotalElements());
@@ -118,6 +120,8 @@ public class GetMyStockTool implements ChatTool {
         result.put("category", stock.getCategoryName());
         result.put("unit", stock.getUomSymbol());
         result.put("quantity", stock.getTotalQuantity());
+        result.put("reservedQuantity", stock.getReservedQuantity());
+        result.put("availableQuantity", stock.getAvailableQuantity());
         result.put("weightKg", stock.getTotalWeightKg());
         result.put("volumeM3", stock.getTotalVolumeM3());
         return result;

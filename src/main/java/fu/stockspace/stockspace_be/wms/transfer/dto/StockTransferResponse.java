@@ -18,9 +18,13 @@ import java.util.UUID;
 @Builder
 public class StockTransferResponse {
     private UUID id;
+    private String transferNo;
     private StockTransferStatus status;
     private WarehouseSummaryResponse sourceWarehouse;
     private WarehouseSummaryResponse destinationWarehouse;
+    /** Current operational destination; destinationWarehouse remains the original request route. */
+    private WarehouseSummaryResponse currentDestinationWarehouse;
+    private TransferActorResponse sourceStaff;
     private String note;
     private List<StockTransferItemResponse> items;
     private TransferActorResponse createdBy;
@@ -35,6 +39,9 @@ public class StockTransferResponse {
     private LocalDateTime receivedAt;
     private LocalDateTime rejectedAt;
     private LocalDateTime cancelledAt;
+    private LocalDateTime expectedArrivalAt;
+    private LocalDateTime overdueAt;
     private UUID outboundReceiptId;
     private UUID inboundReceiptId;
+    private List<StockTransferAttemptResponse> attempts;
 }

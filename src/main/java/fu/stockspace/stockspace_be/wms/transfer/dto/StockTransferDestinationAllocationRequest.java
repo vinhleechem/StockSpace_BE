@@ -1,5 +1,7 @@
 package fu.stockspace.stockspace_be.wms.transfer.dto;
 
+import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferReceiptDisposition;
+
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -28,4 +30,7 @@ public class StockTransferDestinationAllocationRequest {
 
     @Min(value = 1, message = "Số lượng phân bổ phải lớn hơn 0")
     private int quantity;
+
+    @Builder.Default
+    private StockTransferReceiptDisposition disposition = StockTransferReceiptDisposition.GOOD;
 }
