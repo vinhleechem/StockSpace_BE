@@ -33,9 +33,9 @@ import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
@@ -52,8 +52,6 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class ContractService {
     private static final long MIN_RENTAL_DURATION_DAYS = 7;
-    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
-
     private final RentalContractRepository contractRepository;
     private final WarehouseService warehouseService;
     private final UserRepository userRepository;
@@ -62,6 +60,7 @@ public class ContractService {
     private final SubscriptionService subscriptionService;
     private final ObjectMapper objectMapper;
     private final WarehouseRentalAvailabilityService warehouseRentalAvailabilityService;
+    private final Clock businessClock;
 
 
 
@@ -772,7 +771,7 @@ public class ContractService {
     }
 
     private boolean startsInFuture(RentalContract contract) {
-        return contract.getStartDate().isAfter(LocalDate.now(BUSINESS_ZONE));
+        return contract.getStartDate().isAfter(LocalDate.now(businessClock));
     }
 
     private void notifyRenewalScheduled(RentalContract renewal, Warehouse warehouse) {
@@ -881,7 +880,7 @@ public class ContractService {
 
         if (contract.getRenewedFromContract() == null
                 && !contractRepository.existsCurrentDirectActiveContract(
-                tenantId, contract.getWarehouse().getId(), LocalDate.now(BUSINESS_ZONE))) {
+                tenantId, contract.getWarehouse().getId(), LocalDate.now(businessClock))) {
             warehouseLayoutService.archiveTenantLayout(
                     contract.getWarehouse().getId(), tenantId);
         }
@@ -1027,7 +1026,7 @@ public class ContractService {
                 || contract.getStatus() == ContractStatus.EXPIRED
                 || (contract.getStatus() != ContractStatus.ACTIVE
                 && contractRepository.existsCurrentDirectActiveContract(
-                tenant.getId(), warehouse.getId(), LocalDate.now(BUSINESS_ZONE)));
+                tenant.getId(), warehouse.getId(), LocalDate.now(businessClock)));
         if (preferSnapshot && hasLayoutSnapshot(contract)) {
             return readLayoutSnapshot(contract.getLayoutSnapshot());
         }
@@ -1134,7 +1133,7 @@ public class ContractService {
         User tenant = contract.getTenant();
         if (warehouse != null && tenant != null
                 && !contractRepository.existsCurrentDirectActiveContract(
-                tenant.getId(), warehouse.getId(), LocalDate.now(BUSINESS_ZONE))) {
+                tenant.getId(), warehouse.getId(), LocalDate.now(businessClock))) {
             warehouseLayoutService.archiveTenantLayout(warehouse.getId(), tenant.getId());
         }
     }
@@ -1249,7 +1248,7 @@ public class ContractService {
         if (ChronoUnit.DAYS.between(startDate, endDate) < MIN_RENTAL_DURATION_DAYS) {
             throw new BadRequestException("Rental duration must be at least 7 days");
         }
-        if (endDate.isBefore(LocalDate.now(BUSINESS_ZONE))) {
+        if (endDate.isBefore(LocalDate.now(businessClock))) {
             throw new BadRequestException("Contract end date must not be in the past");
         }
     }
@@ -1443,7 +1442,7 @@ public class ContractService {
                 && status == ContractStatus.ACTIVE
                 && contract.isActive()
                 && !contract.isDeleted()
-                && isWithinContractPeriod(contract, LocalDate.now(BUSINESS_ZONE))
+                && isWithinContractPeriod(contract, LocalDate.now(businessClock))
                 && subscriptionService != null
                 && subscriptionService.hasActiveSubscription(tenant.getId());
         boolean canCreateRenewal = ownerViewer && isRenewalEligible(contract, owner);
@@ -1485,7 +1484,7 @@ public class ContractService {
                     "Only an active source contract without an existing renewal can be renewed");
         }
 
-        LocalDate today = LocalDate.now(BUSINESS_ZONE);
+        LocalDate today = LocalDate.now(businessClock);
         if (sourceContract.getStartDate() == null || sourceContract.getEndDate() == null
                 || today.isBefore(sourceContract.getStartDate())) {
             throw new BadRequestException(ErrorCode.CONTRACT_RENEWAL_NOT_ALLOWED,
@@ -1548,7 +1547,7 @@ public class ContractService {
             throw new BadRequestException(ErrorCode.CONTRACT_RENEWAL_NOT_ALLOWED,
                     "The source contract is no longer active");
         }
-        if (LocalDate.now(BUSINESS_ZONE).isAfter(source.getEndDate())) {
+        if (LocalDate.now(businessClock).isAfter(source.getEndDate())) {
             throw new BadRequestException(ErrorCode.CONTRACT_RENEWAL_DEADLINE_PASSED,
                     "The renewal deadline has passed");
         }
@@ -1567,7 +1566,7 @@ public class ContractService {
             return false;
         }
 
-        LocalDate today = LocalDate.now(BUSINESS_ZONE);
+        LocalDate today = LocalDate.now(businessClock);
         if (sourceContract.getStartDate() == null || sourceContract.getEndDate() == null
                 || today.isBefore(sourceContract.getStartDate())
                 || today.isAfter(sourceContract.getEndDate())) {

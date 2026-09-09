@@ -22,16 +22,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.EnumSet;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class TenantDashboardService {
-
-    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final RentalContractRepository contractRepository;
     private final ProductSkuRepository productSkuRepository;
@@ -42,10 +40,11 @@ public class TenantDashboardService {
     private final TenantMemberRepository tenantMemberRepository;
     private final NotificationRepository notificationRepository;
     private final SubscriptionRepository subscriptionRepository;
+    private final Clock businessClock;
 
     @Transactional(readOnly = true)
     public TenantDashboardResponse getDashboard(UUID tenantId) {
-        LocalDate today = LocalDate.now(BUSINESS_ZONE);
+        LocalDate today = LocalDate.now(businessClock);
 
         StockBatchRepository.TenantStockSummaryProjection stockSummary =
                 stockBatchRepository.summarizeForTenant(tenantId, today);

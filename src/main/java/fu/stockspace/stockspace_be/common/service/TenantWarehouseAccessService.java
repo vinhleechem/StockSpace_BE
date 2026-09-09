@@ -12,8 +12,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
@@ -28,11 +28,10 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class TenantWarehouseAccessService {
 
-    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
-
     private final RentalContractRepository contractRepository;
     private final SubscriptionRepository subscriptionRepository;
     private final StaffWarehouseAssignmentRepository assignmentRepository;
+    private final Clock businessClock;
 
     @Transactional(readOnly = true)
     public void requireActiveContract(UUID tenantId, UUID warehouseId) {
@@ -47,13 +46,13 @@ public class TenantWarehouseAccessService {
             return false;
         }
         return contractRepository.existsCurrentDirectActiveContract(
-                tenantId, warehouseId, LocalDate.now(BUSINESS_ZONE));
+                tenantId, warehouseId, LocalDate.now(businessClock));
     }
 
     @Transactional(readOnly = true)
     public void requireActiveSubscription(UUID tenantId) {
         if (tenantId == null || subscriptionRepository.findCurrentByTenantIdAndStatus(
-                tenantId, SubscriptionStatus.ACTIVE, LocalDate.now(BUSINESS_ZONE)).isEmpty()) {
+                tenantId, SubscriptionStatus.ACTIVE, LocalDate.now(businessClock)).isEmpty()) {
             throw new ForbiddenException(ErrorCode.SUBSCRIPTION_REQUIRED);
         }
     }
@@ -70,7 +69,7 @@ public class TenantWarehouseAccessService {
             return List.of();
         }
         return contractRepository.findCurrentDirectWarehousesByTenantId(
-                tenantId, LocalDate.now(BUSINESS_ZONE));
+                tenantId, LocalDate.now(businessClock));
     }
 
     @Transactional(readOnly = true)
