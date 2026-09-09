@@ -370,6 +370,39 @@ class ContractDraftServiceTest {
     }
 
     @Test
+    void partialRenewalDraftDoesNotAdvertiseLayoutEditing() {
+        warehouse.setRentalPricingType(RentalPricingType.PER_SQUARE_METER_MONTHLY);
+        warehouse.setRentalPrice(new BigDecimal("200000"));
+        RentalContract source = activeSourceContract();
+        source.setPricingType(RentalPricingType.PER_SQUARE_METER_MONTHLY);
+        source.setLeasedWidth(new BigDecimal("4"));
+        source.setLeasedLength(new BigDecimal("5"));
+        source.setLeasedHeight(new BigDecimal("5"));
+        source.setLeasedAreaM2(new BigDecimal("20"));
+        WarehouseLayoutResponse tenantLayout = tenantLayout();
+        CreateContractRenewalRequest request = renewalRequest(
+                source.getEndDate().plusDays(8));
+        when(contractRepository.findByIdForUpdate(source.getId())).thenReturn(Optional.of(source));
+        when(contractRepository.findBlockingRenewalsBySourceId(source.getId())).thenReturn(List.of());
+        when(warehouseLayoutService.getDefaultLayoutForContract(warehouseId)).thenReturn(defaultLayout);
+        when(warehouseLayoutService.findActiveTenantLayoutForContract(warehouseId, tenantId))
+                .thenReturn(Optional.of(tenantLayout));
+        when(warehouseLayoutService.stabilizeLayoutSnapshot(tenantLayout)).thenReturn(tenantLayout);
+        when(contractRepository.save(any(RentalContract.class)))
+                .thenAnswer(invocation -> {
+                    RentalContract saved = invocation.getArgument(0);
+                    saved.setId(UUID.randomUUID());
+                    return saved;
+                });
+
+        RentalContractResponse response = contractService.createRenewalDraft(
+                ownerId, source.getId(), request);
+
+        assertEquals(false, response.isCanEditContractLayout());
+        assertEquals(false, response.isLayoutSetupRequired());
+    }
+
+    @Test
     void previewRejectsWarehouseNotOwnedByTheCurrentOwner() {
         when(warehouseService.getOwnedWarehouseForContract(ownerId, warehouseId))
                 .thenThrow(new ForbiddenException("Warehouse is not owned by the current owner"));

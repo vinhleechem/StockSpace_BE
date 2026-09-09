@@ -1434,6 +1434,7 @@ public class ContractService {
                 || status == ContractStatus.CHANGES_REQUESTED;
         boolean ownerCanEdit = ownerViewer && mutableStatus;
         boolean canEditContractLayout = ownerCanEdit
+                && contract.getRenewedFromContract() == null
                 && contract.getPricingType() != RentalPricingType.FIXED_MONTHLY;
         boolean layoutSetupRequired = canEditContractLayout;
         boolean tenantCanReview = tenantViewer && status == ContractStatus.PENDING_TENANT_CONFIRM;
