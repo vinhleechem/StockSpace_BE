@@ -135,6 +135,7 @@ class SearchSystemPolicyToolTest {
         assertEquals("system_knowledge", first.get("source").asText());
         assertEquals("Hủy hợp đồng", first.get("category").asText());
         assertTrue(first.get("relevance").isNumber());
+        assertTrue(first.get("citation").has("excerpt"));
         assertFalse(json.contains(matching.getSourceId()));
         assertNoRawKnowledgeMetadata(json);
         verify(knowledgeRepository).findSearchCandidates(

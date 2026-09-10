@@ -105,6 +105,16 @@ public class PromptBuilder {
             khác, nói đây là danh sách gần nhất, không khẳng định đã liệt kê toàn bộ.
             """;
 
+    private static final String EVIDENCE_INSTRUCTION = """
+            QUY TẮC SUY LUẬN VÀ BẰNG CHỨNG:
+            - Hãy hiểu câu hỏi theo ý định và thực thể trong lịch sử, không chỉ theo từ khóa của lượt hiện tại.
+            - Với câu hỏi nối tiếp, dùng internalId trong bộ nhớ thực thể đã xác minh để gọi đúng tool; không hỏi lại nếu đã xác định được thực thể.
+            - Kết quả tool là dữ liệu có thẩm quyền cho nghiệp vụ. Không trộn số liệu cũ trong lịch sử với số liệu mới.
+            - Kết quả tra cứu chính sách có trường citation: khi nêu một quy định, hãy đặt citation ngay sau mệnh đề tương ứng bằng nhãn nguồn và đoạn.
+            - Chỉ tổng hợp những gì có trong tool result hoặc evidence. Nếu các nguồn mâu thuẫn, nêu rõ mâu thuẫn và ưu tiên dữ liệu live/mới hơn.
+            - Nếu không đủ evidence, nói rõ chưa đủ dữ liệu và hỏi đúng một thông tin cần thiết; không bịa, không suy diễn.
+            """;
+
     public String buildSystemPrompt(String roleName) {
         return buildSystemPrompt(roleName, List.of());
     }
@@ -126,6 +136,8 @@ public class PromptBuilder {
         return BASE_INSTRUCTION
                 + "\n"
                 + FOLLOW_UP_INSTRUCTION
+                + "\n"
+                + EVIDENCE_INSTRUCTION
                 + "\n"
                 + roleInstruction(normalizedRole)
                 + "\n"

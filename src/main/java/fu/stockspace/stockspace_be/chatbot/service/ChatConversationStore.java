@@ -15,6 +15,7 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundE
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,9 +44,13 @@ public class ChatConversationStore {
     private final ChatSessionRepository sessionRepository;
     private final ChatMessageRepository messageRepository;
     private final UserRepository userRepository;
+    private final ConversationMemoryService memoryService;
 
     @Value("${app.chatbot.guest-session-ttl:24h}")
     private Duration guestSessionTtl;
+
+    @Value("${app.chatbot.history-messages:30}")
+    private int historyMessages = 30;
 
     @Transactional
     public PreparedChatSession prepareUserSession(UUID userId, String rawSessionId) {
@@ -61,7 +66,12 @@ public class ChatConversationStore {
             session = sessionRepository.save(ChatSession.builder().user(user).build());
         }
 
-        return new PreparedChatSession(session.getId(), null, buildHistory(session.getId()));
+        return new PreparedChatSession(
+                session.getId(),
+                null,
+                buildHistory(session.getId()),
+                memoryService.read(session.getContextJson())
+        );
     }
 
 
@@ -76,7 +86,12 @@ public class ChatConversationStore {
                     .sessionToken(hashToken(newToken))
                     .expiresAt(nextGuestExpiry())
                     .build());
-            return new PreparedChatSession(session.getId(), newToken, List.of());
+            return new PreparedChatSession(
+                    session.getId(),
+                    newToken,
+                    List.of(),
+                    ConversationMemory.empty()
+            );
         }
 
         String canonicalToken = canonicalGuestToken(rawToken);
@@ -96,7 +111,8 @@ public class ChatConversationStore {
         return new PreparedChatSession(
                 session.getId(),
                 canonicalToken,
-                buildHistory(session.getId())
+                buildHistory(session.getId()),
+                memoryService.read(session.getContextJson())
         );
     }
 
@@ -105,9 +121,19 @@ public class ChatConversationStore {
                                         UUID sessionId,
                                         String userMessage,
                                         String assistantMessage) {
+        return appendUserTurn(
+                userId, sessionId, userMessage, assistantMessage, List.of());
+    }
+
+    @Transactional
+    public LocalDateTime appendUserTurn(UUID userId,
+                                        UUID sessionId,
+                                        String userMessage,
+                                        String assistantMessage,
+                                        List<ToolExecutionTrace> traces) {
         ChatSession session = sessionRepository.findByIdAndUserIdForUpdate(sessionId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CHAT_SESSION_NOT_FOUND));
-        return appendTurn(session, userMessage, assistantMessage);
+        return appendTurn(session, userMessage, assistantMessage, traces);
     }
 
     @Transactional(noRollbackFor = ResourceNotFoundException.class)
@@ -115,6 +141,16 @@ public class ChatConversationStore {
                                          UUID sessionId,
                                          String userMessage,
                                          String assistantMessage) {
+        return appendGuestTurn(
+                rawToken, sessionId, userMessage, assistantMessage, List.of());
+    }
+
+    @Transactional(noRollbackFor = ResourceNotFoundException.class)
+    public LocalDateTime appendGuestTurn(String rawToken,
+                                         UUID sessionId,
+                                         String userMessage,
+                                         String assistantMessage,
+                                         List<ToolExecutionTrace> traces) {
         String canonicalToken = canonicalGuestToken(rawToken);
         String tokenHash = hashToken(canonicalToken);
         ChatSession session = sessionRepository
@@ -122,7 +158,32 @@ public class ChatConversationStore {
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CHAT_SESSION_NOT_FOUND));
         ensureGuestSessionActive(session);
         session.setExpiresAt(nextGuestExpiry());
-        return appendTurn(session, userMessage, assistantMessage);
+        return appendTurn(session, userMessage, assistantMessage, traces);
+    }
+
+    @Transactional
+    public void rememberUserToolContext(
+            UUID userId,
+            UUID sessionId,
+            List<ToolExecutionTrace> traces
+    ) {
+        ChatSession session = sessionRepository.findByIdAndUserIdForUpdate(sessionId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CHAT_SESSION_NOT_FOUND));
+        updateMemory(session, traces);
+    }
+
+    @Transactional(noRollbackFor = ResourceNotFoundException.class)
+    public void rememberGuestToolContext(
+            String rawToken,
+            UUID sessionId,
+            List<ToolExecutionTrace> traces
+    ) {
+        String canonicalToken = canonicalGuestToken(rawToken);
+        ChatSession session = sessionRepository
+                .findGuestByIdAndTokenForUpdate(sessionId, hashToken(canonicalToken))
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CHAT_SESSION_NOT_FOUND));
+        ensureGuestSessionActive(session);
+        updateMemory(session, traces);
     }
 
     @Transactional(readOnly = true)
@@ -166,7 +227,8 @@ public class ChatConversationStore {
 
     private LocalDateTime appendTurn(ChatSession session,
                                      String userMessage,
-                                     String assistantMessage) {
+                                     String assistantMessage,
+                                     List<ToolExecutionTrace> traces) {
         ChatMessage user = messageRepository.save(ChatMessage.builder()
                 .session(session)
                 .role("user")
@@ -180,14 +242,28 @@ public class ChatConversationStore {
         if (session.getTitle() == null || session.getTitle().isBlank()) {
             session.setTitle(truncateByCodePoint(userMessage, TITLE_MAX_CODE_POINTS));
         }
+        updateMemory(session, traces);
         sessionRepository.save(session);
         return assistant.getCreatedAt() != null ? assistant.getCreatedAt() : LocalDateTime.now();
+    }
+
+    private void updateMemory(ChatSession session, List<ToolExecutionTrace> traces) {
+        if (traces == null || traces.isEmpty()) {
+            return;
+        }
+        ConversationMemory currentMemory = memoryService.read(session.getContextJson());
+        ConversationMemory updatedMemory = memoryService.merge(currentMemory, traces);
+        session.setContextJson(memoryService.write(updatedMemory));
+        sessionRepository.save(session);
     }
 
     private List<java.util.Map<String, Object>> buildHistory(UUID sessionId) {
         List<ChatMessage> messages = new ArrayList<>(
                 messageRepository
-                        .findTop10BySession_IdAndIsDeletedFalseOrderByCreatedAtDesc(sessionId)
+                        .findRecentBySession(
+                                sessionId,
+                                PageRequest.of(0, Math.max(2, Math.min(historyMessages, 100)))
+                        )
         );
         Collections.reverse(messages);
         return messages.stream()

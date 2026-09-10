@@ -34,6 +34,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
@@ -216,6 +218,49 @@ class ChatbotServiceTest {
                 eq(Map.of()), contextCaptor.capture());
         assertEquals(userId, contextCaptor.getValue().userId());
         assertEquals(warehouseId, contextCaptor.getValue().activeWarehouseId());
+    }
+
+    @Test
+    void bindsReferentialWarehouseFollowUpToVerifiedMemoryBeforeToolExecution() {
+        UUID userId = UUID.randomUUID();
+        UUID warehouseId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        ChatTool layoutTool = namedTool("getPublicWarehouseLayout");
+        List<ChatTool> allowedTools = List.of(layoutTool);
+        ConversationMemory memory = new ConversationMemory(
+                List.of(new ConversationMemory.EntityReference(
+                        "warehouse", warehouseId.toString(), "Kho lạnh Tân Trào", "searchWarehouses")),
+                List.of("searchWarehouses")
+        );
+
+        when(conversationStore.prepareUserSession(userId, null))
+                .thenReturn(new PreparedChatSession(sessionId, null, List.of(), memory));
+        when(toolRegistry.getToolsForRole("ROLE_TENANT")).thenReturn(allowedTools);
+        when(activeWarehouseContextResolver.resolve(userId, null))
+                .thenReturn(new ChatRequestContext(userId, null));
+        when(promptBuilder.buildSystemPrompt(eq("ROLE_TENANT"), eq(allowedTools), any()))
+                .thenReturn("system prompt");
+        when(layoutTool.executeWithContext(anyMap(), any(ChatRequestContext.class)))
+                .thenReturn("{\"floorAreaM2\":1000}");
+        when(conversationStore.appendUserTurn(
+                eq(userId), eq(sessionId), eq("Kho lạnh Tân Trào bao nhiêu m2?"), anyString()))
+                .thenReturn(LocalDateTime.now());
+        doReturn(
+                new OpenRouterClient.AiResponse(null, new OpenRouterClient.FunctionCall(
+                        "call_layout", "getPublicWarehouseLayout", Map.of())),
+                new OpenRouterClient.AiResponse("Diện tích là 1.000 m².", null)
+        ).when(openRouterClient).complete(
+                anyList(), eq(allowedTools), any(Duration.class));
+
+        service.processTenantMessage(
+                userId,
+                new SendMessageRequest(null, "Kho lạnh Tân Trào bao nhiêu m2?")
+        );
+
+        verify(layoutTool).executeWithContext(
+                org.mockito.ArgumentMatchers.argThat(args ->
+                        warehouseId.toString().equals(args.get("warehouseId"))),
+                any(ChatRequestContext.class));
     }
 
     @Test

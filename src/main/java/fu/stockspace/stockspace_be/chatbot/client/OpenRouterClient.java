@@ -86,8 +86,8 @@ public class OpenRouterClient {
     @Value("${app.openrouter.model:}")
     private String model;
 
-    @Value("${app.openrouter.max-tokens:1024}")
-    private int maxTokens;
+    @Value("${app.openrouter.max-tokens:2048}")
+    private int maxTokens = 2048;
 
     @Value("${app.openrouter.temperature:0.2}")
     private double temperature;
