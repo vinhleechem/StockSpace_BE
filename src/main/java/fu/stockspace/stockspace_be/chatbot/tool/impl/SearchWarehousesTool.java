@@ -17,11 +17,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.text.Normalizer;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Arrays;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -50,6 +53,47 @@ public class SearchWarehousesTool implements ChatTool {
                     + "|\\b(?:rộng|rong|dài|dai|cao)\\s+bao\\s+nhiêu\\b"
                     + "|\\b(?:chiều\\s+dài|chieu\\s+dai)\\b)"
     );
+    private static final Pattern ENTITY_QUESTION_NOISE = Pattern.compile(
+            "(?iu)(?:\\b(?:giá|gia|phí|phi|chi\\s+phí|chi\\s+phi)"
+                    + "(?:\\s+(?:thuê|thue))?\\s+bao\\s+nhiêu\\b"
+                    + "|\\bbao\\s+nhiêu\\s+(?:tiền|tien|đồng|dong)\\b"
+                    + "|\\b(?:còn|con)\\s+(?:không|khong)\\b"
+                    + "|\\b(?:có\\s+sẵn|co\\s+san)\\s+(?:không|khong)\\b"
+                    + "|\\b(?:ở\\s+đâu|o\\s+dau|tại\\s+đâu|tai\\s+dau)\\b"
+                    + "|\\b(?:như\\s+thế\\s+nào|nhu\\s the\\s nao)\\b)"
+    );
+    private static final Set<String> SEMANTIC_STOP_WORDS = Set.of(
+            "ai", "ban", "bao", "bao nhieu", "cach", "can", "cho", "co", "cua",
+            "de", "gi", "giup", "hay", "hoi", "khong", "la", "minh", "muon",
+            "nao", "neu", "nhu", "nha", "o", "phu", "toi", "tim", "toi can",
+            "kho", "bai", "luu", "tru", "hang", "hoa", "va", "ve", "voi", "xin", "xem"
+    );
+    private static final List<SemanticConcept> SEMANTIC_CONCEPTS = List.of(
+            new SemanticConcept(
+                    Set.of("kho lanh", "dong lanh", "kho dong", "kho mat", "bao quan", "bao quan thuc pham", "chuoi lanh", "nhiet do", "2 8"),
+                    Set.of("kho lanh", "dong lanh", "kho dong", "bao quan thuc pham", "thuc pham", "nong san", "nhiet do")
+            ),
+            new SemanticConcept(
+                    Set.of("dien tu", "linh kien dien tu", "linh kien", "thiet bi dien", "hang cong nghe"),
+                    Set.of("dien tu", "linh kien", "thiet bi dien", "hang cong nghe", "may moc")
+            ),
+            new SemanticConcept(
+                    Set.of("nong san", "rau cu", "trai cay", "thuc pham tuoi", "hai san", "luong thuc"),
+                    Set.of("nong san", "rau cu", "trai cay", "thuc pham", "bao quan", "hai san", "luong thuc")
+            ),
+            new SemanticConcept(
+                    Set.of("vat lieu xay dung", "nguyen vat lieu", "sat thep", "xi mang", "gach"),
+                    Set.of("vat lieu xay dung", "nguyen vat lieu", "sat thep", "hang nang", "xi mang", "gach")
+            ),
+            new SemanticConcept(
+                    Set.of("pallet", "ke hang", "gia ke"),
+                    Set.of("pallet", "ke hang", "gia ke", "kho hang")
+            ),
+            new SemanticConcept(
+                    Set.of("thuong mai dien tu", "dong goi", "xu ly don", "hang tieu dung"),
+                    Set.of("thuong mai dien tu", "dong goi", "xu ly don", "hang tieu dung", "kho hang")
+            )
+    );
 
     private final WarehouseRepository warehouseRepository;
     private final ObjectMapper objectMapper;
@@ -66,6 +110,8 @@ public class SearchWarehousesTool implements ChatTool {
                 + "Có thể lọc riêng tỉnh/thành, quận/huyện và cách tính giá, rồi sắp xếp theo giá hoặc sức chứa. "
                 + "Giá niêm yết có thể là giá cố định theo tháng, giá mỗi m² mỗi tháng hoặc để thỏa thuận; "
                 + "nếu người dùng không nêu tiêu chí, gọi với tham số rỗng để lấy các kho đang công khai. "
+                + "Tìm kiếm có thể hiểu nhu cầu lưu trữ gần nghĩa (ví dụ kho lạnh với bảo quản thực phẩm, "
+                + "nông sản hoặc đông lạnh) và xếp hạng kết quả gần đúng; hãy kiểm tra mô tả trước khi kết luận. "
                 + "Nếu cần diện tích hoặc kích thước, dùng warehouseId trong kết quả để gọi getPublicWarehouseLayout; "
                 + "không dùng capacity hay giá/m² để suy ra diện tích.";
     }
@@ -140,11 +186,13 @@ public class SearchWarehousesTool implements ChatTool {
                     Map<String, Object> response = baseResponse(normalizedMatches);
                     response.put("matchedByExactKeyword", false);
                     response.put("matchedByNormalizedKeyword", true);
+                    response.put("matchedBySemanticKeyword", true);
+                    response.put("matchMode", "SEMANTIC_FALLBACK");
                     response.put("requestedKeyword", requestedKeyword);
                     addSearchKeywordMetadata(response, requestedKeyword, keyword);
                     response.put("approximateCandidateLimit", NORMALIZED_SEARCH_CANDIDATE_LIMIT);
                     response.put("guidance",
-                            "Kết quả được tìm bằng chuẩn hóa/gần đúng trên nhóm kho khả dụng gần nhất; hãy kiểm tra lại tên, địa chỉ và mô tả trước khi chọn.");
+                            "Kết quả được tìm bằng chuẩn hóa, từ đồng nghĩa hoặc gần đúng trên nhóm kho khả dụng gần nhất; hãy kiểm tra lại tên, địa chỉ và mô tả trước khi chọn.");
                     return objectMapper.writeValueAsString(response);
                 }
 
@@ -154,6 +202,7 @@ public class SearchWarehousesTool implements ChatTool {
                 if (!fallback.isEmpty()) {
                     Map<String, Object> response = baseResponse(fallback);
                     response.put("matchedByExactKeyword", false);
+                    response.put("matchMode", "FALLBACK_LIST");
                     response.put("requestedKeyword", requestedKeyword);
                     addSearchKeywordMetadata(response, requestedKeyword, keyword);
                     response.put("guidance",
@@ -166,6 +215,7 @@ public class SearchWarehousesTool implements ChatTool {
             addSearchKeywordMetadata(response, requestedKeyword, keyword);
             if (requestedKeyword != null) {
                 response.put("matchedByExactKeyword", !results.isEmpty());
+                response.put("matchMode", results.isEmpty() ? "NO_MATCH" : "EXACT");
             }
             if (results.isEmpty()) {
                 response.put("message", "Không tìm thấy bài đăng kho còn hiệu lực phù hợp với bộ lọc.");
@@ -201,7 +251,8 @@ public class SearchWarehousesTool implements ChatTool {
         if (keyword == null || keyword.isBlank()) {
             return null;
         }
-        String cleaned = DIMENSION_QUESTION.matcher(keyword).replaceAll(" ")
+        String cleaned = DIMENSION_QUESTION.matcher(keyword).replaceAll(" ");
+        cleaned = ENTITY_QUESTION_NOISE.matcher(cleaned).replaceAll(" ")
                 .replaceAll("[?!,:;]+", " ")
                 .replaceAll("\\s+", " ")
                 .trim();
@@ -234,21 +285,49 @@ public class SearchWarehousesTool implements ChatTool {
                 null, province, district, pricingType,
                 minPrice, maxPrice, minCapacity, maxCapacity, isVerified,
                 0, NORMALIZED_SEARCH_CANDIDATE_LIMIT, sort);
-        String normalizedKeyword = normalizeSearchText(keyword);
-        if (normalizedKeyword.isBlank()) {
+        SemanticQuery semanticQuery = buildSemanticQuery(keyword);
+        if (semanticQuery.normalized().isBlank()
+                || (semanticQuery.queryTerms().isEmpty()
+                && semanticQuery.expandedPhrases().isEmpty())) {
             return Page.empty(PageRequest.of(0, pageSize, sort));
         }
-        List<String> queryTerms = List.of(normalizedKeyword.split("\\s+"));
-        List<Warehouse> matches = candidates.getContent().stream()
-                .filter(warehouse -> matchesNormalizedKeyword(warehouse, normalizedKeyword, queryTerms))
+        List<ScoredWarehouse> scored = candidates.getContent().stream()
+                .map(warehouse -> new ScoredWarehouse(
+                        warehouse,
+                        semanticScore(warehouse, semanticQuery)))
+                .filter(match -> match.score() >= 0.15)
+                .sorted(Comparator.comparingDouble(ScoredWarehouse::score).reversed())
                 .toList();
-        List<Warehouse> pageContent = matches.subList(0, Math.min(pageSize, matches.size()));
-        return new PageImpl<>(pageContent, PageRequest.of(0, pageSize, sort), matches.size());
+        List<Warehouse> pageContent = scored.stream()
+                .limit(pageSize)
+                .map(ScoredWarehouse::warehouse)
+                .toList();
+        return new PageImpl<>(pageContent, PageRequest.of(0, pageSize, sort), scored.size());
     }
 
-    private boolean matchesNormalizedKeyword(Warehouse warehouse,
-                                             String normalizedKeyword,
-                                             List<String> queryTerms) {
+    private SemanticQuery buildSemanticQuery(String keyword) {
+        String normalizedKeyword = normalizeSearchText(keyword);
+        List<String> queryTerms = normalizedKeyword.isBlank()
+                ? List.of()
+                : Arrays.stream(normalizedKeyword.split("\\s+"))
+                .filter(term -> term.length() >= 2 && !SEMANTIC_STOP_WORDS.contains(term))
+                .toList();
+        LinkedHashSet<String> expandedPhrases = new LinkedHashSet<>();
+        for (SemanticConcept concept : SEMANTIC_CONCEPTS) {
+            boolean triggered = concept.triggers().stream()
+                    .anyMatch(normalizedKeyword::contains);
+            if (triggered) {
+                expandedPhrases.addAll(concept.expansions());
+            }
+        }
+        return new SemanticQuery(
+                normalizedKeyword,
+                queryTerms,
+                List.copyOf(expandedPhrases));
+    }
+
+    private double semanticScore(Warehouse warehouse, SemanticQuery query) {
+        String name = normalizeSearchText(safeText(warehouse.getName()));
         String searchable = normalizeSearchText(String.join(" ",
                 safeText(warehouse.getName()),
                 safeText(warehouse.getAddress()),
@@ -256,13 +335,39 @@ public class SearchWarehousesTool implements ChatTool {
                 safeText(warehouse.getDistrictName()),
                 safeText(warehouse.getDescription()),
                 warehouse.getType() == null ? "" : safeText(warehouse.getType().getName())));
-        if (searchable.contains(normalizedKeyword)) {
-            return true;
+        if (query.normalized().length() >= 3 && searchable.contains(query.normalized())) {
+            return 1.0;
         }
+        if (searchable.isBlank()) {
+            return 0.0;
+        }
+
         String[] searchableTerms = searchable.split("\\s+");
-        return queryTerms.stream().allMatch(queryTerm ->
-                Arrays.stream(searchableTerms)
-                        .anyMatch(candidate -> approximateTermMatch(queryTerm, candidate)));
+        long directMatches = query.queryTerms().stream()
+                .filter(queryTerm -> Arrays.stream(searchableTerms)
+                        .anyMatch(candidate -> approximateTermMatch(queryTerm, candidate)))
+                .count();
+        double directCoverage = query.queryTerms().isEmpty()
+                ? 0.0
+                : (double) directMatches / query.queryTerms().size();
+        long titleMatches = query.queryTerms().stream()
+                .filter(queryTerm -> Arrays.stream(name.split("\\s+"))
+                        .anyMatch(candidate -> approximateTermMatch(queryTerm, candidate)))
+                .count();
+        double titleCoverage = query.queryTerms().isEmpty()
+                ? 0.0
+                : (double) titleMatches / query.queryTerms().size();
+        long conceptMatches = query.expandedPhrases().stream()
+                .filter(searchable::contains)
+                .count();
+        double conceptStrength = Math.min(1.0, conceptMatches / 2.0);
+        if (directMatches == 0 && conceptMatches == 0) {
+            return 0.0;
+        }
+        return Math.min(1.0,
+                0.55 * directCoverage
+                        + 0.35 * conceptStrength
+                        + 0.10 * titleCoverage);
     }
 
     private boolean approximateTermMatch(String queryTerm, String candidate) {
@@ -444,5 +549,18 @@ public class SearchWarehousesTool implements ChatTool {
         } catch (Exception ignored) {
             return "{\"error\":\"Không thể tìm kiếm kho lúc này.\"}";
         }
+    }
+
+    private record SemanticConcept(Set<String> triggers, Set<String> expansions) {
+    }
+
+    private record SemanticQuery(
+            String normalized,
+            List<String> queryTerms,
+            List<String> expandedPhrases
+    ) {
+    }
+
+    private record ScoredWarehouse(Warehouse warehouse, double score) {
     }
 }

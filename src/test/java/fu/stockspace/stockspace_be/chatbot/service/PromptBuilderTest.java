@@ -40,6 +40,7 @@ class PromptBuilderTest {
         assertTrue(prompt.contains("getPublicWarehouseLayout"));
         assertTrue(prompt.contains("floorAreaM2"));
         assertTrue(prompt.contains("capacity"));
+        assertTrue(prompt.contains("matchedBySemanticKeyword"));
     }
 
     @Test
