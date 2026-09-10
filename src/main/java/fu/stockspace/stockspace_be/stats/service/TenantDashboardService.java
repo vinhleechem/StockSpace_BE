@@ -22,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.EnumSet;
 import java.util.UUID;
@@ -39,10 +40,11 @@ public class TenantDashboardService {
     private final TenantMemberRepository tenantMemberRepository;
     private final NotificationRepository notificationRepository;
     private final SubscriptionRepository subscriptionRepository;
+    private final Clock businessClock;
 
     @Transactional(readOnly = true)
     public TenantDashboardResponse getDashboard(UUID tenantId) {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(businessClock);
 
         StockBatchRepository.TenantStockSummaryProjection stockSummary =
                 stockBatchRepository.summarizeForTenant(tenantId, today);

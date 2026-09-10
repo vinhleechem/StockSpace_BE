@@ -68,6 +68,19 @@ public final class RentalAreaAllocationPolicy {
         return pricingType == RentalPricingType.FIXED_MONTHLY;
     }
 
+    /**
+     * Validates dimensions already stored on a contract against the current
+     * default layout without resolving a new rental scope.
+     */
+    public static LeasedDimensions validatePreservedDimensions(
+            RentalPricingType pricingType,
+            BigDecimal width,
+            BigDecimal length,
+            BigDecimal height,
+            WarehouseLayoutResponse defaultLayout) {
+        return resolveDimensions(pricingType, width, length, height, defaultLayout);
+    }
+
     public static BigDecimal calculateDefaultArea(WarehouseLayoutResponse defaultLayout) {
         Dimensions dimensions = readDefaultDimensions(defaultLayout);
         return dimensions.width().multiply(dimensions.length());

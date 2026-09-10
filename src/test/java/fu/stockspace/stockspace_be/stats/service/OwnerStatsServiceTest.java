@@ -1,5 +1,6 @@
 package fu.stockspace.stockspace_be.stats.service;
 
+import fu.stockspace.stockspace_be.common.config.BusinessTimeConfig;
 import fu.stockspace.stockspace_be.stats.dto.OccupancyStatsResponse;
 import fu.stockspace.stockspace_be.stats.dto.RevenueStatsResponse;
 import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
@@ -14,6 +15,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -28,6 +31,7 @@ class OwnerStatsServiceTest {
 
     @Mock private WarehouseRepository warehouseRepository;
     @Mock private RentalContractRepository contractRepository;
+    @Mock private Clock businessClock;
 
     @InjectMocks
     private OwnerStatsService ownerStatsService;
@@ -37,6 +41,10 @@ class OwnerStatsServiceTest {
     @BeforeEach
     void setUp() {
         ownerId = UUID.randomUUID();
+        org.mockito.Mockito.lenient().when(businessClock.instant())
+                .thenReturn(Instant.parse("2026-12-31T17:00:00Z"));
+        org.mockito.Mockito.lenient().when(businessClock.getZone())
+                .thenReturn(BusinessTimeConfig.BUSINESS_ZONE_ID);
     }
 
     @Test
@@ -48,6 +56,13 @@ class OwnerStatsServiceTest {
         assertEquals(BigDecimal.ZERO, response.getTotalRevenue());
         assertEquals(12, response.getMonthlyRevenue().size());
         assertEquals(BigDecimal.ZERO, response.getMonthlyRevenue().get(0).getRevenue());
+    }
+
+    @Test
+    void testGetRevenueSummary_UsesHoChiMinhBusinessYearWhenYearIsOmitted() {
+        RevenueStatsResponse response = ownerStatsService.getRevenueSummary(ownerId, null);
+
+        assertEquals(2027, response.getYear());
     }
 
     @Test

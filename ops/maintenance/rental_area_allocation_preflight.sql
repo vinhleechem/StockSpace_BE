@@ -99,7 +99,7 @@ WITH active_default_area AS (
 ), actionable_contracts AS (
     SELECT id, warehouse_id, start_date, end_date, leased_area_m2
     FROM rental_contracts
-    WHERE status IN ('PENDING_TENANT_CONFIRM', 'ACTIVE')
+    WHERE status IN ('PENDING_TENANT_CONFIRM', 'SCHEDULED', 'ACTIVE')
       AND is_active = TRUE
       AND is_deleted = FALSE
       AND start_date IS NOT NULL

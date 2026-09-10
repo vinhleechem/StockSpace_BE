@@ -27,6 +27,7 @@ final class ChatToolLocalization {
             case "DRAFT" -> "Bản nháp";
             case "PENDING_TENANT_CONFIRM" -> "Chờ người thuê xác nhận";
             case "CHANGES_REQUESTED" -> "Người thuê yêu cầu chỉnh sửa";
+            case "SCHEDULED" -> "Đã xác nhận, chờ ngày bắt đầu";
             case "ACTIVE" -> "Đang có hiệu lực";
             case "REJECTED" -> "Đã từ chối";
             case "EXPIRED" -> "Đã hết hạn";

@@ -30,6 +30,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -55,6 +56,7 @@ public class TenantStaffService {
     private final SubscriptionRepository subscriptionRepository;
     private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
+    private final Clock businessClock;
 
 
 
@@ -75,7 +77,7 @@ public class TenantStaffService {
 
         Subscription activeSubscription = subscriptionRepository
                 .findFirstByTenantIdAndStatusAndEndDateGreaterThanEqualOrderByEndDateDesc(
-                        tenantId, SubscriptionStatus.ACTIVE, LocalDate.now())
+                        tenantId, SubscriptionStatus.ACTIVE, LocalDate.now(businessClock))
                 .orElseThrow(() -> new BadRequestException(ErrorCode.SUBSCRIPTION_REQUIRED));
 
         ServicePackage activePkg = activeSubscription.getServicePackage();
@@ -232,7 +234,7 @@ public class TenantStaffService {
 
         subscriptionRepository
                 .findFirstByTenantIdAndStatusAndEndDateGreaterThanEqualOrderByEndDateDesc(
-                        tenantId, SubscriptionStatus.ACTIVE, LocalDate.now())
+                        tenantId, SubscriptionStatus.ACTIVE, LocalDate.now(businessClock))
                 .ifPresent(sub -> {
                     ServicePackage pkg = sub.getServicePackage();
                     int maxStaff = (sub.getSnapshotMaxStaff() != null && sub.getSnapshotMaxStaff() > 0)

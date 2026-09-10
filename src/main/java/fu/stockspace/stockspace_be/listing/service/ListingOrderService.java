@@ -50,7 +50,7 @@ public class ListingOrderService {
     private final WarehouseLayoutRepository warehouseLayoutRepository;
     private final WalletService walletService;
     private final NotificationService notificationService;
-    private final Clock publicationClock;
+    private final Clock businessClock;
 
     @Transactional
     public ListingOrderResponse purchasePublication(
@@ -75,8 +75,8 @@ public class ListingOrderService {
         validateListingPackage(listingPackage);
         validateDefaultLayout(warehouseId);
 
-        LocalDateTime now = LocalDateTime.now(publicationClock);
-        LocalDate today = LocalDate.now(publicationClock);
+        LocalDateTime now = LocalDateTime.now(businessClock);
+        LocalDate today = LocalDate.now(businessClock);
         if (request.getStartDate().isBefore(today)) {
             throw new BadRequestException("Publication start date cannot be in the past");
         }
@@ -132,7 +132,7 @@ public class ListingOrderService {
             UUID warehouseId,
             UUID orderId
     ) {
-        LocalDateTime now = LocalDateTime.now(publicationClock);
+        LocalDateTime now = LocalDateTime.now(businessClock);
         Warehouse warehouse = warehouseRepository.findByIdForUpdate(warehouseId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
         ListingOrder order = listingOrderRepository.findByIdForUpdate(orderId)
@@ -199,7 +199,7 @@ public class ListingOrderService {
             UUID warehouseId,
             UUID orderId
     ) {
-        LocalDateTime now = LocalDateTime.now(publicationClock);
+        LocalDateTime now = LocalDateTime.now(businessClock);
         Warehouse warehouse = warehouseRepository.findByIdForUpdate(warehouseId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
         ListingOrder order = listingOrderRepository.findByIdForUpdate(orderId)

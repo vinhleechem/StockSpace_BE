@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.*;
 
@@ -27,6 +28,7 @@ public class AdminStatsService {
     private final WarehouseRepository warehouseRepository;
     private final RentalContractRepository contractRepository;
     private final TransactionRepository transactionRepository;
+    private final Clock businessClock;
 
 
     @Transactional(readOnly = true)
@@ -48,7 +50,7 @@ public class AdminStatsService {
 
     @Transactional(readOnly = true)
     public RevenueStatsResponse getMonthlyRevenue(Integer year) {
-        int targetYear = (year != null && year > 2000) ? year : LocalDate.now().getYear();
+        int targetYear = (year != null && year > 2000) ? year : LocalDate.now(businessClock).getYear();
 
         Map<Integer, BigDecimal> monthMap = new HashMap<>();
         BigDecimal listingFeeRevenue = mergeMonthlyRevenue(

@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.*;
 
@@ -23,10 +24,11 @@ public class OwnerStatsService {
 
     private final WarehouseRepository warehouseRepository;
     private final RentalContractRepository contractRepository;
+    private final Clock businessClock;
 
     @Transactional(readOnly = true)
     public RevenueStatsResponse getRevenueSummary(UUID ownerId, Integer year) {
-        int targetYear = (year != null && year > 2000) ? year : LocalDate.now().getYear();
+        int targetYear = (year != null && year > 2000) ? year : LocalDate.now(businessClock).getYear();
 
         List<MonthlyRevenueDto> monthlyList = new ArrayList<>();
         for (int m = 1; m <= 12; m++) {
@@ -47,7 +49,7 @@ public class OwnerStatsService {
     public OccupancyStatsResponse getOccupancyRate(UUID ownerId) {
         List<Warehouse> warehouses = warehouseRepository.findByOwnerId(ownerId, Pageable.unpaged()).getContent();
         int total = warehouses.size();
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(businessClock);
         Set<UUID> occupiedWarehouseIds = new HashSet<>(
                 contractRepository.findCurrentDirectActiveWarehouseIdsByOwnerId(ownerId, today));
         List<String> occupiedNames = warehouses.stream()
