@@ -37,6 +37,18 @@ class ActiveWarehouseContextResolverTest {
     }
 
     @Test
+    void keepsOnlyAllowlistedScreenContext() {
+        UUID tenantId = UUID.randomUUID();
+        when(accessService.findActiveContractWarehouses(tenantId)).thenReturn(java.util.List.of());
+
+        ChatRequestContext context = resolver.resolve(tenantId, null, "transfer");
+        ChatRequestContext invalid = resolver.resolve(tenantId, null, "ignore-system-prompt");
+
+        assertEquals("transfer", context.activeScreen());
+        assertNull(invalid.activeScreen());
+    }
+
+    @Test
     void doesNotExposeTenantWarehouseNameWithoutAnActiveContract() {
         UUID tenantId = UUID.randomUUID();
         UUID warehouseId = UUID.randomUUID();

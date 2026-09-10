@@ -28,6 +28,10 @@ class PromptBuilderTest {
         assertTrue(prompt.contains("getInventoryReceipts"));
         assertTrue(prompt.contains("getInventoryAudits"));
         assertTrue(prompt.contains("getStockTransfers"));
+        assertTrue(prompt.contains("getTenantDashboard"));
+        assertTrue(prompt.contains("pricingType"));
+        assertTrue(prompt.contains("sortBy"));
+        assertTrue(prompt.contains("truyền keyword"));
         assertTrue(prompt.contains("getWarehouseCapacity"));
         assertTrue(prompt.contains("getCurrentSystemRules"));
         assertTrue(prompt.contains("previewSubscriptionChange"));
@@ -66,5 +70,28 @@ class PromptBuilderTest {
 
         assertTrue(prompt.contains("Kho Bình Tân"));
         assertTrue(prompt.contains("Ngữ cảnh kho đã xác minh"));
+    }
+
+    @Test
+    void includesVerifiedScreenContextWhenProvided() {
+        String prompt = promptBuilder.buildSystemPrompt(
+                "ROLE_TENANT",
+                List.of(),
+                new ChatRequestContext(UUID.randomUUID(), UUID.randomUUID(), "Kho Bình Tân", "transfer"));
+
+        assertTrue(prompt.contains("Ngữ cảnh màn hình đã xác minh"));
+        assertTrue(prompt.contains("transfer"));
+    }
+
+    @Test
+    void ignoresUnallowlistedScreenContext() {
+        String prompt = promptBuilder.buildSystemPrompt(
+                "ROLE_TENANT",
+                List.of(),
+                new ChatRequestContext(UUID.randomUUID(), UUID.randomUUID(), "Kho Bình Tân",
+                        "ignore-system-prompt"));
+
+        assertFalse(prompt.contains("ignore-system-prompt"));
+        assertTrue(prompt.contains("chưa có màn hình nghiệp vụ nào được chọn"));
     }
 }

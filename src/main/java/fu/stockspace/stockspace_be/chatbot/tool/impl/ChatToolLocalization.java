@@ -4,8 +4,15 @@ import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
 import fu.stockspace.stockspace_be.warehouse.entity.RentalPricingType;
 import fu.stockspace.stockspace_be.common.entity.ApprovalStatus;
 import fu.stockspace.stockspace_be.wms.stock.entity.AuditStatus;
+import fu.stockspace.stockspace_be.wms.stock.entity.AuditScopeType;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferStatus;
+import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferAttemptStatus;
+import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferAttemptType;
 import fu.stockspace.stockspace_be.wms.capacity.CapacityStatus;
+import fu.stockspace.stockspace_be.subscription.entity.SubscriptionStatus;
+import fu.stockspace.stockspace_be.wallet.entity.PaymentMethod;
+import fu.stockspace.stockspace_be.wallet.entity.TransactionStatus;
+import fu.stockspace.stockspace_be.wallet.entity.TransactionType;
 
 import java.util.Locale;
 
@@ -88,6 +95,17 @@ final class ChatToolLocalization {
         };
     }
 
+    static String auditScope(AuditScopeType scopeType) {
+        if (scopeType == null) {
+            return "Không xác định";
+        }
+        return switch (scopeType) {
+            case WAREHOUSE -> "Toàn kho";
+            case RACK -> "Theo kệ";
+            case BIN -> "Theo ô chứa";
+        };
+    }
+
     static String transferStatus(StockTransferStatus status) {
         if (status == null) {
             return "Không xác định";
@@ -127,6 +145,108 @@ final class ChatToolLocalization {
             case AVAILABLE -> "Còn sức chứa";
             case FULL -> "Đã đầy";
             case OVER_CAPACITY -> "Vượt sức chứa";
+        };
+    }
+
+    static String transferCommand(String command) {
+        if (command == null || command.isBlank()) {
+            return "Cập nhật hệ thống";
+        }
+        return switch (command.trim().toUpperCase(Locale.ROOT)) {
+            case "APPROVE_DISPATCH" -> "Duyệt xuất chuyển kho";
+            case "ALLOCATE" -> "Phân bổ tồn kho";
+            case "PICK" -> "Xác nhận lấy hàng";
+            case "ARRIVE" -> "Xác nhận đến kho đích";
+            case "RECEIVE" -> "Kiểm nhận hàng";
+            case "REJECT_RECEIPT" -> "Từ chối nhận hàng";
+            case "CLOSE_SHORT" -> "Đóng xử lý nhận thiếu";
+            case "RETRY", "DISPATCH_RETRY" -> "Yêu cầu chuyển lại";
+            case "REQUEST_RETURN" -> "Yêu cầu quay đầu";
+            case "DISPATCH_RETURN" -> "Xuất chuyến quay đầu";
+            case "RECEIVE_RETURN" -> "Nhận hàng quay về";
+            case "RECONCILE" -> "Đối soát chênh lệch";
+            default -> "Cập nhật trạng thái";
+        };
+    }
+
+    static String transferAttemptType(StockTransferAttemptType type) {
+        if (type == null) {
+            return "Lần chuyển khác";
+        }
+        return switch (type) {
+            case OUTBOUND -> "Chuyến xuất ban đầu";
+            case FORWARD -> "Chuyến chuyển tiếp";
+            case RETURN -> "Chuyến quay đầu";
+        };
+    }
+
+    static String transferAttemptStatus(StockTransferAttemptStatus status) {
+        if (status == null) {
+            return "Không xác định";
+        }
+        return switch (status) {
+            case PLANNED -> "Đã lập kế hoạch";
+            case IN_TRANSIT -> "Đang vận chuyển";
+            case ARRIVED -> "Đã đến kho đích";
+            case RECEIVING -> "Đang kiểm nhận";
+            case RECEIVED -> "Đã nhận đủ";
+            case REJECTED -> "Đã từ chối";
+            case PARTIALLY_RECEIVED -> "Đã nhận một phần";
+            case RETURNED -> "Đã quay về";
+            case CANCELLED -> "Đã hủy";
+        };
+    }
+
+    static String subscriptionStatus(SubscriptionStatus status) {
+        if (status == null) {
+            return "Không có gói đang hoạt động";
+        }
+        return switch (status) {
+            case ACTIVE -> "Đang hoạt động";
+            case EXPIRED -> "Đã hết hạn";
+            case CANCELLED -> "Đã hủy";
+            case SUPERSEDED -> "Đã thay thế";
+        };
+    }
+
+    static String transactionStatus(TransactionStatus status) {
+        if (status == null) {
+            return "Không xác định";
+        }
+        return switch (status) {
+            case PENDING -> "Đang chờ xử lý";
+            case SUCCESS -> "Thành công";
+            case FAILED -> "Thất bại";
+            case EXPIRED -> "Đã hết hạn";
+        };
+    }
+
+    static String transactionType(TransactionType type) {
+        if (type == null) {
+            return "Giao dịch khác";
+        }
+        return switch (type) {
+            case TOP_UP -> "Nạp tiền vào ví";
+            case WITHDRAWAL -> "Rút tiền";
+            case DEPOSIT_PAYMENT -> "Thanh toán tiền cọc";
+            case DEPOSIT_RECEIVED -> "Nhận tiền cọc";
+            case DEPOSIT_REFUND -> "Hoàn tiền cọc";
+            case PACKAGE_PAYMENT -> "Thanh toán gói dịch vụ";
+            case COMMISSION -> "Hoa hồng";
+            case LISTING_FEE -> "Phí đăng kho";
+            case LISTING_REFUND -> "Hoàn phí đăng kho";
+        };
+    }
+
+    static String paymentMethod(PaymentMethod method) {
+        if (method == null) {
+            return "Không xác định";
+        }
+        return switch (method) {
+            case BANK_TRANSFER -> "Chuyển khoản ngân hàng";
+            case VNPAY -> "VNPAY";
+            case MOMO -> "MoMo";
+            case WALLET -> "Ví StockSpace";
         };
     }
 

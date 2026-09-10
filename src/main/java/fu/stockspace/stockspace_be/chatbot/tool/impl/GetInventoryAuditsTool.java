@@ -33,7 +33,8 @@ public class GetInventoryAuditsTool implements ChatTool {
 
     @Override
     public String getDescription() {
-        return "Xem các đợt kiểm kê của người thuê, bao gồm chềnh lệch giữa số lượng hệ thống và thực tế. "
+        return "Xem các đợt kiểm kê của người thuê, bao gồm chênh lệch giữa số lượng hệ thống và thực tế, "
+                + "phạm vi, người được giao và trạng thái chỉnh sửa/duyệt. "
                 + "Mặc định dùng kho đang mở trên giao diện; truyền warehouseId để xem kho khác.";
     }
 
@@ -102,6 +103,12 @@ public class GetInventoryAuditsTool implements ChatTool {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("id", audit.getId());
         result.put("status", ChatToolLocalization.auditStatus(audit.getStatus()));
+        result.put("warehouseId", audit.getWarehouseId());
+        result.put("scopeType", ChatToolLocalization.auditScope(audit.getScopeType()));
+        result.put("countRound", audit.getCountRound());
+        result.put("requestedByName", audit.getRequestedByName());
+        result.put("approvedByName", audit.getApprovedByName());
+        result.put("assignedToName", audit.getAssignedToName());
         result.put("note", audit.getNote());
         result.put("itemCount", items.size());
         result.put("itemsWithDiscrepancy", items.stream()
@@ -110,6 +117,12 @@ public class GetInventoryAuditsTool implements ChatTool {
                 .mapToInt(InventoryAuditItemResponse::getDiscrepancy).sum());
         result.put("createdAt", audit.getCreatedAt());
         result.put("updatedAt", audit.getUpdatedAt());
+        result.put("startedAt", audit.getStartedAt());
+        result.put("submittedAt", audit.getSubmittedAt());
+        result.put("reviewedAt", audit.getReviewedAt());
+        result.put("reviewReason", audit.getReviewReason());
+        result.put("editRequestedAt", audit.getEditRequestedAt());
+        result.put("editApprovedAt", audit.getEditApprovedAt());
         return result;
     }
 

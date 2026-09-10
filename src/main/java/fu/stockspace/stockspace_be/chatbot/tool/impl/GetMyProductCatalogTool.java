@@ -40,7 +40,7 @@ public class GetMyProductCatalogTool implements ChatTool {
     @Override
     public String getDescription() {
         return "Xem danh mục hàng hóa của người thuê: SKU, nhóm sản phẩm hoặc đơn vị tính; có thể xem chi tiết một SKU. "
-                + "Đây là dữ liệu danh mục, khác với số lượng tồn kho thực tế.";
+                + "Có thể tìm SKU theo mã, tên hoặc nhóm sản phẩm. Đây là dữ liệu danh mục, khác với số lượng tồn kho thực tế.";
     }
 
     @Override
@@ -49,6 +49,8 @@ public class GetMyProductCatalogTool implements ChatTool {
                 "type", "object",
                 "properties", Map.of(
                         "view", Map.of("type", "string", "enum", List.of("SKUS", "CATEGORIES", "UNITS")),
+                        "keyword", Map.of("type", "string",
+                                "description", "Từ khóa mã SKU, tên sản phẩm hoặc nhóm sản phẩm; chỉ áp dụng cho view SKUS"),
                         "skuId", Map.of("type", "string", "description", "Mã SKU nội bộ nếu cần xem chi tiết"),
                         "page", Map.of("type", "integer", "minimum", 0),
                         "pageSize", Map.of("type", "integer", "minimum", 1, "maximum", 30)));
@@ -87,8 +89,10 @@ public class GetMyProductCatalogTool implements ChatTool {
         }
         int pageNumber = ChatToolParameters.page(params);
         int pageSize = ChatToolParameters.pageSize(params, 15, 30);
-        PagedResponse<ProductSkuResponse> page = skuService.getMySKUs(
-                userId, PageRequest.of(pageNumber, pageSize, Sort.by("name").ascending()));
+        String keyword = params == null || !(params.get("keyword") instanceof String value)
+                ? null : value.trim();
+        PagedResponse<ProductSkuResponse> page = skuService.searchMySKUs(
+                userId, keyword, PageRequest.of(pageNumber, pageSize, Sort.by("name").ascending()));
         Map<String, Object> result = pageMetadata(page.getPage(), page.getSize(),
                 page.getTotalElements(), page.getTotalPages(), page.isLast());
         result.put("skus", page.getContent().stream().map(value -> sku(value, false)).toList());

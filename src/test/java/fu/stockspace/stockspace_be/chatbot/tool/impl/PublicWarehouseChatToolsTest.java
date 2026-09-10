@@ -215,6 +215,64 @@ class PublicWarehouseChatToolsTest {
     }
 
     @Test
+    void searchWarehousesNormalizesVietnameseKeywordWhenExactSearchMisses() throws Exception {
+        Warehouse warehouse = Warehouse.builder()
+                .id(UUID.randomUUID())
+                .name("Kho Quận 7")
+                .address("Thành phố Hồ Chí Minh")
+                .capacity(new BigDecimal("80"))
+                .rentalPricingType(RentalPricingType.FIXED_MONTHLY)
+                .rentalPrice(new BigDecimal("12000000"))
+                .status(WarehouseStatus.AVAILABLE)
+                .build();
+        when(warehouseRepository.searchPublic(
+                any(), eq(WarehouseStatus.AVAILABLE), any(), any(), any(), any(),
+                eq(null), eq(null), eq(null), eq(null), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()), new PageImpl<>(List.of(warehouse)));
+
+        JsonNode result = objectMapper.readTree(
+                new SearchWarehousesTool(warehouseRepository, objectMapper)
+                        .execute(Map.of("keyword", "quan 7"), null));
+
+        assertTrue(result.get("matchedByNormalizedKeyword").asBoolean());
+        assertEquals("Kho Quận 7", result.at("/warehouses/0/name").asText());
+    }
+
+    @Test
+    void searchWarehousesUsesStructuredLocationPricingAndSortFilters() throws Exception {
+        Warehouse warehouse = Warehouse.builder()
+                .id(UUID.randomUUID())
+                .name("Kho Quận 7")
+                .provinceName("Hồ Chí Minh")
+                .districtName("Quận 7")
+                .capacity(new BigDecimal("300"))
+                .rentalPricingType(RentalPricingType.FIXED_MONTHLY)
+                .rentalPrice(new BigDecimal("15000000"))
+                .status(WarehouseStatus.AVAILABLE)
+                .build();
+        when(warehouseRepository.searchPublicForChat(
+                eq(null), eq("%hồ chí minh%"), eq("%quận 7%"),
+                eq(RentalPricingType.FIXED_MONTHLY), eq(null), eq(null),
+                eq(new BigDecimal("100")), eq(null), eq(true), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(warehouse)));
+
+        JsonNode result = objectMapper.readTree(
+                new SearchWarehousesTool(warehouseRepository, objectMapper).execute(Map.of(
+                        "province", "Hồ Chí Minh",
+                        "district", "Quận 7",
+                        "pricingType", "FIXED_MONTHLY",
+                        "minCapacity", 100,
+                        "isVerified", true,
+                        "sortBy", "PRICE_ASC"), null));
+
+        assertEquals(1, result.get("total").asInt());
+        verify(warehouseRepository).searchPublicForChat(
+                eq(null), eq("%hồ chí minh%"), eq("%quận 7%"),
+                eq(RentalPricingType.FIXED_MONTHLY), eq(null), eq(null),
+                eq(new BigDecimal("100")), eq(null), eq(true), any(Pageable.class));
+    }
+
+    @Test
     void everyPublicToolSchemaUsesLowercaseJsonSchemaTypes() {
         Map<String, Object> searchSchema =
                 new SearchWarehousesTool(warehouseRepository, objectMapper).getParameterSchema();
@@ -235,6 +293,10 @@ class PublicWarehouseChatToolsTest {
         assertEquals("number", properties.get("minCapacity").get("type"));
         assertEquals("number", properties.get("maxCapacity").get("type"));
         assertEquals("boolean", properties.get("isVerified").get("type"));
+        assertEquals("string", properties.get("province").get("type"));
+        assertEquals("string", properties.get("district").get("type"));
+        assertEquals("string", properties.get("pricingType").get("type"));
+        assertEquals("string", properties.get("sortBy").get("type"));
     }
 
     @Test

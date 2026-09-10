@@ -279,6 +279,13 @@ public class DataInitializer implements CommandLineRunner {
                                                                 +
                                                                 "Bước 4: Sau khi xác nhận và đến thời gian thuê, hợp đồng cho phép người thuê quan sát dữ liệu kho. Tiền thuê được thanh toán ngoài StockSpace."),
                                 new KnowledgeSeed(
+                                                "kb.contract-renewal.current",
+                                                KnowledgeCategory.RENTAL_PROCESS,
+                                                "Gia hạn hợp đồng thuê kho",
+                                                "Hợp đồng sắp hết hạn có thể có liên kết gia hạn kế tiếp. Hợp đồng gia hạn được xác nhận trước ngày bắt đầu sẽ nối tiếp thời hạn cũ; trạng thái và quyền truy cập phải được kiểm tra theo ngày hiệu lực thực tế. "
+                                                                +
+                                                                "Nếu chưa có gia hạn được xác nhận, người thuê vẫn có thể xem các lựa chọn hiện được phép trên hợp đồng và cần thực hiện thao tác tiếp theo trên giao diện."),
+                                new KnowledgeSeed(
                                                 "kb.wallet-vnpay.current",
                                                 KnowledgeCategory.FAQ,
                                                 "Làm thế nào để nạp tiền vào ví StockSpace?",
@@ -304,12 +311,12 @@ public class DataInitializer implements CommandLineRunner {
                                                 "Quy trình phiếu nhập xuất và kiểm kê",
                                                 "Phiếu nhập hoặc xuất được tạo ở trạng thái chờ duyệt. Khi phiếu được duyệt, hệ thống mới cộng hoặc trừ tồn kho và ghi nhật ký giao dịch; phiếu có thể bị từ chối khi đang chờ duyệt. "
                                                                 +
-                                                                "Kiểm kê chụp số lượng hệ thống, nhận số đếm thực tế và tính chênh lệch. Chỉ khi kết quả kiểm kê được duyệt thì hệ thống mới tạo điều chỉnh tồn kho."),
+                                                                "Kiểm kê chụp số lượng hệ thống, nhận số đếm thực tế và tính chênh lệch. Kiểm kê có thể được yêu cầu chỉnh sửa hoặc kiểm kê lại; chỉ khi kết quả cuối cùng được duyệt thì hệ thống mới tạo điều chỉnh tồn kho."),
                                 new KnowledgeSeed(
                                                 "kb.transfer-picking-capacity.current",
                                                 KnowledgeCategory.FAQ,
                                                 "Chuyển kho, lấy hàng và sức chứa vật lý",
-                                                "Chuyển hàng giữa hai kho của cùng người thuê đi qua các bước chờ duyệt xuất, đang vận chuyển và đã nhận tại kho đích; yêu cầu có thể bị từ chối hoặc hủy khi trạng thái cho phép. "
+                                                "Chuyển hàng giữa hai kho của cùng người thuê có thể đi qua các bước giữ tồn, lấy hàng, sẵn sàng xuất, đang vận chuyển, đến kho đích, kiểm nhận, đối soát hoặc quay đầu; yêu cầu có thể bị từ chối, hủy, nhận thiếu hoặc xác nhận thất lạc khi trạng thái cho phép. "
                                                                 +
                                                                 "Gợi ý xuất kho ưu tiên lô nhập trước rồi sắp xếp lộ trình lấy hàng theo kệ và ô chứa. Gợi ý xếp hàng nhập và nhận chuyển kho kiểm tra giới hạn khối lượng, thể tích của kệ và ô chứa trước khi phân bổ."));
 

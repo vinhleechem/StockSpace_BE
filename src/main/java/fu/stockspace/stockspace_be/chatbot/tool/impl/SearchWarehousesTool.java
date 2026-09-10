@@ -9,16 +9,21 @@ import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.text.Normalizer;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Arrays;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Component
@@ -28,6 +33,9 @@ public class SearchWarehousesTool implements ChatTool {
     private static final int DEFAULT_RESULT_LIMIT = 5;
     private static final int MAX_RESULT_LIMIT = 20;
     private static final int FALLBACK_RESULT_LIMIT = 8;
+    private static final int NORMALIZED_SEARCH_CANDIDATE_LIMIT = 200;
+    private static final Pattern DIACRITICS = Pattern.compile("\\p{M}+");
+    private static final Pattern NON_WORD = Pattern.compile("[^\\p{L}\\p{N}]+");
 
     private final WarehouseRepository warehouseRepository;
     private final ObjectMapper objectMapper;
@@ -41,6 +49,7 @@ public class SearchWarehousesTool implements ChatTool {
     public String getDescription() {
         return "Tìm các bài đăng kho còn hiệu lực theo từ khóa, giá niêm yết, sức chứa và trạng thái xác minh. "
                 + "Từ khóa có thể là tên, địa chỉ, tỉnh/thành, quận/huyện, loại kho hoặc nhu cầu lưu trữ. "
+                + "Có thể lọc riêng tỉnh/thành, quận/huyện và cách tính giá, rồi sắp xếp theo giá hoặc sức chứa. "
                 + "Giá niêm yết có thể là giá cố định theo tháng, giá mỗi m² mỗi tháng hoặc để thỏa thuận; "
                 + "nếu người dùng không nêu tiêu chí, gọi với tham số rỗng để lấy các kho đang công khai.";
     }
@@ -50,11 +59,21 @@ public class SearchWarehousesTool implements ChatTool {
         Map<String, Object> properties = new LinkedHashMap<>();
         properties.put("keyword", Map.of("type", "string", "description",
                 "Tên, địa chỉ, tỉnh/thành, quận/huyện, loại kho hoặc loại hàng cần lưu trữ"));
+        properties.put("province", Map.of("type", "string", "description",
+                "Tỉnh/thành phố cần lọc; có thể nhập một phần tên"));
+        properties.put("district", Map.of("type", "string", "description",
+                "Quận/huyện cần lọc; có thể nhập một phần tên"));
+        properties.put("pricingType", Map.of("type", "string", "enum",
+                List.of("FIXED_MONTHLY", "PER_SQUARE_METER_MONTHLY", "NEGOTIATED"),
+                "description", "Cách tính giá thuê"));
         properties.put("minRentalPrice", Map.of("type", "number", "description", "Giá niêm yết tối thiểu"));
         properties.put("maxRentalPrice", Map.of("type", "number", "description", "Giá niêm yết tối đa"));
         properties.put("minCapacity", Map.of("type", "number", "description", "Sức chứa tối thiểu"));
         properties.put("maxCapacity", Map.of("type", "number", "description", "Sức chứa tối đa"));
         properties.put("isVerified", Map.of("type", "boolean", "description", "Chỉ lấy kho đã xác minh"));
+        properties.put("sortBy", Map.of("type", "string", "enum",
+                List.of("RELEVANCE", "PRICE_ASC", "PRICE_DESC", "CAPACITY_ASC", "CAPACITY_DESC", "NEWEST"),
+                "description", "Cách sắp xếp kết quả"));
         properties.put("page", Map.of("type", "integer", "minimum", 0));
         properties.put("pageSize", Map.of("type", "integer", "minimum", 1, "maximum", MAX_RESULT_LIMIT));
         return Map.of("type", "object", "properties", properties);
@@ -66,6 +85,9 @@ public class SearchWarehousesTool implements ChatTool {
         try {
             Map<String, Object> safeParams = params == null ? Map.of() : params;
             String keyword = getStringParam(safeParams, "keyword");
+            String province = getLikeStringParam(safeParams, "province");
+            String district = getLikeStringParam(safeParams, "district");
+            RentalPricingType pricingType = getPricingTypeParam(safeParams, "pricingType");
             BigDecimal minPrice = getNonNegativeDecimalParam(safeParams, "minRentalPrice");
             BigDecimal maxPrice = getNonNegativeDecimalParam(safeParams, "maxRentalPrice");
             BigDecimal minCapacity = getNonNegativeDecimalParam(safeParams, "minCapacity");
@@ -73,25 +95,44 @@ public class SearchWarehousesTool implements ChatTool {
             Boolean isVerified = getBooleanParam(safeParams, "isVerified");
             int page = ChatToolParameters.page(safeParams);
             int pageSize = ChatToolParameters.pageSize(safeParams, DEFAULT_RESULT_LIMIT, MAX_RESULT_LIMIT);
+            Sort sort = sortParam(safeParams, "sortBy");
             validateRange(minPrice, maxPrice, "Giá niêm yết tối thiểu không được lớn hơn giá niêm yết tối đa");
             validateRange(minCapacity, maxCapacity, "Sức chứa tối thiểu không được lớn hơn sức chứa tối đa");
 
             Page<Warehouse> results = search(
                     keyword == null ? null : "%" + keyword.toLowerCase(Locale.ROOT) + "%",
-                    minPrice, maxPrice, minCapacity, maxCapacity, isVerified, page, pageSize);
+                    province, district, pricingType,
+                    minPrice, maxPrice, minCapacity, maxCapacity, isVerified, page, pageSize, sort);
 
             if (results.getTotalElements() == 0 && keyword != null
                     && keyword.toLowerCase(Locale.ROOT).startsWith("kho ")) {
                 String strippedKeyword = keyword.substring(4).trim();
                 if (!strippedKeyword.isBlank()) {
                     results = search("%" + strippedKeyword.toLowerCase(Locale.ROOT) + "%",
-                            minPrice, maxPrice, minCapacity, maxCapacity, isVerified, page, pageSize);
+                            province, district, pricingType,
+                            minPrice, maxPrice, minCapacity, maxCapacity, isVerified, page, pageSize, sort);
                 }
             }
 
             if (page == 0 && results.getTotalElements() == 0 && keyword != null) {
-                Page<Warehouse> fallback = search(null, minPrice, maxPrice, minCapacity, maxCapacity,
-                        isVerified, 0, Math.max(pageSize, FALLBACK_RESULT_LIMIT));
+                Page<Warehouse> normalizedMatches = searchByNormalizedText(
+                        keyword, province, district, pricingType,
+                        minPrice, maxPrice, minCapacity, maxCapacity, isVerified,
+                        pageSize, sort);
+                if (!normalizedMatches.isEmpty()) {
+                    Map<String, Object> response = baseResponse(normalizedMatches);
+                    response.put("matchedByExactKeyword", false);
+                    response.put("matchedByNormalizedKeyword", true);
+                    response.put("requestedKeyword", keyword);
+                    response.put("approximateCandidateLimit", NORMALIZED_SEARCH_CANDIDATE_LIMIT);
+                    response.put("guidance",
+                            "Kết quả được tìm bằng chuẩn hóa/gần đúng trên nhóm kho khả dụng gần nhất; hãy kiểm tra lại tên, địa chỉ và mô tả trước khi chọn.");
+                    return objectMapper.writeValueAsString(response);
+                }
+
+                Page<Warehouse> fallback = search(null, province, district, pricingType,
+                        minPrice, maxPrice, minCapacity, maxCapacity, isVerified,
+                        0, Math.max(pageSize, FALLBACK_RESULT_LIMIT), sort);
                 if (!fallback.isEmpty()) {
                     Map<String, Object> response = baseResponse(fallback);
                     response.put("matchedByExactKeyword", false);
@@ -115,12 +156,120 @@ public class SearchWarehousesTool implements ChatTool {
         }
     }
 
-    private Page<Warehouse> search(String keyword, BigDecimal minPrice, BigDecimal maxPrice,
+    private Page<Warehouse> search(String keyword, String province, String district,
+                                   RentalPricingType pricingType,
+                                   BigDecimal minPrice, BigDecimal maxPrice,
                                    BigDecimal minCapacity, BigDecimal maxCapacity,
-                                   Boolean isVerified, int page, int limit) {
-        return warehouseRepository.searchPublic(
-                keyword, WarehouseStatus.AVAILABLE, minPrice, maxPrice, minCapacity, maxCapacity,
-                null, null, null, isVerified, PageRequest.of(page, limit));
+                                   Boolean isVerified, int page, int limit, Sort sort) {
+        PageRequest pageable = PageRequest.of(page, limit, sort);
+        if (province == null && district == null && pricingType == null) {
+            return warehouseRepository.searchPublic(
+                    keyword, WarehouseStatus.AVAILABLE, minPrice, maxPrice, minCapacity, maxCapacity,
+                    null, null, null, isVerified, pageable);
+        }
+        return warehouseRepository.searchPublicForChat(
+                keyword, province, district, pricingType,
+                minPrice, maxPrice, minCapacity, maxCapacity, isVerified, pageable);
+    }
+
+    private Page<Warehouse> searchByNormalizedText(String keyword,
+                                                   String province,
+                                                   String district,
+                                                   RentalPricingType pricingType,
+                                                   BigDecimal minPrice,
+                                                   BigDecimal maxPrice,
+                                                   BigDecimal minCapacity,
+                                                   BigDecimal maxCapacity,
+                                                   Boolean isVerified,
+                                                   int pageSize,
+                                                   Sort sort) {
+        Page<Warehouse> candidates = search(
+                null, province, district, pricingType,
+                minPrice, maxPrice, minCapacity, maxCapacity, isVerified,
+                0, NORMALIZED_SEARCH_CANDIDATE_LIMIT, sort);
+        String normalizedKeyword = normalizeSearchText(keyword);
+        if (normalizedKeyword.isBlank()) {
+            return Page.empty(PageRequest.of(0, pageSize, sort));
+        }
+        List<String> queryTerms = List.of(normalizedKeyword.split("\\s+"));
+        List<Warehouse> matches = candidates.getContent().stream()
+                .filter(warehouse -> matchesNormalizedKeyword(warehouse, normalizedKeyword, queryTerms))
+                .toList();
+        List<Warehouse> pageContent = matches.subList(0, Math.min(pageSize, matches.size()));
+        return new PageImpl<>(pageContent, PageRequest.of(0, pageSize, sort), matches.size());
+    }
+
+    private boolean matchesNormalizedKeyword(Warehouse warehouse,
+                                             String normalizedKeyword,
+                                             List<String> queryTerms) {
+        String searchable = normalizeSearchText(String.join(" ",
+                safeText(warehouse.getName()),
+                safeText(warehouse.getAddress()),
+                safeText(warehouse.getProvinceName()),
+                safeText(warehouse.getDistrictName()),
+                safeText(warehouse.getDescription()),
+                warehouse.getType() == null ? "" : safeText(warehouse.getType().getName())));
+        if (searchable.contains(normalizedKeyword)) {
+            return true;
+        }
+        String[] searchableTerms = searchable.split("\\s+");
+        return queryTerms.stream().allMatch(queryTerm ->
+                Arrays.stream(searchableTerms)
+                        .anyMatch(candidate -> approximateTermMatch(queryTerm, candidate)));
+    }
+
+    private boolean approximateTermMatch(String queryTerm, String candidate) {
+        if (candidate.contains(queryTerm) || queryTerm.contains(candidate)) {
+            return true;
+        }
+        if (queryTerm.length() < 3 || candidate.length() < 3) {
+            return false;
+        }
+        int maxDistance = queryTerm.length() >= 7 ? 2 : 1;
+        return levenshteinDistance(queryTerm, candidate, maxDistance) <= maxDistance;
+    }
+
+    private int levenshteinDistance(String left, String right, int cutoff) {
+        if (Math.abs(left.length() - right.length()) > cutoff) {
+            return cutoff + 1;
+        }
+        int[] previous = new int[right.length() + 1];
+        int[] current = new int[right.length() + 1];
+        for (int index = 0; index <= right.length(); index++) {
+            previous[index] = index;
+        }
+        for (int leftIndex = 1; leftIndex <= left.length(); leftIndex++) {
+            current[0] = leftIndex;
+            for (int rightIndex = 1; rightIndex <= right.length(); rightIndex++) {
+                int substitution = previous[rightIndex - 1]
+                        + (left.charAt(leftIndex - 1) == right.charAt(rightIndex - 1) ? 0 : 1);
+                current[rightIndex] = Math.min(Math.min(
+                        previous[rightIndex] + 1,
+                        current[rightIndex - 1] + 1), substitution);
+            }
+            int[] swap = previous;
+            previous = current;
+            current = swap;
+        }
+        return previous[right.length()];
+    }
+
+    private String normalizeSearchText(String value) {
+        if (value == null) {
+            return "";
+        }
+        String decomposed = Normalizer.normalize(value, Normalizer.Form.NFD);
+        String withoutDiacritics = DIACRITICS.matcher(decomposed).replaceAll("")
+                .replace('đ', 'd')
+                .replace('Đ', 'D');
+        return NON_WORD.matcher(withoutDiacritics.toLowerCase(Locale.ROOT))
+                .replaceAll(" ")
+                .trim()
+                .replaceAll("\\s+", " ");
+    }
+
+    private String safeText(String value) {
+        return value == null ? "" : value;
     }
 
     private Map<String, Object> baseResponse(Page<Warehouse> page) {
@@ -167,6 +316,42 @@ public class SearchWarehousesTool implements ChatTool {
     private String getStringParam(Map<String, Object> params, String key) {
         Object value = params.get(key);
         return value instanceof String text && !text.isBlank() ? text.trim() : null;
+    }
+
+    private String getLikeStringParam(Map<String, Object> params, String key) {
+        String value = getStringParam(params, key);
+        return value == null ? null : "%" + value.toLowerCase(Locale.ROOT) + "%";
+    }
+
+    private RentalPricingType getPricingTypeParam(Map<String, Object> params, String key) {
+        String raw = getStringParam(params, key);
+        if (raw == null) {
+            return null;
+        }
+        try {
+            return RentalPricingType.valueOf(raw.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException(
+                    "Cách tính giá thuê không hợp lệ: FIXED_MONTHLY, PER_SQUARE_METER_MONTHLY hoặc NEGOTIATED");
+        }
+    }
+
+    private Sort sortParam(Map<String, Object> params, String key) {
+        String raw = getStringParam(params, key);
+        String value = raw == null ? "RELEVANCE" : raw.toUpperCase(Locale.ROOT);
+        return switch (value) {
+            case "RELEVANCE", "NEWEST" -> Sort.by(Sort.Direction.DESC, "publishedAt");
+            case "PRICE_ASC" -> Sort.by(Sort.Direction.ASC, "rentalPrice")
+                    .and(Sort.by(Sort.Direction.DESC, "publishedAt"));
+            case "PRICE_DESC" -> Sort.by(Sort.Direction.DESC, "rentalPrice")
+                    .and(Sort.by(Sort.Direction.DESC, "publishedAt"));
+            case "CAPACITY_ASC" -> Sort.by(Sort.Direction.ASC, "capacity")
+                    .and(Sort.by(Sort.Direction.DESC, "publishedAt"));
+            case "CAPACITY_DESC" -> Sort.by(Sort.Direction.DESC, "capacity")
+                    .and(Sort.by(Sort.Direction.DESC, "publishedAt"));
+            default -> throw new IllegalArgumentException(
+                    "Cách sắp xếp không hợp lệ: RELEVANCE, PRICE_ASC, PRICE_DESC, CAPACITY_ASC, CAPACITY_DESC hoặc NEWEST");
+        };
     }
 
     private BigDecimal getNonNegativeDecimalParam(Map<String, Object> params, String key) {

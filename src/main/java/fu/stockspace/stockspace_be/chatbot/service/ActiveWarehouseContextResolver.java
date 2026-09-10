@@ -9,6 +9,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
+import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -21,10 +23,22 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ActiveWarehouseContextResolver {
 
+    private static final Set<String> ALLOWED_SCREENS = Set.of(
+            "dashboard", "contracts", "warehouse", "inventory", "receipt",
+            "audit", "transfer", "wallet", "subscription", "notifications"
+    );
+
     private final WarehouseRepository warehouseRepository;
     private final TenantWarehouseAccessService accessService;
 
     public ChatRequestContext resolve(UUID tenantId, UUID requestedWarehouseId) {
+        return resolve(tenantId, requestedWarehouseId, null);
+    }
+
+    public ChatRequestContext resolve(UUID tenantId,
+                                      UUID requestedWarehouseId,
+                                      String requestedScreen) {
+        String activeScreen = normalizeScreen(requestedScreen);
         if (tenantId == null) {
             return withoutWarehouse(null);
         }
@@ -35,7 +49,7 @@ public class ActiveWarehouseContextResolver {
                         tenantId, requestedWarehouseId);
                 if (warehouse.isPresent()) {
                     Warehouse value = warehouse.get();
-                    return new ChatRequestContext(tenantId, value.getId(), value.getName());
+                    return new ChatRequestContext(tenantId, value.getId(), value.getName(), activeScreen);
                 }
             }
 
@@ -45,14 +59,14 @@ public class ActiveWarehouseContextResolver {
                 Warehouse single = activeWarehouses.get(0);
                 log.info("[ActiveWarehouseContext] Auto-resolved single active warehouse: id={} name={}",
                         single.getId(), single.getName());
-                return new ChatRequestContext(tenantId, single.getId(), single.getName());
+                return new ChatRequestContext(tenantId, single.getId(), single.getName(), activeScreen);
             }
 
-            return withoutWarehouse(tenantId);
+            return withoutWarehouse(tenantId, activeScreen);
         } catch (RuntimeException exception) {
             log.warn("[ActiveWarehouseContext] Tenant resolution failed cause={}",
                     exception.getClass().getSimpleName());
-            return withoutWarehouse(tenantId);
+            return withoutWarehouse(tenantId, activeScreen);
         }
     }
 
@@ -64,6 +78,18 @@ public class ActiveWarehouseContextResolver {
     }
 
     private ChatRequestContext withoutWarehouse(UUID tenantId) {
-        return new ChatRequestContext(tenantId, null, null);
+        return withoutWarehouse(tenantId, null);
+    }
+
+    private ChatRequestContext withoutWarehouse(UUID tenantId, String activeScreen) {
+        return new ChatRequestContext(tenantId, null, null, activeScreen);
+    }
+
+    private String normalizeScreen(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String normalized = value.trim().toLowerCase(Locale.ROOT);
+        return ALLOWED_SCREENS.contains(normalized) ? normalized : null;
     }
 }

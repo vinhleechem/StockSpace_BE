@@ -25,6 +25,7 @@ class ChatToolRegistryTest {
             "askLoginPrompt",
             "getMyContracts",
             "getContractDetail",
+            "getTenantDashboard",
             "getMyActiveWarehouses",
             "getWarehouseOwnerContact",
             "getMyWarehouseLayout",
@@ -56,6 +57,7 @@ class ChatToolRegistryTest {
         assertTrue(tenant.containsAll(List.of(
                 "getMyContracts",
                 "getContractDetail",
+                "getTenantDashboard",
                 "getMyActiveWarehouses",
                 "getWarehouseOwnerContact",
                 "getMyWarehouseLayout",
@@ -83,16 +85,19 @@ class ChatToolRegistryTest {
     }
 
     @Test
-    void hidesSubscriptionGatedWmsToolsWhenTenantHasNoActiveSubscription() {
+    void keepsReadOnlyObservationToolsWhenTenantHasNoActiveSubscription() {
         ChatToolRegistry registry = new ChatToolRegistry(requiredTools());
         List<ChatTool> tenantTools = registry.getToolsForRole("ROLE_TENANT");
 
         List<String> locked = names(
                 ChatToolRegistry.filterForActiveSubscription(tenantTools, false));
 
-        assertFalse(locked.contains("getMyStock"));
-        assertFalse(locked.contains("getInventoryReceipts"));
-        assertFalse(locked.contains("getWarehouseCapacity"));
+        assertTrue(locked.contains("getMyStock"));
+        assertTrue(locked.contains("getInventoryReceipts"));
+        assertTrue(locked.contains("getWarehouseCapacity"));
+        assertTrue(locked.contains("getInventoryAudits"));
+        assertTrue(locked.contains("getStockTransfers"));
+        assertFalse(locked.contains("getMyWarehouseLayout"));
         assertFalse(locked.contains("suggestPutaway"));
         assertTrue(locked.containsAll(List.of(
                 "getServicePackages",

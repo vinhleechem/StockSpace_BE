@@ -31,7 +31,7 @@ public class GetContractDetailTool implements ChatTool {
     @Override
     public String getDescription() {
         return "Xem chi tiết hợp đồng thuê kho của người thuê đang đăng nhập: điều khoản, tệp hợp đồng giấy, "
-                + "lý do thay đổi hoặc từ chối và các lựa chọn hiện được phép.";
+                + "lý do thay đổi hoặc từ chối, thông tin gia hạn và các lựa chọn hiện được phép.";
     }
 
     @Override
@@ -91,6 +91,15 @@ public class GetContractDetailTool implements ChatTool {
         result.put("ownerNote", contract.getOwnerNote());
         result.put("changeRequestReason", contract.getChangeRequestReason());
         result.put("rejectionReason", contract.getRejectionReason());
+        result.put("renewedFromContractId", contract.getRenewedFromContractId());
+        result.put("renewalContractId", contract.getRenewalContractId());
+        result.put("canCreateRenewal", contract.isCanCreateRenewal());
+        result.put("layoutSetupRequired", contract.isLayoutSetupRequired());
+        result.put("canEditContractLayout", contract.isCanEditContractLayout());
+        result.put("warehouseTotalAreaM2", contract.getWarehouseTotalAreaM2());
+        result.put("warehouseReservedAreaM2", contract.getWarehouseReservedAreaM2());
+        result.put("warehouseAvailableAreaM2", contract.getWarehouseAvailableAreaM2());
+        result.put("areaAvailabilitySufficient", contract.getAreaAvailabilitySufficient());
         result.put("canConfirm", contract.isCanConfirm());
         result.put("canRequestChanges", contract.isCanRequestChanges());
         result.put("canReject", contract.isCanReject());

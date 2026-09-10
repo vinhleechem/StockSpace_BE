@@ -20,13 +20,21 @@ public record SendMessageRequest(
         String message,
 
         @Schema(description = "Ngữ cảnh kho đang mở. Frontend tự gửi từ màn hình hiện tại; người dùng không cần nhập giá trị này.")
-        UUID activeWarehouseId
+        UUID activeWarehouseId,
+
+        @Size(max = 32, message = "Màn hình hiện tại không hợp lệ")
+        @Schema(description = "Màn hình nghiệp vụ đang mở, dùng để hiểu câu hỏi nối tiếp; backend chỉ nhận giá trị trong allowlist.")
+        String activeScreen
 ) {
     /**
      * Keeps existing Java callers source-compatible. HTTP clients may omit the
      * optional active warehouse context as well.
      */
     public SendMessageRequest(String sessionId, String message) {
-        this(sessionId, message, null);
+        this(sessionId, message, null, null);
+    }
+
+    public SendMessageRequest(String sessionId, String message, UUID activeWarehouseId) {
+        this(sessionId, message, activeWarehouseId, null);
     }
 }

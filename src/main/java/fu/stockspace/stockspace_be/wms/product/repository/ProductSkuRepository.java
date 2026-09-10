@@ -45,6 +45,34 @@ public interface ProductSkuRepository extends JpaRepository<ProductSku, UUID> {
     @Query("SELECT s FROM ProductSku s WHERE s.id = :id AND s.isDeleted = false AND (s.tenant.id = :tenantId OR s.tenant IS NULL)")
     Optional<ProductSku> findByIdAndTenantIdOrSystemAndIsDeletedFalse(@Param("id") UUID id, @Param("tenantId") UUID tenantId);
 
+    @Query("""
+            SELECT s FROM ProductSku s
+            LEFT JOIN s.category c
+            WHERE s.isDeleted = false
+              AND (
+                    s.tenant.id = :tenantId
+                    OR (
+                        s.tenant IS NULL
+                        AND NOT EXISTS (
+                            SELECT 1
+                            FROM ProductSku sub
+                            WHERE sub.tenant.id = :tenantId
+                              AND sub.skuCode = s.skuCode
+                              AND sub.isDeleted = false
+                        )
+                    )
+              )
+              AND (:keyword IS NULL
+                   OR LOWER(s.skuCode) LIKE :keyword
+                   OR LOWER(s.name) LIKE :keyword
+                   OR LOWER(c.name) LIKE :keyword)
+            """)
+    Page<ProductSku> searchAllActiveByTenantOrSystem(
+            @Param("tenantId") UUID tenantId,
+            @Param("keyword") String keyword,
+            Pageable pageable
+    );
+
 
 
 

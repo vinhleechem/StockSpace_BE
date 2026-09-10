@@ -2,6 +2,7 @@ package fu.stockspace.stockspace_be.warehouse.repository;
 
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
+import fu.stockspace.stockspace_be.warehouse.entity.RentalPricingType;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -83,6 +84,49 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
             @Param("provinceCode") String provinceCode,
             @Param("districtCode") String districtCode,
             @Param("warehouseTypeId") UUID warehouseTypeId,
+            @Param("isVerified") Boolean isVerified,
+            Pageable pageable
+    );
+
+    /**
+     * Chat-facing variant with the structured filters that are safe to expose
+     * to a user. The original method is kept for the warehouse management
+     * screens so this extension does not change their query contract.
+     */
+    @EntityGraph(attributePaths = "type")
+    @Query("""
+            SELECT w FROM Warehouse w
+              WHERE w.isActive = true
+                AND w.isDeleted = false
+                AND w.status = fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus.AVAILABLE
+              AND w.publishedAt IS NOT NULL
+              AND w.publishedAt <= CURRENT_TIMESTAMP
+              AND w.visibleUntil IS NOT NULL
+              AND w.visibleUntil >= CURRENT_TIMESTAMP
+              AND (:keyword IS NULL OR LOWER(w.name) LIKE :keyword
+                   OR LOWER(w.address) LIKE :keyword
+                   OR LOWER(w.provinceName) LIKE :keyword
+                   OR LOWER(w.districtName) LIKE :keyword
+                   OR LOWER(w.description) LIKE :keyword
+                   OR LOWER(w.type.name) LIKE :keyword)
+              AND (:provinceName IS NULL OR LOWER(w.provinceName) LIKE :provinceName)
+              AND (:districtName IS NULL OR LOWER(w.districtName) LIKE :districtName)
+              AND (:pricingType IS NULL OR w.rentalPricingType = :pricingType)
+              AND (:minPrice IS NULL OR (w.rentalPrice IS NOT NULL AND w.rentalPrice >= :minPrice))
+              AND (:maxPrice IS NULL OR (w.rentalPrice IS NOT NULL AND w.rentalPrice <= :maxPrice))
+              AND (:minCapacity IS NULL OR w.capacity >= :minCapacity)
+              AND (:maxCapacity IS NULL OR w.capacity <= :maxCapacity)
+              AND (:isVerified IS NULL OR w.isVerified = :isVerified)
+            """)
+    Page<Warehouse> searchPublicForChat(
+            @Param("keyword") String keyword,
+            @Param("provinceName") String provinceName,
+            @Param("districtName") String districtName,
+            @Param("pricingType") RentalPricingType pricingType,
+            @Param("minPrice") BigDecimal minPrice,
+            @Param("maxPrice") BigDecimal maxPrice,
+            @Param("minCapacity") BigDecimal minCapacity,
+            @Param("maxCapacity") BigDecimal maxCapacity,
             @Param("isVerified") Boolean isVerified,
             Pageable pageable
     );

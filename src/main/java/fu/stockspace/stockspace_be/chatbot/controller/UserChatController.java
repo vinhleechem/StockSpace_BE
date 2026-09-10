@@ -40,7 +40,7 @@ public class UserChatController {
 
     private final ChatbotService chatbotService;
 
-    @Operation(summary = "Gửi tin nhắn tới chatbot", description = "Chatbot dành cho người thuê kho. Frontend có thể gửi activeWarehouseId của kho đang mở; giá trị này chỉ là context và luôn được backend kiểm tra quyền trước khi sử dụng.")
+    @Operation(summary = "Gửi tin nhắn tới chatbot", description = "Chatbot dành cho người thuê kho. Frontend có thể gửi activeWarehouseId và activeScreen của màn hình đang mở; đây chỉ là context, luôn được backend kiểm tra và chuẩn hóa trước khi sử dụng.")
     @PostMapping("/send")
     public ResponseEntity<ApiResponse<ChatResponse>> sendMessage(
             @Valid @RequestBody SendMessageRequest request) {
@@ -52,7 +52,7 @@ public class UserChatController {
 
     @Operation(
             summary = "Stream phản hồi chatbot",
-            description = "SSE v1 qua POST; danh tính và role được lấy từ JWT trước khi chuyển xử lý sang worker."
+            description = "SSE v1 qua POST; frontend có thể gửi activeWarehouseId và activeScreen để giữ ngữ cảnh hội thoại. Danh tính và role được lấy từ JWT trước khi chuyển xử lý sang worker."
     )
     @PostMapping(
             value = "/stream",
