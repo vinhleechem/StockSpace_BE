@@ -47,6 +47,22 @@ public class InventoryAudit extends BaseEntity {
     @JoinColumn(name = "approved_by")
     private User approvedBy;
 
+    /** Staff member who requested an in-place edit after submission. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "edit_requested_by")
+    private User editRequestedBy;
+
+    @Column(name = "edit_requested_at")
+    private LocalDateTime editRequestedAt;
+
+    /** Tenant reviewer who approved the in-place edit. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "edit_approved_by")
+    private User editApprovedBy;
+
+    @Column(name = "edit_approved_at")
+    private LocalDateTime editApprovedAt;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assigned_to")
     private User assignedTo;

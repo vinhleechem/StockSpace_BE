@@ -301,6 +301,27 @@ class TenantStaffServiceTest {
         assertEquals("staff@example.com", response.getContent().get(0).getEmail());
     }
 
+    @Test
+    void testListStaffsByActiveWarehouse() {
+        UUID warehouseId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 20);
+        User staffUser = User.builder().id(UUID.randomUUID()).email("receiver@example.com")
+                .fullName("Receiver").isActive(true).isDeleted(false).build();
+        TenantMember member = TenantMember.builder()
+                .id(UUID.randomUUID()).user(staffUser).tenant(tenantUser)
+                .isActive(true).isDeleted(false).build();
+        when(memberRepository.searchStaffsWithWarehouseFilter(
+                tenantId, "", warehouseId, true, pageable))
+                .thenReturn(new PageImpl<>(List.of(member)));
+
+        Page<StaffMemberResponse> response = staffService.listStaffs(
+                tenantId, "", warehouseId, true, pageable);
+
+        assertEquals(1, response.getTotalElements());
+        assertEquals("receiver@example.com", response.getContent().get(0).getEmail());
+        verify(accessService).requireWmsAccess(tenantId, warehouseId);
+    }
+
 
 
     @Test

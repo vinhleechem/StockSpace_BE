@@ -36,6 +36,7 @@ import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferDestinationAllo
 import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferResponse;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransfer;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferDestinationAllocation;
+import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferEvent;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferItem;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferSourceAllocation;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferStatus;
@@ -43,6 +44,7 @@ import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferReceiptDispo
 import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferReconcileRequest;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferReconciliationResolution;
 import fu.stockspace.stockspace_be.wms.transfer.repository.StockTransferRepository;
+import fu.stockspace.stockspace_be.wms.transfer.repository.StockTransferEventRepository;
 import fu.stockspace.stockspace_be.wms.transfer.service.StockTransferService;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -66,8 +68,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -100,6 +104,8 @@ class StockTransferReceiveServiceTest {
     private StaffWarehouseAssignmentRepository assignmentRepository;
     @Mock
     private NotificationService notificationService;
+    @Mock
+    private StockTransferEventRepository eventRepository;
     @Spy
     private PhysicalLoadCalculator physicalLoadCalculator = new PhysicalLoadCalculator();
 
@@ -327,6 +333,31 @@ class StockTransferReceiveServiceTest {
         assertEquals(StockTransferStatus.COMPLETED, secondResponse.getStatus());
         assertEquals(5, item.getReceivedQuantity());
         assertEquals(5, item.getDestinationAllocations().get(0).getQuantity());
+    }
+
+    @Test
+    void receiveTransfer_usesActualPartialStatusForNextTimelineEvent() {
+        stubReceiveDependencies();
+
+        ReceiveStockTransferRequest first = ReceiveStockTransferRequest.builder()
+                .allowPartial(true)
+                .destinationAllocations(List.of(StockTransferDestinationAllocationRequest.builder()
+                        .itemId(itemId).destinationRackId(rackId).destinationBinId(binId).quantity(2).build()))
+                .build();
+        transferService.receiveTransfer(tenantId, transfer.getId(), first);
+        clearInvocations(eventRepository);
+
+        ReceiveStockTransferRequest second = ReceiveStockTransferRequest.builder()
+                .allowPartial(true)
+                .destinationAllocations(List.of(StockTransferDestinationAllocationRequest.builder()
+                        .itemId(itemId).destinationRackId(rackId).destinationBinId(binId).quantity(3).build()))
+                .build();
+        transferService.receiveTransfer(tenantId, transfer.getId(), second);
+
+        ArgumentCaptor<StockTransferEvent> eventCaptor = ArgumentCaptor.forClass(StockTransferEvent.class);
+        verify(eventRepository, times(1)).save(eventCaptor.capture());
+        assertEquals(StockTransferStatus.PARTIALLY_RECEIVED, eventCaptor.getValue().getFromStatus());
+        assertEquals(StockTransferStatus.COMPLETED, eventCaptor.getValue().getToStatus());
     }
 
     @Test

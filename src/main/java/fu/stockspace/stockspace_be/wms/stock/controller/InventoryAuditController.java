@@ -10,6 +10,7 @@ import fu.stockspace.stockspace_be.wms.stock.dto.AuditReviewReasonRequest;
 import fu.stockspace.stockspace_be.wms.stock.dto.CreateInventoryAuditPlanRequest;
 import fu.stockspace.stockspace_be.wms.stock.dto.InventoryAuditResponse;
 import fu.stockspace.stockspace_be.wms.stock.dto.SaveAuditCountsRequest;
+import fu.stockspace.stockspace_be.wms.stock.dto.SaveAuditNotesRequest;
 import fu.stockspace.stockspace_be.wms.stock.service.InventoryAuditService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -80,11 +81,34 @@ public class InventoryAuditController {
                 auditService.saveAuditCounts(currentUserId(), id, request)));
     }
 
+    @PutMapping("/{id}/notes")
+    @Operation(summary = "Save explanations after the submitted count is revealed")
+    public ResponseEntity<ApiResponse<InventoryAuditResponse>> saveNotes(
+            @PathVariable UUID id, @Valid @RequestBody SaveAuditNotesRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("Audit notes saved",
+                auditService.saveAuditNotes(currentUserId(), id, request)));
+    }
+
     @PostMapping("/{id}/submit")
     @Operation(summary = "Submit an inventory audit")
     public ResponseEntity<ApiResponse<InventoryAuditResponse>> submit(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success("Inventory audit submitted",
                 auditService.submitAudit(currentUserId(), id)));
+    }
+
+    @PostMapping("/{id}/request-edit")
+    @Operation(summary = "Request permission to edit a submitted count")
+    public ResponseEntity<ApiResponse<InventoryAuditResponse>> requestEdit(
+            @PathVariable UUID id, @Valid @RequestBody AuditReviewReasonRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("Audit edit requested",
+                auditService.requestEdit(currentUserId(), id, request.getReason())));
+    }
+
+    @PostMapping("/{id}/approve-edit")
+    @Operation(summary = "Approve editing a submitted count")
+    public ResponseEntity<ApiResponse<InventoryAuditResponse>> approveEdit(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.success("Audit edit approved",
+                auditService.approveEdit(currentUserId(), id)));
     }
 
     @PostMapping("/{id}/unexpected-items")

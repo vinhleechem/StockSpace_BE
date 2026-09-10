@@ -48,12 +48,15 @@ public class TenantStaffController {
     @Operation(summary = "Xem danh sách nhân viên kho của tổ chức")
     public ResponseEntity<ApiResponse<Page<StaffMemberResponse>>> listStaffs(
             @RequestParam(required = false, defaultValue = "") String keyword,
+            @RequestParam(required = false) UUID warehouseId,
+            @RequestParam(defaultValue = "false") boolean active,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
         User tenant = getCurrentUser();
         Pageable pageable = PageRequest.of(page, size);
-        Page<StaffMemberResponse> response = staffService.listStaffs(tenant.getId(), keyword, pageable);
+        Page<StaffMemberResponse> response = staffService.listStaffs(
+                tenant.getId(), keyword, warehouseId, active, pageable);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách nhân viên kho thành công", response));
     }
 

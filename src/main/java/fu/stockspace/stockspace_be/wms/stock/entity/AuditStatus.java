@@ -11,6 +11,10 @@ public enum AuditStatus {
     /** Counting is in progress and its scope is movement-locked. */
     IN_PROGRESS,
     SUBMITTED,
+    /** Counter requested a correction after the submitted result was revealed. */
+    EDIT_REQUESTED,
+    /** Tenant approved editing the submitted count in place. */
+    REOPENED,
     /** Reviewer asked the counter to perform another count round. */
     RECOUNT_REQUIRED,
     APPROVED,

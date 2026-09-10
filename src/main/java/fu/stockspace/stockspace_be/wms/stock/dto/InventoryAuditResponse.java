@@ -30,6 +30,11 @@ public class InventoryAuditResponse {
     private UUID approvedById;
     private String approvedByName;
 
+    private UUID editRequestedById;
+    private LocalDateTime editRequestedAt;
+    private UUID editApprovedById;
+    private LocalDateTime editApprovedAt;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

@@ -30,6 +30,9 @@ public class VnPayService {
     @Value("${app.vnpay.return-url}")
     private String returnUrl;
 
+    @Value("${app.wallet.top-up.expiry-minutes:15}")
+    private long paymentExpiryMinutes = 15;
+
     @PostConstruct
     public void init() {
         if (payUrl != null)
@@ -83,7 +86,7 @@ public class VnPayService {
         vnp_Params.put("vnp_CreateDate", vnp_CreateDate);
 
 
-        cld.add(Calendar.MINUTE, 15);
+        cld.add(Calendar.MINUTE, Math.toIntExact(Math.max(paymentExpiryMinutes, 1)));
         String vnp_ExpireDate = formatter.format(cld.getTime());
         vnp_Params.put("vnp_ExpireDate", vnp_ExpireDate);
 

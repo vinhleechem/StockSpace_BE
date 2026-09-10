@@ -28,9 +28,9 @@ caller skips that checkpoint.
 
 Creation accepts an optional `sourceStaffId`. When supplied, the ID must belong
 to an active tenant staff member with an active assignment to the source
-warehouse. Only that staff member can execute picking for the transfer; the
-tenant remains the approver for dispatch. The assigned source staff may run
-`allocate` and `pick` using only the source-warehouse assignment.
+warehouse. Only that staff member can execute allocation/picking for the
+transfer; the tenant remains the approver for dispatch. The assigned source
+staff may run `allocate` and `pick` using only the source-warehouse assignment.
 
 Creation also accepts an optional `destinationStaffId`. The assigned staff must
 have an active assignment at the current destination and may execute `arrive`
@@ -60,6 +60,9 @@ from `PENDING`; this is kept as a compatibility path while clients migrate to
 `PATCH /approve-dispatch`, `POST /receive`, and `POST /reconcile` accept the optional
 `Idempotency-Key` header. Reusing a key with a different payload returns a
 conflict; reusing it with the same payload returns the existing transfer result.
+
+Tenant staff dropdowns can use `GET /api/tenant/staffs?warehouseId={id}&active=true`
+to load only active staff assigned to the selected warehouse.
 
 ## Partial receiving
 

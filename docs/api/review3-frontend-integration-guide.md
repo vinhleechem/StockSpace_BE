@@ -599,7 +599,7 @@ The operation endpoint permission is `STAFF_WORK_HISTORY_READ`; layout uses
 all three are returned. With no status, the backend returns pending work:
 
 - Receipt: `PENDING`.
-- Audit: `PENDING`, `SUBMITTED`.
+- Audit: `PENDING`, `SUBMITTED`, `EDIT_REQUESTED`, `REOPENED`.
 - Transfer: `PENDING`, `IN_TRANSIT`.
 
 Each operation row contains `operationType`, `operationId`, warehouse fields,
@@ -651,12 +651,16 @@ contract access.
 ### 9.1 Lifecycle and permissions
 
 ```text
-PENDING --submit--> SUBMITTED --approve--> APPROVED
-   |                    |
-   +------reject------> REJECTED
+DRAFT --start/count/submit--> SUBMITTED --approve--> APPROVED
+                                  |
+                                  +--request-edit--> EDIT_REQUESTED --approve-edit--> REOPENED
+                                  |
+                                  +--recount------> RECOUNT_REQUIRED
 ```
 
-The actual enum is `PENDING`, `SUBMITTED`, `APPROVED`, `REJECTED`. Audit
+The actual enum includes `DRAFT`, `IN_PROGRESS`, `SUBMITTED`,
+`EDIT_REQUESTED`, `REOPENED`, `RECOUNT_REQUIRED`, `APPROVED`, `CANCELLED` and
+legacy values. Audit
 controller permission: `INVENTORY_AUDIT_MANAGE`. Approval is the boundary that
 reconciles stock; creating or submitting an audit does not change stock.
 
@@ -666,9 +670,15 @@ reconciles stock; creating or submitting an audit does not change stock.
 POST /api/tenant/inventory/audits
 GET /api/tenant/inventory/audits?warehouseId={id}&page=0&size=10
 GET /api/tenant/inventory/audits/{auditId}
+POST /api/tenant/inventory/audits/{auditId}/start
+PUT  /api/tenant/inventory/audits/{auditId}/counts
 POST /api/tenant/inventory/audits/{auditId}/submit
-PATCH /api/tenant/inventory/audits/{auditId}/approve
-PATCH /api/tenant/inventory/audits/{auditId}/reject
+PUT  /api/tenant/inventory/audits/{auditId}/notes
+POST /api/tenant/inventory/audits/{auditId}/request-edit
+POST /api/tenant/inventory/audits/{auditId}/approve-edit
+POST /api/tenant/inventory/audits/{auditId}/approve
+POST /api/tenant/inventory/audits/{auditId}/recount
+POST /api/tenant/inventory/audits/{auditId}/cancel
 ```
 
 Create request:

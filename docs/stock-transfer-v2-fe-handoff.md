@@ -85,10 +85,13 @@ quantity đã nhận `GOOD`.
   `sourceStaffId` là người được pick transfer đó.
 - Staff được gán ở `destinationStaffId` được xem task và gọi `arrive`/`receive`
   tại kho đích hiện tại; staff khác bị chặn.
+- Staff nguồn ở trạng thái `PENDING` có action `ALLOCATE`; sau đó mới `PICK`.
 - `sourceStaffId` phải là staff active, thuộc tenant và được assign ở source.
 - `destinationStaffId` phải được assign tại destination; khi retry sang kho mới
   thì assignment cũ bị bỏ và phải chọn staff của kho mới.
 - FE nên load staff active của từng warehouse cho hai dropdown staff.
+- Có thể lấy trực tiếp staff đang active tại một warehouse bằng
+  `GET /api/tenant/staffs?warehouseId={id}&active=true`.
 - Backend vẫn kiểm tra permission, tenant, contract, subscription và assignment;
   FE chỉ dùng để ẩn/hiện action.
 

@@ -64,6 +64,7 @@ public class TransactionService {
                 .paymentMethod(t.getPaymentMethod())
                 .status(t.getStatus())
                 .paymentCode(t.getPaymentCode())
+                .expiresAt(t.getExpiresAt())
                 .referenceId(t.getReferenceId())
                 .bookingId(t.getBookingId())
                 .subscriptionId(t.getSubscriptionId())

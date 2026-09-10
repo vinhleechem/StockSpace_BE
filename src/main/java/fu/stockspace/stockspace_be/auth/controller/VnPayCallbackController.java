@@ -117,7 +117,9 @@ public class VnPayCallbackController {
             }
 
 
-            if (transaction.getStatus() != TransactionStatus.PENDING) {
+            boolean lateSuccess = transaction.getStatus() == TransactionStatus.EXPIRED
+                    && "00".equals(vnpResponseCode);
+            if (transaction.getStatus() != TransactionStatus.PENDING && !lateSuccess) {
                 response.put("RspCode", "02");
                 response.put("Message", "Order already confirmed");
                 return ResponseEntity.ok(response);

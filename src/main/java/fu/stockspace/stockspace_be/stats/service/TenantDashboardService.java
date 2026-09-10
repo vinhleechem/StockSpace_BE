@@ -64,6 +64,7 @@ public class TenantDashboardService {
                 .pendingAuditCount(auditRepository.countPendingForTenant(
                         tenantId, EnumSet.of(AuditStatus.DRAFT,
                                 AuditStatus.IN_PROGRESS, AuditStatus.SUBMITTED,
+                                AuditStatus.EDIT_REQUESTED, AuditStatus.REOPENED,
                                 AuditStatus.RECOUNT_REQUIRED), today))
                 .pendingTransferCount(transferRepository.countPendingForTenant(
                         tenantId, EnumSet.of(StockTransferStatus.PENDING, StockTransferStatus.IN_TRANSIT,

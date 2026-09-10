@@ -45,6 +45,7 @@ public class StaffOperationsService {
     private static final String TRANSFER = "TRANSFER";
     private static final String VIEW = "VIEW";
     private static final String SUBMIT = "SUBMIT";
+    private static final String ALLOCATE = "ALLOCATE";
     private static final String PICK = "PICK";
     private static final String ARRIVE = "ARRIVE";
     private static final String RECEIVE = "RECEIVE";
@@ -131,7 +132,7 @@ public class StaffOperationsService {
             List<StockTransfer> transfers = new ArrayList<>(uniqueTransfers.values());
             transfers.stream()
                     .filter(transfer -> matchesTransferStatus(transfer, normalizedStatus))
-                    .map(transfer -> toTransferOperation(transfer, staffId))
+                    .map(transfer -> toTransferOperation(transfer, staffId, accessibleWarehouseIds))
                     .forEach(operations::add);
         }
 
@@ -174,7 +175,8 @@ public class StaffOperationsService {
         String current = audit.getStatus().name();
         return status == null
                 ? EnumSet.of(AuditStatus.DRAFT, AuditStatus.IN_PROGRESS,
-                        AuditStatus.SUBMITTED, AuditStatus.RECOUNT_REQUIRED).contains(audit.getStatus())
+                        AuditStatus.SUBMITTED, AuditStatus.EDIT_REQUESTED,
+                        AuditStatus.REOPENED, AuditStatus.RECOUNT_REQUIRED).contains(audit.getStatus())
                 : current.equals(status);
     }
 
@@ -211,6 +213,7 @@ public class StaffOperationsService {
         Warehouse warehouse = audit.getWarehouse();
         List<String> actions = audit.getStatus() == AuditStatus.DRAFT
                 || audit.getStatus() == AuditStatus.IN_PROGRESS
+                || audit.getStatus() == AuditStatus.REOPENED
                 || audit.getStatus() == AuditStatus.RECOUNT_REQUIRED
                 ? List.of(VIEW, SUBMIT)
                 : List.of(VIEW);
@@ -225,15 +228,22 @@ public class StaffOperationsService {
                 .build();
     }
 
-    private StaffOperationResponse toTransferOperation(StockTransfer transfer, UUID staffId) {
+    private StaffOperationResponse toTransferOperation(StockTransfer transfer, UUID staffId,
+                                                       Set<UUID> accessibleWarehouseIds) {
         Warehouse source = transfer.getSourceWarehouse();
         Warehouse destination = activeDestination(transfer);
         boolean sourceAssignee = transfer.getSourceStaff() != null
-                && staffId.equals(transfer.getSourceStaff().getId());
+                && staffId.equals(transfer.getSourceStaff().getId())
+                && accessibleWarehouseIds.contains(source.getId());
         boolean destinationAssignee = transfer.getDestinationStaff() != null
-                && staffId.equals(transfer.getDestinationStaff().getId());
+                && staffId.equals(transfer.getDestinationStaff().getId())
+                && accessibleWarehouseIds.contains(destination.getId());
         LinkedHashSet<String> actions = new LinkedHashSet<>();
         actions.add(VIEW);
+        boolean allocateAction = sourceAssignee && transfer.getStatus() == StockTransferStatus.PENDING;
+        if (allocateAction) {
+            actions.add(ALLOCATE);
+        }
         boolean pickAction = sourceAssignee
                 && (transfer.getStatus() == StockTransferStatus.ALLOCATED
                 || transfer.getStatus() == StockTransferStatus.PICKING);

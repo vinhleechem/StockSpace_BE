@@ -158,6 +158,10 @@ public class InventoryAuditService {
                 .requestedByName(audit.getRequestedBy().getFullName())
                 .approvedById(audit.getApprovedBy() != null ? audit.getApprovedBy().getId() : null)
                 .approvedByName(audit.getApprovedBy() != null ? audit.getApprovedBy().getFullName() : null)
+                .editRequestedById(audit.getEditRequestedBy() != null ? audit.getEditRequestedBy().getId() : null)
+                .editRequestedAt(audit.getEditRequestedAt())
+                .editApprovedById(audit.getEditApprovedBy() != null ? audit.getEditApprovedBy().getId() : null)
+                .editApprovedAt(audit.getEditApprovedAt())
                 .createdAt(audit.getCreatedAt())
                 .updatedAt(audit.getUpdatedAt())
                 .countRound(audit.getCountRound())
@@ -290,7 +294,7 @@ public class InventoryAuditService {
         InventoryAudit audit = getAuditForUpdate(auditId);
         User actor = findUser(userId);
         requireAuditCountAccess(audit, actor);
-        if (audit.getStatus() != AuditStatus.IN_PROGRESS) {
+        if (audit.getStatus() != AuditStatus.IN_PROGRESS && audit.getStatus() != AuditStatus.REOPENED) {
             throw new BadRequestException(ErrorCode.AUDIT_INVALID_STATUS);
         }
         List<InventoryAuditItem> items = currentAuditItems(audit);
@@ -315,13 +319,46 @@ public class InventoryAuditService {
         return maskCounterResponse(mapToResponse(audit, currentAuditItems(audit)), actor);
     }
 
+    /**
+     * Save explanations after submission without accepting a quantity update.
+     * Quantity changes remain impossible until a tenant explicitly approves an
+     * edit request.
+     */
+    @Transactional
+    public InventoryAuditResponse saveAuditNotes(UUID userId, UUID auditId, SaveAuditNotesRequest request) {
+        InventoryAudit audit = getAuditForUpdate(auditId);
+        User actor = findUser(userId);
+        requireAuditCountAccess(audit, actor);
+        if (audit.getStatus() != AuditStatus.SUBMITTED && audit.getStatus() != AuditStatus.EDIT_REQUESTED) {
+            throw new BadRequestException(ErrorCode.AUDIT_INVALID_STATUS);
+        }
+
+        List<InventoryAuditItem> items = currentAuditItems(audit);
+        Map<UUID, InventoryAuditItem> itemsById = items.stream()
+                .collect(Collectors.toMap(InventoryAuditItem::getId, item -> item));
+        Set<UUID> updatedIds = new HashSet<>();
+        for (SaveAuditNoteItemRequest requestItem : request.getItems()) {
+            if (!updatedIds.add(requestItem.getItemId())) {
+                throw new BadRequestException(ErrorCode.AUDIT_SCOPE_INVALID);
+            }
+            InventoryAuditItem item = itemsById.get(requestItem.getItemId());
+            if (item == null) {
+                throw new BadRequestException(ErrorCode.AUDIT_SCOPE_INVALID);
+            }
+            item.setNote(requestItem.getNote());
+            item.setVarianceReason(requestItem.getVarianceReason());
+            auditItemRepository.save(item);
+        }
+        return maskCounterResponse(mapToResponse(audit, currentAuditItems(audit)), actor);
+    }
+
     @Transactional
     public InventoryAuditResponse addUnexpectedItem(
             UUID userId, UUID auditId, AddUnexpectedAuditItemRequest request) {
         InventoryAudit audit = getAuditForUpdate(auditId);
         User actor = findUser(userId);
         requireAuditCountAccess(audit, actor);
-        if (audit.getStatus() != AuditStatus.IN_PROGRESS) {
+        if (audit.getStatus() != AuditStatus.IN_PROGRESS && audit.getStatus() != AuditStatus.REOPENED) {
             throw new BadRequestException(ErrorCode.AUDIT_INVALID_STATUS);
         }
         UUID tenantId = resolveAuditTenantId(audit);
@@ -386,7 +423,7 @@ public class InventoryAuditService {
         InventoryAudit audit = getAuditForUpdate(auditId);
         User actor = findUser(userId);
         requireAuditCountAccess(audit, actor);
-        if (audit.getStatus() != AuditStatus.IN_PROGRESS) {
+        if (audit.getStatus() != AuditStatus.IN_PROGRESS && audit.getStatus() != AuditStatus.REOPENED) {
             throw new BadRequestException(ErrorCode.AUDIT_INVALID_STATUS);
         }
         List<InventoryAuditItem> items = currentAuditItems(audit);
@@ -401,6 +438,58 @@ public class InventoryAuditService {
                 "Kết quả kiểm kê đã được nộp", "Phiếu kiểm kê kho " + audit.getWarehouse().getName()
                         + " đã sẵn sàng để đối soát.");
         return maskCounterResponse(mapToResponse(audit, items), actor);
+    }
+
+    /** Staff asks for an in-place correction after seeing the system quantity. */
+    @Transactional
+    public InventoryAuditResponse requestEdit(UUID userId, UUID auditId, String reason) {
+        InventoryAudit audit = getAuditForUpdate(auditId);
+        User actor = findUser(userId);
+        requireAuditCountAccess(audit, actor);
+        if (!isStaff(actor)) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        }
+        if (audit.getStatus() != AuditStatus.SUBMITTED || reason == null || reason.isBlank()) {
+            throw new BadRequestException(ErrorCode.AUDIT_INVALID_STATUS);
+        }
+
+        audit.setStatus(AuditStatus.EDIT_REQUESTED);
+        audit.setReviewReason(reason.trim());
+        audit.setReviewedAt(null);
+        audit.setEditRequestedBy(actor);
+        audit.setEditRequestedAt(LocalDateTime.now());
+        audit.setEditApprovedBy(null);
+        audit.setEditApprovedAt(null);
+        audit = auditRepository.save(audit);
+        pushAuditNotification(resolveAuditTenantId(audit), "Yêu cầu chỉnh sửa kiểm kê",
+                "Phiếu kiểm kê kho " + audit.getWarehouse().getName()
+                        + " cần được mở để chỉnh sửa: " + reason.trim());
+        return maskCounterResponse(mapToResponse(audit, currentAuditItems(audit)), actor);
+    }
+
+    /** Tenant approves the request and unlocks quantity editing on the same audit. */
+    @Transactional
+    public InventoryAuditResponse approveEdit(UUID userId, UUID auditId) {
+        InventoryAudit audit = getAuditForUpdate(auditId);
+        User approver = findUser(userId);
+        requireAuditTenantReviewer(audit, approver);
+        if (audit.getStatus() != AuditStatus.EDIT_REQUESTED) {
+            throw new BadRequestException(ErrorCode.AUDIT_INVALID_STATUS);
+        }
+        if (audit.getEditRequestedBy() != null && userId.equals(audit.getEditRequestedBy().getId())) {
+            throw new ForbiddenException("Người yêu cầu chỉnh sửa không được tự duyệt yêu cầu.");
+        }
+
+        audit.setStatus(AuditStatus.REOPENED);
+        audit.setEditApprovedBy(approver);
+        audit.setEditApprovedAt(LocalDateTime.now());
+        audit.setReviewedAt(LocalDateTime.now());
+        audit = auditRepository.save(audit);
+        pushAuditNotification(audit.getAssignedTo() != null ? audit.getAssignedTo().getId()
+                        : audit.getRequestedBy().getId(),
+                "Phiếu kiểm kê đã được mở chỉnh sửa",
+                "Có thể chỉnh sửa số lượng và nộp lại phiếu kiểm kê kho " + audit.getWarehouse().getName());
+        return mapToResponse(audit, currentAuditItems(audit));
     }
 
     @Transactional
@@ -687,7 +776,11 @@ public class InventoryAuditService {
     }
 
     private InventoryAuditResponse maskCounterResponse(InventoryAuditResponse response, User actor) {
-        if (actor != null && isStaff(actor) && response.getItems() != null) {
+        boolean blindCount = response.getStatus() == AuditStatus.PENDING
+                || response.getStatus() == AuditStatus.DRAFT
+                || response.getStatus() == AuditStatus.IN_PROGRESS
+                || response.getStatus() == AuditStatus.RECOUNT_REQUIRED;
+        if (actor != null && isStaff(actor) && blindCount && response.getItems() != null) {
             response.getItems().forEach(item -> {
                 item.setExpectedQuantity(null);
                 item.setDiscrepancy(null);
