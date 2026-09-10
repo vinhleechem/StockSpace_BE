@@ -79,6 +79,8 @@ final class ChatToolLocalization {
             case DRAFT -> "Bản nháp";
             case IN_PROGRESS -> "Đang kiểm kê";
             case SUBMITTED -> "Đã gửi kết quả";
+            case EDIT_REQUESTED -> "Yêu cầu chỉnh sửa";
+            case REOPENED -> "Đang chỉnh sửa";
             case RECOUNT_REQUIRED -> "Yêu cầu kiểm kê lại";
             case APPROVED -> "Đã duyệt";
             case REJECTED -> "Đã từ chối";

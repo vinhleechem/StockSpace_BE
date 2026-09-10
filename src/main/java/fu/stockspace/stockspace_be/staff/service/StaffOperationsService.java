@@ -175,7 +175,8 @@ public class StaffOperationsService {
         String current = audit.getStatus().name();
         return status == null
                 ? EnumSet.of(AuditStatus.DRAFT, AuditStatus.IN_PROGRESS,
-                        AuditStatus.SUBMITTED, AuditStatus.RECOUNT_REQUIRED).contains(audit.getStatus())
+                        AuditStatus.SUBMITTED, AuditStatus.EDIT_REQUESTED,
+                        AuditStatus.REOPENED, AuditStatus.RECOUNT_REQUIRED).contains(audit.getStatus())
                 : current.equals(status);
     }
 
@@ -212,6 +213,7 @@ public class StaffOperationsService {
         Warehouse warehouse = audit.getWarehouse();
         List<String> actions = audit.getStatus() == AuditStatus.DRAFT
                 || audit.getStatus() == AuditStatus.IN_PROGRESS
+                || audit.getStatus() == AuditStatus.REOPENED
                 || audit.getStatus() == AuditStatus.RECOUNT_REQUIRED
                 ? List.of(VIEW, SUBMIT)
                 : List.of(VIEW);

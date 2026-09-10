@@ -21,6 +21,10 @@ BEGIN
             ('inventory_audits', 'reviewed_at'),
             ('inventory_audits', 'cancelled_at'),
             ('inventory_audits', 'review_reason'),
+            ('inventory_audits', 'edit_requested_by'),
+            ('inventory_audits', 'edit_requested_at'),
+            ('inventory_audits', 'edit_approved_by'),
+            ('inventory_audits', 'edit_approved_at'),
             ('inventory_audits', 'version'),
             ('inventory_audit_items', 'sku_id'),
             ('inventory_audit_items', 'rack_id'),
@@ -62,6 +66,8 @@ BEGIN
     IF status_constraint IS NULL
        OR status_constraint NOT LIKE '%DRAFT%'
        OR status_constraint NOT LIKE '%IN_PROGRESS%'
+       OR status_constraint NOT LIKE '%EDIT_REQUESTED%'
+       OR status_constraint NOT LIKE '%REOPENED%'
        OR status_constraint NOT LIKE '%RECOUNT_REQUIRED%'
        OR status_constraint NOT LIKE '%CANCELLED%' THEN
         RAISE EXCEPTION 'Inventory audit status constraint is missing canonical statuses';
