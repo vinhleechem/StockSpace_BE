@@ -31,6 +31,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.Future;
@@ -70,6 +71,13 @@ public class ChatbotService {
     private static final String TENANT_ROLE = "ROLE_TENANT";
     private static final Pattern CITATION_LABEL = Pattern.compile(
             "\\\"label\\\"\\s*:\\s*\\\"([^\\\"]{1,240})\\\""
+    );
+    private static final Set<String> SYSTEM_EVIDENCE_MARKERS = Set.of(
+            "ton kho", "sku", "san pham", "phieu", "phieu nhap", "phieu xuat", "kiem ke",
+            "chuyen kho", "suc chua", "tai trong", "the tich", "dien tich", "kich thuoc",
+            "hop dong", "goi dich vu", "goi cua toi", "bao hiem", "dat coc", "tien coc",
+            "gia thue", "phi luu kho", "so du", "vi cua toi", "don hang", "xuat hang",
+            "nhap hang", "nhap xuat"
     );
 
     private final ChatConversationStore conversationStore;
@@ -285,10 +293,16 @@ public class ChatbotService {
                                            Consumer<String> deltaConsumer,
                                            Consumer<String> statusConsumer,
                                            BooleanSupplier cancelled) {
+        // Rental answers are emitted only after the mandatory evidence gate
+        // completes.  Buffering these deltas avoids showing an ungrounded
+        // partial answer when a live-rule lookup fails midway through SSE.
+        boolean evidenceQuestion = requiresSystemEvidence(userMessage);
+        Consumer<String> safeDeltaConsumer = evidenceQuestion ? ignored -> { } : deltaConsumer;
         List<Map<String, Object>> conversation = new ArrayList<>();
         conversation.add(Map.of("role", "system", "content", systemPrompt));
         conversation.addAll(history);
         appendMemoryContext(conversation, memory, userMessage);
+        appendQueryPlanContext(conversation, userMessage);
         conversation.add(OpenRouterClient.buildContent("user", userMessage));
         List<ToolExecutionTrace> traces = new ArrayList<>();
 
@@ -304,11 +318,17 @@ public class ChatbotService {
         preloadWarehouseDimensionLookup(
                 conversation, allowedByName, memory, userMessage,
                 context, traces, statusConsumer, cancelled);
+        preloadWarehouseSearch(
+                conversation, allowedByName, userMessage,
+                context, traces, statusConsumer, cancelled);
+        preloadRentalLookup(
+                conversation, allowedByName, userMessage,
+                context, traces, statusConsumer, cancelled);
         AiResponse response = completeStreamingWithinDeadline(
                 conversation,
                 allowedTools,
                 deadlineNanos,
-                deltaConsumer,
+                safeDeltaConsumer,
                 cancelled
         );
 
@@ -371,7 +391,7 @@ public class ChatbotService {
                     conversation,
                     allowedTools,
                     deadlineNanos,
-                    deltaConsumer,
+                    safeDeltaConsumer,
                     cancelled
             );
         }
@@ -382,7 +402,19 @@ public class ChatbotService {
             return new AgentRunResult(MAX_ITERATIONS_REPLY, traces);
         }
         return new AgentRunResult(
-                enforceCitations(capAssistantResponse(response.text()), traces),
+                enforceCitations(
+                        AnswerEvidenceVerifier.guard(
+                                enforceSystemEvidence(
+                                        enforceRentalEvidence(
+                                                enforceQueryEvidence(
+                                                        capAssistantResponse(response.text()),
+                                                        userMessage,
+                                                        allowedByName,
+                                                        traces),
+                                                userMessage, allowedByName, traces),
+                                        userMessage, traces),
+                                traces),
+                        traces),
                 traces
         );
     }
@@ -423,6 +455,7 @@ public class ChatbotService {
         conversation.add(Map.of("role", "system", "content", systemPrompt));
         conversation.addAll(history);
         appendMemoryContext(conversation, memory, userMessage);
+        appendQueryPlanContext(conversation, userMessage);
         conversation.add(OpenRouterClient.buildContent("user", userMessage));
         List<ToolExecutionTrace> traces = new ArrayList<>();
 
@@ -436,6 +469,12 @@ public class ChatbotService {
                 + effectiveDeadline().toNanos();
         preloadWarehouseDimensionLookup(
                 conversation, allowedByName, memory, userMessage,
+                context, traces, null, null);
+        preloadWarehouseSearch(
+                conversation, allowedByName, userMessage,
+                context, traces, null, null);
+        preloadRentalLookup(
+                conversation, allowedByName, userMessage,
                 context, traces, null, null);
         AiResponse response = completeWithinDeadline(
                 conversation,
@@ -506,7 +545,19 @@ public class ChatbotService {
             return new AgentRunResult(MAX_ITERATIONS_REPLY, traces);
         }
         return new AgentRunResult(
-                enforceCitations(capAssistantResponse(response.text()), traces),
+                enforceCitations(
+                        AnswerEvidenceVerifier.guard(
+                                enforceSystemEvidence(
+                                        enforceRentalEvidence(
+                                                enforceQueryEvidence(
+                                                        capAssistantResponse(response.text()),
+                                                        userMessage,
+                                                        allowedByName,
+                                                        traces),
+                                                userMessage, allowedByName, traces),
+                                        userMessage, traces),
+                                traces),
+                        traces),
                 traces
         );
     }
@@ -522,6 +573,74 @@ public class ChatbotService {
         String memoryPrompt = safeMemory.promptContext(userMessage);
         if (!memoryPrompt.isBlank()) {
             conversation.add(Map.of("role", "system", "content", memoryPrompt));
+        }
+    }
+
+    private void appendQueryPlanContext(
+            List<Map<String, Object>> conversation,
+            String userMessage
+    ) {
+        String planContext = ChatQueryPlanner.plan(userMessage).promptContext();
+        if (!planContext.isBlank()) {
+            conversation.add(Map.of("role", "system", "content", planContext));
+        }
+    }
+
+    private void preloadWarehouseSearch(
+            List<Map<String, Object>> conversation,
+            Map<String, ChatTool> allowedByName,
+            String userMessage,
+            ChatRequestContext context,
+            List<ToolExecutionTrace> traces,
+            Consumer<String> statusConsumer,
+            BooleanSupplier cancelled
+    ) {
+        ChatQueryPlanner.Plan plan = ChatQueryPlanner.plan(userMessage);
+        if (plan.intent() != ChatQueryPlanner.Intent.WAREHOUSE_SEARCH
+                || allowedByName == null || traces == null) {
+            return;
+        }
+        ChatTool tool = allowedByName.get(plan.requiredTool());
+        if (tool == null || !hasRequiredSubscription(tool, context)) {
+            conversation.add(Map.of(
+                    "role", "system",
+                    "content", "Đây là yêu cầu tra cứu kho nhưng phiên này chưa có quyền dùng dữ liệu kho. "
+                            + "Chỉ được nói rõ chưa thể tra cứu, không được tự suy đoán."
+            ));
+            return;
+        }
+        if (cancelled != null) {
+            ensureStreamActive(cancelled);
+        }
+        if (statusConsumer != null) {
+            statusConsumer.accept("retrieving");
+        }
+
+        Map<String, Object> args = plan.filters();
+        OpenRouterClient.FunctionCall functionCall = new OpenRouterClient.FunctionCall(
+                "search_" + UUID.randomUUID(), tool.getName(), args);
+        conversation.add(openRouterClient.buildAssistantToolCall(functionCall));
+        long startedAt = System.nanoTime();
+        String toolResult;
+        boolean successful = false;
+        try {
+            toolResult = capToolResult(tool.executeWithContext(args, context));
+            successful = isSuccessfulToolResult(toolResult);
+        } catch (Exception exception) {
+            log.warn("[AgenticLoop] Deterministic warehouse search failed type={}",
+                    exception.getClass().getSimpleName());
+            toolResult = TOOL_FAILURE;
+        }
+        traces.add(new ToolExecutionTrace(
+                functionCall.name(),
+                args,
+                toolResult,
+                successful,
+                Duration.ofNanos(System.nanoTime() - startedAt).toMillis()
+        ));
+        conversation.add(openRouterClient.buildToolResult(functionCall, toolResult));
+        if (statusConsumer != null) {
+            statusConsumer.accept("processing");
         }
     }
 
@@ -587,6 +706,183 @@ public class ChatbotService {
         if (statusConsumer != null) {
             statusConsumer.accept("processing");
         }
+    }
+
+    /**
+     * Rental-system questions are grounded before the model is allowed to
+     * compose an answer.  This prevents a generic LLM answer from being used
+     * for live fees, active rules, package data, or the tenant's own records.
+     */
+    private void preloadRentalLookup(
+            List<Map<String, Object>> conversation,
+            Map<String, ChatTool> allowedByName,
+            String userMessage,
+            ChatRequestContext context,
+            List<ToolExecutionTrace> traces,
+            Consumer<String> statusConsumer,
+            BooleanSupplier cancelled
+    ) {
+        RentalIntentClassifier.Intent intent = RentalIntentClassifier.classify(userMessage);
+        if (intent.route() == RentalIntentClassifier.Route.NONE
+                || allowedByName == null || traces == null) {
+            return;
+        }
+
+        String requiredToolName = intent.requiredTool();
+        ChatTool tool = allowedByName.get(requiredToolName);
+        if (tool == null || !hasRequiredSubscription(tool, context)) {
+            conversation.add(Map.of(
+                    "role", "system",
+                    "content", rentalRoutingGuard(intent, tool == null)
+            ));
+            return;
+        }
+
+        if (cancelled != null) {
+            ensureStreamActive(cancelled);
+        }
+        if (statusConsumer != null) {
+            statusConsumer.accept("retrieving");
+        }
+
+        Map<String, Object> args = rentalToolArguments(intent, userMessage);
+        OpenRouterClient.FunctionCall functionCall = new OpenRouterClient.FunctionCall(
+                "rental_" + UUID.randomUUID(), tool.getName(), args);
+        conversation.add(openRouterClient.buildAssistantToolCall(functionCall));
+        long startedAt = System.nanoTime();
+        String toolResult;
+        boolean successful = false;
+        try {
+            toolResult = capToolResult(tool.executeWithContext(args, context));
+            successful = isSuccessfulToolResult(toolResult);
+        } catch (Exception exception) {
+            log.warn("[AgenticLoop] Deterministic rental lookup failed tool={} type={}",
+                    tool.getName(), exception.getClass().getSimpleName());
+            toolResult = TOOL_FAILURE;
+        }
+        traces.add(new ToolExecutionTrace(
+                functionCall.name(),
+                args,
+                toolResult,
+                successful,
+                Duration.ofNanos(System.nanoTime() - startedAt).toMillis()
+        ));
+        conversation.add(openRouterClient.buildToolResult(functionCall, toolResult));
+        if (statusConsumer != null) {
+            statusConsumer.accept("processing");
+        }
+    }
+
+    private Map<String, Object> rentalToolArguments(
+            RentalIntentClassifier.Intent intent,
+            String userMessage
+    ) {
+        if (!"searchSystemPolicy".equals(intent.requiredTool())) {
+            return Map.of();
+        }
+        Map<String, Object> args = new java.util.LinkedHashMap<>();
+        args.put("query", userMessage);
+        args.put("topK", 3);
+        if (intent.category() != null) {
+            args.put("category", intent.category());
+        }
+        return Map.copyOf(args);
+    }
+
+    private String rentalRoutingGuard(
+            RentalIntentClassifier.Intent intent,
+            boolean toolUnavailable
+    ) {
+        if (toolUnavailable && (intent.route()
+                == RentalIntentClassifier.Route.MY_CONTRACTS
+                || intent.route()
+                == RentalIntentClassifier.Route.MY_ACTIVE_SUBSCRIPTION)) {
+            return "Đây là dữ liệu cá nhân của người thuê. Không có quyền tra cứu trong phiên này; "
+                    + "chỉ được hướng dẫn người dùng đăng nhập, không được tự suy đoán.";
+        }
+        return "Đây là câu hỏi nghiệp vụ thuê kho nhưng chưa lấy được dữ liệu xác minh. "
+                + "Chỉ được nói rõ chưa thể kiểm tra lúc này; tuyệt đối không tự trả lời hoặc bịa số liệu.";
+    }
+
+    private String enforceRentalEvidence(
+            String reply,
+            String userMessage,
+            Map<String, ChatTool> allowedByName,
+            List<ToolExecutionTrace> traces
+    ) {
+        RentalIntentClassifier.Intent intent = RentalIntentClassifier.classify(userMessage);
+        if (intent.route() == RentalIntentClassifier.Route.NONE) {
+            return reply;
+        }
+        boolean verified = traces != null && traces.stream().anyMatch(trace ->
+                trace != null
+                        && trace.successful()
+                        && intent.requiredTool().equals(trace.toolName()));
+        if (verified) {
+            return reply;
+        }
+        boolean unavailable = allowedByName == null
+                || !allowedByName.containsKey(intent.requiredTool());
+        if (unavailable && (intent.route()
+                == RentalIntentClassifier.Route.MY_CONTRACTS
+                || intent.route()
+                == RentalIntentClassifier.Route.MY_ACTIVE_SUBSCRIPTION)) {
+            return "Bạn cần đăng nhập để tôi tra cứu dữ liệu thuê kho của riêng bạn.";
+        }
+        return "Tôi chưa thể xác minh thông tin thuê kho từ dữ liệu hệ thống lúc này, nên không muốn đoán sai. "
+                + "Bạn vui lòng thử lại sau.";
+    }
+
+    private String enforceQueryEvidence(
+            String reply,
+            String userMessage,
+            Map<String, ChatTool> allowedByName,
+            List<ToolExecutionTrace> traces
+    ) {
+        ChatQueryPlanner.Plan plan = ChatQueryPlanner.plan(userMessage);
+        if (plan.intent() != ChatQueryPlanner.Intent.WAREHOUSE_SEARCH) {
+            return reply;
+        }
+        boolean verified = traces != null && traces.stream().anyMatch(trace ->
+                trace != null && trace.successful()
+                        && plan.requiredTool().equals(trace.toolName()));
+        if (verified) {
+            return reply;
+        }
+        if (allowedByName == null || !allowedByName.containsKey(plan.requiredTool())) {
+            return "Tôi chưa thể tra cứu danh sách kho trong phiên này nên không muốn đoán sai. "
+                    + "Bạn vui lòng thử lại sau.";
+        }
+        return "Tôi chưa thể xác minh kết quả tìm kho từ dữ liệu hệ thống lúc này. "
+                + "Bạn vui lòng thử lại sau.";
+    }
+
+    private String enforceSystemEvidence(
+            String reply,
+            String userMessage,
+            List<ToolExecutionTrace> traces
+    ) {
+        ChatQueryPlanner.Plan plan = ChatQueryPlanner.plan(userMessage);
+        if (plan.intent() != ChatQueryPlanner.Intent.NONE
+                || !requiresSystemEvidence(userMessage)) {
+            return reply;
+        }
+        boolean verified = traces != null && traces.stream().anyMatch(trace ->
+                trace != null && trace.successful());
+        if (verified) {
+            return reply;
+        }
+        return "Tôi chưa thể đọc dữ liệu nghiệp vụ trong phiên này nên không muốn đoán sai. "
+                + "Bạn vui lòng thử lại sau.";
+    }
+
+    private boolean requiresSystemEvidence(String userMessage) {
+        ChatQueryPlanner.Plan plan = ChatQueryPlanner.plan(userMessage);
+        if (plan.requiresEvidence()) {
+            return true;
+        }
+        String normalized = SemanticQueryExpansion.normalize(userMessage);
+        return SYSTEM_EVIDENCE_MARKERS.stream().anyMatch(normalized::contains);
     }
 
     private boolean isSuccessfulToolResult(String toolResult) {

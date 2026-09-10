@@ -10,6 +10,7 @@ import fu.stockspace.stockspace_be.chatbot.repository.PgVectorKnowledgeRepositor
 import fu.stockspace.stockspace_be.chatbot.repository.SystemKnowledgeRepository;
 import fu.stockspace.stockspace_be.chatbot.service.KnowledgeDocumentSupport;
 import fu.stockspace.stockspace_be.chatbot.service.KnowledgePassageSelector;
+import fu.stockspace.stockspace_be.chatbot.service.SemanticQueryExpansion;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatTool;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -140,6 +141,7 @@ public class SearchSystemPolicyTool implements ChatTool {
 
             int topK = topK(params == null ? null : params.get("topK"));
             Set<String> queryTerms = terms(query);
+            Set<String> expandedTerms = expandedTerms(query, queryTerms);
             if (queryTerms.isEmpty()) {
                 return emptyResult(query, categorySelection.category(), "Không tìm thấy từ khóa có ý nghĩa để tra cứu.");
             }
@@ -232,9 +234,10 @@ public class SearchSystemPolicyTool implements ChatTool {
             for (SystemKnowledge candidate : candidatesById.values()) {
                 KnowledgePassageSelector.Passage passage =
                         KnowledgePassageSelector.selectBest(
-                                candidate.getTitle(), candidate.getContent(), query);
+                                candidate.getTitle(), candidate.getContent(),
+                                passageQuery(query));
                 double lexicalScore = Math.max(
-                        lexicalScore(query, queryTerms, candidate),
+                        lexicalScore(query, queryTerms, expandedTerms, candidate),
                         passage.score()
                 );
                 double semanticScore = semanticScores.getOrDefault(candidate.getId(), 0.0);
@@ -276,6 +279,11 @@ public class SearchSystemPolicyTool implements ChatTool {
             response.put("retrievalMode", usedSemantic ? "hybrid" : "lexical");
             if (usedSemantic) {
                 response.put("vectorStore", semanticBackend);
+            }
+            List<String> semanticExpansions = SemanticQueryExpansion.expand(query)
+                    .stream().limit(12).toList();
+            if (!semanticExpansions.isEmpty()) {
+                response.put("semanticExpansions", semanticExpansions);
             }
             response.put("policies", policies);
             if (policies.isEmpty()) {
@@ -439,6 +447,7 @@ public class SearchSystemPolicyTool implements ChatTool {
     private double lexicalScore(
             String query,
             Set<String> queryTerms,
+            Set<String> expandedTerms,
             SystemKnowledge knowledge
     ) {
         Set<String> titleTerms = terms(knowledge.getTitle());
@@ -450,6 +459,13 @@ public class SearchSystemPolicyTool implements ChatTool {
         double coverage = (double) documentMatches / queryTerms.size();
         double titleCoverage = (double) titleMatches / queryTerms.size();
 
+        Set<String> aliasTerms = new LinkedHashSet<>(expandedTerms);
+        aliasTerms.removeAll(queryTerms);
+        long aliasMatches = aliasTerms.stream().filter(documentTerms::contains).count();
+        double aliasCoverage = aliasTerms.isEmpty()
+                ? 0.0
+                : (double) aliasMatches / aliasTerms.size();
+
         String normalizedQuery = normalize(query).trim();
         String normalizedDocument = normalize(
                 safeText(knowledge.getTitle()) + " " + safeText(knowledge.getContent())
@@ -457,7 +473,11 @@ public class SearchSystemPolicyTool implements ChatTool {
         double phraseBoost = normalizedQuery.length() >= 5 && normalizedDocument.contains(normalizedQuery)
                 ? 1.0
                 : 0.0;
-        return Math.min(1.0, 0.70 * coverage + 0.25 * titleCoverage + 0.05 * phraseBoost);
+        return Math.min(1.0,
+                0.60 * coverage
+                        + 0.25 * titleCoverage
+                        + 0.10 * aliasCoverage
+                        + 0.05 * phraseBoost);
     }
 
     private double cosineSimilarity(List<Float> left, List<Float> right) {
@@ -537,6 +557,22 @@ public class SearchSystemPolicyTool implements ChatTool {
             }
         }
         return result;
+    }
+
+    private Set<String> expandedTerms(String query, Set<String> originalTerms) {
+        LinkedHashSet<String> expanded = new LinkedHashSet<>(originalTerms);
+        for (String alias : SemanticQueryExpansion.expand(query)) {
+            expanded.addAll(terms(alias));
+        }
+        return expanded;
+    }
+
+    private String passageQuery(String query) {
+        Set<String> aliases = SemanticQueryExpansion.expand(query);
+        if (aliases.isEmpty()) {
+            return query;
+        }
+        return query + " " + String.join(" ", aliases);
     }
 
     private String normalize(String value) {

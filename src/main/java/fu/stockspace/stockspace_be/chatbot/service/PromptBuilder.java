@@ -89,6 +89,7 @@ public class PromptBuilder {
             - Với câu hỏi về diện tích/kích thước kho, sau khi có warehouseId từ kết quả tìm kiếm, bắt buộc gọi getPublicWarehouseLayout để đọc widthMeters, lengthMeters và floorAreaM2. Chỉ trả lời diện tích khi tool trả về số liệu; không được suy ra diện tích từ capacity hoặc từ đơn giá VND/m²/tháng.
             - Nếu sơ đồ công khai không có kích thước, nói rõ "chưa có dữ liệu diện tích công khai" và có thể nêu capacity là sức chứa (nếu tool trả về), tuyệt đối không biến capacity thành m². Nếu search trả về danh sách gần đúng, phải nói đó là kết quả gần đúng và yêu cầu người dùng xác nhận tên kho trước khi kết luận.
             - Khi search trả về matchedBySemanticKeyword, đó là kết quả gợi ý theo nhu cầu/từ đồng nghĩa chứ chưa phải khẳng định phù hợp. Hãy đọc name, type, description và địa chỉ để giải thích vì sao kho phù hợp; nếu còn nhiều khả năng, nêu rõ và hỏi người dùng chọn kho.
+            - semanticExpansions chỉ là tín hiệu truy hồi; không được trình bày chúng như thuộc tính thật của kho hoặc điều khoản chính sách nếu tool result không có bằng chứng tương ứng.
 
             Luôn hiểu các câu hỏi ngắn là câu hỏi nối tiếp trong lịch sử gần nhất.
             Khi người dùng gửi câu ngắn nối tiếp (như chỉ gửi tên kho "Kho Vũng Tàu", "ừ", "xem đi" sau câu hỏi về tồn kho/phiếu/kho): BẮT BUỘC hiểu đây là câu trả lời tiếp nối cho lượt trước, PHẢI kích hoạt tool tương ứng (như getMyStock) cho kho đó để đọc số liệu thực tế. TUYỆT ĐỐI KHÔNG được dừng lại nói suông hay tự bịa số liệu ra trả lời.
@@ -113,6 +114,10 @@ public class PromptBuilder {
             - Kết quả tra cứu chính sách có trường citation: khi nêu một quy định, hãy đặt citation ngay sau mệnh đề tương ứng bằng nhãn nguồn và đoạn.
             - Chỉ tổng hợp những gì có trong tool result hoặc evidence. Nếu các nguồn mâu thuẫn, nêu rõ mâu thuẫn và ưu tiên dữ liệu live/mới hơn.
             - Nếu không đủ evidence, nói rõ chưa đủ dữ liệu và hỏi đúng một thông tin cần thiết; không bịa, không suy diễn.
+            - Đối với mọi câu hỏi liên quan hệ thống thuê kho, không được trả lời bằng kiến thức nền khi chưa có tool result thành công trong lượt hiện tại.
+            - Ma trận bắt buộc: quy trình/điều khoản/đặt cọc/hủy/bảo hiểm dùng searchSystemPolicy; phí kiểm định, hạn xác nhận và quy định đang áp dụng dùng getCurrentSystemRules; danh sách và giá gói dùng getServicePackages; gói của chính người dùng dùng getMyActiveSubscription; hợp đồng/gia hạn của chính người dùng dùng getMyContracts.
+            - Nếu tool bắt buộc không có trong phiên hoặc trả lỗi, chỉ nêu rõ không thể xác minh (hoặc yêu cầu đăng nhập với dữ liệu cá nhân); không được lấy số liệu từ lịch sử để thay thế.
+            - Nếu có bộ lập kế hoạch truy vấn, dùng intent và bộ lọc của nó để chọn tool; đây chỉ là dữ liệu đã chuẩn hóa, còn kết quả tool mới là bằng chứng cuối cùng.
             """;
 
     public String buildSystemPrompt(String roleName) {
