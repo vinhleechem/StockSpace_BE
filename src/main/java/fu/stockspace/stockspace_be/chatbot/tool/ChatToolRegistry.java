@@ -44,6 +44,7 @@ public class ChatToolRegistry {
             List.of(
                     "getMyContracts",
                     "getContractDetail",
+                    "getTenantDashboard",
                     "getMyActiveWarehouses",
                     "getWarehouseOwnerContact",
                     "getMyWarehouseLayout",
@@ -64,20 +65,15 @@ public class ChatToolRegistry {
     );
 
     /**
-     * Tenant tools that expose operational WMS data or capacity-aware
-     * suggestions.  These tools are not exposed to a tenant without a
-     * currently active service subscription.  Contract/warehouse metadata,
-     * package information, wallet and notification tools remain available so
-     * the chatbot can explain what is locked and how to subscribe.
+     * Tools whose underlying domain service requires the WMS subscription.
+     *
+     * Read-only observation tools deliberately do not belong here: an active
+     * rental contract is enough to observe a tenant's own warehouse data.
+     * Keeping this list aligned with the domain access policy prevents the
+     * chatbot from hiding data that the normal read APIs already expose.
      */
     private static final Set<String> SUBSCRIPTION_REQUIRED_TOOL_NAMES = Set.of(
             "getMyWarehouseLayout",
-            "getMyProductCatalog",
-            "getMyStock",
-            "getInventoryReceipts",
-            "getInventoryAudits",
-            "getStockTransfers",
-            "getWarehouseCapacity",
             "suggestPutaway",
             "suggestOutboundPicking"
     );

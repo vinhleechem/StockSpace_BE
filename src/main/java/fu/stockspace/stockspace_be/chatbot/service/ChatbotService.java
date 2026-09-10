@@ -100,8 +100,7 @@ public class ChatbotService {
     private ChatResponse processTenantMessageWithinRateLimit(
             UUID userId,
             SendMessageRequest request) {
-        ChatRequestContext context = activeWarehouseContextResolver.resolve(
-                userId, request.activeWarehouseId());
+        ChatRequestContext context = resolveRequestContext(userId, request);
         String message = normalizeMessage(request.message());
         PreparedChatSession prepared =
                 conversationStore.prepareUserSession(userId, request.sessionId());
@@ -167,8 +166,7 @@ public class ChatbotService {
             PreparedChatSession prepared =
                     conversationStore.prepareUserSession(userId, request.sessionId());
             List<ChatTool> tools = getTenantTools(userId);
-            ChatRequestContext context = activeWarehouseContextResolver.resolve(
-                    userId, request.activeWarehouseId());
+            ChatRequestContext context = resolveRequestContext(userId, request);
             String systemPrompt = promptBuilder.buildSystemPrompt(TENANT_ROLE, tools, context);
 
             return startStream(
@@ -510,10 +508,20 @@ public class ChatbotService {
         List<ChatTool> roleTools = toolRegistry.getToolsForRole(TENANT_ROLE);
         boolean hasActiveSubscription = subscriptionService.hasActiveSubscription(userId);
         if (!hasActiveSubscription) {
-            log.info("[AgenticLoop] Tenant {} has no active subscription; WMS chatbot tools are hidden",
+            log.info("[AgenticLoop] Tenant {} has no active subscription; subscription-gated chatbot tools are hidden",
                     userId);
         }
         return ChatToolRegistry.filterForActiveSubscription(roleTools, hasActiveSubscription);
+    }
+
+    private ChatRequestContext resolveRequestContext(UUID userId,
+                                                     SendMessageRequest request) {
+        if (request == null || request.activeScreen() == null || request.activeScreen().isBlank()) {
+            return activeWarehouseContextResolver.resolve(
+                    userId, request == null ? null : request.activeWarehouseId());
+        }
+        return activeWarehouseContextResolver.resolve(
+                userId, request.activeWarehouseId(), request.activeScreen());
     }
 
     private boolean hasRequiredSubscription(ChatTool tool, ChatRequestContext context) {
@@ -573,6 +581,12 @@ public class ChatbotService {
         private final AtomicReference<ScheduledFuture<?>> heartbeat =
                 new AtomicReference<>();
         private final StringBuilder streamedReply = new StringBuilder();
+        /**
+         * Holds a possible partial UUID between provider chunks. Sanitizing
+         * each chunk independently is not sufficient because a UUID can be
+         * split at any character boundary in an SSE response.
+         */
+        private final StringBuilder pendingReply = new StringBuilder();
 
         private StreamCoordinator(SseEmitter emitter,
                                   UUID requestId,
@@ -630,10 +644,9 @@ public class ChatbotService {
                 String reply;
                 if (streamedReply.isEmpty()) {
                     sendDelta(providerReply);
-                    reply = streamedReply.toString();
-                } else {
-                    reply = streamedReply.toString();
                 }
+                flushPendingDelta();
+                reply = streamedReply.toString();
                 if (reply.isBlank()) {
                     throw new ChatProviderException(
                             ErrorCode.CHAT_PROVIDER_INVALID_RESPONSE);
@@ -708,6 +721,76 @@ public class ChatbotService {
                 return;
             }
             ensureStreamActive(this::isCancelled);
+
+            if (streamedReply.length() >= Math.max(1_000, maxAssistantResponseChars)) {
+                return;
+            }
+            pendingReply.append(chunk);
+            emitSafePendingPrefix();
+        }
+
+        private void flushPendingDelta() {
+            if (pendingReply.isEmpty()) {
+                return;
+            }
+            String visible = sanitizeRawUuid(pendingReply.toString());
+            pendingReply.setLength(0);
+            emitDelta(visible);
+        }
+
+        private void emitSafePendingPrefix() {
+            String sanitized = sanitizeRawUuid(pendingReply.toString());
+            pendingReply.setLength(0);
+            pendingReply.append(sanitized);
+
+            int heldLength = longestUuidPrefixSuffix(sanitized);
+            int visibleLength = sanitized.length() - heldLength;
+            if (visibleLength <= 0) {
+                return;
+            }
+            String visible = sanitized.substring(0, visibleLength);
+            pendingReply.delete(0, visibleLength);
+            emitDelta(visible);
+        }
+
+        private int longestUuidPrefixSuffix(String value) {
+            int maximum = Math.min(36, value.length());
+            for (int length = maximum; length >= 1; length--) {
+                if (isUuidPrefix(value.substring(value.length() - length))) {
+                    return length;
+                }
+            }
+            return 0;
+        }
+
+        private boolean isUuidPrefix(String value) {
+            if (value.isEmpty() || value.length() > 36) {
+                return false;
+            }
+            for (int index = 0; index < value.length(); index++) {
+                char character = value.charAt(index);
+                boolean hyphenPosition = index == 8 || index == 13 || index == 18 || index == 23;
+                if (hyphenPosition) {
+                    if (character != '-') {
+                        return false;
+                    }
+                } else if (!isAsciiHexDigit(character)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        private boolean isAsciiHexDigit(char character) {
+            return (character >= '0' && character <= '9')
+                    || (character >= 'a' && character <= 'f')
+                    || (character >= 'A' && character <= 'F');
+        }
+
+        private void emitDelta(String chunk) {
+            if (chunk == null || chunk.isEmpty()) {
+                return;
+            }
 
             int limit = Math.max(1_000, maxAssistantResponseChars);
             int remaining = limit - streamedReply.length();

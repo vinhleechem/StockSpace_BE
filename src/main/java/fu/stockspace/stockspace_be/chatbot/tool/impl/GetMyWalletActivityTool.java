@@ -36,7 +36,7 @@ public class GetMyWalletActivityTool implements ChatTool {
 
     @Override
     public String getDescription() {
-        return "Xem lịch sử giao dịch, trạng thái một mã thanh toán hoặc lịch sử yêu cầu rút tiền của người thuê. "
+        return "Xem lịch sử giao dịch, thời hạn một mã nạp tiền, trạng thái thanh toán hoặc lịch sử yêu cầu rút tiền của người thuê. "
                 + "Không trả số tài khoản ngân hàng và không tạo giao dịch mới.";
     }
 
@@ -112,10 +112,11 @@ public class GetMyWalletActivityTool implements ChatTool {
     private Map<String, Object> transaction(TransactionResponse transaction) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("amount", transaction.getAmount());
-        result.put("type", transaction.getTransactionType());
-        result.put("paymentMethod", transaction.getPaymentMethod());
-        result.put("status", transaction.getStatus());
+        result.put("type", ChatToolLocalization.transactionType(transaction.getTransactionType()));
+        result.put("paymentMethod", ChatToolLocalization.paymentMethod(transaction.getPaymentMethod()));
+        result.put("status", ChatToolLocalization.transactionStatus(transaction.getStatus()));
         result.put("paymentCode", transaction.getPaymentCode());
+        result.put("expiresAt", transaction.getExpiresAt());
         result.put("createdAt", transaction.getCreatedAt());
         return result;
     }
@@ -124,7 +125,7 @@ public class GetMyWalletActivityTool implements ChatTool {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("amount", withdrawal.getAmount());
         result.put("bankName", withdrawal.getBankName());
-        result.put("status", withdrawal.getStatus());
+        result.put("status", ChatToolLocalization.approvalStatus(withdrawal.getStatus()));
         result.put("adminNotes", withdrawal.getAdminNotes());
         result.put("createdAt", withdrawal.getCreatedAt());
         result.put("updatedAt", withdrawal.getUpdatedAt());

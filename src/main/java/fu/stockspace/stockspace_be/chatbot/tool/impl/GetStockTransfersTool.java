@@ -4,8 +4,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatRequestContext;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatTool;
 import fu.stockspace.stockspace_be.common.dto.PagedResponse;
+import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferAttemptResponse;
+import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferEventResponse;
 import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferItemResponse;
 import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferResponse;
+import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferAttemptStatus;
+import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferAttemptType;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferStatus;
 import fu.stockspace.stockspace_be.wms.transfer.service.StockTransferService;
 import lombok.RequiredArgsConstructor;
@@ -38,7 +42,8 @@ public class GetStockTransfersTool implements ChatTool {
     @Override
     public String getDescription() {
         return "Xem yêu cầu chuyển hàng giữa các kho của người thuê, có thể lọc trạng thái hoặc xem chi tiết. "
-                + "Khi đang chọn một kho, kết quả gồm cả chuyến đi và chuyến đến của kho đó.";
+                + "Khi đang chọn một kho, kết quả gồm cả chuyến đi và chuyến đến của kho đó. "
+                + "Có thể xem thêm timeline các lần chuyển trạng thái.";
     }
 
     @Override
@@ -49,10 +54,14 @@ public class GetStockTransfersTool implements ChatTool {
                         "warehouseId", Map.of("type", "string",
                                 "description", "UUID kho cần lọc chuyển hàng. Bỏ trống để dùng kho đang mở trên giao diện."),
                         "transferId", Map.of("type", "string", "description", "Mã yêu cầu nếu cần xem chi tiết"),
+                        "includeTimeline", Map.of("type", "boolean",
+                                "description", "Khi xem chi tiết, có lấy timeline xử lý hay không"),
                         "status", Map.of("type", "string",
                                 "enum", List.of("DRAFT", "PENDING", "ALLOCATED", "PICKING", "READY_TO_DISPATCH",
-                                        "IN_TRANSIT", "PARTIALLY_RECEIVED", "RECONCILING", "COMPLETED",
-                                        "REJECTED", "CANCELLED"),
+                                        "IN_TRANSIT", "OVERDUE", "ARRIVED_AT_DESTINATION", "RECEIVING",
+                                        "PARTIALLY_RECEIVED", "SHORT_RECEIVED", "RECEIVE_REJECTED", "RECONCILING",
+                                        "RETRY_REQUESTED", "RETURN_REQUESTED", "RETURN_IN_TRANSIT",
+                                        "PARTIALLY_RETURNED", "RETURNED", "COMPLETED", "LOST", "REJECTED", "CANCELLED"),
                                 "description", "Trạng thái cần lọc"),
                         "page", Map.of("type", "integer", "minimum", 0),
                         "pageSize", Map.of("type", "integer", "minimum", 1, "maximum", 30)
@@ -78,7 +87,12 @@ public class GetStockTransfersTool implements ChatTool {
         try {
             UUID transferId = optionalUuid(params, "transferId");
             if (transferId != null) {
-                return objectMapper.writeValueAsString(toDetail(transferService.getTransfer(userId, transferId)));
+                Map<String, Object> detail = toDetail(transferService.getTransfer(userId, transferId));
+                if (booleanParam(params, "includeTimeline")) {
+                    detail.put("timeline", transferService.getTransferTimeline(userId, transferId)
+                            .stream().map(this::toTimelineEvent).toList());
+                }
+                return objectMapper.writeValueAsString(detail);
             }
             StockTransferStatus status = optionalStatus(params);
             UUID warehouseId = resolveWarehouseId(params, context);
@@ -163,6 +177,8 @@ public class GetStockTransfersTool implements ChatTool {
         result.put("updatedAt", transfer.getUpdatedAt());
         result.put("expectedArrivalAt", transfer.getExpectedArrivalAt());
         result.put("overdueAt", transfer.getOverdueAt());
+        result.put("outboundReceiptId", transfer.getOutboundReceiptId());
+        result.put("inboundReceiptId", transfer.getInboundReceiptId());
         return result;
     }
 
@@ -172,9 +188,43 @@ public class GetStockTransfersTool implements ChatTool {
         result.put("receivedAt", transfer.getReceivedAt());
         result.put("rejectedAt", transfer.getRejectedAt());
         result.put("cancelledAt", transfer.getCancelledAt());
-        result.put("attempts", transfer.getAttempts() == null ? List.of() : transfer.getAttempts());
+        result.put("attempts", transfer.getAttempts() == null ? List.of()
+                : transfer.getAttempts().stream().map(this::toAttempt).toList());
         result.put("items", transfer.getItems() == null ? List.of()
                 : transfer.getItems().stream().map(this::toItem).toList());
+        return result;
+    }
+
+    private Map<String, Object> toTimelineEvent(StockTransferEventResponse event) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("fromStatus", ChatToolLocalization.transferStatus(event.getFromStatus()));
+        result.put("toStatus", ChatToolLocalization.transferStatus(event.getToStatus()));
+        result.put("command", ChatToolLocalization.transferCommand(event.getCommand()));
+        result.put("actor", event.getActor() == null ? null : event.getActor().getFullName());
+        result.put("attemptSequenceNo", event.getAttemptSequenceNo());
+        result.put("reason", event.getReason());
+        result.put("createdAt", event.getCreatedAt());
+        return result;
+    }
+
+    private Map<String, Object> toAttempt(StockTransferAttemptResponse attempt) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("sequenceNo", attempt.getSequenceNo());
+        result.put("type", ChatToolLocalization.transferAttemptType(attempt.getType()));
+        result.put("status", ChatToolLocalization.transferAttemptStatus(attempt.getStatus()));
+        result.put("sourceWarehouse", attempt.getSourceWarehouse() == null ? null
+                : attempt.getSourceWarehouse().getName());
+        result.put("destinationWarehouse", attempt.getDestinationWarehouse() == null ? null
+                : attempt.getDestinationWarehouse().getName());
+        result.put("destinationStaff", attempt.getDestinationStaff() == null ? null
+                : attempt.getDestinationStaff().getFullName());
+        result.put("plannedQuantity", attempt.getPlannedQuantity());
+        result.put("shippedQuantity", attempt.getShippedQuantity());
+        result.put("receivedQuantity", attempt.getReceivedQuantity());
+        result.put("reason", attempt.getReason());
+        result.put("startedAt", attempt.getStartedAt());
+        result.put("arrivedAt", attempt.getArrivedAt());
+        result.put("completedAt", attempt.getCompletedAt());
         return result;
     }
 
@@ -213,6 +263,14 @@ public class GetStockTransfersTool implements ChatTool {
     private StockTransferStatus optionalStatus(Map<String, Object> params) {
         Object raw = params == null ? null : params.get("status");
         return raw == null ? null : StockTransferStatus.valueOf(raw.toString().trim().toUpperCase(Locale.ROOT));
+    }
+
+    private boolean booleanParam(Map<String, Object> params, String key) {
+        Object raw = params == null ? null : params.get(key);
+        if (raw instanceof Boolean value) {
+            return value;
+        }
+        return raw != null && "true".equalsIgnoreCase(raw.toString().trim());
     }
 
     private UUID optionalUuid(Map<String, Object> params, String key) {

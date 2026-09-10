@@ -45,6 +45,17 @@ public class ProductSkuService {
         return PagedResponse.fromPage(page, this::mapToResponse);
     }
 
+    public PagedResponse<ProductSkuResponse> searchMySKUs(UUID tenantId,
+                                                          String keyword,
+                                                          Pageable pageable) {
+        String pattern = keyword == null || keyword.isBlank()
+                ? null
+                : "%" + keyword.trim().toLowerCase(java.util.Locale.ROOT) + "%";
+        Page<ProductSku> page = skuRepository.searchAllActiveByTenantOrSystem(
+                tenantId, pattern, pageable);
+        return PagedResponse.fromPage(page, this::mapToResponse);
+    }
+
     public ProductSkuResponse getSkuDetail(UUID tenantId, UUID skuId) {
         ProductSku sku = skuRepository.findByIdAndIsDeletedFalse(skuId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.SKU_NOT_FOUND));

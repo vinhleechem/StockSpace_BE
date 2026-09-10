@@ -101,6 +101,18 @@ Trên Windows:
 
 Chatbot cần `OPENROUTER_API_KEY` và `OPENROUTER_MODEL`. Cơ sở dữ liệu sử dụng image `pgvector/pgvector:0.8.5-pg16`; schema vector được khởi tạo theo cấu hình ứng dụng. Các biến `CHATBOT_*` trong `.env.example` điều chỉnh SSE, giới hạn request, RAG và retention.
 
+Chatbot Guest chỉ đọc dữ liệu công khai. Chatbot Tenant có thể đọc dữ liệu thuộc
+hợp đồng hiện hành (tồn kho, phiếu, kiểm kê, chuyển kho, sức chứa và tổng quan
+tài khoản); các gợi ý vận hành hoặc sơ đồ WMS vẫn tuân theo subscription và quyền
+domain tương ứng. Chatbot hiện không tự tạo, duyệt, từ chối hoặc hủy nghiệp vụ.
+Frontend nên gửi thêm `activeWarehouseId` và `activeScreen` (`dashboard`,
+`contracts`, `warehouse`, `inventory`, `receipt`, `audit`, `transfer`, `wallet`,
+`subscription` hoặc `notifications`) trong body `/api/chat/send` và
+`/api/chat/stream`; backend sẽ kiểm tra quyền kho và chỉ chấp nhận màn hình trong allowlist.
+Search kho hiện hỗ trợ thêm lọc tỉnh/thành, quận/huyện, cách tính giá, sắp xếp
+theo giá/sức chứa và chuẩn hóa từ khóa tiếng Việt khi truy vấn chính xác không có kết quả.
+Danh mục SKU của tenant có thể tìm theo mã, tên hoặc nhóm sản phẩm.
+
 ## CI/CD và production
 
 - Pull request vào `main` chạy `./mvnw --batch-mode verify` qua `.github/workflows/ci-pr.yml`.

@@ -299,6 +299,37 @@ class ChatbotServiceTest {
         );
     }
 
+    @Test
+    void streamRedactsUuidEvenWhenProviderSplitsItAcrossChunks() {
+        configureStreamRuntime();
+        UUID sessionId = UUID.randomUUID();
+        String token = UUID.randomUUID().toString();
+        String leakedId = "123e4567-e89b-12d3-a456-426614174000";
+        List<ChatTool> noTools = List.of();
+        when(conversationStore.prepareGuestSession(null))
+                .thenReturn(new PreparedChatSession(sessionId, token, List.of()));
+        when(toolRegistry.getToolsForRole("GUEST")).thenReturn(noTools);
+        when(promptBuilder.buildSystemPrompt(
+                eq("GUEST"), eq(noTools), any(ChatRequestContext.class)))
+                .thenReturn("system prompt");
+        when(conversationStore.appendGuestTurn(
+                token, sessionId, "Xin chào", "Mã nội bộ: "))
+                .thenReturn(LocalDateTime.of(2026, 7, 28, 16, 0));
+        org.mockito.Mockito.doAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            Consumer<String> chunks = invocation.getArgument(3);
+            chunks.accept("Mã nội bộ: " + leakedId.substring(0, 11));
+            chunks.accept(leakedId.substring(11));
+            return new OpenRouterClient.AiResponse("Mã nội bộ: " + leakedId, null);
+        }).when(openRouterClient).completeStreaming(
+                anyList(), eq(noTools), any(Duration.class), any(Consumer.class), any(BooleanSupplier.class));
+
+        service.streamGuestMessage(null, new SendMessageRequest(null, "Xin chào"));
+
+        verify(conversationStore).appendGuestTurn(
+                token, sessionId, "Xin chào", "Mã nội bộ: ");
+    }
+
     private ChatTool namedTool(String name) {
         ChatTool tool = mock(ChatTool.class);
         when(tool.getName()).thenReturn(name);
