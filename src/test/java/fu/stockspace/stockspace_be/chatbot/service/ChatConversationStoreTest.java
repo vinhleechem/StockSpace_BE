@@ -41,14 +41,20 @@ class ChatConversationStoreTest {
     @Mock
     private UserRepository userRepository;
 
+    private ConversationMemoryService memoryService;
+
     private ChatConversationStore store;
 
     @BeforeEach
     void setUp() {
+        memoryService = new ConversationMemoryService(
+                new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules()
+        );
         store = new ChatConversationStore(
                 sessionRepository,
                 messageRepository,
-                userRepository
+                userRepository,
+                memoryService
         );
         ReflectionTestUtils.setField(store, "guestSessionTtl", Duration.ofHours(24));
     }

@@ -29,7 +29,6 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -44,6 +43,8 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 
 
@@ -67,6 +68,9 @@ public class ChatbotService {
             "Xin lỗi, tôi chưa thể hoàn thành yêu cầu này. Vui lòng diễn đạt ngắn gọn hơn hoặc thử lại sau.";
 
     private static final String TENANT_ROLE = "ROLE_TENANT";
+    private static final Pattern CITATION_LABEL = Pattern.compile(
+            "\\\"label\\\"\\s*:\\s*\\\"([^\\\"]{1,240})\\\""
+    );
 
     private final ChatConversationStore conversationStore;
     private final OpenRouterClient openRouterClient;
@@ -77,8 +81,8 @@ public class ChatbotService {
     private final AuthenticatedChatRateLimiter authenticatedRateLimiter;
     private final ChatStreamRuntime chatStreamRuntime;
 
-    @Value("${app.chatbot.max-agent-iterations:4}")
-    private int maxAgentIterations;
+    @Value("${app.chatbot.max-agent-iterations:6}")
+    private int maxAgentIterations = 6;
 
     @Value("${app.chatbot.request-deadline:75s}")
     private Duration requestDeadline;
@@ -107,19 +111,22 @@ public class ChatbotService {
         List<ChatTool> tools = getTenantTools(userId);
         String systemPrompt = promptBuilder.buildSystemPrompt(TENANT_ROLE, tools, context);
 
-        String reply = runAgenticLoop(
+        AgentRunResult run = runAgenticLoop(
                 prepared.history(),
                 systemPrompt,
                 message,
                 tools,
-                context
+                context,
+                prepared.memory()
         );
+        String reply = run.reply();
         LocalDateTime timestamp = conversationStore.appendUserTurn(
                 userId,
                 prepared.sessionId(),
                 message,
                 reply
         );
+        rememberUserContextBestEffort(userId, prepared.sessionId(), run.traces());
         return new ChatResponse(prepared.sessionId(), null, reply, timestamp);
     }
 
@@ -132,19 +139,23 @@ public class ChatbotService {
         List<ChatTool> tools = toolRegistry.getToolsForRole("GUEST");
         String systemPrompt = promptBuilder.buildSystemPrompt("GUEST", tools, context);
 
-        String reply = runAgenticLoop(
+        AgentRunResult run = runAgenticLoop(
                 prepared.history(),
                 systemPrompt,
                 message,
                 tools,
-                context
+                context,
+                prepared.memory()
         );
+        String reply = run.reply();
         LocalDateTime timestamp = conversationStore.appendGuestTurn(
                 prepared.guestToken(),
                 prepared.sessionId(),
                 message,
                 reply
         );
+        rememberGuestContextBestEffort(
+                prepared.guestToken(), prepared.sessionId(), run.traces());
         return new ChatResponse(
                 prepared.sessionId(),
                 prepared.guestToken(),
@@ -265,18 +276,21 @@ public class ChatbotService {
         return emitter;
     }
 
-    private String runAgenticLoopStreaming(List<Map<String, Object>> history,
+    private AgentRunResult runAgenticLoopStreaming(List<Map<String, Object>> history,
                                            String systemPrompt,
                                            String userMessage,
                                            List<ChatTool> allowedTools,
                                            ChatRequestContext context,
+                                           ConversationMemory memory,
                                            Consumer<String> deltaConsumer,
                                            Consumer<String> statusConsumer,
                                            BooleanSupplier cancelled) {
         List<Map<String, Object>> conversation = new ArrayList<>();
         conversation.add(Map.of("role", "system", "content", systemPrompt));
         conversation.addAll(history);
+        appendMemoryContext(conversation, memory, userMessage);
         conversation.add(OpenRouterClient.buildContent("user", userMessage));
+        List<ToolExecutionTrace> traces = new ArrayList<>();
 
         Map<String, ChatTool> allowedByName = allowedTools.stream()
                 .collect(Collectors.toUnmodifiableMap(
@@ -287,6 +301,9 @@ public class ChatbotService {
         long deadlineNanos = System.nanoTime()
                 + effectiveDeadline().toNanos();
         ensureStreamActive(cancelled);
+        preloadWarehouseDimensionLookup(
+                conversation, allowedByName, memory, userMessage,
+                context, traces, statusConsumer, cancelled);
         AiResponse response = completeStreamingWithinDeadline(
                 conversation,
                 allowedTools,
@@ -306,6 +323,12 @@ public class ChatbotService {
 
             ChatTool tool = allowedByName.get(functionCall.name());
             String toolResult;
+            Map<String, Object> args = memory.enrichToolArguments(
+                    functionCall.name(),
+                    functionCall.args(),
+                    userMessage
+            );
+            boolean successful = false;
             long startedAt = System.nanoTime();
             if (tool == null) {
                 log.warn("[AgenticLoop] Rejected non-allowlisted tool name={}",
@@ -319,10 +342,8 @@ public class ChatbotService {
                 toolResult = TOOL_SUBSCRIPTION_REQUIRED;
             } else {
                 try {
-                    Map<String, Object> args = functionCall.args() == null
-                            ? Map.of()
-                            : new LinkedHashMap<>(functionCall.args());
                     toolResult = capToolResult(tool.executeWithContext(args, context));
+                    successful = isSuccessfulToolResult(toolResult);
                     log.info("[AgenticLoop] Tool completed name={} durationMs={}",
                             tool.getName(),
                             Duration.ofNanos(System.nanoTime() - startedAt).toMillis());
@@ -333,6 +354,14 @@ public class ChatbotService {
                     toolResult = TOOL_FAILURE;
                 }
             }
+
+            traces.add(new ToolExecutionTrace(
+                    functionCall.name(),
+                    args,
+                    toolResult,
+                    successful,
+                    Duration.ofNanos(System.nanoTime() - startedAt).toMillis()
+            ));
 
             ensureStreamActive(cancelled);
             conversation.add(openRouterClient.buildToolResult(functionCall, toolResult));
@@ -350,9 +379,12 @@ public class ChatbotService {
         ensureStreamActive(cancelled);
         if (response.isFunctionCall()) {
             log.warn("[AgenticLoop] Iteration limit reached count={}", iterations);
-            return MAX_ITERATIONS_REPLY;
+            return new AgentRunResult(MAX_ITERATIONS_REPLY, traces);
         }
-        return capAssistantResponse(response.text());
+        return new AgentRunResult(
+                enforceCitations(capAssistantResponse(response.text()), traces),
+                traces
+        );
     }
 
     private AiResponse completeStreamingWithinDeadline(
@@ -381,15 +413,18 @@ public class ChatbotService {
         }
     }
 
-    private String runAgenticLoop(List<Map<String, Object>> history,
+    private AgentRunResult runAgenticLoop(List<Map<String, Object>> history,
                                   String systemPrompt,
                                   String userMessage,
                                   List<ChatTool> allowedTools,
-                                  ChatRequestContext context) {
+                                  ChatRequestContext context,
+                                  ConversationMemory memory) {
         List<Map<String, Object>> conversation = new ArrayList<>();
         conversation.add(Map.of("role", "system", "content", systemPrompt));
         conversation.addAll(history);
+        appendMemoryContext(conversation, memory, userMessage);
         conversation.add(OpenRouterClient.buildContent("user", userMessage));
+        List<ToolExecutionTrace> traces = new ArrayList<>();
 
         Map<String, ChatTool> allowedByName = allowedTools.stream()
                 .collect(Collectors.toUnmodifiableMap(
@@ -399,6 +434,9 @@ public class ChatbotService {
 
         long deadlineNanos = System.nanoTime()
                 + effectiveDeadline().toNanos();
+        preloadWarehouseDimensionLookup(
+                conversation, allowedByName, memory, userMessage,
+                context, traces, null, null);
         AiResponse response = completeWithinDeadline(
                 conversation,
                 allowedTools,
@@ -413,6 +451,12 @@ public class ChatbotService {
 
             ChatTool tool = allowedByName.get(functionCall.name());
             String toolResult;
+            Map<String, Object> args = memory.enrichToolArguments(
+                    functionCall.name(),
+                    functionCall.args(),
+                    userMessage
+            );
+            boolean successful = false;
             long startedAt = System.nanoTime();
             if (tool == null) {
 
@@ -427,10 +471,8 @@ public class ChatbotService {
                 toolResult = TOOL_SUBSCRIPTION_REQUIRED;
             } else {
                 try {
-                    Map<String, Object> args = functionCall.args() == null
-                            ? Map.of()
-                            : new LinkedHashMap<>(functionCall.args());
                     toolResult = capToolResult(tool.executeWithContext(args, context));
+                    successful = isSuccessfulToolResult(toolResult);
                     log.info("[AgenticLoop] Tool completed name={} durationMs={}",
                             tool.getName(),
                             Duration.ofNanos(System.nanoTime() - startedAt).toMillis());
@@ -441,6 +483,14 @@ public class ChatbotService {
                     toolResult = TOOL_FAILURE;
                 }
             }
+
+            traces.add(new ToolExecutionTrace(
+                    functionCall.name(),
+                    args,
+                    toolResult,
+                    successful,
+                    Duration.ofNanos(System.nanoTime() - startedAt).toMillis()
+            ));
 
             conversation.add(openRouterClient.buildToolResult(functionCall, toolResult));
             iterations++;
@@ -453,9 +503,162 @@ public class ChatbotService {
 
         if (response.isFunctionCall()) {
             log.warn("[AgenticLoop] Iteration limit reached count={}", iterations);
-            return MAX_ITERATIONS_REPLY;
+            return new AgentRunResult(MAX_ITERATIONS_REPLY, traces);
         }
-        return capAssistantResponse(response.text());
+        return new AgentRunResult(
+                enforceCitations(capAssistantResponse(response.text()), traces),
+                traces
+        );
+    }
+
+    private void appendMemoryContext(
+            List<Map<String, Object>> conversation,
+            ConversationMemory memory,
+            String userMessage
+    ) {
+        ConversationMemory safeMemory = memory == null
+                ? ConversationMemory.empty()
+                : memory;
+        String memoryPrompt = safeMemory.promptContext(userMessage);
+        if (!memoryPrompt.isBlank()) {
+            conversation.add(Map.of("role", "system", "content", memoryPrompt));
+        }
+    }
+
+    /**
+     * Handles the high-frequency failure mode where a user asks for a field
+     * of the warehouse returned in the previous turn. This read-only lookup is
+     * deterministic and happens before the model gets a chance to repeat a
+     * broad search with the full natural-language question as its keyword.
+     */
+    private void preloadWarehouseDimensionLookup(
+            List<Map<String, Object>> conversation,
+            Map<String, ChatTool> allowedByName,
+            ConversationMemory memory,
+            String userMessage,
+            ChatRequestContext context,
+            List<ToolExecutionTrace> traces,
+            Consumer<String> statusConsumer,
+            BooleanSupplier cancelled
+    ) {
+        if (memory == null || !memory.isDimensionQuestion(userMessage)
+                || allowedByName == null || traces == null) {
+            return;
+        }
+        ChatTool tool = allowedByName.get("getPublicWarehouseLayout");
+        if (tool == null || !hasRequiredSubscription(tool, context)) {
+            return;
+        }
+        Map<String, Object> args = memory.enrichToolArguments(
+                tool.getName(), Map.of(), userMessage);
+        Object warehouseId = args.get("warehouseId");
+        if (warehouseId == null || warehouseId.toString().isBlank()) {
+            return;
+        }
+        if (cancelled != null) {
+            ensureStreamActive(cancelled);
+        }
+        if (statusConsumer != null) {
+            statusConsumer.accept("retrieving");
+        }
+
+        OpenRouterClient.FunctionCall functionCall = new OpenRouterClient.FunctionCall(
+                "memory_" + UUID.randomUUID(), tool.getName(), args);
+        conversation.add(openRouterClient.buildAssistantToolCall(functionCall));
+        long startedAt = System.nanoTime();
+        String toolResult;
+        boolean successful = false;
+        try {
+            toolResult = capToolResult(tool.executeWithContext(args, context));
+            successful = isSuccessfulToolResult(toolResult);
+        } catch (Exception exception) {
+            log.warn("[AgenticLoop] Deterministic warehouse lookup failed type={}",
+                    exception.getClass().getSimpleName());
+            toolResult = TOOL_FAILURE;
+        }
+        traces.add(new ToolExecutionTrace(
+                functionCall.name(),
+                args,
+                toolResult,
+                successful,
+                Duration.ofNanos(System.nanoTime() - startedAt).toMillis()
+        ));
+        conversation.add(openRouterClient.buildToolResult(functionCall, toolResult));
+        if (statusConsumer != null) {
+            statusConsumer.accept("processing");
+        }
+    }
+
+    private boolean isSuccessfulToolResult(String toolResult) {
+        if (toolResult == null || toolResult.isBlank()) {
+            return false;
+        }
+        String normalized = toolResult.stripLeading();
+        return !normalized.startsWith("{\"error\"")
+                && !normalized.startsWith("{ \"error\"");
+    }
+
+    /**
+     * Makes provenance visible even when a model forgets to repeat the
+     * citation returned by a retrieval tool. This is deliberately additive:
+     * the model still controls the explanation, while the backend guarantees a
+     * source label is present for every policy lookup.
+     */
+    private String enforceCitations(String reply, List<ToolExecutionTrace> traces) {
+        if (reply == null || traces == null || traces.isEmpty()) {
+            return reply;
+        }
+        java.util.LinkedHashSet<String> labels = new java.util.LinkedHashSet<>();
+        for (ToolExecutionTrace trace : traces) {
+            if (trace == null || !trace.successful()
+                    || !"searchSystemPolicy".equals(trace.toolName())) {
+                continue;
+            }
+            Matcher matcher = CITATION_LABEL.matcher(trace.result());
+            while (matcher.find() && labels.size() < 3) {
+                String label = matcher.group(1).trim();
+                if (!label.isBlank()) {
+                    labels.add(label);
+                }
+            }
+        }
+        if (labels.isEmpty() || labels.stream().allMatch(reply::contains)) {
+            return reply;
+        }
+        String suffix = "\n\nNguồn tham khảo: " + String.join("; ", labels);
+        return capAssistantResponse(reply + suffix);
+    }
+
+    private void rememberUserContextBestEffort(
+            UUID userId,
+            UUID sessionId,
+            List<ToolExecutionTrace> traces
+    ) {
+        if (traces == null || traces.isEmpty()) {
+            return;
+        }
+        try {
+            conversationStore.rememberUserToolContext(userId, sessionId, traces);
+        } catch (RuntimeException exception) {
+            log.warn("[ConversationMemory] Could not persist user context cause={}",
+                    exception.getClass().getSimpleName());
+        }
+    }
+
+    private void rememberGuestContextBestEffort(
+            String token,
+            UUID sessionId,
+            List<ToolExecutionTrace> traces
+    ) {
+        if (traces == null || traces.isEmpty()) {
+            return;
+        }
+        try {
+            conversationStore.rememberGuestToolContext(token, sessionId, traces);
+        } catch (RuntimeException exception) {
+            log.warn("[ConversationMemory] Could not persist guest context cause={}",
+                    exception.getClass().getSimpleName());
+        }
     }
 
     private AiResponse completeWithinDeadline(List<Map<String, Object>> conversation,
@@ -555,6 +758,16 @@ public class ChatbotService {
         return name.replaceAll("[^A-Za-z0-9_-]", "?");
     }
 
+    private record AgentRunResult(
+            String reply,
+            List<ToolExecutionTrace> traces
+    ) {
+
+        private AgentRunResult {
+            traces = traces == null ? List.of() : List.copyOf(traces);
+        }
+    }
+
     private final class StreamCoordinator {
 
         private static final String PROCESSING_MESSAGE =
@@ -629,21 +842,30 @@ public class ChatbotService {
                 sendStatus("processing");
                 heartbeat.set(chatStreamRuntime.scheduleHeartbeat(this::sendPing));
 
-                String providerReply = runAgenticLoopStreaming(
+                AgentRunResult run = runAgenticLoopStreaming(
                         prepared.history(),
                         systemPrompt,
                         userMessage,
                         tools,
                         context,
+                        prepared.memory(),
                         this::sendDelta,
                         this::sendStatus,
                         this::isCancelled
                 );
+                String providerReply = run.reply();
                 ensureStreamActive(this::isCancelled);
 
                 String reply;
                 if (streamedReply.isEmpty()) {
                     sendDelta(providerReply);
+                } else if (providerReply.startsWith(streamedReply)
+                        && providerReply.length() > streamedReply.length()) {
+                    // The provider text may already have been emitted before
+                    // the final citation-enforcement pass. Emit only the
+                    // additive suffix so SSE and non-streaming responses stay
+                    // identical.
+                    sendDelta(providerReply.substring(streamedReply.length()));
                 }
                 flushPendingDelta();
                 reply = streamedReply.toString();
@@ -651,7 +873,7 @@ public class ChatbotService {
                     throw new ChatProviderException(
                             ErrorCode.CHAT_PROVIDER_INVALID_RESPONSE);
                 }
-                completeSuccessfully(sanitizeRawUuid(reply));
+                completeSuccessfully(sanitizeRawUuid(reply), run.traces());
             } catch (CancellationException ignored) {
                 cancelWithoutEvent();
             } catch (Throwable failure) {
@@ -661,7 +883,10 @@ public class ChatbotService {
             }
         }
 
-        private void completeSuccessfully(String reply) {
+        private void completeSuccessfully(
+                String reply,
+                List<ToolExecutionTrace> traces
+        ) {
             LocalDateTime timestamp;
             Throwable persistenceFailure = null;
             synchronized (finalizationLock) {
@@ -676,6 +901,8 @@ public class ChatbotService {
                                 userMessage,
                                 reply
                         );
+                        rememberGuestContextBestEffort(
+                                prepared.guestToken(), prepared.sessionId(), traces);
                     } else {
                         timestamp = conversationStore.appendUserTurn(
                                 userId,
@@ -683,6 +910,8 @@ public class ChatbotService {
                                 userMessage,
                                 reply
                         );
+                        rememberUserContextBestEffort(
+                                userId, prepared.sessionId(), traces);
                     }
                     terminal.set(true);
                 } catch (Throwable failure) {

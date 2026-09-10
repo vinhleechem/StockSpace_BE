@@ -9,6 +9,7 @@ import fu.stockspace.stockspace_be.chatbot.repository.PgVectorKnowledgeRepositor
 import fu.stockspace.stockspace_be.chatbot.repository.PgVectorKnowledgeRepository.KnowledgeVectorMatch;
 import fu.stockspace.stockspace_be.chatbot.repository.SystemKnowledgeRepository;
 import fu.stockspace.stockspace_be.chatbot.service.KnowledgeDocumentSupport;
+import fu.stockspace.stockspace_be.chatbot.service.KnowledgePassageSelector;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatTool;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -229,7 +230,13 @@ public class SearchSystemPolicyTool implements ChatTool {
             List<ScoredKnowledge> scored = new ArrayList<>();
 
             for (SystemKnowledge candidate : candidatesById.values()) {
-                double lexicalScore = lexicalScore(query, queryTerms, candidate);
+                KnowledgePassageSelector.Passage passage =
+                        KnowledgePassageSelector.selectBest(
+                                candidate.getTitle(), candidate.getContent(), query);
+                double lexicalScore = Math.max(
+                        lexicalScore(query, queryTerms, candidate),
+                        passage.score()
+                );
                 double semanticScore = semanticScores.getOrDefault(candidate.getId(), 0.0);
                 boolean semanticUsable = semanticScores.containsKey(candidate.getId());
 
@@ -239,7 +246,8 @@ public class SearchSystemPolicyTool implements ChatTool {
                 boolean relevant = lexicalScore >= MIN_LEXICAL_SCORE
                         || (queryTerms.size() >= 2 && semanticScore >= MIN_SEMANTIC_ONLY_SCORE);
                 if (relevant && hybridScore >= minScore) {
-                    scored.add(new ScoredKnowledge(candidate, hybridScore, lexicalScore, semanticScore));
+                    scored.add(new ScoredKnowledge(
+                            candidate, hybridScore, lexicalScore, semanticScore, passage));
                 }
             }
 
@@ -477,13 +485,21 @@ public class SearchSystemPolicyTool implements ChatTool {
 
     private Map<String, Object> toResult(ScoredKnowledge scored) {
         SystemKnowledge knowledge = scored.knowledge();
+        KnowledgePassageSelector.Passage passage = scored.passage();
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("id", safeId(knowledge));
         result.put("source", "system_knowledge");
         result.put("category", categoryLabel(knowledge.getCategory()));
         result.put("title", knowledge.getTitle());
-        result.put("content", knowledge.getContent());
+        result.put("content", passage.text().isBlank() ? knowledge.getContent() : passage.text());
         result.put("relevance", roundScore(scored.score()));
+        result.put("citation", Map.of(
+                "label", safeText(knowledge.getTitle()) + " · đoạn " + (passage.index() + 1),
+                "sourceTitle", safeText(knowledge.getTitle()),
+                "excerpt", passage.text(),
+                "startOffset", Math.max(0, passage.startOffset()),
+                "endOffset", Math.max(0, passage.endOffset())
+        ));
         return result;
     }
 
@@ -562,7 +578,8 @@ public class SearchSystemPolicyTool implements ChatTool {
             SystemKnowledge knowledge,
             double score,
             double lexicalScore,
-            double semanticScore
+            double semanticScore,
+            KnowledgePassageSelector.Passage passage
     ) {
     }
 }
