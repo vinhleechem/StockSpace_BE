@@ -32,6 +32,11 @@ warehouse. Only that staff member can execute picking for the transfer; the
 tenant remains the approver for dispatch. The assigned source staff may run
 `allocate` and `pick` using only the source-warehouse assignment.
 
+Creation also accepts an optional `destinationStaffId`. The assigned staff must
+have an active assignment at the current destination and may execute `arrive`
+and `receive`; exception decisions remain tenant-only. Retry may supply a new
+`destinationStaffId`, and every attempt preserves its receiver snapshot.
+
 Existing clients may continue calling `PATCH /{id}/approve-dispatch` directly
 from `PENDING`; this is kept as a compatibility path while clients migrate to
 `allocate → pick → approve-dispatch`.
@@ -39,6 +44,7 @@ from `PENDING`; this is kept as a compatibility path while clients migrate to
 ## New endpoints
 
 - `PATCH /api/tenant/inventory/transfers/{id}/allocate`
+- `PATCH /api/tenant/inventory/transfers/{id}/destination-staff`
 - `POST /api/tenant/inventory/transfers/{id}/pick`
 - `POST /api/tenant/inventory/transfers/{id}/reconcile`
 - `GET /api/tenant/inventory/transfers/{id}/timeline`
@@ -91,7 +97,8 @@ request with fresh source allocation.
 ## Database migration
 
 Apply `ops/migrations/20260909_01_stock_transfer_hardening.sql` and
-`ops/migrations/20260909_02_stock_transfer_operational_legs.sql` with the normal
+`ops/migrations/20260909_02_stock_transfer_operational_legs.sql`, followed by
+`ops/migrations/20260910_01_stock_transfer_destination_staff.sql`, with the normal
 migration runner. They are additive, backfill transfer numbers/counters and an
 initial outbound attempt for existing rows, add non-negative stock protection,
 and create reservation, pick-line, event, idempotency and operational-attempt

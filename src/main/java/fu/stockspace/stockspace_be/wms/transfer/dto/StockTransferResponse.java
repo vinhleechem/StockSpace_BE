@@ -25,6 +25,7 @@ public class StockTransferResponse {
     /** Current operational destination; destinationWarehouse remains the original request route. */
     private WarehouseSummaryResponse currentDestinationWarehouse;
     private TransferActorResponse sourceStaff;
+    private TransferActorResponse destinationStaff;
     private String note;
     private List<StockTransferItemResponse> items;
     private TransferActorResponse createdBy;

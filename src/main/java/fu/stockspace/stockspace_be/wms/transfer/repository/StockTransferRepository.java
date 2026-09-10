@@ -34,6 +34,18 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, UU
                         t.sourceStaff.id = :staffId
                     )
                     or (
+                        t.destinationStaff.id = :staffId
+                        and exists (
+                            select assignedDestination.id from StaffWarehouseAssignment assignedDestination
+                            where assignedDestination.staff.id = :staffId
+                              and assignedDestination.tenant.id = :tenantId
+                              and assignedDestination.warehouse.id = coalesce(t.activeDestinationWarehouse.id, t.destinationWarehouse.id)
+                              and assignedDestination.status = fu.stockspace.stockspace_be.staff.entity.AssignmentStatus.ACTIVE
+                              and assignedDestination.isActive = true
+                              and assignedDestination.isDeleted = false
+                        )
+                    )
+                    or (
                         exists (
                             select sourceAssignment.id from StaffWarehouseAssignment sourceAssignment
                             where sourceAssignment.staff.id = :staffId
@@ -86,6 +98,18 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, UU
             order by t.createdAt desc, t.id desc
             """)
     List<StockTransfer> findAssignedSourceOperationsForStaff(
+            @Param("tenantId") UUID tenantId,
+            @Param("staffId") UUID staffId);
+
+    @Query("""
+            select t from StockTransfer t
+            where t.tenant.id = :tenantId
+              and t.destinationStaff.id = :staffId
+              and t.isActive = true
+              and t.isDeleted = false
+            order by t.createdAt desc, t.id desc
+            """)
+    List<StockTransfer> findAssignedDestinationOperationsForStaff(
             @Param("tenantId") UUID tenantId,
             @Param("staffId") UUID staffId);
 

@@ -20,12 +20,15 @@ import fu.stockspace.stockspace_be.wms.product.entity.ProductSku;
 import fu.stockspace.stockspace_be.wms.product.repository.ProductSkuRepository;
 import fu.stockspace.stockspace_be.wms.stock.entity.StockBatch;
 import fu.stockspace.stockspace_be.wms.stock.repository.StockBatchRepository;
+import fu.stockspace.stockspace_be.wms.transfer.dto.AssignStockTransferDestinationStaffRequest;
 import fu.stockspace.stockspace_be.wms.transfer.dto.CreateStockTransferRequest;
 import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferItemRequest;
 import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferResponse;
 import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferSourceAllocationRequest;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransfer;
+import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferAttempt;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferStatus;
+import fu.stockspace.stockspace_be.wms.transfer.repository.StockTransferAttemptRepository;
 import fu.stockspace.stockspace_be.wms.transfer.repository.StockTransferRepository;
 import fu.stockspace.stockspace_be.wms.transfer.service.StockTransferService;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
@@ -33,6 +36,7 @@ import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -60,6 +64,8 @@ class StockTransferServiceTest {
 
     @Mock
     private StockTransferRepository transferRepository;
+    @Mock
+    private StockTransferAttemptRepository attemptRepository;
     @Mock
     private WarehouseRepository warehouseRepository;
     @Mock
@@ -223,6 +229,92 @@ class StockTransferServiceTest {
     }
 
     @Test
+    void createTransfer_assignsDestinationStaffForReceiving() {
+        stubCreateAccess();
+        UUID destinationStaffId = UUID.randomUUID();
+        User destinationStaff = User.builder()
+                .id(destinationStaffId)
+                .fullName("Destination Receiver")
+                .roles(Set.of(Role.builder().name(RoleType.ROLE_STAFF.name()).build()))
+                .build();
+        when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+        when(userRepository.findById(destinationStaffId)).thenReturn(Optional.of(destinationStaff));
+        when(tenantMemberRepository.existsByUserIdAndTenantIdAndIsActiveTrueAndIsDeletedFalse(
+                destinationStaffId, tenantId)).thenReturn(true);
+        when(assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
+                destinationStaffId, tenantId, destinationWarehouseId, AssignmentStatus.ACTIVE)).thenReturn(true);
+        when(warehouseRepository.findById(sourceWarehouseId)).thenReturn(Optional.of(sourceWarehouse));
+        when(warehouseRepository.findById(destinationWarehouseId)).thenReturn(Optional.of(destinationWarehouse));
+        when(productSkuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(sku));
+        when(stockBatchRepository.findByIdAndIsDeletedFalse(batchId)).thenReturn(Optional.of(sourceBatch));
+        when(transferRepository.save(any(StockTransfer.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        StockTransferResponse response = transferService.createTransfer(
+                tenantId, request(10, 10, null, destinationStaffId));
+
+        assertEquals(destinationStaffId, response.getDestinationStaff().getId());
+        ArgumentCaptor<StockTransferAttempt> attemptCaptor =
+                ArgumentCaptor.forClass(StockTransferAttempt.class);
+        verify(attemptRepository).save(attemptCaptor.capture());
+        assertEquals(destinationStaffId, attemptCaptor.getValue().getDestinationStaff().getId());
+        verify(assignmentRepository).existsActiveByStaffAndTenantAndWarehouse(
+                destinationStaffId, tenantId, destinationWarehouseId, AssignmentStatus.ACTIVE);
+    }
+
+    @Test
+    void assignDestinationStaff_reassignsCurrentReceiver() {
+        stubCreateAccess();
+        UUID destinationStaffId = UUID.randomUUID();
+        User destinationStaff = User.builder()
+                .id(destinationStaffId)
+                .fullName("Destination Receiver")
+                .roles(Set.of(Role.builder().name(RoleType.ROLE_STAFF.name()).build()))
+                .build();
+        StockTransfer transfer = StockTransfer.builder()
+                .id(UUID.randomUUID())
+                .tenant(tenant)
+                .sourceWarehouse(sourceWarehouse)
+                .destinationWarehouse(destinationWarehouse)
+                .activeDestinationWarehouse(destinationWarehouse)
+                .createdBy(tenant)
+                .status(StockTransferStatus.IN_TRANSIT)
+                .build();
+        StockTransferAttempt attempt = StockTransferAttempt.builder()
+                .id(UUID.randomUUID())
+                .transfer(transfer)
+                .sequenceNo(1)
+                .sourceWarehouse(sourceWarehouse)
+                .destinationWarehouse(destinationWarehouse)
+                .plannedQuantity(10)
+                .build();
+        when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+        when(userRepository.findById(destinationStaffId)).thenReturn(Optional.of(destinationStaff));
+        when(tenantMemberRepository.existsByUserIdAndTenantIdAndIsActiveTrueAndIsDeletedFalse(
+                destinationStaffId, tenantId)).thenReturn(true);
+        when(assignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
+                destinationStaffId, tenantId, destinationWarehouseId, AssignmentStatus.ACTIVE)).thenReturn(true);
+        when(transferRepository.findByIdForUpdate(transfer.getId())).thenReturn(Optional.of(transfer));
+        when(attemptRepository.findTopByTransferIdOrderBySequenceNoDesc(transfer.getId()))
+                .thenReturn(Optional.of(attempt));
+        when(transferRepository.save(any(StockTransfer.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        StockTransferResponse response = transferService.assignDestinationStaff(
+                tenantId,
+                transfer.getId(),
+                AssignStockTransferDestinationStaffRequest.builder()
+                        .destinationStaffId(destinationStaffId)
+                        .reason("Assign receiving shift")
+                        .build(),
+                "assign-key");
+
+        assertEquals(destinationStaffId, response.getDestinationStaff().getId());
+        assertEquals(destinationStaff, transfer.getDestinationStaff());
+        assertEquals(destinationStaff, attempt.getDestinationStaff());
+    }
+
+    @Test
     void createTransfer_rejectsAllocationTotalThatDoesNotMatchItemQuantity() {
         stubCreateAccess();
         when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
@@ -356,10 +448,16 @@ class StockTransferServiceTest {
 
     private CreateStockTransferRequest request(int requestedQuantity, int sourceQuantity,
                                                UUID sourceStaffId) {
+        return request(requestedQuantity, sourceQuantity, sourceStaffId, null);
+    }
+
+    private CreateStockTransferRequest request(int requestedQuantity, int sourceQuantity,
+                                               UUID sourceStaffId, UUID destinationStaffId) {
         return CreateStockTransferRequest.builder()
                 .sourceWarehouseId(sourceWarehouseId)
                 .destinationWarehouseId(destinationWarehouseId)
                 .sourceStaffId(sourceStaffId)
+                .destinationStaffId(destinationStaffId)
                 .items(List.of(StockTransferItemRequest.builder()
                         .skuId(skuId)
                         .requestedQuantity(requestedQuantity)

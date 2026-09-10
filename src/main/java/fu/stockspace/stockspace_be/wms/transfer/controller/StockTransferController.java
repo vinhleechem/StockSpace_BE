@@ -3,6 +3,7 @@ package fu.stockspace.stockspace_be.wms.transfer.controller;
 import fu.stockspace.stockspace_be.auth.util.SecurityUtil;
 import fu.stockspace.stockspace_be.common.dto.ApiResponse;
 import fu.stockspace.stockspace_be.common.dto.PagedResponse;
+import fu.stockspace.stockspace_be.wms.transfer.dto.AssignStockTransferDestinationStaffRequest;
 import fu.stockspace.stockspace_be.wms.transfer.dto.CreateStockTransferRequest;
 import fu.stockspace.stockspace_be.wms.transfer.dto.ReceiveStockTransferRequest;
 import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferDecisionRequest;
@@ -75,6 +76,18 @@ public class StockTransferController {
         StockTransferResponse response = transferService.getTransfer(
                 SecurityUtil.getCurrentUserId(), id);
         return ResponseEntity.ok(ApiResponse.success("Lấy chi tiết chuyển kho thành công", response));
+    }
+
+    @PatchMapping("/{id}/destination-staff")
+    @PreAuthorize("@rbac.hasPermission('INVENTORY_UPDATE')")
+    @Operation(summary = "Giao hoặc đổi staff nhận hàng tại kho đích hiện tại")
+    public ResponseEntity<ApiResponse<StockTransferResponse>> assignDestinationStaff(
+            @PathVariable UUID id,
+            @Valid @RequestBody AssignStockTransferDestinationStaffRequest request,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+        StockTransferResponse response = transferService.assignDestinationStaff(
+                SecurityUtil.getCurrentUserId(), id, request, idempotencyKey);
+        return ResponseEntity.ok(ApiResponse.success("Giao staff nhận hàng thành công", response));
     }
 
     @PatchMapping("/{id}/approve-dispatch")
