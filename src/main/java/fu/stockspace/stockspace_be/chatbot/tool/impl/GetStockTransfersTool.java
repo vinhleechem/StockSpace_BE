@@ -151,6 +151,8 @@ public class GetStockTransfersTool implements ChatTool {
                 : transfer.getCurrentDestinationWarehouse().getName());
         result.put("sourceStaff", transfer.getSourceStaff() == null ? null
                 : transfer.getSourceStaff().getFullName());
+        result.put("destinationStaff", transfer.getDestinationStaff() == null ? null
+                : transfer.getDestinationStaff().getFullName());
         result.put("note", transfer.getNote());
         result.put("decisionReason", transfer.getDecisionReason());
         result.put("productCount", items.size());

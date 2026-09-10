@@ -23,6 +23,7 @@ public class StockTransferAttemptResponse {
     private StockTransferAttemptStatus status;
     private WarehouseSummaryResponse sourceWarehouse;
     private WarehouseSummaryResponse destinationWarehouse;
+    private TransferActorResponse destinationStaff;
     private int plannedQuantity;
     private int shippedQuantity;
     private int receivedQuantity;

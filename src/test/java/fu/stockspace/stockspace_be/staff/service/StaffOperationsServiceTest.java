@@ -1,5 +1,6 @@
 package fu.stockspace.stockspace_be.staff.service;
 
+import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
@@ -108,6 +109,32 @@ class StaffOperationsServiceTest {
         assertEquals("RECEIPT", response.getContent().get(2).getOperationType());
         assertEquals(1, response.getTotalPages());
         assertTrue(response.isLast());
+    }
+
+    @Test
+    void getOperationsReturnsReceiveActionsForAssignedDestinationStaff() {
+        when(accessService.findAccessibleContractWarehouses(tenantId, staffId))
+                .thenReturn(List.of(warehouseB));
+        StockTransfer transfer = StockTransfer.builder()
+                .id(UUID.randomUUID())
+                .sourceWarehouse(warehouseA)
+                .destinationWarehouse(warehouseB)
+                .destinationStaff(User.builder().id(staffId).build())
+                .status(StockTransferStatus.IN_TRANSIT)
+                .createdAt(LocalDateTime.of(2026, 9, 10, 10, 0))
+                .build();
+        when(transferRepository.findActiveOperationsForStaff(tenantId, List.of(warehouseBId)))
+                .thenReturn(List.of());
+        when(transferRepository.findAssignedDestinationOperationsForStaff(tenantId, staffId))
+                .thenReturn(List.of(transfer));
+
+        PagedResponse<StaffOperationResponse> response = operationsService.getOperations(
+                staffId, tenantId, warehouseBId, "TRANSFER", null, PageRequest.of(0, 20));
+
+        assertEquals(1, response.getTotalElements());
+        assertEquals(warehouseBId, response.getContent().get(0).getWarehouseId());
+        assertEquals(List.of("VIEW", "ARRIVE", "RECEIVE"),
+                response.getContent().get(0).getAllowedActions());
     }
 
     @Test

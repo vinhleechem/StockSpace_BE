@@ -81,6 +81,11 @@ public class StockTransfer extends BaseEntity {
     @JoinColumn(name = "assigned_source_staff_id")
     private User sourceStaff;
 
+    /** Staff currently responsible for receiving at the active destination warehouse. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assigned_destination_staff_id")
+    private User destinationStaff;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)
     @Builder.Default

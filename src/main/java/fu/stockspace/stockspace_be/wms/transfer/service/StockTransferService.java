@@ -37,6 +37,7 @@ import fu.stockspace.stockspace_be.wms.receipt.repository.InventoryReceiptReposi
 import fu.stockspace.stockspace_be.wms.receipt.repository.InventoryTransactionRepository;
 import fu.stockspace.stockspace_be.wms.stock.entity.StockBatch;
 import fu.stockspace.stockspace_be.wms.stock.repository.StockBatchRepository;
+import fu.stockspace.stockspace_be.wms.transfer.dto.AssignStockTransferDestinationStaffRequest;
 import fu.stockspace.stockspace_be.wms.transfer.dto.CreateStockTransferRequest;
 import fu.stockspace.stockspace_be.wms.transfer.dto.ReceiveStockTransferRequest;
 import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferDestinationAllocationRequest;
@@ -104,6 +105,17 @@ import java.time.LocalDateTime;
 public class StockTransferService {
 
     private static final String TRANSFER_NOTIFICATION_TYPE = "TRANSFER";
+    private static final Set<StockTransferStatus> DESTINATION_STAFF_ASSIGNABLE_STATUSES = Set.of(
+            StockTransferStatus.PENDING,
+            StockTransferStatus.ALLOCATED,
+            StockTransferStatus.PICKING,
+            StockTransferStatus.READY_TO_DISPATCH,
+            StockTransferStatus.RETRY_REQUESTED,
+            StockTransferStatus.IN_TRANSIT,
+            StockTransferStatus.OVERDUE,
+            StockTransferStatus.ARRIVED_AT_DESTINATION,
+            StockTransferStatus.RECEIVING,
+            StockTransferStatus.PARTIALLY_RECEIVED);
 
     private final StockTransferRepository transferRepository;
     private final WarehouseRepository warehouseRepository;
@@ -142,6 +154,8 @@ public class StockTransferService {
         requireMutationAccess(creator, tenantId, sourceWarehouse.getId(), destinationWarehouse.getId());
         User sourceStaff = request.getSourceStaffId() == null ? null
                 : resolveSourceStaff(request.getSourceStaffId(), tenantId, sourceWarehouse.getId());
+        User destinationStaff = request.getDestinationStaffId() == null ? null
+                : resolveDestinationStaff(request.getDestinationStaffId(), tenantId, destinationWarehouse.getId());
 
         Set<UUID> skuIds = new HashSet<>();
         StockTransfer transfer = StockTransfer.builder()
@@ -151,6 +165,7 @@ public class StockTransferService {
                 .destinationWarehouse(destinationWarehouse)
                 .activeDestinationWarehouse(destinationWarehouse)
                 .sourceStaff(sourceStaff)
+                .destinationStaff(destinationStaff)
                 .createdBy(creator)
                 .note(request.getNote())
                 .expectedArrivalAt(request.getExpectedArrivalAt() == null
@@ -210,7 +225,60 @@ public class StockTransferService {
         createInitialAttempt(savedTransfer, creator);
         recordEvent(savedTransfer, null, savedTransfer.getStatus(), "CREATE", creator, null, null);
         notifyTransferCreated(savedTransfer, creator, tenantId);
+        notifyDestinationStaffAssigned(savedTransfer, destinationStaff);
         return mapToResponse(savedTransfer);
+    }
+
+    @Transactional
+    public StockTransferResponse assignDestinationStaff(
+            UUID userId,
+            UUID transferId,
+            AssignStockTransferDestinationStaffRequest request,
+            String idempotencyKey) {
+        User actor = findTenantActor(userId);
+        UUID tenantId = resolveTenantId(actor);
+        StockTransfer transfer = lockTenantTransfer(tenantId, transferId);
+        String command = "ASSIGN_DESTINATION_STAFF";
+        String requestHash = requestHash(command, transferId, request);
+        StockTransferResponse previous = findPreviousCommandResult(
+                tenantId, transfer, command, idempotencyKey, requestHash);
+        if (previous != null) {
+            return previous;
+        }
+        if (request == null || request.getDestinationStaffId() == null) {
+            throw new BadRequestException(ErrorCode.STAFF_NOT_FOUND);
+        }
+        if (!DESTINATION_STAFF_ASSIGNABLE_STATUSES.contains(transfer.getStatus())) {
+            throw new ResourceConflictException(ErrorCode.STOCK_TRANSFER_INVALID_STATUS);
+        }
+
+        requireTenantMutationAccess(tenantId, transfer);
+        User destinationStaff = resolveDestinationStaff(
+                request.getDestinationStaffId(), tenantId, activeDestinationWarehouse(transfer).getId());
+        User currentStaff = transfer.getDestinationStaff();
+        if (currentStaff != null && currentStaff.getId().equals(destinationStaff.getId())) {
+            saveCommand(tenantId, transfer, command, idempotencyKey, requestHash);
+            return mapToResponse(transfer);
+        }
+
+        transfer.setDestinationStaff(destinationStaff);
+        StockTransferAttempt attempt = currentAttempt(transfer);
+        if (attempt != null && attempt.getDestinationWarehouse() != null
+                && attempt.getDestinationWarehouse().getId()
+                .equals(activeDestinationWarehouse(transfer).getId())) {
+            attempt.setDestinationStaff(destinationStaff);
+            attemptRepository.save(attempt);
+        }
+
+        StockTransfer saved = transferRepository.save(transfer);
+        String reason = request.getReason() == null || request.getReason().isBlank()
+                ? null : request.getReason().trim();
+        recordEvent(saved, saved.getStatus(), saved.getStatus(),
+                currentStaff == null ? command : "REASSIGN_DESTINATION_STAFF",
+                actor, reason, idempotencyKey);
+        saveCommand(tenantId, saved, command, idempotencyKey, requestHash);
+        notifyDestinationStaffAssigned(saved, destinationStaff);
+        return mapToResponse(saved);
     }
 
     /**
@@ -572,14 +640,12 @@ public class StockTransferService {
                                                  ReceiveStockTransferRequest request,
                                                  String idempotencyKey) {
         User receiver = findUser(userId);
-        if (isStaff(receiver) || !hasRole(receiver, RoleType.ROLE_TENANT)) {
-            throw new ForbiddenException(ErrorCode.FORBIDDEN);
-        }
         UUID tenantId = resolveTenantId(receiver);
         StockTransfer transfer = transferRepository.findByIdForUpdate(transferId)
                 .filter(candidate -> candidate.getTenant() != null
                         && tenantId.equals(candidate.getTenant().getId()))
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STOCK_TRANSFER_NOT_FOUND));
+        requireDestinationReceivingAccess(receiver, tenantId, transfer);
         StockTransferResponse previousResult = findPreviousCommandResult(
                 tenantId, transfer, "RECEIVE", idempotencyKey,
                 requestHash("RECEIVE", transferId, request));
@@ -726,9 +792,10 @@ public class StockTransferService {
     /** Mark the truck as physically present before the receiving clerk starts counting. */
     @Transactional
     public StockTransferResponse arriveTransfer(UUID userId, UUID transferId, String idempotencyKey) {
-        User actor = findTenantActor(userId);
+        User actor = findUser(userId);
         UUID tenantId = resolveTenantId(actor);
         StockTransfer transfer = lockTenantTransfer(tenantId, transferId);
+        requireDestinationReceivingAccess(actor, tenantId, transfer);
         StockTransferResponse previous = findPreviousCommandResult(tenantId, transfer, "ARRIVE",
                 idempotencyKey, requestHash("ARRIVE", transferId));
         if (previous != null) return previous;
@@ -842,6 +909,8 @@ public class StockTransferService {
         accessService.requireActiveContract(tenantId, retrySource.getId());
         accessService.requireActiveContract(tenantId, newDestination.getId());
         accessService.requireActiveSubscription(tenantId);
+        User destinationStaff = request.getDestinationStaffId() == null ? null
+                : resolveDestinationStaff(request.getDestinationStaffId(), tenantId, newDestination.getId());
         int outstanding = outstandingQuantity(transfer);
         if (outstanding <= 0) {
             throw new ResourceConflictException(ErrorCode.STOCK_TRANSFER_INVALID_ALLOCATION,
@@ -850,6 +919,7 @@ public class StockTransferService {
         String reason = normalizeRetryReason(request.getReason());
         StockTransferStatus from = transfer.getStatus();
         transfer.setActiveDestinationWarehouse(newDestination);
+        transfer.setDestinationStaff(destinationStaff);
         transfer.setExpectedArrivalAt(request.getExpectedArrivalAt() == null
                 ? LocalDateTime.now().plusHours(48) : request.getExpectedArrivalAt());
         transfer.setOverdueAt(null);
@@ -857,10 +927,11 @@ public class StockTransferService {
         transfer.setStatus(StockTransferStatus.RETRY_REQUESTED);
         StockTransfer saved = transferRepository.save(transfer);
         createAttempt(saved, StockTransferAttemptType.FORWARD, retrySource, newDestination,
-                outstanding, actor, reason);
+                outstanding, actor, reason, destinationStaff);
         recordEvent(saved, from, saved.getStatus(), "RETRY", actor, reason, idempotencyKey);
         saveCommand(tenantId, saved, "RETRY", idempotencyKey,
                 requestHash("RETRY", transferId, request));
+        notifyDestinationStaffAssigned(saved, destinationStaff);
         return mapToResponse(saved);
     }
 
@@ -914,6 +985,7 @@ public class StockTransferService {
                 ? currentReturnAttemptSource(transfer) : activeDestinationWarehouse(transfer);
         StockTransferStatus from = transfer.getStatus();
         transfer.setDecisionReason(reason);
+        transfer.setDestinationStaff(null);
         transfer.setStatus(StockTransferStatus.RETURN_REQUESTED);
         StockTransfer saved = transferRepository.save(transfer);
         createAttempt(saved, StockTransferAttemptType.RETURN, returnSource,
@@ -1088,6 +1160,7 @@ public class StockTransferService {
         String reason = request.getReason() == null ? request.getResolution().name() : request.getReason().trim();
         transfer.setDecisionReason(reason.isBlank() ? request.getResolution().name() : reason);
         if (request.getResolution() == fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferReconciliationResolution.RETURN_TO_SOURCE) {
+            transfer.setDestinationStaff(null);
             transfer.setStatus(StockTransferStatus.RETURN_REQUESTED);
         } else if (request.getResolution() == fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferReconciliationResolution.DECLARE_LOST) {
             transfer.setStatus(StockTransferStatus.LOST);
@@ -1361,9 +1434,20 @@ public class StockTransferService {
 
     private String requestHash(String command, UUID transferId,
                                StockTransferRetryRequest request) {
+        StringBuilder canonical = new StringBuilder(command).append(':').append(transferId).append(':')
+                .append(request == null ? "" : request.getDestinationWarehouseId());
+        if (request != null && request.getDestinationStaffId() != null) {
+            canonical.append(":staff=").append(request.getDestinationStaffId());
+        }
+        canonical.append(':').append(request == null ? "" : request.getExpectedArrivalAt()).append(':')
+                .append(request == null || request.getReason() == null ? "" : request.getReason().trim());
+        return sha256(canonical.toString());
+    }
+
+    private String requestHash(String command, UUID transferId,
+                               AssignStockTransferDestinationStaffRequest request) {
         return sha256(command + ':' + transferId + ':'
-                + (request == null ? "" : request.getDestinationWarehouseId()) + ':'
-                + (request == null ? "" : request.getExpectedArrivalAt()) + ':'
+                + (request == null ? "" : request.getDestinationStaffId()) + ':'
                 + (request == null || request.getReason() == null ? "" : request.getReason().trim()));
     }
 
@@ -1419,6 +1503,18 @@ public class StockTransferService {
         notifySafely(transfer.getCreatedBy().getId(), title, message, action, transfer.getId());
     }
 
+    private void notifyDestinationStaffAssigned(StockTransfer transfer, User destinationStaff) {
+        if (destinationStaff == null || destinationStaff.getId() == null) {
+            return;
+        }
+        notifySafely(
+                destinationStaff.getId(),
+                "Bạn được giao nhận chuyển kho",
+                "Bạn được giao nhận " + transferRoute(transfer) + ".",
+                "assign-destination-staff",
+                transfer.getId());
+    }
+
     private void notifySafely(UUID recipientId, String title, String message,
                               String action, UUID transferId) {
         try {
@@ -1460,6 +1556,7 @@ public class StockTransferService {
                 .status(StockTransferAttemptStatus.PLANNED)
                 .sourceWarehouse(transfer.getSourceWarehouse())
                 .destinationWarehouse(activeDestinationWarehouse(transfer))
+                .destinationStaff(transfer.getDestinationStaff())
                 .plannedQuantity(planned)
                 .createdBy(actor)
                 .build());
@@ -1468,6 +1565,12 @@ public class StockTransferService {
     private void createAttempt(StockTransfer transfer, StockTransferAttemptType type,
                                Warehouse source, Warehouse destination, int planned,
                                User actor, String reason) {
+        createAttempt(transfer, type, source, destination, planned, actor, reason, null);
+    }
+
+    private void createAttempt(StockTransfer transfer, StockTransferAttemptType type,
+                               Warehouse source, Warehouse destination, int planned,
+                               User actor, String reason, User destinationStaff) {
         if (attemptRepository == null) return;
         int sequence = attemptRepository.findTopByTransferIdOrderBySequenceNoDesc(transfer.getId())
                 .map(attempt -> attempt.getSequenceNo() + 1).orElse(1);
@@ -1478,6 +1581,7 @@ public class StockTransferService {
                 .status(StockTransferAttemptStatus.PLANNED)
                 .sourceWarehouse(source)
                 .destinationWarehouse(destination)
+                .destinationStaff(destinationStaff)
                 .plannedQuantity(Math.max(1, planned))
                 .reason(reason)
                 .createdBy(actor)
@@ -1919,16 +2023,48 @@ public class StockTransferService {
                     transfer.getSourceWarehouse().getId());
             return;
         }
+        User assignedDestinationStaff = transfer.getDestinationStaff();
+        if (assignedDestinationStaff != null
+                && staff.getId().equals(assignedDestinationStaff.getId())) {
+            accessService.requireActiveStaffAssignment(staff.getId(), tenantId,
+                    activeDestinationWarehouse(transfer).getId());
+            return;
+        }
         requireStaffAssignments(staff.getId(), tenantId,
                 transfer.getSourceWarehouse().getId(), activeDestinationWarehouse(transfer).getId());
     }
 
+    private void requireDestinationReceivingAccess(User actor, UUID tenantId, StockTransfer transfer) {
+        if (!isStaff(actor)) {
+            if (!hasRole(actor, RoleType.ROLE_TENANT)) {
+                throw new ForbiddenException(ErrorCode.FORBIDDEN);
+            }
+            return;
+        }
+        User assignedDestinationStaff = transfer.getDestinationStaff();
+        if (assignedDestinationStaff == null
+                || !actor.getId().equals(assignedDestinationStaff.getId())) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN,
+                    "Only the assigned destination staff can receive this transfer");
+        }
+        accessService.requireActiveStaffAssignment(
+                actor.getId(), tenantId, activeDestinationWarehouse(transfer).getId());
+    }
+
     private User resolveSourceStaff(UUID staffId, UUID tenantId, UUID sourceWarehouseId) {
+        return resolveWarehouseStaff(staffId, tenantId, sourceWarehouseId, "sourceStaffId");
+    }
+
+    private User resolveDestinationStaff(UUID staffId, UUID tenantId, UUID destinationWarehouseId) {
+        return resolveWarehouseStaff(staffId, tenantId, destinationWarehouseId, "destinationStaffId");
+    }
+
+    private User resolveWarehouseStaff(UUID staffId, UUID tenantId, UUID warehouseId, String fieldName) {
         User staff = userRepository.findById(staffId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STAFF_NOT_FOUND));
         if (!staff.isActive() || staff.isDeleted() || !isStaff(staff)) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN,
-                    "sourceStaffId phải là staff đang hoạt động");
+                    fieldName + " phải là staff đang hoạt động");
         }
         if (!tenantMemberRepository.existsByUserIdAndTenantIdAndIsActiveTrueAndIsDeletedFalse(
                 staffId, tenantId)) {
@@ -1937,9 +2073,9 @@ public class StockTransferService {
         }
         if (staffAssignmentRepository == null
                 || !staffAssignmentRepository.existsActiveByStaffAndTenantAndWarehouse(
-                staffId, tenantId, sourceWarehouseId, AssignmentStatus.ACTIVE)) {
+                staffId, tenantId, warehouseId, AssignmentStatus.ACTIVE)) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN,
-                    "Staff chưa được gán vào kho nguồn");
+                    "Staff chưa được gán vào warehouse tương ứng");
         }
         return staff;
     }
@@ -2008,6 +2144,7 @@ public class StockTransferService {
                 .destinationWarehouse(warehouseSummary(transfer.getDestinationWarehouse()))
                 .currentDestinationWarehouse(warehouseSummary(activeDestinationWarehouse(transfer)))
                 .sourceStaff(actor(transfer.getSourceStaff()))
+                .destinationStaff(actor(transfer.getDestinationStaff()))
                 .note(transfer.getNote())
                 .items(transfer.getItems().stream().map(this::mapItem).toList())
                 .attempts(mapAttempts(transfer))
@@ -2096,6 +2233,7 @@ public class StockTransferService {
                         .status(attempt.getStatus())
                         .sourceWarehouse(warehouseSummary(attempt.getSourceWarehouse()))
                         .destinationWarehouse(warehouseSummary(attempt.getDestinationWarehouse()))
+                        .destinationStaff(actor(attempt.getDestinationStaff()))
                         .plannedQuantity(attempt.getPlannedQuantity())
                         .shippedQuantity(attempt.getShippedQuantity())
                         .receivedQuantity(attempt.getReceivedQuantity())

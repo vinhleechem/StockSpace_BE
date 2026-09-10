@@ -75,6 +75,11 @@ public class StockTransferAttempt extends BaseEntity {
     @JoinColumn(name = "destination_warehouse_id", nullable = false)
     private Warehouse destinationWarehouse;
 
+    /** Receiver assignment snapshot for this physical leg. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assigned_destination_staff_id")
+    private User destinationStaff;
+
     @Column(name = "planned_quantity", nullable = false)
     private int plannedQuantity;
 

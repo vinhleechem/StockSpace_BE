@@ -9,6 +9,7 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictE
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
+import fu.stockspace.stockspace_be.staff.entity.TenantMember;
 import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
 import fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
@@ -231,6 +232,75 @@ class StockTransferReceiveServiceTest {
                 "yêu cầu chuyển kho từ kho 'Source' đến kho 'Destination' đã được tiếp nhận thành công. "
                         + "Tồn kho tại kho đích đã được cập nhật.",
                 "TRANSFER");
+    }
+
+    @Test
+    void receiveTransfer_allowsAssignedDestinationStaff() {
+        UUID staffId = UUID.randomUUID();
+        User destinationStaff = User.builder()
+                .id(staffId)
+                .fullName("Destination Receiver")
+                .roles(Set.of(Role.builder().name(RoleType.ROLE_STAFF.name()).build()))
+                .build();
+        transfer.setDestinationStaff(destinationStaff);
+        stubReceiveDependencies();
+        when(userRepository.findById(staffId)).thenReturn(Optional.of(destinationStaff));
+        when(tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(staffId))
+                .thenReturn(Optional.of(TenantMember.builder().user(destinationStaff).tenant(tenant).build()));
+
+        StockTransferResponse response = transferService.receiveTransfer(
+                staffId, transfer.getId(), receiveRequest(5));
+
+        assertEquals(StockTransferStatus.COMPLETED, response.getStatus());
+        assertEquals(staffId, response.getReceivedBy().getId());
+        verify(accessService).requireActiveStaffAssignment(
+                staffId, tenantId, destinationWarehouseId);
+    }
+
+    @Test
+    void receiveTransfer_rejectsUnassignedDestinationStaff() {
+        UUID staffId = UUID.randomUUID();
+        User staff = User.builder()
+                .id(staffId)
+                .roles(Set.of(Role.builder().name(RoleType.ROLE_STAFF.name()).build()))
+                .build();
+        transfer.setDestinationStaff(User.builder()
+                .id(UUID.randomUUID())
+                .roles(Set.of(Role.builder().name(RoleType.ROLE_STAFF.name()).build()))
+                .build());
+        when(userRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(staffId))
+                .thenReturn(Optional.of(TenantMember.builder().user(staff).tenant(tenant).build()));
+        when(transferRepository.findByIdForUpdate(transfer.getId())).thenReturn(Optional.of(transfer));
+
+        assertThrows(ForbiddenException.class,
+                () -> transferService.receiveTransfer(staffId, transfer.getId(), receiveRequest(5)));
+
+        verify(receiptRepository, never()).save(any());
+        verify(layoutRepository, never()).findByWarehouseIdAndTenantId(any(), any());
+    }
+
+    @Test
+    void arriveTransfer_allowsAssignedDestinationStaff() {
+        UUID staffId = UUID.randomUUID();
+        User destinationStaff = User.builder()
+                .id(staffId)
+                .roles(Set.of(Role.builder().name(RoleType.ROLE_STAFF.name()).build()))
+                .build();
+        transfer.setDestinationStaff(destinationStaff);
+        when(userRepository.findById(staffId)).thenReturn(Optional.of(destinationStaff));
+        when(tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(staffId))
+                .thenReturn(Optional.of(TenantMember.builder().user(destinationStaff).tenant(tenant).build()));
+        when(transferRepository.findByIdForUpdate(transfer.getId())).thenReturn(Optional.of(transfer));
+        when(transferRepository.save(any(StockTransfer.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        StockTransferResponse response = transferService.arriveTransfer(
+                staffId, transfer.getId(), "arrive-key");
+
+        assertEquals(StockTransferStatus.ARRIVED_AT_DESTINATION, response.getStatus());
+        verify(accessService).requireActiveStaffAssignment(
+                staffId, tenantId, destinationWarehouseId);
     }
 
     @Test

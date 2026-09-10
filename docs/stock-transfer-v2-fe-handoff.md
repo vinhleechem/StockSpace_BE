@@ -6,7 +6,7 @@ Base URL: `/api/tenant/inventory/transfers`
 
 ## 1. Những gì đã thêm
 
-- Tạo transfer có thể gán `sourceStaffId` (staff phụ trách pick tại kho nguồn).
+- Tạo transfer có thể gán `sourceStaffId` để pick và `destinationStaffId` để nhận.
 - Luồng chuẩn: reservation → pick → duyệt xuất → vận chuyển → nhận hàng.
 - Nhận nhiều đợt, nhận thiếu, hàng hỏng/quarantine và reconcile.
 - Timeline event có actor, lý do, timestamp, idempotency key.
@@ -77,14 +77,18 @@ returnable  = max(0, shipped - receivedGood - returned)
 Retry chỉ gửi `outstanding`; return chỉ gửi phần `returnable`. Không gửi lại
 quantity đã nhận `GOOD`.
 
-## 4. Quyền và source staff
+## 4. Quyền và staff hai đầu
 
-- Tenant (`ROLE_TENANT`) là người duyệt xuất, nhận hàng, reject/cancel,
-  close-short, retry, return và reconcile.
+- Tenant (`ROLE_TENANT`) duyệt xuất và xử lý reject/cancel, close-short, retry,
+  return, reconcile; tenant vẫn có thể nhận hàng.
 - Staff cần assignment `ACTIVE` đúng warehouse; staff được gán ở
   `sourceStaffId` là người được pick transfer đó.
+- Staff được gán ở `destinationStaffId` được xem task và gọi `arrive`/`receive`
+  tại kho đích hiện tại; staff khác bị chặn.
 - `sourceStaffId` phải là staff active, thuộc tenant và được assign ở source.
-- FE nên load staff active của source để làm dropdown `sourceStaffId`.
+- `destinationStaffId` phải được assign tại destination; khi retry sang kho mới
+  thì assignment cũ bị bỏ và phải chọn staff của kho mới.
+- FE nên load staff active của từng warehouse cho hai dropdown staff.
 - Backend vẫn kiểm tra permission, tenant, contract, subscription và assignment;
   FE chỉ dùng để ẩn/hiện action.
 
@@ -94,6 +98,7 @@ quantity đã nhận `GOOD`.
 |---|---|---|---|
 | `POST` | `/` | create request | `PENDING` |
 | `GET` | `/`, `/{id}` | — | list/detail |
+| `PATCH` | `/{id}/destination-staff` | `{ destinationStaffId, reason? }` | giao/reassign người nhận |
 | `PATCH` | `/{id}/allocate` | — | `ALLOCATED` |
 | `POST` | `/{id}/pick` | `{ lines: [{ sourceAllocationId, quantity }] }` | `PICKING`/`READY_TO_DISPATCH` |
 | `PATCH` | `/{id}/approve-dispatch` | — | `IN_TRANSIT`, trừ source |
@@ -101,7 +106,7 @@ quantity đã nhận `GOOD`.
 | `POST` | `/{id}/receive` | receive request | partial/completed/reconciling |
 | `PATCH` | `/{id}/reject-receipt` | `{ reason }` | `RECEIVE_REJECTED` |
 | `PATCH` | `/{id}/close-short` | `{ reason }` | `SHORT_RECEIVED` |
-| `POST` | `/{id}/retry` | `{ destinationWarehouseId, expectedArrivalAt?, reason }` | `RETRY_REQUESTED` |
+| `POST` | `/{id}/retry` | `{ destinationWarehouseId, destinationStaffId?, expectedArrivalAt?, reason }` | `RETRY_REQUESTED` |
 | `PATCH` | `/{id}/retry/dispatch` | — | retry `IN_TRANSIT` |
 | `POST` | `/{id}/return/request` | `{ reason }` | `RETURN_REQUESTED` |
 | `PATCH` | `/{id}/return/dispatch` | — | `RETURN_IN_TRANSIT` |
@@ -117,6 +122,7 @@ quantity đã nhận `GOOD`.
   "sourceWarehouseId": "...",
   "destinationWarehouseId": "...",
   "sourceStaffId": "...",
+  "destinationStaffId": "...",
   "expectedArrivalAt": "2026-09-12T10:00:00",
   "note": "...",
   "items": [{
@@ -200,6 +206,8 @@ Body trên là của `return/receive`; `reconcile` dùng `resolution`.
 5. Thêm status mới phải sửa cả Java enum, DB check constraint, migration, API,
    service và test.
 6. Mọi retry/return phải tính theo counter hiện có, không dispatch lại toàn bộ.
+7. Chỉ destination staff đang được gán và còn assignment active mới được
+   `arrive`/`receive`; tenant giữ quyền quyết định ngoại lệ.
 
 File chính:
 
@@ -216,6 +224,7 @@ Phải apply theo thứ tự:
 ```text
 ops/migrations/20260909_01_stock_transfer_hardening.sql
 ops/migrations/20260909_02_stock_transfer_operational_legs.sql
+ops/migrations/20260910_01_stock_transfer_destination_staff.sql
 ```
 
 ```bash
