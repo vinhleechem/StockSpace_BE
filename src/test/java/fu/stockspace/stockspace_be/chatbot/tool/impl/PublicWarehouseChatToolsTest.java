@@ -239,6 +239,57 @@ class PublicWarehouseChatToolsTest {
     }
 
     @Test
+    void searchWarehousesRemovesDimensionQuestionFromWarehouseEntityLookup() throws Exception {
+        Warehouse warehouse = Warehouse.builder()
+                .id(UUID.randomUUID())
+                .name("Kho Lạnh Tân Trào")
+                .address("Quận Bình Tân")
+                .capacity(new BigDecimal("1000"))
+                .rentalPricingType(RentalPricingType.PER_SQUARE_METER_MONTHLY)
+                .rentalPrice(new BigDecimal("100000"))
+                .status(WarehouseStatus.AVAILABLE)
+                .build();
+        when(warehouseRepository.searchPublic(
+                eq("%kho lạnh tân trào%"), eq(WarehouseStatus.AVAILABLE),
+                eq(null), eq(null), eq(null), eq(null), eq(null), eq(null), eq(null), eq(null),
+                any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(warehouse)));
+
+        JsonNode result = objectMapper.readTree(
+                new SearchWarehousesTool(warehouseRepository, objectMapper).execute(Map.of(
+                        "keyword", "KHO LẠNH TÂN TRÀO BAO NHIÊU M2"), null));
+
+        assertEquals(1, result.get("total").asInt());
+        assertTrue(result.get("keywordIntentRemoved").asBoolean());
+        assertEquals("Kho Lạnh Tân Trào", result.at("/warehouses/0/name").asText());
+        assertEquals("KHO LẠNH TÂN TRÀO", result.get("searchedKeyword").asText());
+    }
+
+    @Test
+    void searchWarehousesMatchesStorageNeedThroughSemanticConcepts() throws Exception {
+        Warehouse warehouse = Warehouse.builder()
+                .id(UUID.randomUUID())
+                .name("Kho lạnh thực phẩm")
+                .description("Bảo quản thực phẩm ở nhiệt độ ổn định")
+                .capacity(new BigDecimal("500"))
+                .rentalPricingType(RentalPricingType.PER_SQUARE_METER_MONTHLY)
+                .rentalPrice(new BigDecimal("100000"))
+                .status(WarehouseStatus.AVAILABLE)
+                .build();
+        when(warehouseRepository.searchPublic(
+                any(), eq(WarehouseStatus.AVAILABLE), eq(null), eq(null), eq(null), eq(null),
+                eq(null), eq(null), eq(null), eq(null), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()), new PageImpl<>(List.of(warehouse)));
+
+        JsonNode result = objectMapper.readTree(
+                new SearchWarehousesTool(warehouseRepository, objectMapper).execute(Map.of(
+                        "keyword", "Cần kho để bảo quản rau củ"), null));
+
+        assertTrue(result.get("matchedBySemanticKeyword").asBoolean());
+        assertEquals("Kho lạnh thực phẩm", result.at("/warehouses/0/name").asText());
+    }
+
+    @Test
     void searchWarehousesUsesStructuredLocationPricingAndSortFilters() throws Exception {
         Warehouse warehouse = Warehouse.builder()
                 .id(UUID.randomUUID())

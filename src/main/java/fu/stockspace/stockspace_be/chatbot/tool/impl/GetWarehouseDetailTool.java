@@ -30,7 +30,9 @@ public class GetWarehouseDetailTool implements ChatTool {
     @Override
     public String getDescription() {
         return "Lấy chi tiết một bài đăng kho còn hiệu lực: vị trí, sức chứa, cách tính giá, "
-                + "giá niêm yết, loại kho, mô tả, thời hạn hiển thị và trạng thái xác minh.";
+                + "giá niêm yết, loại kho, mô tả, thời hạn hiển thị và trạng thái xác minh. "
+                + "Thông tin diện tích/kích thước nằm trong sơ đồ công khai và cần đọc bằng getPublicWarehouseLayout; "
+                + "capacity không phải diện tích m².";
     }
 
     @Override
@@ -69,6 +71,7 @@ public class GetWarehouseDetailTool implements ChatTool {
             detail.put("district", w.getDistrictName());
             detail.put("description", w.getDescription());
             detail.put("capacity", w.getCapacity());
+            detail.put("capacityNote", "Sức chứa khai báo của bài đăng; không phải diện tích (m²)");
             detail.put("pricingType", ChatToolLocalization.rentalPricingType(w.getRentalPricingType()));
             detail.put("listedRentalPrice", w.getRentalPrice());
             detail.put("priceUnit", priceUnit(w.getRentalPricingType()));

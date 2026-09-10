@@ -134,6 +134,8 @@ class ExpandedChatToolsTest {
 
         assertEquals("Kệ A", result.at("/racks/0/name").asText());
         assertEquals("Ô A1", result.at("/racks/0/bins/0/name").asText());
+        assertEquals("600", result.get("floorAreaM2").asText());
+        assertTrue(result.get("areaAvailable").asBoolean());
         assertFalse(json.contains(layoutId.toString()));
         assertFalse(json.contains(rackId.toString()));
         assertFalse(json.contains(binId.toString()));

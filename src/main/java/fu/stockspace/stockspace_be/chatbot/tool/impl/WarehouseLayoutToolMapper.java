@@ -4,6 +4,7 @@ import fu.stockspace.stockspace_be.warehouse.dto.RackResponse;
 import fu.stockspace.stockspace_be.warehouse.dto.WarehouseBinResponse;
 import fu.stockspace.stockspace_be.warehouse.dto.WarehouseLayoutResponse;
 
+import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +22,9 @@ final class WarehouseLayoutToolMapper {
         result.put("widthMeters", layout.getWidth());
         result.put("lengthMeters", layout.getLength());
         result.put("heightMeters", layout.getHeight());
+        BigDecimal floorArea = floorArea(layout.getWidth(), layout.getLength());
+        result.put("floorAreaM2", floorArea);
+        result.put("areaAvailable", floorArea != null);
         result.put("totalRacks", layout.getTotalRacks());
         result.put("totalBins", layout.getTotalBins());
         result.put("occupiedBins", layout.getOccupiedBins());
@@ -30,6 +34,14 @@ final class WarehouseLayoutToolMapper {
         result.put("racksReturned", Math.min(racks.size(), MAX_RACKS));
         result.put("racksTruncated", racks.size() > MAX_RACKS);
         return result;
+    }
+
+    private static BigDecimal floorArea(BigDecimal width, BigDecimal length) {
+        if (width == null || length == null
+                || width.signum() < 0 || length.signum() < 0) {
+            return null;
+        }
+        return width.multiply(length);
     }
 
     private static Map<String, Object> rack(RackResponse rack) {
