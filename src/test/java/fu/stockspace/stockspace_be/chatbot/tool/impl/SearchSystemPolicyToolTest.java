@@ -145,6 +145,26 @@ class SearchSystemPolicyToolTest {
     }
 
     @Test
+    void lexicalFallbackUsesDomainAliasesForPolicyWording() throws Exception {
+        String query = "Trách nhiệm đền bù hàng hóa";
+        SystemKnowledge matching = document(
+                KnowledgeCategory.INSURANCE,
+                "kb.insurance",
+                "Bảo hiểm và bồi thường",
+                "Chính sách bảo hiểm quy định trách nhiệm khi hàng hóa bị mất mát hoặc hư hỏng."
+        );
+        when(knowledgeRepository.findSearchCandidates(eq(KnowledgeCategory.INSURANCE), any(Pageable.class)))
+                .thenReturn(List.of(matching));
+        when(embeddingClient.getEmbedding(query)).thenReturn(List.of());
+
+        JsonNode response = objectMapper.readTree(tool.execute(
+                Map.of("query", query, "category", "INSURANCE"), null));
+
+        assertEquals(1, response.get("policies").size());
+        assertEquals(matching.getId().toString(), response.get("policies").get(0).get("id").asText());
+    }
+
+    @Test
     void staleModelOrDimensionCannotInfluenceSemanticRanking() throws Exception {
         String query = "điều chỉnh hợp đồng";
         SystemKnowledge lexicalMatch = document(

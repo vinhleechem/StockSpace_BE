@@ -264,6 +264,73 @@ class ChatbotServiceTest {
     }
 
     @Test
+    void preloadsRentalPolicyBeforeModelCanAnswer() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        ChatTool policyTool = namedTool("searchSystemPolicy");
+        List<ChatTool> allowedTools = List.of(policyTool);
+        String message = "Quy trình thuê kho và đặt cọc như thế nào?";
+
+        when(conversationStore.prepareUserSession(userId, null))
+                .thenReturn(new PreparedChatSession(sessionId, null, List.of()));
+        when(toolRegistry.getToolsForRole("ROLE_TENANT")).thenReturn(allowedTools);
+        when(activeWarehouseContextResolver.resolve(userId, null))
+                .thenReturn(new ChatRequestContext(userId, null));
+        when(promptBuilder.buildSystemPrompt(eq("ROLE_TENANT"), eq(allowedTools), any()))
+                .thenReturn("system prompt");
+        when(policyTool.executeWithContext(anyMap(), any(ChatRequestContext.class)))
+                .thenReturn("{\"policies\":[{\"title\":\"Quy trình thuê kho\"}]}");
+        when(conversationStore.appendUserTurn(
+                eq(userId), eq(sessionId), eq(message), eq("Có thể thuê theo quy trình đã công bố.")))
+                .thenReturn(LocalDateTime.now());
+        doReturn(new OpenRouterClient.AiResponse(
+                "Có thể thuê theo quy trình đã công bố.", null))
+                .when(openRouterClient).complete(
+                        anyList(), eq(allowedTools), any(Duration.class));
+
+        service.processTenantMessage(userId, new SendMessageRequest(null, message));
+
+        verify(policyTool).executeWithContext(
+                org.mockito.ArgumentMatchers.argThat(args ->
+                        message.equals(args.get("query"))
+                                && "RENTAL_PROCESS".equals(args.get("category"))),
+                any(ChatRequestContext.class));
+    }
+
+    @Test
+    void preloadsStructuredWarehouseSearchPlanBeforeModelCanAnswer() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        ChatTool searchTool = namedTool("searchWarehouses");
+        List<ChatTool> allowedTools = List.of(searchTool);
+        String message = "Tìm kho lạnh ở Bình Dương giá dưới 15 triệu";
+
+        when(conversationStore.prepareUserSession(userId, null))
+                .thenReturn(new PreparedChatSession(sessionId, null, List.of()));
+        when(toolRegistry.getToolsForRole("ROLE_TENANT")).thenReturn(allowedTools);
+        when(activeWarehouseContextResolver.resolve(userId, null))
+                .thenReturn(new ChatRequestContext(userId, null));
+        when(promptBuilder.buildSystemPrompt(eq("ROLE_TENANT"), eq(allowedTools), any()))
+                .thenReturn("system prompt");
+        when(searchTool.executeWithContext(anyMap(), any(ChatRequestContext.class)))
+                .thenReturn("{\"total\":1,\"warehouses\":[{\"name\":\"Kho lạnh\",\"listedRentalPrice\":12000000}]}");
+        when(conversationStore.appendUserTurn(
+                eq(userId), eq(sessionId), eq(message), eq("Có một kho phù hợp.")))
+                .thenReturn(LocalDateTime.now());
+        doReturn(new OpenRouterClient.AiResponse("Có một kho phù hợp.", null))
+                .when(openRouterClient).complete(
+                        anyList(), eq(allowedTools), any(Duration.class));
+
+        service.processTenantMessage(userId, new SendMessageRequest(null, message));
+
+        verify(searchTool).executeWithContext(
+                org.mockito.ArgumentMatchers.argThat(args ->
+                        message.equals(args.get("keyword"))
+                                && new java.math.BigDecimal("15000000").equals(args.get("maxRentalPrice"))),
+                any(ChatRequestContext.class));
+    }
+
+    @Test
     void guestStreamPersistsExactlyTheVisibleCompletedReply() {
         configureStreamRuntime();
         UUID sessionId = UUID.randomUUID();

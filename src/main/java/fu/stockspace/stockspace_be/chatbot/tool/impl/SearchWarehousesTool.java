@@ -1,6 +1,7 @@
 package fu.stockspace.stockspace_be.chatbot.tool.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import fu.stockspace.stockspace_be.chatbot.service.SemanticQueryExpansion;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatTool;
 import fu.stockspace.stockspace_be.warehouse.entity.RentalPricingType;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
@@ -190,6 +191,11 @@ public class SearchWarehousesTool implements ChatTool {
                     response.put("matchMode", "SEMANTIC_FALLBACK");
                     response.put("requestedKeyword", requestedKeyword);
                     addSearchKeywordMetadata(response, requestedKeyword, keyword);
+                    List<String> semanticExpansions = SemanticQueryExpansion.expand(keyword)
+                            .stream().limit(12).toList();
+                    if (!semanticExpansions.isEmpty()) {
+                        response.put("semanticExpansions", semanticExpansions);
+                    }
                     response.put("approximateCandidateLimit", NORMALIZED_SEARCH_CANDIDATE_LIMIT);
                     response.put("guidance",
                             "Kết quả được tìm bằng chuẩn hóa, từ đồng nghĩa hoặc gần đúng trên nhóm kho khả dụng gần nhất; hãy kiểm tra lại tên, địa chỉ và mô tả trước khi chọn.");
@@ -320,6 +326,9 @@ public class SearchWarehousesTool implements ChatTool {
                 expandedPhrases.addAll(concept.expansions());
             }
         }
+        // Merge the shared domain vocabulary with the original warehouse
+        // concepts so aliases and small typos use the same candidate set.
+        expandedPhrases.addAll(SemanticQueryExpansion.expand(normalizedKeyword));
         return new SemanticQuery(
                 normalizedKeyword,
                 queryTerms,
