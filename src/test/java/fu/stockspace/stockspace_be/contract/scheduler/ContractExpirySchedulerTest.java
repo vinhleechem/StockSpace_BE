@@ -1,12 +1,16 @@
 package fu.stockspace.stockspace_be.contract.scheduler;
 
+import fu.stockspace.stockspace_be.common.config.BusinessTimeConfig;
 import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -24,9 +28,20 @@ class ContractExpirySchedulerTest {
     @Mock
     private ContractExpiryProcessor contractExpiryProcessor;
 
+    @Mock
+    private Clock businessClock;
+
+    @BeforeEach
+    void setUp() {
+        lenient().when(businessClock.instant())
+                .thenReturn(Instant.parse("2026-09-09T17:00:00Z"));
+        lenient().when(businessClock.getZone())
+                .thenReturn(BusinessTimeConfig.BUSINESS_ZONE_ID);
+    }
+
     @Test
     void processesRemindersBeforeActivationsAndExpiries() {
-        LocalDate today = LocalDate.now(ContractExpiryScheduler.BUSINESS_ZONE);
+        LocalDate today = LocalDate.now(businessClock);
         UUID reminderId = UUID.randomUUID();
         UUID scheduledId = UUID.randomUUID();
         UUID expiredId = UUID.randomUUID();
@@ -38,7 +53,7 @@ class ContractExpirySchedulerTest {
                 .thenReturn(List.of(expiredId));
 
         ContractExpiryScheduler scheduler = new ContractExpiryScheduler(
-                contractRepository, contractExpiryProcessor);
+                contractRepository, contractExpiryProcessor, businessClock);
 
         scheduler.expireContracts();
 
@@ -55,7 +70,7 @@ class ContractExpirySchedulerTest {
 
     @Test
     void oneCandidateFailureDoesNotStopTheRemainingCandidates() {
-        LocalDate today = LocalDate.now(ContractExpiryScheduler.BUSINESS_ZONE);
+        LocalDate today = LocalDate.now(businessClock);
         UUID failedReminderId = UUID.randomUUID();
         UUID successfulReminderId = UUID.randomUUID();
         UUID scheduledId = UUID.randomUUID();
@@ -70,7 +85,7 @@ class ContractExpirySchedulerTest {
                 .when(contractExpiryProcessor).sendExpiryReminder(failedReminderId, today);
 
         ContractExpiryScheduler scheduler = new ContractExpiryScheduler(
-                contractRepository, contractExpiryProcessor);
+                contractRepository, contractExpiryProcessor, businessClock);
 
         assertDoesNotThrow(scheduler::expireContracts);
 

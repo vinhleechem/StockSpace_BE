@@ -2,6 +2,7 @@ package fu.stockspace.stockspace_be.contract.scheduler;
 
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.service.EmailService;
+import fu.stockspace.stockspace_be.common.config.BusinessTimeConfig;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.contract.entity.ContractStatus;
@@ -23,7 +24,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
@@ -31,8 +31,6 @@ import java.util.UUID;
 @Slf4j
 @RequiredArgsConstructor
 public class ContractExpiryProcessor {
-
-    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final RentalContractRepository contractRepository;
     private final WarehouseRepository warehouseRepository;
@@ -234,7 +232,7 @@ public class ContractExpiryProcessor {
     private void revokeAssignments(UUID tenantId, UUID warehouseId) {
         List<StaffWarehouseAssignment> assignments = assignmentRepository
                 .findByTenantIdAndWarehouseIdAndStatus(tenantId, warehouseId, AssignmentStatus.ACTIVE);
-        LocalDateTime now = LocalDateTime.now(BUSINESS_ZONE);
+        LocalDateTime now = LocalDateTime.now(BusinessTimeConfig.BUSINESS_ZONE_ID);
         assignments.forEach(assignment -> {
             assignment.setStatus(AssignmentStatus.REVOKED);
             assignment.setActive(false);

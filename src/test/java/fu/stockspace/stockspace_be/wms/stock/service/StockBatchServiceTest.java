@@ -1,6 +1,7 @@
 package fu.stockspace.stockspace_be.wms.stock.service;
 
 import fu.stockspace.stockspace_be.common.dto.PagedResponse;
+import fu.stockspace.stockspace_be.common.config.BusinessTimeConfig;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
@@ -30,6 +31,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -48,6 +51,7 @@ class StockBatchServiceTest {
     @Mock private ProductSkuRepository productSkuRepository;
     @Mock private TenantWarehouseAccessService accessService;
     @Mock private fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository assignmentRepository;
+    @Mock private Clock businessClock;
 
     @InjectMocks
     private StockBatchService stockBatchService;
@@ -67,6 +71,11 @@ class StockBatchServiceTest {
         warehouseId = UUID.randomUUID();
         skuId = UUID.randomUUID();
         batchId = UUID.randomUUID();
+
+        lenient().when(businessClock.instant())
+                .thenReturn(Instant.parse("2026-09-09T17:00:00Z"));
+        lenient().when(businessClock.getZone())
+                .thenReturn(BusinessTimeConfig.BUSINESS_ZONE_ID);
 
         warehouse = Warehouse.builder().id(warehouseId).name("Test Warehouse").build();
         uom = UnitOfMeasure.builder().id(UUID.randomUUID()).code("BOX").name("Hộp").build();

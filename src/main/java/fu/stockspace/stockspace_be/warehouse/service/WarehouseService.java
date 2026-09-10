@@ -26,8 +26,8 @@ import org.springframework.util.StringUtils;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
 
 import fu.stockspace.stockspace_be.auth.util.SecurityUtil;
-
 import java.time.Clock;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -225,7 +225,7 @@ public class WarehouseService {
         Warehouse warehouse = getOwnedWarehouseForUpdate(ownerId, warehouseId);
 
         if (warehouseRepository.hasCurrentActiveContract(
-                warehouseId, java.time.LocalDate.now(java.time.ZoneId.of("Asia/Ho_Chi_Minh")))) {
+                warehouseId, LocalDate.now(publicationClock))) {
             throw new BadRequestException(ErrorCode.WAREHOUSE_HAS_ACTIVE_CONTRACTS);
         }
         if (warehouseRepository.hasOpenPaidPublication(

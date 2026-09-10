@@ -2,6 +2,7 @@ package fu.stockspace.stockspace_be.contract.scheduler;
 
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.service.EmailService;
+import fu.stockspace.stockspace_be.common.config.BusinessTimeConfig;
 import fu.stockspace.stockspace_be.contract.entity.ContractStatus;
 import fu.stockspace.stockspace_be.contract.entity.RentalContract;
 import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
@@ -88,7 +89,7 @@ class ContractExpiryProcessorTest {
 
     @Test
     void expiryClearsOnlyTenantStockArchivesLayoutAndRevokesAssignments() {
-        LocalDate today = LocalDate.now(ContractExpiryScheduler.BUSINESS_ZONE);
+        LocalDate today = LocalDate.now(BusinessTimeConfig.BUSINESS_ZONE_ID);
         RentalContract contract = activeContract(today.minusDays(1));
         StockBatch batch = StockBatch.builder()
                 .quantity(5)
@@ -97,7 +98,7 @@ class ContractExpiryProcessorTest {
                 .build();
         StaffWarehouseAssignment assignment = StaffWarehouseAssignment.builder()
                 .status(AssignmentStatus.ACTIVE)
-                .startDate(LocalDateTime.now(ContractExpiryScheduler.BUSINESS_ZONE).minusDays(5))
+                .startDate(LocalDateTime.now(BusinessTimeConfig.BUSINESS_ZONE_ID).minusDays(5))
                 .build();
         stubLockedContract(contract);
         when(contractRepository.existsOtherCurrentDirectActiveContract(
@@ -126,7 +127,7 @@ class ContractExpiryProcessorTest {
 
     @Test
     void expiryRetainsSharedOperationalDataWhenAnActiveSiblingExists() {
-        LocalDate today = LocalDate.now(ContractExpiryScheduler.BUSINESS_ZONE);
+        LocalDate today = LocalDate.now(BusinessTimeConfig.BUSINESS_ZONE_ID);
         RentalContract contract = activeContract(today.minusDays(1));
         stubLockedContract(contract);
         when(contractRepository.existsOtherCurrentDirectActiveContract(
@@ -141,7 +142,7 @@ class ContractExpiryProcessorTest {
 
     @Test
     void reminderUsesTheThirtyDayWindowAndMarksItSentAfterTenantNotification() {
-        LocalDate today = LocalDate.now(ContractExpiryScheduler.BUSINESS_ZONE);
+        LocalDate today = LocalDate.now(BusinessTimeConfig.BUSINESS_ZONE_ID);
         RentalContract contract = activeContract(today.plusDays(7));
         when(contractRepository.findByIdForUpdate(contract.getId())).thenReturn(Optional.of(contract));
 
@@ -161,7 +162,7 @@ class ContractExpiryProcessorTest {
 
     @Test
     void reminderSkipsSourceWhenRenewalIsAlreadyScheduled() {
-        LocalDate today = LocalDate.now(ContractExpiryScheduler.BUSINESS_ZONE);
+        LocalDate today = LocalDate.now(BusinessTimeConfig.BUSINESS_ZONE_ID);
         RentalContract source = activeContract(today.plusDays(7));
         RentalContract renewal = scheduledContract(source.getEndDate().plusDays(1));
         renewal.setRenewedFromContract(source);
@@ -177,7 +178,7 @@ class ContractExpiryProcessorTest {
 
     @Test
     void failedTenantReminderRemainsPendingForRetry() {
-        LocalDate today = LocalDate.now(ContractExpiryScheduler.BUSINESS_ZONE);
+        LocalDate today = LocalDate.now(BusinessTimeConfig.BUSINESS_ZONE_ID);
         RentalContract contract = activeContract(today.plusDays(7));
         when(contractRepository.findByIdForUpdate(contract.getId())).thenReturn(Optional.of(contract));
         doThrow(new RuntimeException("notification unavailable"))
@@ -196,7 +197,7 @@ class ContractExpiryProcessorTest {
 
     @Test
     void ordinaryScheduledContractBecomesActiveOnItsStartDate() {
-        LocalDate today = LocalDate.now(ContractExpiryScheduler.BUSINESS_ZONE);
+        LocalDate today = LocalDate.now(BusinessTimeConfig.BUSINESS_ZONE_ID);
         RentalContract contract = scheduledContract(today);
         when(contractRepository.findById(contract.getId())).thenReturn(Optional.of(contract));
         when(warehouseRepository.findByIdForUpdate(warehouse.getId())).thenReturn(Optional.of(warehouse));
@@ -210,7 +211,7 @@ class ContractExpiryProcessorTest {
 
     @Test
     void renewalHandoverActivatesSuccessorAndExpiresSourceWithoutOperationalCleanup() {
-        LocalDate today = LocalDate.now(ContractExpiryScheduler.BUSINESS_ZONE);
+        LocalDate today = LocalDate.now(BusinessTimeConfig.BUSINESS_ZONE_ID);
         RentalContract source = activeContract(today.minusDays(1));
         RentalContract successor = scheduledContract(today);
         successor.setRenewedFromContract(source);
@@ -236,7 +237,7 @@ class ContractExpiryProcessorTest {
 
     @Test
     void renewalActivationNotificationFailureDoesNotUndoHandover() {
-        LocalDate today = LocalDate.now(ContractExpiryScheduler.BUSINESS_ZONE);
+        LocalDate today = LocalDate.now(BusinessTimeConfig.BUSINESS_ZONE_ID);
         RentalContract source = activeContract(today.minusDays(1));
         RentalContract successor = scheduledContract(today);
         successor.setRenewedFromContract(source);
@@ -260,7 +261,7 @@ class ContractExpiryProcessorTest {
 
     @Test
     void repeatedScheduledActivationIsIdempotent() {
-        LocalDate today = LocalDate.now(ContractExpiryScheduler.BUSINESS_ZONE);
+        LocalDate today = LocalDate.now(BusinessTimeConfig.BUSINESS_ZONE_ID);
         RentalContract contract = scheduledContract(today);
         when(contractRepository.findById(contract.getId())).thenReturn(Optional.of(contract));
         when(warehouseRepository.findByIdForUpdate(warehouse.getId())).thenReturn(Optional.of(warehouse));
@@ -275,7 +276,7 @@ class ContractExpiryProcessorTest {
 
     @Test
     void notificationFailureDoesNotUndoExpiryTransition() {
-        LocalDate today = LocalDate.now(ContractExpiryScheduler.BUSINESS_ZONE);
+        LocalDate today = LocalDate.now(BusinessTimeConfig.BUSINESS_ZONE_ID);
         RentalContract contract = activeContract(today.minusDays(1));
         stubLockedContract(contract);
         when(contractRepository.existsOtherCurrentDirectActiveContract(

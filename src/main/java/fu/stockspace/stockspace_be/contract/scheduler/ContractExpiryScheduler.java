@@ -1,13 +1,14 @@
 package fu.stockspace.stockspace_be.contract.scheduler;
 
+import fu.stockspace.stockspace_be.common.config.BusinessTimeConfig;
 import fu.stockspace.stockspace_be.contract.repository.RentalContractRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.Clock;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.BiConsumer;
@@ -17,15 +18,15 @@ import java.util.function.BiConsumer;
 @RequiredArgsConstructor
 public class ContractExpiryScheduler {
 
-    static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final int EXPIRY_REMINDER_WINDOW_DAYS = 30;
 
     private final RentalContractRepository contractRepository;
     private final ContractExpiryProcessor contractExpiryProcessor;
+    private final Clock businessClock;
 
-    @Scheduled(cron = "0 0 0 * * ?", zone = "Asia/Ho_Chi_Minh")
+    @Scheduled(cron = "0 0 0 * * ?", zone = BusinessTimeConfig.BUSINESS_ZONE)
     public void expireContracts() {
-        LocalDate today = LocalDate.now(BUSINESS_ZONE);
+        LocalDate today = LocalDate.now(businessClock);
         log.info("Starting direct rental contract lifecycle check for {}", today);
 
         processCandidates(

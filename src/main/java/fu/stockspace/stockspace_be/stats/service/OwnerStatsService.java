@@ -13,8 +13,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.*;
 
 @Slf4j
@@ -22,14 +22,13 @@ import java.util.*;
 @RequiredArgsConstructor
 public class OwnerStatsService {
 
-    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
-
     private final WarehouseRepository warehouseRepository;
     private final RentalContractRepository contractRepository;
+    private final Clock businessClock;
 
     @Transactional(readOnly = true)
     public RevenueStatsResponse getRevenueSummary(UUID ownerId, Integer year) {
-        int targetYear = (year != null && year > 2000) ? year : LocalDate.now(BUSINESS_ZONE).getYear();
+        int targetYear = (year != null && year > 2000) ? year : LocalDate.now(businessClock).getYear();
 
         List<MonthlyRevenueDto> monthlyList = new ArrayList<>();
         for (int m = 1; m <= 12; m++) {
@@ -50,7 +49,7 @@ public class OwnerStatsService {
     public OccupancyStatsResponse getOccupancyRate(UUID ownerId) {
         List<Warehouse> warehouses = warehouseRepository.findByOwnerId(ownerId, Pageable.unpaged()).getContent();
         int total = warehouses.size();
-        LocalDate today = LocalDate.now(BUSINESS_ZONE);
+        LocalDate today = LocalDate.now(businessClock);
         Set<UUID> occupiedWarehouseIds = new HashSet<>(
                 contractRepository.findCurrentDirectActiveWarehouseIdsByOwnerId(ownerId, today));
         List<String> occupiedNames = warehouses.stream()
