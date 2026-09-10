@@ -37,6 +37,9 @@ class PromptBuilderTest {
         assertTrue(prompt.contains("previewSubscriptionChange"));
         assertTrue(prompt.contains("Tiền thuê kho được hai bên thanh toán ngoài StockSpace"));
         assertTrue(prompt.contains("thanh toán gói dịch vụ"));
+        assertTrue(prompt.contains("getPublicWarehouseLayout"));
+        assertTrue(prompt.contains("floorAreaM2"));
+        assertTrue(prompt.contains("capacity"));
     }
 
     @Test

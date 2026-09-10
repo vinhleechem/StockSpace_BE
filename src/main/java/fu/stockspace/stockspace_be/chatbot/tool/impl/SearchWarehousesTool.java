@@ -36,6 +36,20 @@ public class SearchWarehousesTool implements ChatTool {
     private static final int NORMALIZED_SEARCH_CANDIDATE_LIMIT = 200;
     private static final Pattern DIACRITICS = Pattern.compile("\\p{M}+");
     private static final Pattern NON_WORD = Pattern.compile("[^\\p{L}\\p{N}]+");
+    /**
+     * A follow-up such as "Kho A bao nhiêu m2" is an entity lookup plus an
+     * area question.  Passing the question words into a SQL LIKE predicate
+     * makes an otherwise valid warehouse look missing, so strip only the
+     * well-known dimension phrases before searching.  The original phrase is
+     * still returned to the model as {@code requestedKeyword}.
+     */
+    private static final Pattern DIMENSION_QUESTION = Pattern.compile(
+            "(?iu)(?:\\b(?:diện\\s+tích|dien\\s+tich|kích\\s+thước|kich\\s+thuoc)\\b"
+                    + "(?:\\s+bao\\s+nhiêu(?:\\s*(?:m2|m²|mét\\s+vuông|met\\s+vuong))?)?\\b"
+                    + "|\\bbao\\s+nhiêu\\s*(?:m2|m²|mét\\s+vuông|met\\s+vuong)\\b"
+                    + "|\\b(?:rộng|rong|dài|dai|cao)\\s+bao\\s+nhiêu\\b"
+                    + "|\\b(?:chiều\\s+dài|chieu\\s+dai)\\b)"
+    );
 
     private final WarehouseRepository warehouseRepository;
     private final ObjectMapper objectMapper;
@@ -51,14 +65,16 @@ public class SearchWarehousesTool implements ChatTool {
                 + "Từ khóa có thể là tên, địa chỉ, tỉnh/thành, quận/huyện, loại kho hoặc nhu cầu lưu trữ. "
                 + "Có thể lọc riêng tỉnh/thành, quận/huyện và cách tính giá, rồi sắp xếp theo giá hoặc sức chứa. "
                 + "Giá niêm yết có thể là giá cố định theo tháng, giá mỗi m² mỗi tháng hoặc để thỏa thuận; "
-                + "nếu người dùng không nêu tiêu chí, gọi với tham số rỗng để lấy các kho đang công khai.";
+                + "nếu người dùng không nêu tiêu chí, gọi với tham số rỗng để lấy các kho đang công khai. "
+                + "Nếu cần diện tích hoặc kích thước, dùng warehouseId trong kết quả để gọi getPublicWarehouseLayout; "
+                + "không dùng capacity hay giá/m² để suy ra diện tích.";
     }
 
     @Override
     public Map<String, Object> getParameterSchema() {
         Map<String, Object> properties = new LinkedHashMap<>();
         properties.put("keyword", Map.of("type", "string", "description",
-                "Tên, địa chỉ, tỉnh/thành, quận/huyện, loại kho hoặc loại hàng cần lưu trữ"));
+                "Tên, địa chỉ, tỉnh/thành, quận/huyện, loại kho hoặc loại hàng cần lưu trữ; không đưa các từ hỏi diện tích như bao nhiêu m2 vào keyword"));
         properties.put("province", Map.of("type", "string", "description",
                 "Tỉnh/thành phố cần lọc; có thể nhập một phần tên"));
         properties.put("district", Map.of("type", "string", "description",
@@ -84,7 +100,8 @@ public class SearchWarehousesTool implements ChatTool {
     public String execute(Map<String, Object> params, UUID userId) {
         try {
             Map<String, Object> safeParams = params == null ? Map.of() : params;
-            String keyword = getStringParam(safeParams, "keyword");
+            String requestedKeyword = getStringParam(safeParams, "keyword");
+            String keyword = cleanEntitySearchKeyword(requestedKeyword);
             String province = getLikeStringParam(safeParams, "province");
             String district = getLikeStringParam(safeParams, "district");
             RentalPricingType pricingType = getPricingTypeParam(safeParams, "pricingType");
@@ -123,7 +140,8 @@ public class SearchWarehousesTool implements ChatTool {
                     Map<String, Object> response = baseResponse(normalizedMatches);
                     response.put("matchedByExactKeyword", false);
                     response.put("matchedByNormalizedKeyword", true);
-                    response.put("requestedKeyword", keyword);
+                    response.put("requestedKeyword", requestedKeyword);
+                    addSearchKeywordMetadata(response, requestedKeyword, keyword);
                     response.put("approximateCandidateLimit", NORMALIZED_SEARCH_CANDIDATE_LIMIT);
                     response.put("guidance",
                             "Kết quả được tìm bằng chuẩn hóa/gần đúng trên nhóm kho khả dụng gần nhất; hãy kiểm tra lại tên, địa chỉ và mô tả trước khi chọn.");
@@ -136,7 +154,8 @@ public class SearchWarehousesTool implements ChatTool {
                 if (!fallback.isEmpty()) {
                     Map<String, Object> response = baseResponse(fallback);
                     response.put("matchedByExactKeyword", false);
-                    response.put("requestedKeyword", keyword);
+                    response.put("requestedKeyword", requestedKeyword);
+                    addSearchKeywordMetadata(response, requestedKeyword, keyword);
                     response.put("guidance",
                             "Không có kết quả khớp chính xác; hãy so sánh mô tả, loại kho và vị trí trước khi gợi ý.");
                     return objectMapper.writeValueAsString(response);
@@ -144,8 +163,14 @@ public class SearchWarehousesTool implements ChatTool {
             }
 
             Map<String, Object> response = baseResponse(results);
+            addSearchKeywordMetadata(response, requestedKeyword, keyword);
+            if (requestedKeyword != null) {
+                response.put("matchedByExactKeyword", !results.isEmpty());
+            }
             if (results.isEmpty()) {
                 response.put("message", "Không tìm thấy bài đăng kho còn hiệu lực phù hợp với bộ lọc.");
+                response.put("guidance",
+                        "Không có kết quả với từ khóa này; điều đó chưa chứng minh kho đã bị xóa hoặc không còn khả dụng. Hãy thử lại bằng tên kho ngắn hơn hoặc xác nhận tên kho.");
             }
             return objectMapper.writeValueAsString(response);
         } catch (IllegalArgumentException e) {
@@ -170,6 +195,28 @@ public class SearchWarehousesTool implements ChatTool {
         return warehouseRepository.searchPublicForChat(
                 keyword, province, district, pricingType,
                 minPrice, maxPrice, minCapacity, maxCapacity, isVerified, pageable);
+    }
+
+    private String cleanEntitySearchKeyword(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return null;
+        }
+        String cleaned = DIMENSION_QUESTION.matcher(keyword).replaceAll(" ")
+                .replaceAll("[?!,:;]+", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+        // Do not turn a standalone dimension question into a broad listing.
+        return cleaned.isBlank() ? keyword.trim() : cleaned;
+    }
+
+    private void addSearchKeywordMetadata(Map<String, Object> response,
+                                          String requestedKeyword,
+                                          String searchedKeyword) {
+        if (requestedKeyword != null && searchedKeyword != null
+                && !requestedKeyword.equals(searchedKeyword)) {
+            response.put("searchedKeyword", searchedKeyword);
+            response.put("keywordIntentRemoved", true);
+        }
     }
 
     private Page<Warehouse> searchByNormalizedText(String keyword,
@@ -292,6 +339,7 @@ public class SearchWarehousesTool implements ChatTool {
         result.put("district", warehouse.getDistrictName());
         result.put("description", warehouse.getDescription());
         result.put("capacity", warehouse.getCapacity());
+        result.put("capacityNote", "Sức chứa khai báo của bài đăng; không phải diện tích (m²)");
         result.put("pricingType", ChatToolLocalization.rentalPricingType(warehouse.getRentalPricingType()));
         result.put("listedRentalPrice", warehouse.getRentalPrice());
         result.put("priceUnit", priceUnit(warehouse.getRentalPricingType()));
