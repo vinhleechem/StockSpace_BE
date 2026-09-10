@@ -145,6 +145,11 @@ public class SearchSystemPolicyTool implements ChatTool {
             if (queryTerms.isEmpty()) {
                 return emptyResult(query, categorySelection.category(), "Không tìm thấy từ khóa có ý nghĩa để tra cứu.");
             }
+            // Compound questions need enough evidence to cover each topic, but
+            // never return the old fixed three unrelated passages by default.
+            if (queryTerms.size() >= 7 || query.matches("(?iu).*\\s+(?:và|va|and)\\s+.*")) {
+                topK = Math.min(MAX_TOP_K, Math.max(topK, 4));
+            }
 
             List<SystemKnowledge> lexicalCandidates = knowledgeRepository.findSearchCandidates(
                     categorySelection.category(),

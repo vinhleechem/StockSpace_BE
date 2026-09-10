@@ -3,6 +3,7 @@ package fu.stockspace.stockspace_be.chatbot.service;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -49,5 +50,17 @@ class ChatQueryPlannerTest {
         assertEquals(new BigDecimal("5000000"), plan.filters().get("minRentalPrice"));
         assertEquals(new BigDecimal("15000000"), plan.filters().get("maxRentalPrice"));
         assertEquals(true, plan.filters().get("isVerified"));
+    }
+
+    @Test
+    void decomposesCompoundRentalQuestionIntoIndependentPolicyQueries() {
+        List<ChatQueryPlanner.SubQuery> queries = ChatQueryPlanner.decompose(
+                "Gia hạn hợp đồng và bảo hiểm hàng hóa"
+        );
+
+        assertEquals(2, queries.size());
+        assertEquals("searchSystemPolicy", queries.get(0).requiredTool());
+        assertEquals("searchSystemPolicy", queries.get(1).requiredTool());
+        assertEquals("INSURANCE", queries.get(1).arguments().get("category"));
     }
 }

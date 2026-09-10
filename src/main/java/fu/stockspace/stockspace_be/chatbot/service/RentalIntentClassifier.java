@@ -97,6 +97,14 @@ public final class RentalIntentClassifier {
             return new Intent(Route.SYSTEM_POLICY, "CANCELLATION");
         }
         if (containsAny(text, Set.of(
+                "gia han", "tai ky", "noi tiep hop dong", "hop dong moi", "hop dong thue"))) {
+            return new Intent(Route.SYSTEM_POLICY, "RENTAL_PROCESS");
+        }
+        if (containsAny(text, Set.of(
+                "quyen truy cap wms", "truy cap wms", "quan ly wms", "dieu kien wms"))) {
+            return new Intent(Route.SYSTEM_POLICY, "FAQ");
+        }
+        if (containsAny(text, Set.of(
                 "quy trinh", "thu tuc", "dat coc", "hoan coc", "khi nao duoc thue"))) {
             return new Intent(Route.SYSTEM_POLICY, "RENTAL_PROCESS");
         }

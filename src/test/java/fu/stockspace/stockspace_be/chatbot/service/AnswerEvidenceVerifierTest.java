@@ -57,6 +57,51 @@ class AnswerEvidenceVerifierTest {
     }
 
     @Test
+    void acceptsNumbersCopiedFromTheUserQuestion() {
+        ToolExecutionTrace trace = new ToolExecutionTrace(
+                "searchSystemPolicy", Map.of(),
+                "{\"policies\":[{\"content\":\"Có thể gia hạn theo hợp đồng.\"}]}",
+                true, 1);
+
+        assertTrue(AnswerEvidenceVerifier.verify(
+                "Với hợp đồng còn 30 ngày, bạn nên liên hệ chủ kho để xác nhận.",
+                "Hợp đồng của tôi còn 30 ngày thì gia hạn thế nào?",
+                List.of(trace)
+        ).valid());
+    }
+
+    @Test
+    void sanitizesOnlyTheUnsupportedNumericClaim() {
+        ToolExecutionTrace trace = new ToolExecutionTrace(
+                "searchSystemPolicy", Map.of(),
+                "{\"policies\":[{\"content\":\"Cần kiểm tra điều khoản trong hợp đồng.\"}]}",
+                true, 1);
+
+        String result = AnswerEvidenceVerifier.sanitize(
+                "Bạn cần kiểm tra điều khoản trong hợp đồng. Thời hạn là 30 ngày.",
+                "Gia hạn hợp đồng thế nào?",
+                List.of(trace)
+        );
+
+        assertTrue(result.contains("kiểm tra điều khoản"));
+        assertTrue(result.contains("[số liệu chưa xác minh]"));
+    }
+
+    @Test
+    void acceptsExplicitCalculationFromUserInputs() {
+        ToolExecutionTrace trace = new ToolExecutionTrace(
+                "searchSystemPolicy", Map.of(),
+                "{\"policies\":[{\"content\":\"Bảng giá áp dụng theo m2.\"}]}",
+                true, 1);
+
+        assertTrue(AnswerEvidenceVerifier.verify(
+                "Tổng dự kiến là 1.000.000 VND.",
+                "Kho 10 m2, giá 100.000 VND/m2, tính tổng giúp tôi.",
+                List.of(trace)
+        ).valid());
+    }
+
+    @Test
     void ignoresNumberedAnswerListMarkers() {
         ToolExecutionTrace trace = new ToolExecutionTrace(
                 "searchSystemPolicy", Map.of(), "{\"policies\":[{}]}", true, 1);

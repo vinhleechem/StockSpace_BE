@@ -350,7 +350,14 @@ public class ChatbotService {
             );
             boolean successful = false;
             long startedAt = System.nanoTime();
-            if (tool == null) {
+            ToolExecutionTrace reusableTrace = findReusableTrace(
+                    functionCall.name(), args, traces);
+            if (reusableTrace != null) {
+                toolResult = reusableTrace.result();
+                successful = true;
+                log.debug("[AgenticLoop] Reused deterministic tool result name={}",
+                        safeToolName(functionCall.name()));
+            } else if (tool == null) {
                 log.warn("[AgenticLoop] Rejected non-allowlisted tool name={}",
                         safeToolName(functionCall.name()));
                 toolResult = isSubscriptionLocked(functionCall.name(), context)
@@ -401,19 +408,31 @@ public class ChatbotService {
             log.warn("[AgenticLoop] Iteration limit reached count={}", iterations);
             return new AgentRunResult(MAX_ITERATIONS_REPLY, traces);
         }
+        String candidate = enforceSystemEvidence(
+                enforceRentalEvidence(
+                        enforceQueryEvidence(
+                                capAssistantResponse(response.text()),
+                                userMessage,
+                                allowedByName,
+                                traces),
+                        userMessage, allowedByName, traces),
+                userMessage, traces);
+        // Evidence questions are buffered until this point, so one bounded
+        // repair pass can safely rewrite unsupported numeric claims before the
+        // final SSE event is emitted.
+        if (evidenceQuestion) {
+            candidate = repairNumericClaims(
+                    conversation,
+                    allowedTools,
+                    deadlineNanos,
+                    candidate,
+                    userMessage,
+                    traces
+            );
+        }
         return new AgentRunResult(
                 enforceCitations(
-                        AnswerEvidenceVerifier.guard(
-                                enforceSystemEvidence(
-                                        enforceRentalEvidence(
-                                                enforceQueryEvidence(
-                                                        capAssistantResponse(response.text()),
-                                                        userMessage,
-                                                        allowedByName,
-                                                        traces),
-                                                userMessage, allowedByName, traces),
-                                        userMessage, traces),
-                                traces),
+                        AnswerEvidenceVerifier.sanitize(candidate, userMessage, traces),
                         traces),
                 traces
         );
@@ -497,7 +516,14 @@ public class ChatbotService {
             );
             boolean successful = false;
             long startedAt = System.nanoTime();
-            if (tool == null) {
+            ToolExecutionTrace reusableTrace = findReusableTrace(
+                    functionCall.name(), args, traces);
+            if (reusableTrace != null) {
+                toolResult = reusableTrace.result();
+                successful = true;
+                log.debug("[AgenticLoop] Reused deterministic tool result name={}",
+                        safeToolName(functionCall.name()));
+            } else if (tool == null) {
 
                 log.warn("[AgenticLoop] Rejected non-allowlisted tool name={}",
                         safeToolName(functionCall.name()));
@@ -544,19 +570,26 @@ public class ChatbotService {
             log.warn("[AgenticLoop] Iteration limit reached count={}", iterations);
             return new AgentRunResult(MAX_ITERATIONS_REPLY, traces);
         }
+        String candidate = enforceSystemEvidence(
+                enforceRentalEvidence(
+                        enforceQueryEvidence(
+                                capAssistantResponse(response.text()),
+                                userMessage,
+                                allowedByName,
+                                traces),
+                        userMessage, allowedByName, traces),
+                userMessage, traces);
+        candidate = repairNumericClaims(
+                conversation,
+                allowedTools,
+                deadlineNanos,
+                candidate,
+                userMessage,
+                traces
+        );
         return new AgentRunResult(
                 enforceCitations(
-                        AnswerEvidenceVerifier.guard(
-                                enforceSystemEvidence(
-                                        enforceRentalEvidence(
-                                                enforceQueryEvidence(
-                                                        capAssistantResponse(response.text()),
-                                                        userMessage,
-                                                        allowedByName,
-                                                        traces),
-                                                userMessage, allowedByName, traces),
-                                        userMessage, traces),
-                                traces),
+                        AnswerEvidenceVerifier.sanitize(candidate, userMessage, traces),
                         traces),
                 traces
         );
@@ -583,6 +616,19 @@ public class ChatbotService {
         String planContext = ChatQueryPlanner.plan(userMessage).promptContext();
         if (!planContext.isBlank()) {
             conversation.add(Map.of("role", "system", "content", planContext));
+        }
+        List<ChatQueryPlanner.SubQuery> subQueries = ChatQueryPlanner.decompose(userMessage);
+        if (subQueries.size() > 1) {
+            String tools = subQueries.stream()
+                    .map(ChatQueryPlanner.SubQuery::requiredTool)
+                    .filter(java.util.Objects::nonNull)
+                    .distinct()
+                    .collect(Collectors.joining(", "));
+            conversation.add(Map.of(
+                    "role", "system",
+                    "content", "Câu hỏi có nhiều ý. Đã tách thành "
+                            + subQueries.size() + " phần; phải xử lý từng phần với tool: " + tools + "."
+            ));
         }
     }
 
@@ -632,7 +678,7 @@ public class ChatbotService {
             toolResult = TOOL_FAILURE;
         }
         traces.add(new ToolExecutionTrace(
-                functionCall.name(),
+                tool.getName(),
                 args,
                 toolResult,
                 successful,
@@ -696,7 +742,7 @@ public class ChatbotService {
             toolResult = TOOL_FAILURE;
         }
         traces.add(new ToolExecutionTrace(
-                functionCall.name(),
+                tool.getName(),
                 args,
                 toolResult,
                 successful,
@@ -722,54 +768,55 @@ public class ChatbotService {
             Consumer<String> statusConsumer,
             BooleanSupplier cancelled
     ) {
-        RentalIntentClassifier.Intent intent = RentalIntentClassifier.classify(userMessage);
-        if (intent.route() == RentalIntentClassifier.Route.NONE
-                || allowedByName == null || traces == null) {
+        List<ChatQueryPlanner.SubQuery> subQueries = ChatQueryPlanner.decompose(userMessage);
+        if (subQueries.isEmpty() || allowedByName == null || traces == null) {
             return;
         }
 
-        String requiredToolName = intent.requiredTool();
-        ChatTool tool = allowedByName.get(requiredToolName);
-        if (tool == null || !hasRequiredSubscription(tool, context)) {
-            conversation.add(Map.of(
-                    "role", "system",
-                    "content", rentalRoutingGuard(intent, tool == null)
+        for (ChatQueryPlanner.SubQuery subQuery : subQueries) {
+            RentalIntentClassifier.Intent intent = subQuery.intent();
+            ChatTool tool = allowedByName.get(subQuery.requiredTool());
+            if (tool == null || !hasRequiredSubscription(tool, context)) {
+                conversation.add(Map.of(
+                        "role", "system",
+                        "content", rentalRoutingGuard(intent, tool == null)
+                ));
+                continue;
+            }
+
+            if (cancelled != null) {
+                ensureStreamActive(cancelled);
+            }
+            if (statusConsumer != null) {
+                statusConsumer.accept("retrieving");
+            }
+
+            Map<String, Object> args = subQuery.arguments();
+            OpenRouterClient.FunctionCall functionCall = new OpenRouterClient.FunctionCall(
+                    "rental_" + UUID.randomUUID(), tool.getName(), args);
+            conversation.add(openRouterClient.buildAssistantToolCall(functionCall));
+            long startedAt = System.nanoTime();
+            String toolResult;
+            boolean successful = false;
+            try {
+                toolResult = capToolResult(tool.executeWithContext(args, context));
+                successful = isSuccessfulToolResult(toolResult);
+            } catch (Exception exception) {
+                log.warn("[AgenticLoop] Deterministic rental lookup failed tool={} type={}",
+                        tool.getName(), exception.getClass().getSimpleName());
+                toolResult = TOOL_FAILURE;
+            }
+            traces.add(new ToolExecutionTrace(
+                    tool.getName(),
+                    args,
+                    toolResult,
+                    successful,
+                    Duration.ofNanos(System.nanoTime() - startedAt).toMillis()
             ));
-            return;
-        }
-
-        if (cancelled != null) {
-            ensureStreamActive(cancelled);
-        }
-        if (statusConsumer != null) {
-            statusConsumer.accept("retrieving");
-        }
-
-        Map<String, Object> args = rentalToolArguments(intent, userMessage);
-        OpenRouterClient.FunctionCall functionCall = new OpenRouterClient.FunctionCall(
-                "rental_" + UUID.randomUUID(), tool.getName(), args);
-        conversation.add(openRouterClient.buildAssistantToolCall(functionCall));
-        long startedAt = System.nanoTime();
-        String toolResult;
-        boolean successful = false;
-        try {
-            toolResult = capToolResult(tool.executeWithContext(args, context));
-            successful = isSuccessfulToolResult(toolResult);
-        } catch (Exception exception) {
-            log.warn("[AgenticLoop] Deterministic rental lookup failed tool={} type={}",
-                    tool.getName(), exception.getClass().getSimpleName());
-            toolResult = TOOL_FAILURE;
-        }
-        traces.add(new ToolExecutionTrace(
-                functionCall.name(),
-                args,
-                toolResult,
-                successful,
-                Duration.ofNanos(System.nanoTime() - startedAt).toMillis()
-        ));
-        conversation.add(openRouterClient.buildToolResult(functionCall, toolResult));
-        if (statusConsumer != null) {
-            statusConsumer.accept("processing");
+            conversation.add(openRouterClient.buildToolResult(functionCall, toolResult));
+            if (statusConsumer != null) {
+                statusConsumer.accept("processing");
+            }
         }
     }
 
@@ -810,17 +857,34 @@ public class ChatbotService {
             Map<String, ChatTool> allowedByName,
             List<ToolExecutionTrace> traces
     ) {
-        RentalIntentClassifier.Intent intent = RentalIntentClassifier.classify(userMessage);
-        if (intent.route() == RentalIntentClassifier.Route.NONE) {
+        List<ChatQueryPlanner.SubQuery> subQueries = ChatQueryPlanner.decompose(userMessage);
+        if (subQueries.isEmpty()) {
             return reply;
         }
-        boolean verified = traces != null && traces.stream().anyMatch(trace ->
-                trace != null
+        boolean verified = traces != null && subQueries.stream().anyMatch(subQuery ->
+                traces.stream().anyMatch(trace -> trace != null
                         && trace.successful()
-                        && intent.requiredTool().equals(trace.toolName()));
+                        && subQuery.requiredTool().equals(trace.toolName())));
         if (verified) {
-            return reply;
+            List<ChatQueryPlanner.SubQuery> missing = subQueries.stream()
+                    .filter(subQuery -> traces == null || traces.stream().noneMatch(trace ->
+                            trace != null
+                                    && trace.successful()
+                                    && subQuery.requiredTool().equals(trace.toolName())))
+                    .toList();
+            if (missing.isEmpty() || reply == null || isEvidenceFallback(reply)) {
+                return reply;
+            }
+            String missingTopics = missing.stream()
+                    .map(ChatQueryPlanner.SubQuery::intent)
+                    .map(this::rentalIntentLabel)
+                    .distinct()
+                    .collect(Collectors.joining(", "));
+            return capAssistantResponse(reply
+                    + "\n\nPhần " + missingTopics
+                    + " chưa có dữ liệu xác minh trong lượt này nên tôi chưa kết luận phần đó.");
         }
+        RentalIntentClassifier.Intent intent = subQueries.get(0).intent();
         boolean unavailable = allowedByName == null
                 || !allowedByName.containsKey(intent.requiredTool());
         if (unavailable && (intent.route()
@@ -831,6 +895,28 @@ public class ChatbotService {
         }
         return "Tôi chưa thể xác minh thông tin thuê kho từ dữ liệu hệ thống lúc này, nên không muốn đoán sai. "
                 + "Bạn vui lòng thử lại sau.";
+    }
+
+    private String rentalIntentLabel(RentalIntentClassifier.Intent intent) {
+        if (intent == null) {
+            return "câu hỏi còn lại";
+        }
+        if (intent.category() == null || intent.category().isBlank()) {
+            return switch (intent.route()) {
+                case MY_CONTRACTS -> "hợp đồng cá nhân";
+                case MY_ACTIVE_SUBSCRIPTION -> "gói dịch vụ cá nhân";
+                case SERVICE_PACKAGES -> "gói dịch vụ";
+                case CURRENT_SYSTEM_RULES -> "quy định hiện hành";
+                default -> "câu hỏi còn lại";
+            };
+        }
+        return switch (intent.category()) {
+            case "INSURANCE" -> "bảo hiểm và đền bù";
+            case "CANCELLATION" -> "hủy hợp đồng";
+            case "RENTAL_PROCESS" -> "quy trình thuê kho";
+            case "FAQ" -> "điều kiện WMS/FAQ";
+            default -> "chính sách liên quan";
+        };
     }
 
     private String enforceQueryEvidence(
@@ -890,8 +976,28 @@ public class ChatbotService {
             return false;
         }
         String normalized = toolResult.stripLeading();
-        return !normalized.startsWith("{\"error\"")
-                && !normalized.startsWith("{ \"error\"");
+        return !normalized.matches("(?s)^\\{\\s*\"error\"\\s*:.*");
+    }
+
+    private ToolExecutionTrace findReusableTrace(
+            String toolName,
+            Map<String, Object> arguments,
+            List<ToolExecutionTrace> traces
+    ) {
+        if (toolName == null || traces == null) {
+            return null;
+        }
+        return traces.stream()
+                .filter(trace -> trace != null && trace.successful())
+                .filter(trace -> toolName.equals(trace.toolName()))
+                .filter(trace -> arguments == null
+                        || (arguments.isEmpty()
+                        ? trace.arguments() == null || trace.arguments().isEmpty()
+                        : arguments.entrySet().stream().allMatch(entry ->
+                        java.util.Objects.equals(
+                                entry.getValue(), trace.arguments().get(entry.getKey())))))
+                .findFirst()
+                .orElse(null);
     }
 
     /**
@@ -901,7 +1007,8 @@ public class ChatbotService {
      * source label is present for every policy lookup.
      */
     private String enforceCitations(String reply, List<ToolExecutionTrace> traces) {
-        if (reply == null || traces == null || traces.isEmpty()) {
+        if (reply == null || reply.isBlank() || traces == null || traces.isEmpty()
+                || isEvidenceFallback(reply)) {
             return reply;
         }
         java.util.LinkedHashSet<String> labels = new java.util.LinkedHashSet<>();
@@ -923,6 +1030,62 @@ public class ChatbotService {
         }
         String suffix = "\n\nNguồn tham khảo: " + String.join("; ", labels);
         return capAssistantResponse(reply + suffix);
+    }
+
+    private String repairNumericClaims(
+            List<Map<String, Object>> conversation,
+            List<ChatTool> allowedTools,
+            long deadlineNanos,
+            String candidate,
+            String userMessage,
+            List<ToolExecutionTrace> traces
+    ) {
+        if (AnswerEvidenceVerifier.verify(candidate, userMessage, traces).valid()) {
+            return candidate;
+        }
+        long remainingNanos = deadlineNanos - System.nanoTime();
+        if (remainingNanos <= 0) {
+            return AnswerEvidenceVerifier.sanitize(candidate, userMessage, traces);
+        }
+
+        conversation.add(Map.of("role", "assistant", "content", candidate));
+        conversation.add(Map.of(
+                "role", "system",
+                "content", "Câu trả lời vừa rồi có claim số liệu chưa có trong bằng chứng. "
+                        + "Hãy viết lại toàn bộ câu trả lời, chỉ giữ số trong dữ liệu tool hoặc câu hỏi của user. "
+                        + "Không tự tính hoặc bịa số; nếu thiếu số thì nói rõ trường nào chưa xác minh. "
+                        + "Không gọi tool trong lượt sửa này."
+        ));
+        try {
+            AiResponse repaired = completeWithinDeadline(
+                    conversation,
+                    List.of(),
+                    deadlineNanos
+            );
+            if (!repaired.isFunctionCall()
+                    && repaired.text() != null
+                    && !repaired.text().isBlank()) {
+                String repairedText = capAssistantResponse(repaired.text());
+                if (AnswerEvidenceVerifier.verify(
+                        repairedText, userMessage, traces).valid()) {
+                    return repairedText;
+                }
+                return AnswerEvidenceVerifier.sanitize(
+                        repairedText, userMessage, traces);
+            }
+        } catch (RuntimeException exception) {
+            log.debug("[AgenticLoop] Numeric claim repair unavailable type={}",
+                    exception.getClass().getSimpleName());
+        }
+        return AnswerEvidenceVerifier.sanitize(candidate, userMessage, traces);
+    }
+
+    private boolean isEvidenceFallback(String reply) {
+        String normalized = reply.toLowerCase(java.util.Locale.ROOT);
+        return normalized.contains("chưa thể xác minh")
+                || normalized.contains("chưa thể tra cứu")
+                || normalized.contains("chưa đọc dữ liệu")
+                || normalized.contains("[số liệu chưa xác minh]");
     }
 
     private void rememberUserContextBestEffort(

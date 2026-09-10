@@ -5,6 +5,8 @@ import java.text.Normalizer;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -68,6 +70,75 @@ public final class ChatQueryPlanner {
         return Plan.none();
     }
 
+    /**
+     * Decomposes compound rental questions into deterministic retrieval units.
+     * The old planner selected one route for the entire sentence, causing the
+     * second half of questions such as "gia hạn và bảo hiểm" to be ignored.
+     */
+    public static List<SubQuery> decompose(String message) {
+        if (message == null || message.isBlank()) {
+            return List.of();
+        }
+        List<String> parts = new ArrayList<>();
+        for (String part : message.split("(?iu)\\s+(?:và|va|and)\\s+|[;?]+")) {
+            if (!part.isBlank()) {
+                parts.add(part.trim());
+            }
+        }
+        if (parts.size() <= 1) {
+            parts = List.of(message.trim());
+        }
+
+        List<SubQuery> result = new ArrayList<>();
+        for (String part : parts) {
+            RentalIntentClassifier.Intent intent = RentalIntentClassifier.classify(part);
+            if (intent.route() == RentalIntentClassifier.Route.NONE) {
+                continue;
+            }
+            result.add(new SubQuery(
+                    part,
+                    intent,
+                    rentalArguments(intent, part)
+            ));
+        }
+        if (result.isEmpty()) {
+            RentalIntentClassifier.Intent intent = RentalIntentClassifier.classify(message);
+            if (intent.route() != RentalIntentClassifier.Route.NONE) {
+                result.add(new SubQuery(message.trim(), intent, rentalArguments(intent, message)));
+            }
+        }
+        // Keep one retrieval for a compound question when every part maps to
+        // the same policy bucket.  This preserves the full user wording (and
+        // therefore all lexical context) while still splitting genuinely
+        // different topics such as renewal + insurance.
+        if (result.size() > 1 && result.stream().map(SubQuery::intent)
+                .map(RentalIntentClassifier.Intent::requiredTool)
+                .distinct().count() == 1
+                && result.stream().map(SubQuery::intent)
+                .map(RentalIntentClassifier.Intent::category)
+                .distinct().count() == 1) {
+            RentalIntentClassifier.Intent intent = result.get(0).intent();
+            return List.of(new SubQuery(message.trim(), intent, rentalArguments(intent, message)));
+        }
+        return List.copyOf(result);
+    }
+
+    private static Map<String, Object> rentalArguments(
+            RentalIntentClassifier.Intent intent,
+            String query
+    ) {
+        if (!"searchSystemPolicy".equals(intent.requiredTool())) {
+            return Map.of();
+        }
+        Map<String, Object> args = new LinkedHashMap<>();
+        args.put("query", query);
+        args.put("topK", 4);
+        if (intent.category() != null) {
+            args.put("category", intent.category());
+        }
+        return Map.copyOf(args);
+    }
+
     private static boolean isWarehouseSearch(String normalized) {
         if (!normalized.contains("kho") || containsAny(normalized, OPERATION_MARKERS)
                 || normalized.contains("dien tich") || normalized.contains("kich thuoc")
@@ -121,8 +192,10 @@ public final class ChatQueryPlanner {
         }
 
         Matcher numberMatcher = NUMBER.matcher(normalized);
-        BigDecimal firstPrice = null;
-        BigDecimal secondPrice = null;
+        String firstPriceRaw = null;
+        String firstPriceUnit = null;
+        String secondPriceRaw = null;
+        String secondPriceUnit = null;
         while (numberMatcher.find()) {
             String before = normalized.substring(
                     Math.max(0, numberMatcher.start() - 32), numberMatcher.start());
@@ -132,15 +205,22 @@ public final class ChatQueryPlanner {
             if (!priceContext) {
                 continue;
             }
-            BigDecimal price = parseNumber(numberMatcher.group(1), numberMatcher.group(2));
-            if (price != null) {
-                if (firstPrice == null) {
-                    firstPrice = price;
-                } else if (secondPrice == null) {
-                    secondPrice = price;
-                }
+            if (firstPriceRaw == null) {
+                firstPriceRaw = numberMatcher.group(1);
+                firstPriceUnit = numberMatcher.group(2);
+            } else if (secondPriceRaw == null) {
+                secondPriceRaw = numberMatcher.group(1);
+                secondPriceUnit = numberMatcher.group(2);
             }
         }
+        // Vietnamese price ranges commonly write the unit only once at the
+        // end ("từ 5 đến 15 triệu"). Infer that unit for the first bound.
+        String inferredUnit = firstPriceUnit == null ? secondPriceUnit : firstPriceUnit;
+        BigDecimal firstPrice = parseNumber(firstPriceRaw, inferredUnit);
+        BigDecimal secondPrice = parseNumber(
+                secondPriceRaw,
+                secondPriceUnit == null ? inferredUnit : secondPriceUnit
+        );
         boolean hasRange = normalized.contains(" tu ") && normalized.contains(" den ");
         if (hasRange && firstPrice != null) {
             filters.put("minRentalPrice", firstPrice);
@@ -241,6 +321,22 @@ public final class ChatQueryPlanner {
         SERVICE_PACKAGES,
         MY_ACTIVE_SUBSCRIPTION,
         MY_CONTRACTS
+    }
+
+    public record SubQuery(
+            String query,
+            RentalIntentClassifier.Intent intent,
+            Map<String, Object> arguments
+    ) {
+        public SubQuery {
+            query = query == null ? "" : query.trim();
+            intent = intent == null ? RentalIntentClassifier.Intent.none() : intent;
+            arguments = arguments == null ? Map.of() : Map.copyOf(arguments);
+        }
+
+        public String requiredTool() {
+            return intent.requiredTool();
+        }
     }
 
     public record Plan(Intent intent, Map<String, Object> filters, boolean requiresEvidence) {
