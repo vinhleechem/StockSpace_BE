@@ -393,6 +393,41 @@ class StockTransferServiceTest {
     }
 
     @Test
+    void getTransfer_allowsDualAssignedStaffWhenOnlyDestinationAssignmentRemains() {
+        UUID staffId = UUID.randomUUID();
+        User staff = User.builder()
+                .id(staffId)
+                .roles(Set.of(Role.builder().name(RoleType.ROLE_STAFF.name()).build()))
+                .build();
+        StockTransfer transfer = StockTransfer.builder()
+                .id(UUID.randomUUID())
+                .tenant(tenant)
+                .sourceWarehouse(sourceWarehouse)
+                .destinationWarehouse(destinationWarehouse)
+                .activeDestinationWarehouse(destinationWarehouse)
+                .sourceStaff(staff)
+                .destinationStaff(staff)
+                .createdBy(tenant)
+                .status(StockTransferStatus.IN_TRANSIT)
+                .build();
+        when(userRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(staffId))
+                .thenReturn(Optional.of(TenantMember.builder().user(staff).tenant(tenant).build()));
+        when(transferRepository.findByIdAndTenantIdAndIsDeletedFalse(transfer.getId(), tenantId))
+                .thenReturn(Optional.of(transfer));
+        when(accessService.hasActiveStaffAssignment(staffId, tenantId, sourceWarehouseId))
+                .thenReturn(false);
+        when(accessService.hasActiveStaffAssignment(staffId, tenantId, destinationWarehouseId))
+                .thenReturn(true);
+
+        StockTransferResponse response = transferService.getTransfer(staffId, transfer.getId());
+
+        assertEquals(transfer.getId(), response.getId());
+        verify(accessService).hasActiveStaffAssignment(staffId, tenantId, sourceWarehouseId);
+        verify(accessService).hasActiveStaffAssignment(staffId, tenantId, destinationWarehouseId);
+    }
+
+    @Test
     void createTransfer_requiresStaffAssignmentAtBothWarehouses() {
         UUID staffId = UUID.randomUUID();
         User staff = User.builder()

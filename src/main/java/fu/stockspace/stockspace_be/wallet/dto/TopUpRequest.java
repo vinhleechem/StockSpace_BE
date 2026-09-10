@@ -13,7 +13,7 @@ import java.math.BigDecimal;
 public class TopUpRequest {
     @NotNull(message = "Số tiền nạp không được để trống")
     @DecimalMin(value = "1000.00", message = "Số tiền nạp tối thiểu là 1,000 VND")
-    @DecimalMax(value = "9999999999999.99", message = "Amount exceeds the supported limit")
+    @DecimalMax(value = "100000000.00", message = "Số tiền nạp tối đa là 100,000,000 VND")
     @Digits(integer = 13, fraction = 2, message = "Amount must have at most 13 integer digits and 2 decimal places")
     private BigDecimal amount;
     @NotNull(message = "Phương thức thanh toán không được để trống")

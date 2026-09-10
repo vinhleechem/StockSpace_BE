@@ -72,4 +72,30 @@ public interface TenantMemberRepository extends JpaRepository<TenantMember, UUID
     Page<TenantMember> searchStaffs(@Param("tenantId") UUID tenantId,
                                     @Param("keyword") String keyword,
                                     Pageable pageable);
+
+    @Query("""
+            SELECT m FROM TenantMember m
+            WHERE m.tenant.id = :tenantId
+              AND m.isDeleted = false
+              AND (:activeOnly = false OR (m.isActive = true
+                   AND m.user.isActive = true AND m.user.isDeleted = false))
+              AND (:warehouseId IS NULL OR EXISTS (
+                   SELECT a.id FROM StaffWarehouseAssignment a
+                   WHERE a.staff.id = m.user.id
+                     AND a.tenant.id = :tenantId
+                     AND a.warehouse.id = :warehouseId
+                     AND a.status = fu.stockspace.stockspace_be.staff.entity.AssignmentStatus.ACTIVE
+                     AND a.isActive = true
+                     AND a.isDeleted = false))
+              AND (:keyword = '' OR LOWER(m.user.email) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR LOWER(m.user.fullName) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR m.user.phone LIKE CONCAT('%', :keyword, '%'))
+            ORDER BY m.joinedAt ASC
+            """)
+    Page<TenantMember> searchStaffsWithWarehouseFilter(
+            @Param("tenantId") UUID tenantId,
+            @Param("keyword") String keyword,
+            @Param("warehouseId") UUID warehouseId,
+            @Param("activeOnly") boolean activeOnly,
+            Pageable pageable);
 }

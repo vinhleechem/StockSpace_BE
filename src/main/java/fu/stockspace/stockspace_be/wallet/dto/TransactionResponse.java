@@ -17,6 +17,7 @@ public class TransactionResponse {
     private PaymentMethod paymentMethod;
     private TransactionStatus status;
     private String paymentCode;
+    private LocalDateTime expiresAt;
     private String referenceId;
     private UUID bookingId;
     private UUID subscriptionId;

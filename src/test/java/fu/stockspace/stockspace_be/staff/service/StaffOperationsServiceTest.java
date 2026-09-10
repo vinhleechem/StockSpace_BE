@@ -138,6 +138,59 @@ class StaffOperationsServiceTest {
     }
 
     @Test
+    void getOperationsReturnsAllocateActionForAssignedSourceStaff() {
+        when(accessService.findAccessibleContractWarehouses(tenantId, staffId))
+                .thenReturn(List.of(warehouseA));
+        StockTransfer transfer = StockTransfer.builder()
+                .id(UUID.randomUUID())
+                .sourceWarehouse(warehouseA)
+                .destinationWarehouse(warehouseB)
+                .sourceStaff(User.builder().id(staffId).build())
+                .status(StockTransferStatus.PENDING)
+                .createdAt(LocalDateTime.of(2026, 9, 10, 9, 0))
+                .build();
+        when(transferRepository.findActiveOperationsForStaff(tenantId, List.of(warehouseAId)))
+                .thenReturn(List.of());
+        when(transferRepository.findAssignedSourceOperationsForStaff(tenantId, staffId))
+                .thenReturn(List.of(transfer));
+
+        PagedResponse<StaffOperationResponse> response = operationsService.getOperations(
+                staffId, tenantId, warehouseAId, "TRANSFER", null, PageRequest.of(0, 20));
+
+        assertEquals(1, response.getTotalElements());
+        assertEquals(warehouseAId, response.getContent().get(0).getWarehouseId());
+        assertEquals(List.of("VIEW", "ALLOCATE"),
+                response.getContent().get(0).getAllowedActions());
+    }
+
+    @Test
+    void getOperationsDoesNotExposeSourceActionsWhenSourceAssignmentWasRevoked() {
+        when(accessService.findAccessibleContractWarehouses(tenantId, staffId))
+                .thenReturn(List.of(warehouseB));
+        StockTransfer transfer = StockTransfer.builder()
+                .id(UUID.randomUUID())
+                .sourceWarehouse(warehouseA)
+                .destinationWarehouse(warehouseB)
+                .sourceStaff(User.builder().id(staffId).build())
+                .destinationStaff(User.builder().id(staffId).build())
+                .status(StockTransferStatus.PENDING)
+                .createdAt(LocalDateTime.of(2026, 9, 10, 8, 0))
+                .build();
+        when(transferRepository.findActiveOperationsForStaff(tenantId, List.of(warehouseBId)))
+                .thenReturn(List.of());
+        when(transferRepository.findAssignedSourceOperationsForStaff(tenantId, staffId))
+                .thenReturn(List.of(transfer));
+        when(transferRepository.findAssignedDestinationOperationsForStaff(tenantId, staffId))
+                .thenReturn(List.of(transfer));
+
+        PagedResponse<StaffOperationResponse> response = operationsService.getOperations(
+                staffId, tenantId, warehouseBId, "TRANSFER", null, PageRequest.of(0, 20));
+
+        assertEquals(1, response.getTotalElements());
+        assertEquals(List.of("VIEW"), response.getContent().get(0).getAllowedActions());
+    }
+
+    @Test
     void getOperationsRejectsWarehouseOutsideActiveAssignment() {
         when(accessService.findAccessibleContractWarehouses(tenantId, staffId))
                 .thenReturn(List.of(warehouseA));

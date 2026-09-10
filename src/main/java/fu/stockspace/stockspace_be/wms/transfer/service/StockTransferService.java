@@ -669,14 +669,15 @@ public class StockTransferService {
         if (receivingFrom == StockTransferStatus.IN_TRANSIT
                 || receivingFrom == StockTransferStatus.OVERDUE) {
             markCurrentAttemptArrived(transfer, receiver);
+            transfer.setStatus(StockTransferStatus.ARRIVED_AT_DESTINATION);
             recordEvent(transfer, receivingFrom,
                     StockTransferStatus.ARRIVED_AT_DESTINATION, "ARRIVE", receiver, null, idempotencyKey);
         }
-        if (receivingFrom != StockTransferStatus.RECEIVING) {
+        if (transfer.getStatus() == StockTransferStatus.ARRIVED_AT_DESTINATION) {
+            StockTransferStatus receivingStatus = transfer.getStatus();
+            transfer.setStatus(StockTransferStatus.RECEIVING);
             recordEvent(transfer,
-                    receivingFrom == StockTransferStatus.IN_TRANSIT
-                            || receivingFrom == StockTransferStatus.OVERDUE
-                            ? StockTransferStatus.ARRIVED_AT_DESTINATION : receivingFrom,
+                    receivingStatus,
                     StockTransferStatus.RECEIVING, "START_RECEIVING", receiver, null, idempotencyKey);
         }
         WarehouseLayout destinationLayout = findActiveTenantLayout(
@@ -760,7 +761,7 @@ public class StockTransferService {
             }
         }
 
-        StockTransferStatus previous = StockTransferStatus.RECEIVING;
+        StockTransferStatus previous = transfer.getStatus();
         boolean allReceived = transfer.getItems().stream()
                 .allMatch(item -> item.getReceivedQuantity() >= item.getRequestedQuantity());
         boolean hasDamaged = transfer.getItems().stream()
@@ -2018,17 +2019,20 @@ public class StockTransferService {
 
     private void requireStaffTransferAccess(User staff, UUID tenantId, StockTransfer transfer) {
         User assignedSourceStaff = transfer.getSourceStaff();
-        if (assignedSourceStaff != null && staff.getId().equals(assignedSourceStaff.getId())) {
-            accessService.requireActiveStaffAssignment(staff.getId(), tenantId,
-                    transfer.getSourceWarehouse().getId());
+        User assignedDestinationStaff = transfer.getDestinationStaff();
+        boolean isAssignedSource = assignedSourceStaff != null
+                && staff.getId().equals(assignedSourceStaff.getId());
+        boolean isAssignedDestination = assignedDestinationStaff != null
+                && staff.getId().equals(assignedDestinationStaff.getId());
+        boolean sourceAccess = isAssignedSource && accessService.hasActiveStaffAssignment(
+                staff.getId(), tenantId, transfer.getSourceWarehouse().getId());
+        boolean destinationAccess = isAssignedDestination && accessService.hasActiveStaffAssignment(
+                staff.getId(), tenantId, activeDestinationWarehouse(transfer).getId());
+        if (sourceAccess || destinationAccess) {
             return;
         }
-        User assignedDestinationStaff = transfer.getDestinationStaff();
-        if (assignedDestinationStaff != null
-                && staff.getId().equals(assignedDestinationStaff.getId())) {
-            accessService.requireActiveStaffAssignment(staff.getId(), tenantId,
-                    activeDestinationWarehouse(transfer).getId());
-            return;
+        if (isAssignedSource || isAssignedDestination) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
         requireStaffAssignments(staff.getId(), tenantId,
                 transfer.getSourceWarehouse().getId(), activeDestinationWarehouse(transfer).getId());

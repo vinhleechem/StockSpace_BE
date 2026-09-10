@@ -32,6 +32,15 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, UU
                     :staffId is null
                     or (
                         t.sourceStaff.id = :staffId
+                        and exists (
+                            select assignedSource.id from StaffWarehouseAssignment assignedSource
+                            where assignedSource.staff.id = :staffId
+                              and assignedSource.tenant.id = :tenantId
+                              and assignedSource.warehouse.id = t.sourceWarehouse.id
+                              and assignedSource.status = fu.stockspace.stockspace_be.staff.entity.AssignmentStatus.ACTIVE
+                              and assignedSource.isActive = true
+                              and assignedSource.isDeleted = false
+                        )
                     )
                     or (
                         t.destinationStaff.id = :staffId

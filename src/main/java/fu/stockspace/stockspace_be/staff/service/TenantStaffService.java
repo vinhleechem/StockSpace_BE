@@ -293,6 +293,22 @@ public class TenantStaffService {
                 .map(this::mapToResponse);
     }
 
+    @Transactional(readOnly = true)
+    public Page<StaffMemberResponse> listStaffs(UUID tenantId, String keyword,
+                                                UUID warehouseId, boolean activeOnly,
+                                                Pageable pageable) {
+        if (warehouseId == null && !activeOnly) {
+            return listStaffs(tenantId, keyword, pageable);
+        }
+        if (warehouseId != null) {
+            accessService.requireWmsAccess(tenantId, warehouseId);
+        }
+        String kw = keyword == null ? "" : keyword.trim();
+        return memberRepository.searchStaffsWithWarehouseFilter(
+                        tenantId, kw, warehouseId, activeOnly, pageable)
+                .map(this::mapToResponse);
+    }
+
 
 
 
