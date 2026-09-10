@@ -28,7 +28,7 @@ class FinalRentalApiContractTest {
     @Test
     void contractStatusAndActionFlagSchemaMatchesTheFeHandoff() throws Exception {
         assertEquals(
-                Set.of("DRAFT", "PENDING_TENANT_CONFIRM", "CHANGES_REQUESTED", "ACTIVE", "REJECTED", "EXPIRED"),
+                Set.of("DRAFT", "PENDING_TENANT_CONFIRM", "CHANGES_REQUESTED", "SCHEDULED", "ACTIVE", "REJECTED", "EXPIRED"),
                 Arrays.stream(ContractStatus.values()).map(Enum::name).collect(Collectors.toSet()));
 
         Set<String> fields = Arrays.stream(RentalContractResponse.class.getDeclaredFields())

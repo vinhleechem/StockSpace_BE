@@ -12,14 +12,15 @@ import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RentalContractSchemaMappingTest {
 
     @Test
-    void contractUsesOnlyTheSixFinalStates() {
+    void contractUsesOnlyTheSevenFinalStates() {
         assertEquals(Set.of(
                         "DRAFT", "PENDING_TENANT_CONFIRM", "CHANGES_REQUESTED",
-                        "ACTIVE", "REJECTED", "EXPIRED"),
+                        "SCHEDULED", "ACTIVE", "REJECTED", "EXPIRED"),
                 Arrays.stream(ContractStatus.values()).map(Enum::name).collect(Collectors.toSet()));
     }
 
@@ -29,6 +30,13 @@ class RentalContractSchemaMappingTest {
             Field field = RentalContract.class.getDeclaredField(fieldName);
             assertFalse(field.getAnnotation(JoinColumn.class).nullable());
         }
+    }
+
+    @Test
+    void renewalSourceRelationIsNullableAndSelfReferencing() throws Exception {
+        Field field = RentalContract.class.getDeclaredField("renewedFromContract");
+        assertEquals(RentalContract.class, field.getType());
+        assertTrue(field.getAnnotation(JoinColumn.class).nullable());
     }
 
     @Test

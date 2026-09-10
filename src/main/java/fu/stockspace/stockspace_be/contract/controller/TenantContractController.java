@@ -34,18 +34,25 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @PreAuthorize("@rbac.hasPermission('CONTRACT_READ')")
 @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Contract is not in a tenant-review state",
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Contract is not in a tenant-review state or renewal deadline has passed",
                 content = @Content(schema = @Schema(implementation = ApiResponse.class),
-                        examples = @ExampleObject(value = "{\"success\":false,\"code\":\"INVALID_CONTRACT_STATUS\",\"message\":\"Contract must be in PENDING_TENANT_CONFIRM status for this action\"}"))),
+                        examples = {
+                                @ExampleObject(name = "Invalid status", value = "{\"success\":false,\"code\":\"INVALID_CONTRACT_STATUS\",\"message\":\"Contract must be in PENDING_TENANT_CONFIRM status for this action\"}"),
+                                @ExampleObject(name = "Renewal deadline passed", value = "{\"success\":false,\"code\":\"CONTRACT_RENEWAL_DEADLINE_PASSED\",\"message\":\"The renewal deadline has passed\"}")
+                        })),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Caller is not this contract's tenant",
                 content = @Content(schema = @Schema(implementation = ApiResponse.class),
                         examples = @ExampleObject(value = "{\"success\":false,\"code\":\"FORBIDDEN\",\"message\":\"You cannot access this contract\"}"))),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Contract not found",
                 content = @Content(schema = @Schema(implementation = ApiResponse.class),
                         examples = @ExampleObject(value = "{\"success\":false,\"code\":\"CONTRACT_NOT_FOUND\",\"message\":\"Rental contract not found\"}"))),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Confirmation would overlap an existing contract",
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Confirmation conflicts with contract pricing, dates, or area reservation",
                 content = @Content(schema = @Schema(implementation = ApiResponse.class),
-                        examples = @ExampleObject(value = "{\"success\":false,\"code\":\"CONTRACT_DATE_OVERLAP\",\"message\":\"The tenant already has an overlapping contract for this warehouse\"}")))
+                        examples = {
+                                @ExampleObject(name = "Date overlap", value = "{\"success\":false,\"code\":\"CONTRACT_DATE_OVERLAP\",\"message\":\"The tenant already has an overlapping contract for this warehouse\"}"),
+                                @ExampleObject(name = "Area unavailable", value = "{\"success\":false,\"code\":\"WAREHOUSE_AREA_UNAVAILABLE\",\"message\":\"The requested leased area is not available for the selected dates\"}"),
+                                @ExampleObject(name = "Pricing changed", value = "{\"success\":false,\"code\":\"CONTRACT_RENEWAL_PRICING_CHANGED\",\"message\":\"The warehouse pricing type changed and this renewal is no longer valid\"}")
+                        }))
 })
 public class TenantContractController {
 

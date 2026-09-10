@@ -2,6 +2,7 @@ package fu.stockspace.stockspace_be.warehouse.service;
 
 import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
+import fu.stockspace.stockspace_be.common.config.BusinessTimeConfig;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
@@ -23,6 +24,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.*;
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -58,6 +61,9 @@ class WarehouseLayoutServiceTest {
     @Spy
     private PhysicalLoadCalculator physicalLoadCalculator;
 
+    @Mock
+    private Clock businessClock;
+
     @InjectMocks
     private WarehouseLayoutService layoutService;
 
@@ -71,6 +77,11 @@ class WarehouseLayoutServiceTest {
     void setUp() {
         warehouseId = UUID.randomUUID();
         userId = UUID.randomUUID();
+
+        lenient().when(businessClock.instant())
+                .thenReturn(Instant.parse("2026-09-09T17:00:00Z"));
+        lenient().when(businessClock.getZone())
+                .thenReturn(BusinessTimeConfig.BUSINESS_ZONE_ID);
 
         owner = User.builder().id(userId).email("owner@test.com").build();
         warehouse = Warehouse.builder().id(warehouseId).owner(owner).name("Main Warehouse").build();

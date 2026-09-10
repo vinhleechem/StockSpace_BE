@@ -122,10 +122,12 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
               AND c.status = fu.stockspace.stockspace_be.contract.entity.ContractStatus.ACTIVE
               AND c.isActive = true
               AND c.isDeleted = false
-              AND c.startDate <= CURRENT_DATE
-              AND c.endDate >= CURRENT_DATE
+              AND c.startDate <= :today
+              AND c.endDate >= :today
             """)
-    boolean hasCurrentActiveContract(@Param("warehouseId") UUID warehouseId);
+    boolean hasCurrentActiveContract(
+            @Param("warehouseId") UUID warehouseId,
+            @Param("today") java.time.LocalDate today);
 
     @Query("""
             SELECT COUNT(o) > 0 FROM ListingOrder o

@@ -37,8 +37,11 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -47,6 +50,10 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class TenantStaffServiceTest {
+
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+    private static final Instant FIXED_INSTANT = Instant.parse("2026-09-09T17:00:00Z");
+    private static final LocalDate TODAY = LocalDate.of(2026, 9, 10);
 
     @Mock private TenantMemberRepository memberRepository;
     @Mock private StaffInvitationRepository invitationRepository;
@@ -58,6 +65,7 @@ class TenantStaffServiceTest {
     @Mock private SubscriptionRepository subscriptionRepository;
     @Mock private EmailService emailService;
     @Mock private PasswordEncoder passwordEncoder;
+    @Mock private Clock businessClock;
 
     @InjectMocks
     private TenantStaffService staffService;
@@ -70,6 +78,9 @@ class TenantStaffServiceTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(businessClock.instant()).thenReturn(FIXED_INSTANT);
+        lenient().when(businessClock.getZone()).thenReturn(BUSINESS_ZONE);
+
         tenantId = UUID.randomUUID();
         tenantUser = User.builder()
                 .id(tenantId)
@@ -88,8 +99,8 @@ class TenantStaffServiceTest {
                 .id(UUID.randomUUID())
                 .tenant(tenantUser)
                 .servicePackage(servicePackage)
-                .startDate(LocalDate.now())
-                .endDate(LocalDate.now().plusDays(30))
+                .startDate(TODAY)
+                .endDate(TODAY.plusDays(30))
                 .status(SubscriptionStatus.ACTIVE)
                 .build();
     }

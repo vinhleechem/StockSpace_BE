@@ -79,7 +79,7 @@ class ListingOrderServiceTest {
     private NotificationService notificationService;
 
     @Mock
-    private Clock publicationClock;
+    private Clock businessClock;
 
     @InjectMocks
     private ListingOrderService listingOrderService;
@@ -124,8 +124,8 @@ class ListingOrderServiceTest {
                 .isDeleted(false)
                 .build();
 
-        lenient().when(publicationClock.instant()).thenReturn(FIXED_INSTANT);
-        lenient().when(publicationClock.getZone()).thenReturn(PUBLICATION_ZONE);
+        lenient().when(businessClock.instant()).thenReturn(FIXED_INSTANT);
+        lenient().when(businessClock.getZone()).thenReturn(PUBLICATION_ZONE);
         lenient().when(warehouseLayoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId))
                 .thenReturn(Optional.of(defaultLayout));
         lenient().when(listingOrderRepository.findOpenPaidByWarehouseIdForUpdate(warehouseId, NOW))

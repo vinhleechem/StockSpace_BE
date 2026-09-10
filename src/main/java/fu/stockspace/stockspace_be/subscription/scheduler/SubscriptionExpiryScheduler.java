@@ -1,5 +1,6 @@
 package fu.stockspace.stockspace_be.subscription.scheduler;
 
+import fu.stockspace.stockspace_be.common.config.BusinessTimeConfig;
 import fu.stockspace.stockspace_be.subscription.entity.Subscription;
 import fu.stockspace.stockspace_be.subscription.entity.SubscriptionStatus;
 import fu.stockspace.stockspace_be.subscription.repository.SubscriptionRepository;
@@ -9,6 +10,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -18,11 +20,12 @@ import java.util.List;
 public class SubscriptionExpiryScheduler {
 
     private final SubscriptionRepository subscriptionRepository;
+    private final Clock businessClock;
 
-    @Scheduled(cron = "0 5 0 * * ?")
+    @Scheduled(cron = "0 5 0 * * ?", zone = BusinessTimeConfig.BUSINESS_ZONE)
     @Transactional
     public void expireSubscriptions() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(businessClock);
         List<Subscription> expiredSubscriptions = subscriptionRepository
                 .findByStatusAndEndDateBeforeAndIsActiveTrueAndIsDeletedFalse(
                         SubscriptionStatus.ACTIVE, today);

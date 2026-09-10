@@ -33,6 +33,8 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
+import java.time.LocalDate;
 
 
 
@@ -56,6 +58,7 @@ public class WarehouseLayoutService {
     private final WarehouseApprovalNotifier approvalNotifier;
     private final RackBinGeometryPolicy rackBinGeometryPolicy;
     private final PhysicalLoadCalculator physicalLoadCalculator;
+    private final Clock businessClock;
 
 
 
@@ -255,8 +258,8 @@ public class WarehouseLayoutService {
         WarehouseLayoutResponse defaultLayout = getDefaultLayoutForContract(warehouseId);
         WarehouseLayout existing = layoutRepository.findByWarehouseIdAndTenantId(warehouseId, tenantId)
                 .orElse(null);
-        boolean hasActiveContract = contractRepository
-                .existsByTenantIdAndWarehouseIdAndStatusActive(tenantId, warehouseId);
+        boolean hasActiveContract = contractRepository.existsCurrentDirectActiveContract(
+                tenantId, warehouseId, LocalDate.now(businessClock));
 
         // Do not overwrite the operational layout of an already active contract.
         // A3 does not lock overlap yet; the draft only keeps an independent snapshot.

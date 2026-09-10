@@ -18,13 +18,17 @@ import fu.stockspace.stockspace_be.wms.stock.repository.InventoryAuditRepository
 import fu.stockspace.stockspace_be.wms.stock.repository.StockBatchRepository;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferStatus;
 import fu.stockspace.stockspace_be.wms.transfer.repository.StockTransferRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -33,10 +37,15 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class TenantDashboardServiceTest {
+
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+    private static final Instant FIXED_INSTANT = Instant.parse("2026-09-09T17:00:00Z");
+    private static final LocalDate TODAY = LocalDate.of(2026, 9, 10);
 
     @Mock private RentalContractRepository contractRepository;
     @Mock private ProductSkuRepository productSkuRepository;
@@ -48,14 +57,21 @@ class TenantDashboardServiceTest {
     @Mock private NotificationRepository notificationRepository;
     @Mock private SubscriptionRepository subscriptionRepository;
     @Mock private StockBatchRepository.TenantStockSummaryProjection stockSummary;
+    @Mock private Clock businessClock;
 
     @InjectMocks
     private TenantDashboardService tenantDashboardService;
 
+    @BeforeEach
+    void setUp() {
+        lenient().when(businessClock.instant()).thenReturn(FIXED_INSTANT);
+        lenient().when(businessClock.getZone()).thenReturn(BUSINESS_ZONE);
+    }
+
     @Test
     void returnsTenantScopedDashboardMetricsAndSubscription() {
         UUID tenantId = UUID.randomUUID();
-        LocalDate today = LocalDate.now();
+        LocalDate today = TODAY;
 
         when(stockBatchRepository.summarizeForTenant(eq(tenantId), eq(today))).thenReturn(stockSummary);
         when(stockSummary.getBatchCount()).thenReturn(12L);
