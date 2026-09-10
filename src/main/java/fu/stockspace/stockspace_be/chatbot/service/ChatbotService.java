@@ -1155,7 +1155,7 @@ public class ChatbotService {
                 String reply;
                 if (streamedReply.isEmpty()) {
                     sendDelta(providerReply);
-                } else if (providerReply.startsWith(streamedReply)
+                } else if (providerReply.startsWith(streamedReply.toString())
                         && providerReply.length() > streamedReply.length()) {
                     // The provider text may already have been emitted before
                     // the final citation-enforcement pass. Emit only the
