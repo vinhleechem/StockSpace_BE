@@ -331,6 +331,38 @@ class ChatbotServiceTest {
     }
 
     @Test
+    void routesEnglishInventorySuggestionAndExplainsMissingContract() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        ChatTool stockTool = namedTool("getMyStock");
+        List<ChatTool> allowedTools = List.of(stockTool);
+        String message = "Check my inventory";
+
+        when(conversationStore.prepareUserSession(userId, null))
+                .thenReturn(new PreparedChatSession(sessionId, null, List.of()));
+        when(toolRegistry.getToolsForRole("ROLE_TENANT")).thenReturn(allowedTools);
+        ChatRequestContext context = new ChatRequestContext(userId, null);
+        when(activeWarehouseContextResolver.resolve(userId, null)).thenReturn(context);
+        when(promptBuilder.buildSystemPrompt(eq("ROLE_TENANT"), eq(allowedTools), eq(context)))
+                .thenReturn("system prompt");
+        when(stockTool.executeWithContext(anyMap(), eq(context)))
+                .thenReturn("{\"error\":\"Bạn chưa có hợp đồng thuê kho nào đang hiệu lực để xem tồn kho.\"}");
+        when(conversationStore.appendUserTurn(
+                eq(userId), eq(sessionId), eq(message), anyString()))
+                .thenReturn(LocalDateTime.now());
+        doReturn(new OpenRouterClient.AiResponse(
+                "I cannot access your inventory right now.", null))
+                .when(openRouterClient).complete(
+                        anyList(), eq(allowedTools), any(Duration.class));
+
+        ChatResponse result = service.processTenantMessage(
+                userId, new SendMessageRequest(null, message));
+
+        assertTrue(result.botReply().contains("hợp đồng thuê kho"));
+        verify(stockTool).executeWithContext(eq(Map.of()), eq(context));
+    }
+
+    @Test
     void guestStreamPersistsExactlyTheVisibleCompletedReply() {
         configureStreamRuntime();
         UUID sessionId = UUID.randomUUID();
