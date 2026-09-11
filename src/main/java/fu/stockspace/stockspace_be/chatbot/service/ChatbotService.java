@@ -77,7 +77,9 @@ public class ChatbotService {
             "chuyen kho", "suc chua", "tai trong", "the tich", "dien tich", "kich thuoc",
             "hop dong", "goi dich vu", "goi cua toi", "bao hiem", "dat coc", "tien coc",
             "gia thue", "phi luu kho", "so du", "vi cua toi", "don hang", "xuat hang",
-            "nhap hang", "nhap xuat"
+            "nhap hang", "nhap xuat", "inventory", "stock", "receipt", "inbound", "outbound",
+            "audit", "transfer", "capacity", "warehouse", "contract", "subscription", "wallet",
+            "balance"
     );
 
     private final ChatConversationStore conversationStore;
@@ -318,6 +320,9 @@ public class ChatbotService {
         preloadWarehouseDimensionLookup(
                 conversation, allowedByName, memory, userMessage,
                 context, traces, statusConsumer, cancelled);
+        preloadOperationalLookup(
+                conversation, allowedByName, userMessage,
+                context, traces, statusConsumer, cancelled);
         preloadWarehouseSearch(
                 conversation, allowedByName, userMessage,
                 context, traces, statusConsumer, cancelled);
@@ -488,6 +493,9 @@ public class ChatbotService {
                 + effectiveDeadline().toNanos();
         preloadWarehouseDimensionLookup(
                 conversation, allowedByName, memory, userMessage,
+                context, traces, null, null);
+        preloadOperationalLookup(
+                conversation, allowedByName, userMessage,
                 context, traces, null, null);
         preloadWarehouseSearch(
                 conversation, allowedByName, userMessage,
@@ -820,6 +828,105 @@ public class ChatbotService {
         }
     }
 
+    /**
+     * Deterministically routes common WMS questions before the model runs.
+     * This is especially important for short English suggestions such as
+     * "Check my inventory", where the Vietnamese-only marker gate previously
+     * allowed a generic answer without ever calling getMyStock.
+     */
+    private void preloadOperationalLookup(
+            List<Map<String, Object>> conversation,
+            Map<String, ChatTool> allowedByName,
+            String userMessage,
+            ChatRequestContext context,
+            List<ToolExecutionTrace> traces,
+            Consumer<String> statusConsumer,
+            BooleanSupplier cancelled
+    ) {
+        if (allowedByName == null || traces == null) {
+            return;
+        }
+        String toolName = operationalToolForMessage(userMessage);
+        if (toolName == null) {
+            return;
+        }
+        ChatTool tool = allowedByName.get(toolName);
+        if (tool == null || !hasRequiredSubscription(tool, context)) {
+            return;
+        }
+        if (cancelled != null) {
+            ensureStreamActive(cancelled);
+        }
+        if (statusConsumer != null) {
+            statusConsumer.accept("retrieving");
+        }
+
+        Map<String, Object> args = context != null && context.activeWarehouseId() != null
+                ? Map.of("warehouseId", context.activeWarehouseId().toString())
+                : Map.of();
+        OpenRouterClient.FunctionCall functionCall = new OpenRouterClient.FunctionCall(
+                "wms_" + UUID.randomUUID(), toolName, args);
+        conversation.add(openRouterClient.buildAssistantToolCall(functionCall));
+        long startedAt = System.nanoTime();
+        String toolResult;
+        boolean successful = false;
+        try {
+            toolResult = capToolResult(tool.executeWithContext(args, context));
+            successful = isSuccessfulToolResult(toolResult);
+        } catch (Exception exception) {
+            log.warn("[AgenticLoop] Deterministic WMS lookup failed tool={} type={}",
+                    toolName, exception.getClass().getSimpleName());
+            toolResult = TOOL_FAILURE;
+        }
+        traces.add(new ToolExecutionTrace(
+                toolName,
+                args,
+                toolResult,
+                successful,
+                Duration.ofNanos(System.nanoTime() - startedAt).toMillis()
+        ));
+        conversation.add(openRouterClient.buildToolResult(functionCall, toolResult));
+        if (statusConsumer != null) {
+            statusConsumer.accept("processing");
+        }
+    }
+
+    private String operationalToolForMessage(String userMessage) {
+        String normalized = SemanticQueryExpansion.normalize(userMessage);
+        if (normalized.isBlank()) {
+            return null;
+        }
+        if (containsAny(normalized, Set.of(
+                "phieu", "receipt", "inbound", "outbound", "nhap xuat", "nhap hang", "xuat hang"))) {
+            return "getInventoryReceipts";
+        }
+        if (containsAny(normalized, Set.of(
+                "kiem ke", "audit", "inventory audit", "chenh lech"))) {
+            return "getInventoryAudits";
+        }
+        if (containsAny(normalized, Set.of(
+                "chuyen kho", "transfer", "dieu chuyen"))) {
+            return "getStockTransfers";
+        }
+        if (containsAny(normalized, Set.of(
+                "suc chua", "capacity", "tai trong", "the tich", "weight", "volume"))) {
+            return "getWarehouseCapacity";
+        }
+        if (containsAny(normalized, Set.of(
+                "danh muc san pham", "product catalog", "catalog", "product list"))) {
+            return "getMyProductCatalog";
+        }
+        if (containsAny(normalized, Set.of(
+                "ton kho", "inventory", "stock", "sku", "hang trong kho", "san pham trong kho"))) {
+            return "getMyStock";
+        }
+        return null;
+    }
+
+    private boolean containsAny(String normalized, Set<String> markers) {
+        return markers.stream().anyMatch(normalized::contains);
+    }
+
     private Map<String, Object> rentalToolArguments(
             RentalIntentClassifier.Intent intent,
             String userMessage
@@ -958,6 +1065,10 @@ public class ChatbotService {
         if (verified) {
             return reply;
         }
+        String toolFailure = safeOperationalFailureReply(userMessage, traces);
+        if (toolFailure != null) {
+            return toolFailure;
+        }
         return "Tôi chưa thể đọc dữ liệu nghiệp vụ trong phiên này nên không muốn đoán sai. "
                 + "Bạn vui lòng thử lại sau.";
     }
@@ -969,6 +1080,63 @@ public class ChatbotService {
         }
         String normalized = SemanticQueryExpansion.normalize(userMessage);
         return SYSTEM_EVIDENCE_MARKERS.stream().anyMatch(normalized::contains);
+    }
+
+    private String safeOperationalFailureReply(
+            String userMessage,
+            List<ToolExecutionTrace> traces
+    ) {
+        String expectedTool = operationalToolForMessage(userMessage);
+        if (expectedTool == null || traces == null) {
+            return null;
+        }
+        ToolExecutionTrace failed = traces.stream()
+                .filter(trace -> trace != null && !trace.successful())
+                .filter(trace -> expectedTool.equals(trace.toolName()))
+                .reduce((first, second) -> second)
+                .orElse(null);
+        if (failed == null) {
+            return null;
+        }
+        String error = extractToolError(failed.result());
+        if (error == null || error.isBlank()) {
+            return null;
+        }
+        String normalized = SemanticQueryExpansion.normalize(error);
+        if (normalized.contains("can dang nhap")) {
+            return "Bạn cần đăng nhập để xem dữ liệu tồn kho của mình.";
+        }
+        if (normalized.contains("dang thue nhieu kho")) {
+            return error + " Vui lòng gửi tên kho muốn kiểm tra.";
+        }
+        if (normalized.contains("chua co hop dong")) {
+            return "Bạn chưa có hợp đồng thuê kho đang hiệu lực nên chưa thể xem tồn kho.";
+        }
+        if ("getMyStock".equals(expectedTool)
+                && normalized.contains("khong the lay thong tin ton kho")) {
+            return "Hệ thống chưa đọc được dữ liệu tồn kho lúc này. Vui lòng thử lại sau.";
+        }
+        return null;
+    }
+
+    private String extractToolError(String result) {
+        if (result == null || result.isBlank()) {
+            return null;
+        }
+        int marker = result.indexOf("\"error\"");
+        if (marker < 0) {
+            return null;
+        }
+        int colon = result.indexOf(':', marker + 7);
+        int openingQuote = colon < 0 ? -1 : result.indexOf('"', colon + 1);
+        int closingQuote = openingQuote < 0 ? -1 : result.lastIndexOf('"');
+        if (openingQuote < 0 || closingQuote <= openingQuote) {
+            return null;
+        }
+        return result.substring(openingQuote + 1, closingQuote)
+                .replace("\\\"", "\"")
+                .replace("\\n", " ")
+                .trim();
     }
 
     private boolean isSuccessfulToolResult(String toolResult) {
