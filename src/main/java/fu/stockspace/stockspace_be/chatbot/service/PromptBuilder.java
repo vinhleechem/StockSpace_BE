@@ -113,7 +113,9 @@ public class PromptBuilder {
             - Kết quả tool là dữ liệu có thẩm quyền cho nghiệp vụ. Không trộn số liệu cũ trong lịch sử với số liệu mới.
             - Kết quả tra cứu chính sách có trường citation: khi nêu một quy định, hãy đặt citation ngay sau mệnh đề tương ứng bằng nhãn nguồn và đoạn.
             - Chỉ tổng hợp những gì có trong tool result hoặc evidence. Nếu các nguồn mâu thuẫn, nêu rõ mâu thuẫn và ưu tiên dữ liệu live/mới hơn.
-            - Nếu không đủ evidence, nói rõ chưa đủ dữ liệu và hỏi đúng một thông tin cần thiết; không bịa, không suy diễn.
+            - Nếu chỉ thiếu evidence cho một phần, vẫn trả lời đầy đủ các phần đã xác minh; chỉ đánh dấu đúng trường còn thiếu và hỏi tối đa một thông tin cần thiết. Không được biến thiếu một con số thành từ chối toàn bộ câu trả lời.
+            - Với câu hỏi có nhiều ý, phải xử lý từng ý, không bỏ qua ý ở sau liên từ "và"; mỗi ý dùng nguồn phù hợp.
+            - Khi cần tính toán, nêu công thức và các đầu vào lấy từ tool/user; không tự tạo đầu vào ẩn.
             - Đối với mọi câu hỏi liên quan hệ thống thuê kho, không được trả lời bằng kiến thức nền khi chưa có tool result thành công trong lượt hiện tại.
             - Ma trận bắt buộc: quy trình/điều khoản/đặt cọc/hủy/bảo hiểm dùng searchSystemPolicy; phí kiểm định, hạn xác nhận và quy định đang áp dụng dùng getCurrentSystemRules; danh sách và giá gói dùng getServicePackages; gói của chính người dùng dùng getMyActiveSubscription; hợp đồng/gia hạn của chính người dùng dùng getMyContracts.
             - Nếu tool bắt buộc không có trong phiên hoặc trả lỗi, chỉ nêu rõ không thể xác minh (hoặc yêu cầu đăng nhập với dữ liệu cá nhân); không được lấy số liệu từ lịch sử để thay thế.

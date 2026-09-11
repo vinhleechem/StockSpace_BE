@@ -282,9 +282,11 @@ public class DataInitializer implements CommandLineRunner {
                                                 "kb.contract-renewal.current",
                                                 KnowledgeCategory.RENTAL_PROCESS,
                                                 "Gia hạn hợp đồng thuê kho",
-                                                "Hợp đồng sắp hết hạn có thể có liên kết gia hạn kế tiếp. Hợp đồng gia hạn được xác nhận trước ngày bắt đầu sẽ nối tiếp thời hạn cũ; trạng thái và quyền truy cập phải được kiểm tra theo ngày hiệu lực thực tế. "
+                                                "Hợp đồng sắp hết hạn có thể có liên kết gia hạn kế tiếp. Chủ hợp đồng tạo bản nháp gia hạn từ hợp đồng đang đủ điều kiện; bản gia hạn phải nối tiếp không có khoảng trống, bắt đầu vào ngày sau ngày kết thúc hợp đồng cũ. "
                                                                 +
-                                                                "Nếu chưa có gia hạn được xác nhận, người thuê vẫn có thể xem các lựa chọn hiện được phép trên hợp đồng và cần thực hiện thao tác tiếp theo trên giao diện."),
+                                                                "Bản gia hạn được xác nhận trước ngày bắt đầu sẽ nối tiếp thời hạn cũ; trạng thái và quyền truy cập phải được kiểm tra theo ngày hiệu lực thực tế. Trong luồng gia hạn hiện tại, diện tích đã thuê và kích thước layout không được tự ý thay đổi. "
+                                                                +
+                                                                "Hợp đồng phải có thời hạn tối thiểu 7 ngày. Người thuê xác nhận bản gia hạn trên giao diện; khi ngày bắt đầu ở tương lai hợp đồng ở trạng thái đã lên lịch, còn khi đã đến ngày hiệu lực thì chuyển sang đang hoạt động. Nếu chưa có gia hạn được xác nhận, quyền WMS sau khi hợp đồng cũ hết hạn phải được kiểm tra lại theo hợp đồng hiệu lực."),
                                 new KnowledgeSeed(
                                                 "kb.wallet-vnpay.current",
                                                 KnowledgeCategory.FAQ,
@@ -300,7 +302,7 @@ public class DataInitializer implements CommandLineRunner {
                                                 "kb.wms-access.current",
                                                 KnowledgeCategory.FAQ,
                                                 "Điều kiện truy cập và quản lý WMS",
-                                                "Hợp đồng thuê đang có hiệu lực cho phép người thuê quan sát kho và dữ liệu tồn kho thuộc mình. "
+                                                "Hợp đồng thuê đang có hiệu lực cho phép người thuê quan sát kho và dữ liệu tồn kho thuộc mình. Lịch sử vận hành vẫn được giữ để tra cứu sau khi hợp đồng hết hạn, nhưng thao tác làm thay đổi dữ liệu mới bị khóa khi không còn hợp đồng hoặc gói hợp lệ. "
                                                                 +
                                                                 "Các thao tác làm thay đổi dữ liệu WMS còn yêu cầu gói dịch vụ đang có hiệu lực. "
                                                                 +

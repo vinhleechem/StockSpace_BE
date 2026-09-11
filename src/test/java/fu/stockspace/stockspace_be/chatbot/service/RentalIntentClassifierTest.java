@@ -49,6 +49,12 @@ class RentalIntentClassifierTest {
         assertEquals(
                 RentalIntentClassifier.Route.SYSTEM_POLICY,
                 RentalIntentClassifier.classify("Điều kiện gia hạn hợp đồng là gì?").route());
+        assertEquals(
+                "RENTAL_PROCESS",
+                RentalIntentClassifier.classify("Điều kiện gia hạn hợp đồng là gì?").category());
+        assertEquals(
+                "FAQ",
+                RentalIntentClassifier.classify("Điều kiện truy cập và quản lý WMS là gì?").category());
     }
 
     @Test

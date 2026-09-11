@@ -58,9 +58,12 @@ class PromptBuilderTest {
         for (String role : new String[]{"GUEST", "ROLE_TENANT"}) {
             String prompt = promptBuilder.buildSystemPrompt(role);
 
-            assertFalse(prompt.contains("Tenant"));
-            assertFalse(prompt.contains("PENDING"));
-            assertFalse(prompt.contains("ACTIVE"));
+            // Internal tool identifiers are intentionally present for the
+            // model, but user-facing role/status labels must not leak.
+            String userFacingPrompt = prompt.replace("getTenantDashboard", "");
+            assertFalse(userFacingPrompt.contains("Tenant"));
+            assertFalse(userFacingPrompt.contains("PENDING"));
+            assertFalse(userFacingPrompt.contains("ACTIVE"));
         }
     }
 
