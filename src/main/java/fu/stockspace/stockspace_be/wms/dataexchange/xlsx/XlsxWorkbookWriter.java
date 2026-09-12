@@ -65,6 +65,7 @@ public final class XlsxWorkbookWriter {
 
     public static CellStyle editableStyle(Workbook workbook) {
         CellStyle style = workbook.createCellStyle();
+        style.setLocked(false);
         style.setFillForegroundColor(IndexedColors.LIGHT_YELLOW.getIndex());
         style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
         return style;
