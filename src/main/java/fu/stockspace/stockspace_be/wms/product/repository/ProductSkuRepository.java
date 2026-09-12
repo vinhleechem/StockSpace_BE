@@ -9,6 +9,8 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+import java.util.Collection;
+import java.util.List;
 import java.util.UUID;
 
 @Repository
@@ -21,6 +23,28 @@ public interface ProductSkuRepository extends JpaRepository<ProductSku, UUID> {
     boolean existsBySkuCodeAndTenantOrSystem(@Param("skuCode") String skuCode, @Param("tenantId") UUID tenantId);
 
     Optional<ProductSku> findByIdAndIsDeletedFalse(UUID id);
+
+    @Query("""
+            SELECT s FROM ProductSku s
+            WHERE s.isActive = true
+              AND s.isDeleted = false
+              AND LOWER(s.skuCode) IN :skuCodes
+              AND (
+                    s.tenant.id = :tenantId
+                    OR (
+                        s.tenant IS NULL
+                        AND NOT EXISTS (
+                            SELECT 1 FROM ProductSku shadow
+                            WHERE shadow.tenant.id = :tenantId
+                              AND LOWER(shadow.skuCode) = LOWER(s.skuCode)
+                              AND shadow.isDeleted = false
+                        )
+                    )
+              )
+            """)
+    List<ProductSku> findVisibleActiveByTenantAndSkuCodes(
+            @Param("tenantId") UUID tenantId,
+            @Param("skuCodes") Collection<String> skuCodes);
 
     @Query("""
             SELECT COUNT(s) FROM ProductSku s
