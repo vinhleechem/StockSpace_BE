@@ -17,6 +17,25 @@ public interface WmsImportJobRepository extends JpaRepository<WmsImportJob, UUID
 
     Optional<WmsImportJob> findByIdAndCreatedByIdAndIsDeletedFalse(UUID id, UUID createdById);
 
+    @Query("""
+            select j from WmsImportJob j
+            where j.id = :jobId
+              and j.tenant.id = :tenantId
+              and j.isActive = true
+              and j.isDeleted = false
+              and (j.createdBy.id = :actorId or j.createdBy.id = :tenantId)
+            """)
+    Optional<WmsImportJob> findReadableByTenantAndActor(
+            @Param("jobId") UUID jobId,
+            @Param("tenantId") UUID tenantId,
+            @Param("actorId") UUID actorId);
+
+    boolean existsByTenantIdAndImportTypeAndContentSha256AndStatusAndIsActiveTrueAndIsDeletedFalse(
+            UUID tenantId,
+            WmsImportType importType,
+            String contentSha256,
+            WmsImportJobStatus status);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select j from WmsImportJob j where j.id = :id and j.isDeleted = false")
     Optional<WmsImportJob> findByIdForUpdate(@Param("id") UUID id);

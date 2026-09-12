@@ -1,6 +1,7 @@
 package fu.stockspace.stockspace_be.wms.dataexchange.xlsx;
 
 import fu.stockspace.stockspace_be.wms.dataexchange.config.DataExchangeProperties;
+import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import org.apache.poi.openxml4j.util.ZipSecureFile;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
@@ -41,13 +42,15 @@ public class XlsxWorkbookReader {
                 throw new XlsxFileException("Only OOXML .xlsx workbooks are supported");
             }
         } catch (IOException ex) {
-            throw new XlsxFileException("The uploaded workbook cannot be read", ex);
+            throw new XlsxFileException(ErrorCode.WMS_IMPORT_FILE_INVALID,
+                    "The uploaded workbook cannot be read", ex);
         }
 
         try (InputStream input = new ByteArrayInputStream(content)) {
             return WorkbookFactory.create(input);
         } catch (IOException | RuntimeException ex) {
-            throw new XlsxFileException("The uploaded workbook is invalid or encrypted", ex);
+            throw new XlsxFileException(ErrorCode.WMS_IMPORT_FILE_INVALID,
+                    "The uploaded workbook is invalid or encrypted", ex);
         }
     }
 
@@ -87,7 +90,8 @@ public class XlsxWorkbookReader {
             throw new XlsxFileException("The uploaded workbook is empty");
         }
         if (content.length > properties.getMaxFileBytes()) {
-            throw new XlsxFileException("The uploaded workbook exceeds the configured size limit");
+            throw new XlsxFileException(ErrorCode.WMS_IMPORT_LIMIT_EXCEEDED,
+                    "The uploaded workbook exceeds the configured size limit");
         }
         if (originalFilename == null
                 || !originalFilename.toLowerCase(java.util.Locale.ROOT).endsWith(XLSX_EXTENSION)
