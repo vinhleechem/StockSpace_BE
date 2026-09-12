@@ -9,6 +9,7 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 import java.util.UUID;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "inventory_receipts", indexes = {
@@ -66,4 +67,14 @@ public class InventoryReceipt extends BaseEntity {
 
     @Column(name = "reject_reason", columnDefinition = "TEXT")
     private String rejectReason;
+
+    @Column(name = "occurred_at", nullable = false)
+    private LocalDateTime occurredAt;
+
+    @PrePersist
+    private void initializeOccurredAt() {
+        if (occurredAt == null) {
+            occurredAt = LocalDateTime.now();
+        }
+    }
 }

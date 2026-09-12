@@ -30,4 +30,5 @@ public class InventoryReceiptResponse {
     private OutboundPickingSuggestionResponse pickList;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private LocalDateTime occurredAt;
 }

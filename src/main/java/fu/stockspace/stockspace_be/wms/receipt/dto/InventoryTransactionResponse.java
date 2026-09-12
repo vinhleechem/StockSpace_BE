@@ -20,4 +20,5 @@ public class InventoryTransactionResponse {
     private String skuName;
     private int quantityChanged;
     private LocalDateTime createdAt;
+    private LocalDateTime occurredAt;
 }

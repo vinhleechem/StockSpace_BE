@@ -91,6 +91,19 @@ public class InventoryReceiptService {
 
     @Transactional
     public InventoryReceiptResponse createReceipt(UUID userId, CreateInventoryReceiptRequest request) {
+        return createReceipt(userId, request, LocalDateTime.now());
+    }
+
+    /** Used by trusted offline import orchestration; online requests keep the business clock default. */
+    @Transactional
+    public InventoryReceiptResponse createReceipt(UUID userId, CreateInventoryReceiptRequest request,
+                                                  LocalDateTime occurredAt) {
+        if (occurredAt == null) {
+            occurredAt = LocalDateTime.now();
+        }
+        if (occurredAt.isAfter(LocalDateTime.now())) {
+            throw new BadRequestException("occurredAt cannot be in the future");
+        }
         User creator = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
 
@@ -102,7 +115,7 @@ public class InventoryReceiptService {
         requireWarehouseMutationAccess(creator, tenantId, warehouse.getId());
 
         if (request.getType() == DocumentType.OUTBOUND) {
-            return createOutboundReceipt(creator, tenant, warehouse, request);
+            return createOutboundReceipt(creator, tenant, warehouse, request, occurredAt);
         }
 
         InventoryReceipt receipt = InventoryReceipt.builder()
@@ -114,6 +127,7 @@ public class InventoryReceiptService {
                 .senderName(request.getSenderName())
                 .receiverName(request.getReceiverName())
                 .status(ApprovalStatus.PENDING)
+                .occurredAt(occurredAt)
                 .build();
 
         receipt = receiptRepository.save(receipt);
@@ -171,12 +185,13 @@ public class InventoryReceiptService {
     }
 
     private InventoryReceiptResponse createOutboundReceipt(
-            User creator, User tenant, Warehouse warehouse, CreateInventoryReceiptRequest request) {
+            User creator, User tenant, Warehouse warehouse, CreateInventoryReceiptRequest request,
+            LocalDateTime occurredAt) {
         UUID tenantId = tenant.getId();
         boolean manualLocation = request.getItems().stream()
                 .anyMatch(item -> item.getRackId() != null || item.getBinId() != null);
         if (manualLocation) {
-            return createManualOutboundReceipt(creator, tenant, warehouse, request);
+            return createManualOutboundReceipt(creator, tenant, warehouse, request, occurredAt);
         }
 
         List<OutboundPickingInputItem> inputItems = request.getItems().stream()
@@ -213,6 +228,7 @@ public class InventoryReceiptService {
                 .senderName(request.getSenderName())
                 .receiverName(request.getReceiverName())
                 .status(ApprovalStatus.PENDING)
+                .occurredAt(occurredAt)
                 .build();
         receipt = receiptRepository.save(receipt);
 
@@ -229,7 +245,8 @@ public class InventoryReceiptService {
     }
 
     private InventoryReceiptResponse createManualOutboundReceipt(
-            User creator, User tenant, Warehouse warehouse, CreateInventoryReceiptRequest request) {
+            User creator, User tenant, Warehouse warehouse, CreateInventoryReceiptRequest request,
+            LocalDateTime occurredAt) {
         UUID tenantId = tenant.getId();
         List<ManualOutboundAllocation> allocations = new ArrayList<>();
         Map<UUID, Integer> remainingByBatchId = new HashMap<>();
@@ -303,6 +320,7 @@ public class InventoryReceiptService {
                 .senderName(request.getSenderName())
                 .receiverName(request.getReceiverName())
                 .status(ApprovalStatus.PENDING)
+                .occurredAt(occurredAt)
                 .build();
         receipt = receiptRepository.save(receipt);
 
@@ -688,7 +706,9 @@ public class InventoryReceiptService {
                         .rack(item.getRack())
                         .bin(item.getBin())
                         .quantity(item.getQuantity())
-                        .arrivalDate(LocalDateTime.now())
+                        .arrivalDate(receipt.getOccurredAt() != null
+                                ? receipt.getOccurredAt()
+                                : receipt.getCreatedAt() != null ? receipt.getCreatedAt() : LocalDateTime.now())
                         .build();
                 batch = stockBatchRepository.save(batch);
 
@@ -880,6 +900,7 @@ public class InventoryReceiptService {
                 .pickList(pickList)
                 .createdAt(receipt.getCreatedAt())
                 .updatedAt(receipt.getUpdatedAt())
+                .occurredAt(receipt.getOccurredAt())
                 .build();
     }
 
@@ -1089,6 +1110,7 @@ public class InventoryReceiptService {
                             .skuName(sku != null ? sku.getName() : null)
                             .quantityChanged(t.getQuantityChanged())
                             .createdAt(t.getCreatedAt())
+                            .occurredAt(t.getReceipt().getOccurredAt())
                             .build();
                 });
     }
