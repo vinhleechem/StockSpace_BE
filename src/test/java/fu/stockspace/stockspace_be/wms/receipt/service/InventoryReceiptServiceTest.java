@@ -1592,7 +1592,7 @@ class InventoryReceiptServiceTest {
         assertEquals(1, result.getTotalElements());
         verify(receiptRepository).findByTenantIdAndWarehouseIdAndIsDeletedFalse(
                 userId, warehouseId, pageable);
-        verify(receiptRepository, never()).findByWarehouseIdAndIsDeletedFalse(any(), any());
+        verify(receiptRepository, never()).findForCsvByTenantAndWarehouse(any(), any());
     }
 
     @Test
@@ -1602,19 +1602,81 @@ class InventoryReceiptServiceTest {
                 .warehouse(warehouse)
                 .createdBy(tenantUser)
                 .type(DocumentType.INBOUND)
-                .senderName("Công ty gửi hàng")
+                .senderName("Công ty, gửi hàng")
                 .status(ApprovalStatus.PENDING)
                 .build();
-        when(receiptRepository.findByWarehouseIdAndTypeAndIsDeletedFalse(
-                warehouseId, DocumentType.INBOUND, Pageable.unpaged()))
-                .thenReturn(new PageImpl<>(List.of(receipt)));
-        when(receiptItemRepository.findByReceiptId(receipt.getId())).thenReturn(List.of());
+        when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
+        when(receiptRepository.findForCsvByTenantAndWarehouseAndType(
+                userId, warehouseId, DocumentType.INBOUND))
+                .thenReturn(List.of(receipt));
+        when(receiptItemRepository.findByReceiptIdInWithDetails(List.of(receipt.getId())))
+                .thenReturn(List.of());
 
         String csv = new String(
-                receiptService.exportReceiptsToCsv(warehouseId, DocumentType.INBOUND),
+                receiptService.exportReceiptsToCsv(userId, warehouseId, DocumentType.INBOUND),
                 StandardCharsets.UTF_8);
 
+        assertEquals('\uFEFF', csv.charAt(0));
         assertTrue(csv.contains("Tên Nơi Gửi,Tên Nơi Nhận"));
-        assertTrue(csv.contains("\"Công ty gửi hàng\",\"\""));
+        assertTrue(csv.contains("\"Công ty, gửi hàng\","));
+        verify(receiptItemRepository).findByReceiptIdInWithDetails(List.of(receipt.getId()));
+        verify(receiptItemRepository, never()).findByReceiptId(receipt.getId());
+    }
+
+    @Test
+    void exportReceiptsToCsv_ContainsLocationBatchAndEscapesUnsafeMultilineValues() {
+        InventoryReceipt receipt = InventoryReceipt.builder()
+                .id(UUID.randomUUID())
+                .warehouse(warehouse)
+                .createdBy(tenantUser)
+                .type(DocumentType.OUTBOUND)
+                .senderName("Sender")
+                .receiverName("Receiver")
+                .status(ApprovalStatus.REJECTED)
+                .rejectReason("Rejected, please review")
+                .occurredAt(java.time.LocalDateTime.of(2026, 9, 12, 10, 15, 0))
+                .build();
+        WarehouseRack csvRack = WarehouseRack.builder()
+                .id(rackId).layout(layout).code("R-01").name("Rack 01").build();
+        WarehouseBin csvBin = WarehouseBin.builder()
+                .id(binId).rack(csvRack).code("B-02").name("Bin 02").shelfLevel(2).build();
+        ProductSku csvSku = ProductSku.builder()
+                .id(skuId).skuCode("SKU-01").name("=HYPERLINK(\"https://example.test\")").build();
+        StockBatch batch = StockBatch.builder()
+                .id(UUID.randomUUID())
+                .skuId(skuId)
+                .warehouse(warehouse)
+                .rack(csvRack)
+                .bin(csvBin)
+                .arrivalDate(java.time.LocalDateTime.of(2026, 9, 1, 8, 0, 0))
+                .quantity(20)
+                .build();
+        InventoryReceiptItem item = InventoryReceiptItem.builder()
+                .id(UUID.randomUUID())
+                .receipt(receipt)
+                .sku(csvSku)
+                .quantity(3)
+                .rack(csvRack)
+                .bin(csvBin)
+                .stockBatch(batch)
+                .pickSequence(1)
+                .note("=SUM(A1:A2)\nLine 2, note")
+                .build();
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
+        when(receiptRepository.findForCsvByTenantAndWarehouse(userId, warehouseId))
+                .thenReturn(List.of(receipt));
+        when(receiptItemRepository.findByReceiptIdInWithDetails(List.of(receipt.getId())))
+                .thenReturn(List.of(item));
+
+        String csv = new String(
+                receiptService.exportReceiptsToCsv(userId, warehouseId, null),
+                StandardCharsets.UTF_8);
+
+        assertTrue(csv.contains("R-01,Rack 01,B-02,Bin 02,2"));
+        assertTrue(csv.contains(batch.getId().toString()));
+        assertTrue(csv.contains("'=HYPERLINK(\"\"https://example.test\"\")"));
+        assertTrue(csv.contains("\"'=SUM(A1:A2)\nLine 2, note\""));
+        assertTrue(csv.contains("Rejected, please review"));
     }
 }

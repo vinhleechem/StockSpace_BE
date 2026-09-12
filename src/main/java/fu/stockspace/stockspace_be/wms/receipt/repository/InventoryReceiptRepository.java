@@ -38,11 +38,37 @@ public interface InventoryReceiptRepository extends JpaRepository<InventoryRecei
     Page<InventoryReceipt> findByTenantIdAndWarehouseIdAndIsDeletedFalse(
             UUID tenantId, UUID warehouseId, Pageable pageable);
 
+    @Query("""
+            select r from InventoryReceipt r
+            left join fetch r.warehouse
+            left join fetch r.createdBy
+            where r.tenant.id = :tenantId
+              and r.warehouse.id = :warehouseId
+              and r.isDeleted = false
+            order by r.createdAt desc, r.id desc
+            """)
+    List<InventoryReceipt> findForCsvByTenantAndWarehouse(
+            @Param("tenantId") UUID tenantId,
+            @Param("warehouseId") UUID warehouseId);
+
+    @Query("""
+            select r from InventoryReceipt r
+            left join fetch r.warehouse
+            left join fetch r.createdBy
+            where r.tenant.id = :tenantId
+              and r.warehouse.id = :warehouseId
+              and r.type = :type
+              and r.isDeleted = false
+            order by r.createdAt desc, r.id desc
+            """)
+    List<InventoryReceipt> findForCsvByTenantAndWarehouseAndType(
+            @Param("tenantId") UUID tenantId,
+            @Param("warehouseId") UUID warehouseId,
+            @Param("type") DocumentType type);
+
     long countByTenantIdAndTypeAndStatusAndIsActiveTrueAndIsDeletedFalse(
             UUID tenantId, DocumentType type, ApprovalStatus status);
 
-    Page<InventoryReceipt> findByWarehouseIdAndTypeAndIsDeletedFalse(UUID warehouseId, DocumentType type, Pageable pageable);
-    Page<InventoryReceipt> findByWarehouseIdAndIsDeletedFalse(UUID warehouseId, Pageable pageable);
     Page<InventoryReceipt> findByWarehouseIdAndTypeAndStatusAndIsDeletedFalse(UUID warehouseId, DocumentType type, ApprovalStatus status, Pageable pageable);
     Page<InventoryReceipt> findByWarehouseIdAndStatusAndIsDeletedFalse(UUID warehouseId, ApprovalStatus status, Pageable pageable);
 
