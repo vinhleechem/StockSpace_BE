@@ -32,6 +32,42 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
     List<StockBatch> findAllByWarehouseIdAndIsDeletedFalse(UUID warehouseId);
 
     @Query("""
+            SELECT new fu.stockspace.stockspace_be.wms.stock.repository.InventorySnapshotRow(
+                   b.id, b.skuId, s.skuCode, s.name, c.name, u.code, u.name,
+                   w.id, w.name, r.id, r.name, r.code, bin.id, bin.name, bin.code,
+                   bin.shelfLevel, b.quantity, b.arrivalDate, s.unitWeightKg, s.unitVolumeM3)
+            FROM StockBatch b
+            JOIN b.warehouse w
+            JOIN ProductSku s ON s.id = b.skuId
+            LEFT JOIN s.category c
+            LEFT JOIN s.uom u
+            LEFT JOIN b.rack r
+            LEFT JOIN b.bin bin
+            WHERE b.warehouse.id = :warehouseId
+              AND b.isActive = true
+              AND b.isDeleted = false
+              AND s.isActive = true
+              AND s.isDeleted = false
+              AND (
+                    s.tenant.id = :tenantId
+                    OR (
+                        s.tenant IS NULL
+                        AND NOT EXISTS (
+                            SELECT 1 FROM ProductSku shadow
+                            WHERE shadow.tenant.id = :tenantId
+                              AND shadow.skuCode = s.skuCode
+                              AND shadow.isActive = true
+                              AND shadow.isDeleted = false
+                        )
+                    )
+              )
+            ORDER BY b.id
+            """)
+    List<InventorySnapshotRow> findInventorySnapshotRows(
+            @Param("tenantId") UUID tenantId,
+            @Param("warehouseId") UUID warehouseId);
+
+    @Query("""
             SELECT new fu.stockspace.stockspace_be.wms.capacity.PhysicalLoadLine(
                    b.rack.id,
                    b.bin.id,

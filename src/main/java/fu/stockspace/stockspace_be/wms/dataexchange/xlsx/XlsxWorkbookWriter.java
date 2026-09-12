@@ -11,6 +11,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -25,9 +26,16 @@ public final class XlsxWorkbookWriter {
         return new XSSFWorkbook();
     }
 
+    public static Workbook newStreamingWorkbook() {
+        return new SXSSFWorkbook(100);
+    }
+
     public static byte[] toBytes(Workbook workbook) {
         try (workbook; ByteArrayOutputStream output = new ByteArrayOutputStream()) {
             workbook.write(output);
+            if (workbook instanceof SXSSFWorkbook streamingWorkbook) {
+                streamingWorkbook.dispose();
+            }
             return output.toByteArray();
         } catch (IOException ex) {
             throw new XlsxFileException("Unable to render workbook", ex);
