@@ -69,6 +69,9 @@ public interface InventoryReceiptRepository extends JpaRepository<InventoryRecei
     long countByTenantIdAndTypeAndStatusAndIsActiveTrueAndIsDeletedFalse(
             UUID tenantId, DocumentType type, ApprovalStatus status);
 
+    Page<InventoryReceipt> findByWarehouseIdAndTypeAndIsDeletedFalse(
+            UUID warehouseId, DocumentType type, Pageable pageable);
+    Page<InventoryReceipt> findByWarehouseIdAndIsDeletedFalse(UUID warehouseId, Pageable pageable);
     Page<InventoryReceipt> findByWarehouseIdAndTypeAndStatusAndIsDeletedFalse(UUID warehouseId, DocumentType type, ApprovalStatus status, Pageable pageable);
     Page<InventoryReceipt> findByWarehouseIdAndStatusAndIsDeletedFalse(UUID warehouseId, ApprovalStatus status, Pageable pageable);
 
