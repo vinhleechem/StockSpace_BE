@@ -98,6 +98,18 @@ public class InventoryReceiptService {
     @Transactional
     public InventoryReceiptResponse createReceipt(UUID userId, CreateInventoryReceiptRequest request,
                                                   LocalDateTime occurredAt) {
+        return createReceipt(userId, request, occurredAt, true);
+    }
+
+    /** Creates a receipt for an already validated offline job without per-receipt notifications. */
+    @Transactional
+    public InventoryReceiptResponse createReceiptForOfflineImport(
+            UUID userId, CreateInventoryReceiptRequest request, LocalDateTime occurredAt) {
+        return createReceipt(userId, request, occurredAt, false);
+    }
+
+    private InventoryReceiptResponse createReceipt(UUID userId, CreateInventoryReceiptRequest request,
+                                                   LocalDateTime occurredAt, boolean notify) {
         if (occurredAt == null) {
             occurredAt = LocalDateTime.now();
         }
@@ -115,7 +127,7 @@ public class InventoryReceiptService {
         requireWarehouseMutationAccess(creator, tenantId, warehouse.getId());
 
         if (request.getType() == DocumentType.OUTBOUND) {
-            return createOutboundReceipt(creator, tenant, warehouse, request, occurredAt);
+            return createOutboundReceipt(creator, tenant, warehouse, request, occurredAt, notify);
         }
 
         InventoryReceipt receipt = InventoryReceipt.builder()
@@ -178,7 +190,7 @@ public class InventoryReceiptService {
             validateInboundCapacity(tenantId, warehouse.getId(), capacityItems, false);
         }
 
-        notifyReceiptCreated(receipt, creator, tenantId, warehouse);
+        if (notify) notifyReceiptCreated(receipt, creator, tenantId, warehouse);
 
         log.info("WMS Receipt: Created receipt {} of type {} for warehouse {}", receipt.getId(), receipt.getType(), warehouse.getId());
         return mapToResponse(receipt, savedItems);
@@ -186,12 +198,12 @@ public class InventoryReceiptService {
 
     private InventoryReceiptResponse createOutboundReceipt(
             User creator, User tenant, Warehouse warehouse, CreateInventoryReceiptRequest request,
-            LocalDateTime occurredAt) {
+            LocalDateTime occurredAt, boolean notify) {
         UUID tenantId = tenant.getId();
         boolean manualLocation = request.getItems().stream()
                 .anyMatch(item -> item.getRackId() != null || item.getBinId() != null);
         if (manualLocation) {
-            return createManualOutboundReceipt(creator, tenant, warehouse, request, occurredAt);
+            return createManualOutboundReceipt(creator, tenant, warehouse, request, occurredAt, notify);
         }
 
         List<OutboundPickingInputItem> inputItems = request.getItems().stream()
@@ -238,7 +250,7 @@ public class InventoryReceiptService {
             savedItems.add(receiptItemRepository.save(item));
         }
 
-        notifyReceiptCreated(receipt, creator, tenantId, warehouse);
+        if (notify) notifyReceiptCreated(receipt, creator, tenantId, warehouse);
 
         log.info("WMS Receipt: Created receipt {} of type {} for warehouse {}", receipt.getId(), receipt.getType(), warehouse.getId());
         return mapToResponse(receipt, savedItems, pickList);
@@ -246,7 +258,7 @@ public class InventoryReceiptService {
 
     private InventoryReceiptResponse createManualOutboundReceipt(
             User creator, User tenant, Warehouse warehouse, CreateInventoryReceiptRequest request,
-            LocalDateTime occurredAt) {
+            LocalDateTime occurredAt, boolean notify) {
         UUID tenantId = tenant.getId();
         List<ManualOutboundAllocation> allocations = new ArrayList<>();
         Map<UUID, Integer> remainingByBatchId = new HashMap<>();
@@ -341,7 +353,7 @@ public class InventoryReceiptService {
 
         OutboundPickingSuggestionResponse pickList = buildManualOutboundPickList(
                 warehouse, requestedBySkuId, allocations);
-        notifyReceiptCreated(receipt, creator, tenantId, warehouse);
+        if (notify) notifyReceiptCreated(receipt, creator, tenantId, warehouse);
         log.info("WMS Receipt: Created manual outbound receipt {} for warehouse {}",
                 receipt.getId(), warehouse.getId());
         return mapToResponse(receipt, savedItems, pickList);
@@ -660,6 +672,16 @@ public class InventoryReceiptService {
 
     @Transactional
     public InventoryReceiptResponse approveReceipt(UUID approverId, UUID receiptId) {
+        return approveReceipt(approverId, receiptId, true);
+    }
+
+    /** Approves an offline-import receipt without emitting one notification per receipt. */
+    @Transactional
+    public InventoryReceiptResponse approveReceiptForOfflineImport(UUID approverId, UUID receiptId) {
+        return approveReceipt(approverId, receiptId, false);
+    }
+
+    private InventoryReceiptResponse approveReceipt(UUID approverId, UUID receiptId, boolean notify) {
         User approver = userRepository.findById(approverId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
 
@@ -740,16 +762,18 @@ public class InventoryReceiptService {
         receipt.setStatus(ApprovalStatus.APPROVED);
         receipt = receiptRepository.save(receipt);
 
-        try {
-            String typeStr = receipt.getType() == DocumentType.INBOUND ? "nhập kho" : "xuất kho";
-            notificationService.push(
-                    receipt.getCreatedBy().getId(),
-                    "Phiếu " + typeStr + " đã được phê duyệt",
-                    "Phiếu " + typeStr + " tại kho " + receipt.getWarehouse().getName() + " đã được phê duyệt thành công. Hàng hóa trong kho đã được cập nhật.",
-                    "RECEIPT"
-            );
-        } catch (Exception e) {
-            log.warn("Failed to push approve notification for receipt {}: {}", receipt.getId(), e.getMessage());
+        if (notify) {
+            try {
+                String typeStr = receipt.getType() == DocumentType.INBOUND ? "nhập kho" : "xuất kho";
+                notificationService.push(
+                        receipt.getCreatedBy().getId(),
+                        "Phiếu " + typeStr + " đã được phê duyệt",
+                        "Phiếu " + typeStr + " tại kho " + receipt.getWarehouse().getName() + " đã được phê duyệt thành công. Hàng hóa trong kho đã được cập nhật.",
+                        "RECEIPT"
+                );
+            } catch (Exception e) {
+                log.warn("Failed to push approve notification for receipt {}: {}", receipt.getId(), e.getMessage());
+            }
         }
 
         log.info("WMS Receipt: Approved receipt {} of type {} by user {}", receipt.getId(), receipt.getType(), approverId);

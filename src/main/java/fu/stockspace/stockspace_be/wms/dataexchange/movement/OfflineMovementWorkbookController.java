@@ -34,6 +34,7 @@ public class OfflineMovementWorkbookController {
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
     private final OfflineMovementWorkbookService workbookService;
+    private final OfflineMovementApplyService applyService;
 
     @GetMapping(value = "/{warehouseId}/offline-movements/template",
             produces = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
@@ -61,5 +62,15 @@ public class OfflineMovementWorkbookController {
         WmsImportJobResponse response = workbookService.validate(
                 TenantContextUtil.getCurrentTenantId(), SecurityUtil.getCurrentUserId(), warehouseId, file);
         return ResponseEntity.ok(ApiResponse.success("Offline movement workbook validated", response));
+    }
+
+    @PostMapping("/offline-movements/imports/{jobId}/apply")
+    @PreAuthorize("@rbac.hasPermission('INVENTORY_UPDATE') and hasRole('TENANT')")
+    @Operation(summary = "Apply a validated offline movement workbook atomically")
+    public ResponseEntity<ApiResponse<OfflineMovementApplyResponse>> apply(
+            @PathVariable UUID jobId) {
+        OfflineMovementApplyResponse response = applyService.apply(
+                TenantContextUtil.getCurrentTenantId(), SecurityUtil.getCurrentUserId(), jobId);
+        return ResponseEntity.ok(ApiResponse.success("Offline movements applied", response));
     }
 }

@@ -346,10 +346,16 @@ public class OfflineMovementWorkbookService {
             addError(errors, "OCCURRED_AT_INVALID", "occurred_at phải là ISO-8601 date-time");
         } else if (occurredAt.isBefore(generatedAt) || occurredAt.isAfter(now)) {
             addError(errors, "OCCURRED_AT_OUT_OF_RANGE", "occurred_at phải nằm từ generated_at đến thời điểm hiện tại");
+        } else {
+            payload.put("occurred_at", occurredAt.toString());
         }
 
         ProductSku sku = findSku(tenantId, skuCode);
-        if (sku == null) addError(errors, "SKU_NOT_VISIBLE", "sku_code không tồn tại hoặc không còn hoạt động");
+        if (sku == null) {
+            addError(errors, "SKU_NOT_VISIBLE", "sku_code không tồn tại hoặc không còn hoạt động");
+        } else {
+            payload.put("sku_id", sku.getId());
+        }
 
         boolean hasRack = !rackCode.isBlank();
         boolean hasBin = !binCode.isBlank();
@@ -359,7 +365,8 @@ public class OfflineMovementWorkbookService {
             } else if (!hasPermission(actor, "INBOUND_CREATE")) {
                 addError(errors, "INBOUND_PERMISSION_REQUIRED", "Tài khoản không có quyền tạo phiếu nhập");
             } else {
-                validateLocation(warehouseId, rackCode, binCode, errors);
+                Location location = validateLocation(warehouseId, rackCode, binCode, errors);
+                if (location != null) putLocationIds(payload, location);
             }
         } else if ("OUTBOUND".equals(type)) {
             if (hasRack != hasBin) {
@@ -368,7 +375,10 @@ public class OfflineMovementWorkbookService {
             if (!hasPermission(actor, "OUTBOUND_CREATE")) {
                 addError(errors, "OUTBOUND_PERMISSION_REQUIRED", "Tài khoản không có quyền tạo phiếu xuất");
             }
-            if (hasRack && hasBin) validateLocation(warehouseId, rackCode, binCode, errors);
+            if (hasRack && hasBin) {
+                Location location = validateLocation(warehouseId, rackCode, binCode, errors);
+                if (location != null) putLocationIds(payload, location);
+            }
         }
     }
 
@@ -420,8 +430,8 @@ public class OfflineMovementWorkbookService {
         }
     }
 
-    private void validateLocation(UUID warehouseId, String rackCode, String binCode,
-                                  List<Map<String, String>> errors) {
+    private Location validateLocation(UUID warehouseId, String rackCode, String binCode,
+                                      List<Map<String, String>> errors) {
         WarehouseLayout currentLayout = layoutRepository.findByWarehouseId(warehouseId).stream()
                 .filter(this::activeLayout)
                 .filter(candidate -> candidate.getTenant() != null)
@@ -430,7 +440,7 @@ public class OfflineMovementWorkbookService {
                 .orElse(null);
         if (currentLayout == null) {
             addError(errors, "LAYOUT_NOT_FOUND", "Warehouse chưa có tenant layout hoạt động");
-            return;
+            return null;
         }
         WarehouseRack rack = rackRepository.findAllByLayoutId(currentLayout.getId()).stream()
                 .filter(this::activeRack)
@@ -438,12 +448,23 @@ public class OfflineMovementWorkbookService {
                 .findFirst().orElse(null);
         if (rack == null) {
             addError(errors, "RACK_NOT_VISIBLE", "rack_code không thuộc layout hiện tại của warehouse");
-            return;
+            return null;
         }
-        boolean binExists = binRepository.findAllByRackId(rack.getId()).stream()
+        WarehouseBin bin = binRepository.findAllByRackId(rack.getId()).stream()
                 .filter(this::activeBin)
-                .anyMatch(item -> item.getCode() != null && item.getCode().equalsIgnoreCase(binCode));
-        if (!binExists) addError(errors, "BIN_NOT_VISIBLE", "bin_code không thuộc rack_code hiện tại");
+                .filter(item -> item.getCode() != null && item.getCode().equalsIgnoreCase(binCode))
+                .findFirst().orElse(null);
+        if (bin == null) {
+            addError(errors, "BIN_NOT_VISIBLE", "bin_code không thuộc rack_code hiện tại");
+            return null;
+        }
+        return new Location(currentLayout.getId(), rack.getId(), bin.getId());
+    }
+
+    private void putLocationIds(Map<String, Object> payload, Location location) {
+        payload.put("layout_id", location.layoutId());
+        payload.put("rack_id", location.rackId());
+        payload.put("bin_id", location.binId());
     }
 
     private WarehouseLayout activeTenantLayout(UUID warehouseId, UUID tenantId) {
@@ -620,5 +641,8 @@ public class OfflineMovementWorkbookService {
 
     private record ParsedWorkbook(List<WmsImportRowInput> rows, LocalDateTime generatedAt,
                                  String stockFingerprint, int groupCount) {
+    }
+
+    private record Location(UUID layoutId, UUID rackId, UUID binId) {
     }
 }
