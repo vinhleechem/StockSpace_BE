@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.annotation.Transactional;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -45,6 +46,7 @@ public class WmsImportJobService {
     private final EntityManager entityManager;
     private final PlatformTransactionManager transactionManager;
 
+    @Transactional
     public WmsImportJob createJob(WmsImportJobCommand command) {
         validateCommand(command);
         List<WmsImportRowInput> inputs = command.rows() == null ? List.of() : command.rows();
