@@ -154,6 +154,15 @@ public enum ErrorCode {
     AUDIT_STOCK_CHANGED("Tồn kho đã thay đổi trong lúc kiểm kê, cần kiểm tra lại", HttpStatus.CONFLICT),
 
 
+    WMS_IMPORT_FILE_INVALID("File import XLSX không hợp lệ", HttpStatus.BAD_REQUEST),
+    WMS_IMPORT_SCHEMA_UNSUPPORTED("Phiên bản template import không được hỗ trợ", HttpStatus.BAD_REQUEST),
+    WMS_IMPORT_LIMIT_EXCEEDED("File import vượt quá giới hạn cho phép", HttpStatus.PAYLOAD_TOO_LARGE),
+    WMS_IMPORT_JOB_NOT_FOUND("Import job không tồn tại hoặc không thuộc tenant hiện tại", HttpStatus.NOT_FOUND),
+    WMS_IMPORT_JOB_INVALID_STATUS("Trạng thái import job không cho phép thao tác này", HttpStatus.CONFLICT),
+    WMS_IMPORT_ALREADY_APPLIED("File import này đã được áp dụng trước đó", HttpStatus.CONFLICT),
+    WMS_IMPORT_STALE("Import job đã cũ và không còn an toàn để áp dụng", HttpStatus.CONFLICT),
+
+
     CHAT_SESSION_NOT_FOUND("Phiên hội thoại không tồn tại", HttpStatus.NOT_FOUND),
     CHAT_SESSION_ACCESS_DENIED("Bạn không có quyền truy cập phiên hội thoại này", HttpStatus.FORBIDDEN),
     GEMINI_API_ERROR("Chatbot tạm thời không khả dụng, vui lòng thử lại sau", HttpStatus.SERVICE_UNAVAILABLE),
