@@ -156,8 +156,8 @@ public class ProductSkuService {
         sku.setName(request.getName());
         sku.setUom(uom);
         if (stockBatchRepository.existsBySkuIdAndIsDeletedFalse(skuId)
-                && (!request.getUnitWeightKg().equals(sku.getUnitWeightKg())
-                || !request.getUnitVolumeM3().equals(sku.getUnitVolumeM3()))) {
+                && (differs(request.getUnitWeightKg(), sku.getUnitWeightKg())
+                || differs(request.getUnitVolumeM3(), sku.getUnitVolumeM3()))) {
             throw new BadRequestException("Physical properties cannot be changed after stock has been recorded");
         }
         sku.setUnitWeightKg(request.getUnitWeightKg());
@@ -216,5 +216,9 @@ public class ProductSkuService {
                 || unitVolumeM3 == null || unitVolumeM3.signum() <= 0) {
             throw new BadRequestException("unitWeightKg and unitVolumeM3 must both be greater than 0");
         }
+    }
+
+    private boolean differs(BigDecimal left, BigDecimal right) {
+        return left == null ? right != null : right == null || left.compareTo(right) != 0;
     }
 }

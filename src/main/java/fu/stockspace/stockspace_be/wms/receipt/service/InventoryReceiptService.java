@@ -91,6 +91,31 @@ public class InventoryReceiptService {
 
     @Transactional
     public InventoryReceiptResponse createReceipt(UUID userId, CreateInventoryReceiptRequest request) {
+        return createReceipt(userId, request, LocalDateTime.now());
+    }
+
+    /** Used by trusted offline import orchestration; online requests keep the business clock default. */
+    @Transactional
+    public InventoryReceiptResponse createReceipt(UUID userId, CreateInventoryReceiptRequest request,
+                                                  LocalDateTime occurredAt) {
+        return createReceipt(userId, request, occurredAt, true);
+    }
+
+    /** Creates a receipt for an already validated offline job without per-receipt notifications. */
+    @Transactional
+    public InventoryReceiptResponse createReceiptForOfflineImport(
+            UUID userId, CreateInventoryReceiptRequest request, LocalDateTime occurredAt) {
+        return createReceipt(userId, request, occurredAt, false);
+    }
+
+    private InventoryReceiptResponse createReceipt(UUID userId, CreateInventoryReceiptRequest request,
+                                                   LocalDateTime occurredAt, boolean notify) {
+        if (occurredAt == null) {
+            occurredAt = LocalDateTime.now();
+        }
+        if (occurredAt.isAfter(LocalDateTime.now())) {
+            throw new BadRequestException("occurredAt cannot be in the future");
+        }
         User creator = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
 
@@ -102,7 +127,7 @@ public class InventoryReceiptService {
         requireWarehouseMutationAccess(creator, tenantId, warehouse.getId());
 
         if (request.getType() == DocumentType.OUTBOUND) {
-            return createOutboundReceipt(creator, tenant, warehouse, request);
+            return createOutboundReceipt(creator, tenant, warehouse, request, occurredAt, notify);
         }
 
         InventoryReceipt receipt = InventoryReceipt.builder()
@@ -114,6 +139,7 @@ public class InventoryReceiptService {
                 .senderName(request.getSenderName())
                 .receiverName(request.getReceiverName())
                 .status(ApprovalStatus.PENDING)
+                .occurredAt(occurredAt)
                 .build();
 
         receipt = receiptRepository.save(receipt);
@@ -164,19 +190,20 @@ public class InventoryReceiptService {
             validateInboundCapacity(tenantId, warehouse.getId(), capacityItems, false);
         }
 
-        notifyReceiptCreated(receipt, creator, tenantId, warehouse);
+        if (notify) notifyReceiptCreated(receipt, creator, tenantId, warehouse);
 
         log.info("WMS Receipt: Created receipt {} of type {} for warehouse {}", receipt.getId(), receipt.getType(), warehouse.getId());
         return mapToResponse(receipt, savedItems);
     }
 
     private InventoryReceiptResponse createOutboundReceipt(
-            User creator, User tenant, Warehouse warehouse, CreateInventoryReceiptRequest request) {
+            User creator, User tenant, Warehouse warehouse, CreateInventoryReceiptRequest request,
+            LocalDateTime occurredAt, boolean notify) {
         UUID tenantId = tenant.getId();
         boolean manualLocation = request.getItems().stream()
                 .anyMatch(item -> item.getRackId() != null || item.getBinId() != null);
         if (manualLocation) {
-            return createManualOutboundReceipt(creator, tenant, warehouse, request);
+            return createManualOutboundReceipt(creator, tenant, warehouse, request, occurredAt, notify);
         }
 
         List<OutboundPickingInputItem> inputItems = request.getItems().stream()
@@ -213,6 +240,7 @@ public class InventoryReceiptService {
                 .senderName(request.getSenderName())
                 .receiverName(request.getReceiverName())
                 .status(ApprovalStatus.PENDING)
+                .occurredAt(occurredAt)
                 .build();
         receipt = receiptRepository.save(receipt);
 
@@ -222,14 +250,15 @@ public class InventoryReceiptService {
             savedItems.add(receiptItemRepository.save(item));
         }
 
-        notifyReceiptCreated(receipt, creator, tenantId, warehouse);
+        if (notify) notifyReceiptCreated(receipt, creator, tenantId, warehouse);
 
         log.info("WMS Receipt: Created receipt {} of type {} for warehouse {}", receipt.getId(), receipt.getType(), warehouse.getId());
         return mapToResponse(receipt, savedItems, pickList);
     }
 
     private InventoryReceiptResponse createManualOutboundReceipt(
-            User creator, User tenant, Warehouse warehouse, CreateInventoryReceiptRequest request) {
+            User creator, User tenant, Warehouse warehouse, CreateInventoryReceiptRequest request,
+            LocalDateTime occurredAt, boolean notify) {
         UUID tenantId = tenant.getId();
         List<ManualOutboundAllocation> allocations = new ArrayList<>();
         Map<UUID, Integer> remainingByBatchId = new HashMap<>();
@@ -303,6 +332,7 @@ public class InventoryReceiptService {
                 .senderName(request.getSenderName())
                 .receiverName(request.getReceiverName())
                 .status(ApprovalStatus.PENDING)
+                .occurredAt(occurredAt)
                 .build();
         receipt = receiptRepository.save(receipt);
 
@@ -323,7 +353,7 @@ public class InventoryReceiptService {
 
         OutboundPickingSuggestionResponse pickList = buildManualOutboundPickList(
                 warehouse, requestedBySkuId, allocations);
-        notifyReceiptCreated(receipt, creator, tenantId, warehouse);
+        if (notify) notifyReceiptCreated(receipt, creator, tenantId, warehouse);
         log.info("WMS Receipt: Created manual outbound receipt {} for warehouse {}",
                 receipt.getId(), warehouse.getId());
         return mapToResponse(receipt, savedItems, pickList);
@@ -642,6 +672,16 @@ public class InventoryReceiptService {
 
     @Transactional
     public InventoryReceiptResponse approveReceipt(UUID approverId, UUID receiptId) {
+        return approveReceipt(approverId, receiptId, true);
+    }
+
+    /** Approves an offline-import receipt without emitting one notification per receipt. */
+    @Transactional
+    public InventoryReceiptResponse approveReceiptForOfflineImport(UUID approverId, UUID receiptId) {
+        return approveReceipt(approverId, receiptId, false);
+    }
+
+    private InventoryReceiptResponse approveReceipt(UUID approverId, UUID receiptId, boolean notify) {
         User approver = userRepository.findById(approverId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
 
@@ -688,7 +728,9 @@ public class InventoryReceiptService {
                         .rack(item.getRack())
                         .bin(item.getBin())
                         .quantity(item.getQuantity())
-                        .arrivalDate(LocalDateTime.now())
+                        .arrivalDate(receipt.getOccurredAt() != null
+                                ? receipt.getOccurredAt()
+                                : receipt.getCreatedAt() != null ? receipt.getCreatedAt() : LocalDateTime.now())
                         .build();
                 batch = stockBatchRepository.save(batch);
 
@@ -720,16 +762,18 @@ public class InventoryReceiptService {
         receipt.setStatus(ApprovalStatus.APPROVED);
         receipt = receiptRepository.save(receipt);
 
-        try {
-            String typeStr = receipt.getType() == DocumentType.INBOUND ? "nhập kho" : "xuất kho";
-            notificationService.push(
-                    receipt.getCreatedBy().getId(),
-                    "Phiếu " + typeStr + " đã được phê duyệt",
-                    "Phiếu " + typeStr + " tại kho " + receipt.getWarehouse().getName() + " đã được phê duyệt thành công. Hàng hóa trong kho đã được cập nhật.",
-                    "RECEIPT"
-            );
-        } catch (Exception e) {
-            log.warn("Failed to push approve notification for receipt {}: {}", receipt.getId(), e.getMessage());
+        if (notify) {
+            try {
+                String typeStr = receipt.getType() == DocumentType.INBOUND ? "nhập kho" : "xuất kho";
+                notificationService.push(
+                        receipt.getCreatedBy().getId(),
+                        "Phiếu " + typeStr + " đã được phê duyệt",
+                        "Phiếu " + typeStr + " tại kho " + receipt.getWarehouse().getName() + " đã được phê duyệt thành công. Hàng hóa trong kho đã được cập nhật.",
+                        "RECEIPT"
+                );
+            } catch (Exception e) {
+                log.warn("Failed to push approve notification for receipt {}: {}", receipt.getId(), e.getMessage());
+            }
         }
 
         log.info("WMS Receipt: Approved receipt {} of type {} by user {}", receipt.getId(), receipt.getType(), approverId);
@@ -880,6 +924,7 @@ public class InventoryReceiptService {
                 .pickList(pickList)
                 .createdAt(receipt.getCreatedAt())
                 .updatedAt(receipt.getUpdatedAt())
+                .occurredAt(receipt.getOccurredAt())
                 .build();
     }
 
@@ -987,72 +1032,98 @@ public class InventoryReceiptService {
 
 
     @Transactional(readOnly = true)
-    public byte[] exportReceiptsToCsv(UUID warehouseId, DocumentType type) {
-        Page<InventoryReceipt> page;
-        if (type != null) {
-            page = receiptRepository.findByWarehouseIdAndTypeAndIsDeletedFalse(warehouseId, type, Pageable.unpaged());
-        } else {
-            page = receiptRepository.findByWarehouseIdAndIsDeletedFalse(warehouseId, Pageable.unpaged());
-        }
-
-        return renderReceiptsCsv(page);
+    public byte[] exportReceiptsToCsv(UUID userId, UUID warehouseId, DocumentType type) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
+        UUID tenantId = resolveTenantId(user);
+        requireWarehouseObservationAccess(user, tenantId, warehouseId);
+        List<InventoryReceipt> receipts = type == null
+                ? receiptRepository.findForCsvByTenantAndWarehouse(tenantId, warehouseId)
+                : receiptRepository.findForCsvByTenantAndWarehouseAndType(tenantId, warehouseId, type);
+        return renderReceiptsCsv(receipts);
     }
 
-    private byte[] renderReceiptsCsv(Page<InventoryReceipt> page) {
-        StringBuilder csv = new StringBuilder();
+    private byte[] renderReceiptsCsv(List<InventoryReceipt> receipts) {
+        StringBuilder csv = new StringBuilder("\uFEFF");
         csv.append("sep=,\n");
-        csv.append("\uFEFF");
-        csv.append("STT,Mã Phiếu,Loại Phiếu,Kho Bãi,Tên Nơi Gửi,Tên Nơi Nhận,Trạng Thái,Mã SKU,Tên Sản Phẩm,Đơn Vị Tính,Số Lượng,Người Tạo,Thời Gian Tạo\n");
+        csv.append("STT,Mã Phiếu,Loại Phiếu,Kho Bãi,Tên Nơi Gửi,Tên Nơi Nhận,Trạng Thái,Mã SKU,Tên Sản Phẩm,Đơn Vị Tính,Số Lượng,Người Tạo,Thời Gian Tạo,")
+                .append("Thời Gian Nghiệp Vụ,Mã Kệ,Tên Kệ,Mã Bin,Tên Bin,Tầng,Mã Batch,Ngày Nhập Batch,Thứ Tự Lấy,Ghi Chú,Lý Do Từ Chối\n");
 
-        java.time.format.DateTimeFormatter dateFormatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        java.time.format.DateTimeFormatter dateFormatter =
+                java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        List<UUID> receiptIds = receipts.stream().map(InventoryReceipt::getId).toList();
+        Map<UUID, List<InventoryReceiptItem>> itemsByReceipt = receiptIds.isEmpty()
+                ? Map.of()
+                : receiptItemRepository.findByReceiptIdInWithDetails(receiptIds).stream()
+                        .collect(Collectors.groupingBy(item -> item.getReceipt().getId(), LinkedHashMap::new, Collectors.toList()));
+
         int stt = 1;
-
-        for (InventoryReceipt receipt : page.getContent()) {
-            List<InventoryReceiptItem> items = receiptItemRepository.findByReceiptId(receipt.getId());
-            String warehouseName = escapeCsvField(receipt.getWarehouse() != null ? receipt.getWarehouse().getName() : "");
-            String senderName = escapeCsvField(receipt.getSenderName());
-            String receiverName = escapeCsvField(receipt.getReceiverName());
-            String typeStr = receipt.getType() == DocumentType.INBOUND ? "Nhập kho" : "Xuất kho";
-            String statusStr = mapStatusToVietnamese(receipt.getStatus());
-            String createdByStr = escapeCsvField(receipt.getCreatedBy() != null ? receipt.getCreatedBy().getFullName() : "");
-            String formattedDate = receipt.getCreatedAt() != null ? receipt.getCreatedAt().format(dateFormatter) : "";
-
+        for (InventoryReceipt receipt : receipts) {
+            List<InventoryReceiptItem> items = itemsByReceipt.getOrDefault(receipt.getId(), List.of());
             if (items.isEmpty()) {
-                csv.append(String.format("%d,%s,\"%s\",\"%s\",\"%s\",\"%s\",%s,-,-,-,0,\"%s\",%s\n",
-                        stt++, receipt.getId(), typeStr, warehouseName, senderName, receiverName,
-                        statusStr, createdByStr, formattedDate));
-            } else {
-                for (InventoryReceiptItem item : items) {
-                    ProductSku sku = item.getSku();
-                    String skuCode = sku != null ? sku.getSkuCode() : "-";
-                    String skuName = escapeCsvField(sku != null ? sku.getName() : "-");
-                    String uomName = sku != null && sku.getUom() != null ? sku.getUom().getName() : "-";
+                appendCsvRow(csv,
+                        stt++, receipt.getId(), mapTypeToVietnamese(receipt.getType()),
+                        receipt.getWarehouse() != null ? receipt.getWarehouse().getName() : "",
+                        receipt.getSenderName(), receipt.getReceiverName(), mapStatusToVietnamese(receipt.getStatus()),
+                        "", "", "", 0,
+                        receipt.getCreatedBy() != null ? receipt.getCreatedBy().getFullName() : "",
+                        formatDate(receipt.getCreatedAt(), dateFormatter),
+                        formatDate(receipt.getOccurredAt(), dateFormatter), "", "", "", "", "", "", "", "", "",
+                        receipt.getRejectReason());
+                continue;
+            }
 
-                    csv.append(String.format("%d,%s,%s,\"%s\",\"%s\",\"%s\",%s,%s,\"%s\",%s,%d,\"%s\",%s\n",
-                            stt++, receipt.getId(), typeStr, warehouseName, senderName, receiverName,
-                            statusStr, skuCode, skuName, uomName, item.getQuantity(), createdByStr, formattedDate));
-                }
+            for (InventoryReceiptItem item : items) {
+                ProductSku sku = item.getSku();
+                WarehouseRack rack = item.getRack();
+                WarehouseBin bin = item.getBin();
+                StockBatch batch = item.getStockBatch();
+                appendCsvRow(csv,
+                        stt++, receipt.getId(), mapTypeToVietnamese(receipt.getType()),
+                        receipt.getWarehouse() != null ? receipt.getWarehouse().getName() : "",
+                        receipt.getSenderName(), receipt.getReceiverName(), mapStatusToVietnamese(receipt.getStatus()),
+                        sku != null ? sku.getSkuCode() : "",
+                        sku != null ? sku.getName() : "",
+                        sku != null && sku.getUom() != null ? sku.getUom().getName() : "",
+                        item.getQuantity(),
+                        receipt.getCreatedBy() != null ? receipt.getCreatedBy().getFullName() : "",
+                        formatDate(receipt.getCreatedAt(), dateFormatter),
+                        formatDate(receipt.getOccurredAt(), dateFormatter),
+                        rack != null ? rack.getCode() : "", rack != null ? rack.getName() : "",
+                        bin != null ? bin.getCode() : "", bin != null ? bin.getName() : "",
+                        bin != null ? bin.getShelfLevel() : "",
+                        batch != null ? batch.getId() : "",
+                        batch != null ? formatDate(batch.getArrivalDate(), dateFormatter) : "",
+                        item.getPickSequence() != null ? item.getPickSequence() : "",
+                        item.getNote(), receipt.getRejectReason());
             }
         }
 
         return csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
 
+    private String formatDate(LocalDateTime value, java.time.format.DateTimeFormatter formatter) {
+        return value == null ? "" : value.format(formatter);
+    }
 
+    private String mapTypeToVietnamese(DocumentType type) {
+        if (type == DocumentType.INBOUND) {
+            return "Nhập kho";
+        }
+        if (type == DocumentType.OUTBOUND) {
+            return "Xuất kho";
+        }
+        return "";
+    }
 
-
-    @Transactional(readOnly = true)
-    public byte[] exportReceiptsToCsv(UUID userId, UUID warehouseId, DocumentType type) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
-        UUID tenantId = resolveTenantId(user);
-        requireWarehouseObservationAccess(user, tenantId, warehouseId);
-        Page<InventoryReceipt> page = type == null
-                ? receiptRepository.findByTenantIdAndWarehouseIdAndIsDeletedFalse(
-                        tenantId, warehouseId, Pageable.unpaged())
-                : receiptRepository.findByTenantIdAndWarehouseIdAndTypeAndIsDeletedFalse(
-                        tenantId, warehouseId, type, Pageable.unpaged());
-        return renderReceiptsCsv(page);
+    private void appendCsvRow(StringBuilder csv, Object... values) {
+        for (int i = 0; i < values.length; i++) {
+            if (i > 0) {
+                csv.append(',');
+            }
+            csv.append(escapeCsvField(values[i] == null ? "" : String.valueOf(values[i])));
+        }
+        csv.append('\n');
     }
 
     private String mapStatusToVietnamese(ApprovalStatus status) {
@@ -1065,8 +1136,12 @@ public class InventoryReceiptService {
     }
 
     private String escapeCsvField(String input) {
-        if (input == null) return "";
-        return input.replace("\"", "\"\"");
+        String safe = fu.stockspace.stockspace_be.wms.dataexchange.xlsx.XlsxWorkbookWriter.safeText(input);
+        if (safe.indexOf('"') >= 0 || safe.indexOf(',') >= 0
+                || safe.indexOf('\n') >= 0 || safe.indexOf('\r') >= 0) {
+            return "\"" + safe.replace("\"", "\"\"") + "\"";
+        }
+        return safe;
     }
 
 
@@ -1089,6 +1164,7 @@ public class InventoryReceiptService {
                             .skuName(sku != null ? sku.getName() : null)
                             .quantityChanged(t.getQuantityChanged())
                             .createdAt(t.getCreatedAt())
+                            .occurredAt(t.getReceipt().getOccurredAt())
                             .build();
                 });
     }
