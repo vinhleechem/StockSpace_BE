@@ -27,7 +27,8 @@ public final class ChatQueryPlanner {
             "(?<![\\p{L}\\d])([0-9][0-9.,]*)\\s*(?:m2|met vuong)",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern LOCATION = Pattern.compile(
-            "(?iu)(?:\\b(?:ở|tại|khu vực|gần)\\s+)([^,;.!?]+?)(?=\\s+(?:giá|theo|từ|dưới|trên|có|với|và|tối thiểu|ít nhất|phù hợp|còn|đang)|[,;.!?]|$)");
+            "(?iu)(?:\\b(?:ở|tại|khu vực|gần)\\s+)([^,;.!?]+?)(?=\\s+(?:giá|theo|từ|dưới|trên|có|với|và|tối thiểu|ít nhất|phù hợp|còn|đang)|[,;.!?]|$)",
+            Pattern.UNICODE_CHARACTER_CLASS);
     private static final Set<String> SEARCH_MARKERS = Set.of(
             "tim", "kiem", "danh sach", "loc", "goi y", "kho nao", "co kho",
             "o dau", "tai dau", "quan nao", "tinh nao", "con trong", "con cho thue",
