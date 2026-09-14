@@ -9,6 +9,7 @@ import fu.stockspace.stockspace_be.wms.dataexchange.job.WmsImportJobService;
 import fu.stockspace.stockspace_be.wms.dataexchange.job.WmsImportJobStatus;
 import fu.stockspace.stockspace_be.wms.dataexchange.job.WmsImportType;
 import fu.stockspace.stockspace_be.wms.dataexchange.xlsx.XlsxWorkbookReader;
+import fu.stockspace.stockspace_be.wms.dataexchange.xlsx.XlsxFileException;
 import fu.stockspace.stockspace_be.wms.dataexchange.xlsx.XlsxWorkbookWriter;
 import fu.stockspace.stockspace_be.wms.product.entity.UnitOfMeasure;
 import fu.stockspace.stockspace_be.wms.product.repository.ProductCategoryRepository;
@@ -32,8 +33,10 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.never;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -113,6 +116,15 @@ class CatalogImportServiceValidationTest {
         assertEquals(WmsImportType.SKU_CATALOG, command.getValue().importType());
         assertEquals(1, command.getValue().rows().size());
         assertTrue(command.getValue().rows().get(0).validationErrors().isEmpty());
+    }
+
+    @Test
+    void rejectsNonXlsxInputBeforeCreatingAnImportJob() {
+        assertThrows(XlsxFileException.class, () -> service.validate(TENANT_ID, ACTOR_ID,
+                new MockMultipartFile("file", "catalog.xls", "application/vnd.ms-excel",
+                        new byte[]{1, 2, 3})));
+
+        org.mockito.Mockito.verify(jobService, never()).createJob(any());
     }
 
     private byte[] catalogWorkbook() {

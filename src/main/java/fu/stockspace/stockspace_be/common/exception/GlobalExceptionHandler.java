@@ -17,6 +17,9 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import fu.stockspace.stockspace_be.wms.dataexchange.xlsx.XlsxFileException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -72,6 +75,17 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleMaxUploadSize(MaxUploadSizeExceededException ex) {
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
                 .body(ApiResponse.error(ErrorCode.WMS_IMPORT_LIMIT_EXCEEDED));
+    }
+
+    @ExceptionHandler({
+            MissingServletRequestPartException.class,
+            MultipartException.class,
+            HttpMediaTypeNotSupportedException.class
+    })
+    public ResponseEntity<ApiResponse<Void>> handleInvalidMultipart(Exception ex) {
+        log.warn("Invalid multipart workbook request: {}", ex.getMessage());
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.error(ErrorCode.WMS_IMPORT_FILE_INVALID));
     }
 
 
