@@ -19,8 +19,11 @@ class InventoryAuditController {
   +createAudit()
   +startAudit()
   +saveAuditCounts()
+  +saveAuditNotes()
   +addUnexpectedItem()
   +submitAudit()
+  +requestEdit()
+  +approveEdit()
   +requestRecount()
   +cancelAudit()
   +approveAudit()
@@ -32,8 +35,11 @@ class InventoryAuditService {
   +createAudit()
   +startAudit()
   +saveAuditCounts()
+  +saveAuditNotes()
   +addUnexpectedItem()
   +submitAudit()
+  +requestEdit()
+  +approveEdit()
   +requestRecount()
   +cancelAudit()
   +approveAudit()
@@ -50,6 +56,8 @@ enum AuditStatus {
   DRAFT
   IN_PROGRESS
   SUBMITTED
+  EDIT_REQUESTED
+  REOPENED
   RECOUNT_REQUIRED
   APPROVED
   CANCELLED
@@ -75,7 +83,7 @@ skinparam backgroundColor transparent
 hide footbox
 autonumber
 
-actor Staff
+actor Counter
 actor Tenant
 participant "InventoryAuditController" as Controller
 participant "InventoryAuditService" as Service
@@ -95,7 +103,7 @@ deactivate Service
 Controller --> Tenant: success(data)
 deactivate Controller
 
-Staff -> Controller: startAudit(auditId)
+Counter -> Controller: startAudit(auditId)
 Controller -> Service: startAudit(userId, auditId)
 activate Service
 Service -> StockRepo: snapshot scoped stock and acquire movement lock
@@ -106,25 +114,25 @@ Service -> AuditRepo: mark audit IN_PROGRESS
 AuditRepo --> Service: audit IN_PROGRESS
 Service --> Controller: InventoryAuditResponse(IN_PROGRESS)
 deactivate Service
-Controller --> Staff: success(data)
+Controller --> Counter: success(data)
 
-Staff -> Controller: saveAuditCounts(auditId, counts)
+Counter -> Controller: saveAuditCounts(auditId, counts)
 Controller -> Service: saveAuditCounts(userId, auditId, request)
 activate Service
 Service -> ItemRepo: save actual quantities and discrepancies
 ItemRepo --> Service: count items
 Service --> Controller: InventoryAuditResponse(IN_PROGRESS)
 deactivate Service
-Controller --> Staff: success(data)
+Controller --> Counter: success(data)
 
-Staff -> Controller: submitAudit(auditId)
+Counter -> Controller: submitAudit(auditId)
 Controller -> Service: submitAudit(userId, auditId)
 activate Service
 Service -> AuditRepo: mark audit SUBMITTED
 AuditRepo --> Service: audit SUBMITTED
 Service --> Controller: InventoryAuditResponse(SUBMITTED)
 deactivate Service
-Controller --> Staff: success(data)
+Controller --> Counter: success(data)
 
 Tenant -> Controller: approveAudit(auditId)
 Controller -> Service: approveAudit(approverId, auditId)
@@ -157,11 +165,16 @@ skinparam state {
 DRAFT --> IN_PROGRESS : start count
 IN_PROGRESS --> SUBMITTED : submit complete counts
 SUBMITTED --> APPROVED : approve reconciliation
+SUBMITTED --> EDIT_REQUESTED : request edit (counter)
+EDIT_REQUESTED --> REOPENED : approve edit (tenant)
+REOPENED --> SUBMITTED : submit corrected count
 SUBMITTED --> RECOUNT_REQUIRED : request recount
 RECOUNT_REQUIRED --> IN_PROGRESS : start recount
 DRAFT --> CANCELLED : cancel audit
 IN_PROGRESS --> CANCELLED : cancel audit
 SUBMITTED --> CANCELLED : cancel audit
+EDIT_REQUESTED --> CANCELLED : cancel audit
+REOPENED --> CANCELLED : cancel audit
 APPROVED --> [*]
 CANCELLED --> [*]
 @enduml
