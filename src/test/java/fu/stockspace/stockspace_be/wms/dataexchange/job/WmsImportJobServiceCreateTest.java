@@ -2,7 +2,9 @@ package fu.stockspace.stockspace_be.wms.dataexchange.job;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fu.stockspace.stockspace_be.auth.entity.User;
+import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.wms.dataexchange.config.DataExchangeProperties;
+import fu.stockspace.stockspace_be.wms.stock.entity.InventoryAudit;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,6 +50,10 @@ class WmsImportJobServiceCreateTest {
     private UUID actorId;
     private User tenant;
     private User actor;
+    @Mock
+    private Warehouse warehouse;
+    @Mock
+    private InventoryAudit audit;
 
     @BeforeEach
     void setUp() {
@@ -107,6 +113,30 @@ class WmsImportJobServiceCreateTest {
     }
 
     @Test
+    void keepsInvalidStatusAndCountsForEverySupportedImportType() {
+        UUID warehouseId = UUID.randomUUID();
+        UUID auditId = UUID.randomUUID();
+        when(entityManager.getReference(Warehouse.class, warehouseId)).thenReturn(warehouse);
+        when(entityManager.getReference(InventoryAudit.class, auditId)).thenReturn(audit);
+        when(jobRepository.saveAndFlush(any(WmsImportJob.class)))
+                .thenAnswer(invocation -> managedCopy(invocation.getArgument(0)));
+
+        for (WmsImportType type : WmsImportType.values()) {
+            UUID scopedWarehouseId = type == WmsImportType.SKU_CATALOG ? null : warehouseId;
+            UUID scopedAuditId = type == WmsImportType.AUDIT_RECONCILIATION ? auditId : null;
+            WmsImportJob result = service.createJob(scopedCommand(type, scopedWarehouseId, scopedAuditId,
+                    List.of(row(type.name(), 2, List.of()),
+                            row(type.name(), 3, List.of(Map.of("code", "ROW_INVALID"))))));
+
+            assertEquals(type, result.getImportType());
+            assertEquals(WmsImportJobStatus.INVALID, result.getStatus());
+            assertEquals(2, result.getTotalRows());
+            assertEquals(1, result.getValidRows());
+            assertEquals(1, result.getInvalidRows());
+        }
+    }
+
+    @Test
     void doesNotSaveRowsWhenParentPersistenceFails() {
         when(jobRepository.saveAndFlush(any(WmsImportJob.class)))
                 .thenThrow(new DataAccessException("parent persistence failed") { });
@@ -118,12 +148,45 @@ class WmsImportJobServiceCreateTest {
         verify(rowRepository, never()).saveAll(any());
     }
 
+    @Test
+    void supportsAllImportTypesWithTheSamePersistBeforeChildOrdering() {
+        UUID warehouseId = UUID.randomUUID();
+        UUID auditId = UUID.randomUUID();
+        when(entityManager.getReference(Warehouse.class, warehouseId)).thenReturn(warehouse);
+        when(entityManager.getReference(InventoryAudit.class, auditId)).thenReturn(audit);
+        when(jobRepository.saveAndFlush(any(WmsImportJob.class)))
+                .thenAnswer(invocation -> managedCopy(invocation.getArgument(0)));
+
+        for (WmsImportType type : WmsImportType.values()) {
+            UUID scopedWarehouseId = type == WmsImportType.SKU_CATALOG ? null : warehouseId;
+            UUID scopedAuditId = type == WmsImportType.AUDIT_RECONCILIATION ? auditId : null;
+            WmsImportJob result = service.createJob(scopedCommand(type, scopedWarehouseId, scopedAuditId,
+                    List.of(row(type.name(), 2, List.of()))));
+
+            assertEquals(type, result.getImportType());
+            assertEquals(WmsImportJobStatus.VALIDATED, result.getStatus());
+        }
+
+        ArgumentCaptor<List<WmsImportRow>> rowsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(rowRepository, org.mockito.Mockito.times(WmsImportType.values().length))
+                .saveAll(rowsCaptor.capture());
+        for (int index = 0; index < rowsCaptor.getAllValues().size(); index++) {
+            WmsImportRow row = rowsCaptor.getAllValues().get(index).get(0);
+            assertEquals(WmsImportType.values()[index], row.getJob().getImportType());
+        }
+    }
+
     private WmsImportJobCommand command(WmsImportType type, List<WmsImportRowInput> rows) {
+        return scopedCommand(type, null, null, rows);
+    }
+
+    private WmsImportJobCommand scopedCommand(WmsImportType type, UUID warehouseId,
+                                              UUID auditId, List<WmsImportRowInput> rows) {
         return new WmsImportJobCommand(
                 tenantId,
                 actorId,
-                null,
-                null,
+                warehouseId,
+                auditId,
                 type,
                 "1.0",
                 "catalog.xlsx",
@@ -153,6 +216,27 @@ class WmsImportJobServiceCreateTest {
                 .originalFilename("catalog.xlsx")
                 .fileSha256("a".repeat(64))
                 .contentSha256("b".repeat(64))
+                .build();
+    }
+
+    private WmsImportJob managedCopy(WmsImportJob source) {
+        return WmsImportJob.builder()
+                .id(UUID.randomUUID())
+                .tenant(source.getTenant())
+                .createdBy(source.getCreatedBy())
+                .warehouse(source.getWarehouse())
+                .audit(source.getAudit())
+                .importType(source.getImportType())
+                .status(source.getStatus())
+                .schemaVersion(source.getSchemaVersion())
+                .originalFilename(source.getOriginalFilename())
+                .fileSha256(source.getFileSha256())
+                .contentSha256(source.getContentSha256())
+                .contextMetadata(source.getContextMetadata())
+                .totalRows(source.getTotalRows())
+                .validRows(source.getValidRows())
+                .invalidRows(source.getInvalidRows())
+                .version(0L)
                 .build();
     }
 }
