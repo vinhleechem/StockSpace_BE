@@ -127,6 +127,43 @@ class CatalogImportServiceValidationTest {
         org.mockito.Mockito.verify(jobService, never()).createJob(any());
     }
 
+    @Test
+    void returnsInvalidJobForRowsThatFailBusinessValidation() {
+        WmsImportJob job = WmsImportJob.builder()
+                .id(JOB_ID)
+                .importType(WmsImportType.SKU_CATALOG)
+                .status(WmsImportJobStatus.INVALID)
+                .schemaVersion("1.0")
+                .originalFilename("catalog.xlsx")
+                .fileSha256("a".repeat(64))
+                .contentSha256("b".repeat(64))
+                .build();
+        when(jobService.createJob(any())).thenReturn(job);
+        when(jobService.getJob(TENANT_ID, ACTOR_ID, JOB_ID)).thenReturn(
+                new WmsImportJobResponse(JOB_ID, WmsImportType.SKU_CATALOG, WmsImportJobStatus.INVALID,
+                        "1.0", "catalog.xlsx", job.getFileSha256(), job.getContentSha256(), Map.of(), null, null,
+                        1, 0, 1, null, LocalDateTime.now(), LocalDateTime.now(), null, List.of()));
+
+        WmsImportJobResponse response = service.validate(TENANT_ID, ACTOR_ID,
+                new MockMultipartFile("file", "catalog.xlsx",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        catalogWorkbookWithInvalidRow()));
+
+        assertEquals(WmsImportJobStatus.INVALID, response.status());
+        verify(jobService).createJob(any());
+    }
+
+    @Test
+    void rejectsWorkbookWithUnexpectedHeadersBeforeCreatingAnImportJob() {
+        assertThrows(fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException.class,
+                () -> service.validate(TENANT_ID, ACTOR_ID,
+                        new MockMultipartFile("file", "catalog.xlsx",
+                                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                catalogWorkbookWithUnexpectedHeader())));
+
+        verify(jobService, never()).createJob(any());
+    }
+
     private byte[] catalogWorkbook() {
         Workbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
             XlsxWorkbookWriter.addMetadataSheet(workbook, Map.of(
@@ -144,6 +181,38 @@ class CatalogImportServiceValidationTest {
             writeRow(skus.createRow(1), "SKIP", "55555555-5555-5555-5555-555555555555", "2026-09-14T00:00:00",
                     "SYSTEM", "SKU-001", "Sample SKU", "", "", "KG", "1", "0.01", "");
             return XlsxWorkbookWriter.toBytes(workbook);
+    }
+
+    private byte[] catalogWorkbookWithInvalidRow() {
+        Workbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
+        XlsxWorkbookWriter.addMetadataSheet(workbook, Map.of(
+                "schema_version", "1.0",
+                "workbook_type", "SKU_CATALOG"));
+        Sheet categories = workbook.createSheet("CATEGORIES");
+        writeRow(categories.createRow(0), "action", "category_key", "category_id", "source",
+                "name", "default_attributes_json");
+        Sheet skus = workbook.createSheet("SKUS");
+        writeRow(skus.createRow(0), "action", "sku_id", "source_updated_at", "source", "sku_code",
+                "name", "category_id", "category_key", "uom_code", "unit_weight_kg", "unit_volume_m3",
+                "specifications_json");
+        writeRow(skus.createRow(1), "NOT_SUPPORTED", "", "", "TENANT", "SKU-001", "Sample SKU",
+                "", "", "", "", "", "");
+        return XlsxWorkbookWriter.toBytes(workbook);
+    }
+
+    private byte[] catalogWorkbookWithUnexpectedHeader() {
+        Workbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
+        XlsxWorkbookWriter.addMetadataSheet(workbook, Map.of(
+                "schema_version", "1.0",
+                "workbook_type", "SKU_CATALOG"));
+        Sheet categories = workbook.createSheet("CATEGORIES");
+        writeRow(categories.createRow(0), "action", "category_key", "category_id", "source",
+                "name", "unexpected_column");
+        Sheet skus = workbook.createSheet("SKUS");
+        writeRow(skus.createRow(0), "action", "sku_id", "source_updated_at", "source", "sku_code",
+                "name", "category_id", "category_key", "uom_code", "unit_weight_kg", "unit_volume_m3",
+                "specifications_json");
+        return XlsxWorkbookWriter.toBytes(workbook);
     }
 
     private void writeRow(Row row, String... values) {
