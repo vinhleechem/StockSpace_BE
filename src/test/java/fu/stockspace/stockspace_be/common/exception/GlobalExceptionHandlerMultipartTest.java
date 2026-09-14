@@ -49,10 +49,10 @@ class GlobalExceptionHandlerMultipartTest {
 
     @Test
     void returnsBadRequestWhenMediaTypeIsUnsupported() {
-        var response = handler.handleInvalidMultipart(new HttpMediaTypeNotSupportedException("text/plain"));
+        var response = handler.handleUnsupportedMediaType(new HttpMediaTypeNotSupportedException("text/plain"));
 
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertEquals(ErrorCode.WMS_IMPORT_FILE_INVALID.name(), response.getBody().getCode());
+        assertEquals(HttpStatus.UNSUPPORTED_MEDIA_TYPE, response.getStatusCode());
+        assertEquals("Unsupported media type", response.getBody().getMessage());
     }
 
     @Test

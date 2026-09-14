@@ -79,13 +79,19 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler({
             MissingServletRequestPartException.class,
-            MultipartException.class,
-            HttpMediaTypeNotSupportedException.class
+            MultipartException.class
     })
     public ResponseEntity<ApiResponse<Void>> handleInvalidMultipart(Exception ex) {
         log.warn("Invalid multipart workbook request: {}", ex.getMessage());
         return ResponseEntity.badRequest()
                 .body(ApiResponse.error(ErrorCode.WMS_IMPORT_FILE_INVALID));
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUnsupportedMediaType(HttpMediaTypeNotSupportedException ex) {
+        log.warn("Unsupported request media type: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+                .body(ApiResponse.error("Unsupported media type"));
     }
 
 
