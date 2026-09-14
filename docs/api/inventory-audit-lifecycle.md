@@ -4,6 +4,9 @@ The inventory audit API uses one public workflow at
 `/api/tenant/inventory/audits`. The workflow marker kept in the database is an
 internal compatibility detail and is not part of the API contract.
 
+The physical count can be entered by either the assigned staff member or the
+tenant who owns the audit. Tenant access is not dependent on `assignedToId`.
+
 ## Lifecycle
 
 ```text
@@ -50,12 +53,12 @@ ID. Every current-round item must be counted before submit. The count is blind
 while the audit is `IN_PROGRESS`; after submit the API reveals the expected
 quantity and discrepancy to the counter.
 
-After submit, the staff response includes the expected quantity and discrepancy,
-and staff may update only notes through `/notes`. Quantity updates are rejected
-until the assigned staff member requests an edit and a tenant approves it.
-Approval changes the same audit to `REOPENED`; the staff can correct quantities
-and submit again, which locks the audit again. No separate count version is
-created.
+After submit, the counter response includes the expected quantity and
+discrepancy, and the counter may update only notes through `/notes`. Quantity
+updates are rejected until the assigned staff member or tenant counter requests
+an edit and a tenant approves it. Approval changes the same audit to `REOPENED`;
+the counter can correct quantities and submit again, which locks the audit
+again. No separate count version is created.
 
 `unexpected-items` adds a SKU/location that was physically found but absent
 from the snapshot. Approve re-reads and locks every relevant batch before

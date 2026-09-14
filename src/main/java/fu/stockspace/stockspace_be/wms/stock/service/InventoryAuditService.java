@@ -105,6 +105,11 @@ public class InventoryAuditService {
                 .anyMatch(role -> RoleType.ROLE_STAFF.name().equals(role.getName()));
     }
 
+    private boolean isTenant(User user) {
+        return user.getRoles() != null && user.getRoles().stream()
+                .anyMatch(role -> RoleType.ROLE_TENANT.name().equals(role.getName()));
+    }
+
     private void ensureApproverIsTenant(User approver) {
         boolean isTenant = approver.getRoles() != null && approver.getRoles().stream()
                 .anyMatch(role -> RoleType.ROLE_TENANT.name().equals(role.getName()));
@@ -440,13 +445,13 @@ public class InventoryAuditService {
         return maskCounterResponse(mapToResponse(audit, items), actor);
     }
 
-    /** Staff asks for an in-place correction after seeing the system quantity. */
+    /** Counter (staff or tenant) asks for an in-place correction after seeing the system quantity. */
     @Transactional
     public InventoryAuditResponse requestEdit(UUID userId, UUID auditId, String reason) {
         InventoryAudit audit = getAuditForUpdate(auditId);
         User actor = findUser(userId);
         requireAuditCountAccess(audit, actor);
-        if (!isStaff(actor)) {
+        if (!isStaff(actor) && !isTenant(actor)) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
         }
         if (audit.getStatus() != AuditStatus.SUBMITTED || reason == null || reason.isBlank()) {
@@ -476,7 +481,9 @@ public class InventoryAuditService {
         if (audit.getStatus() != AuditStatus.EDIT_REQUESTED) {
             throw new BadRequestException(ErrorCode.AUDIT_INVALID_STATUS);
         }
-        if (audit.getEditRequestedBy() != null && userId.equals(audit.getEditRequestedBy().getId())) {
+        if (audit.getEditRequestedBy() != null
+                && userId.equals(audit.getEditRequestedBy().getId())
+                && isStaff(audit.getEditRequestedBy())) {
             throw new ForbiddenException("Người yêu cầu chỉnh sửa không được tự duyệt yêu cầu.");
         }
 
@@ -748,6 +755,8 @@ public class InventoryAuditService {
 
     private void requireAuditCountAccess(InventoryAudit audit, User actor) {
         requireAuditReadAccess(audit, actor);
+        // Staff must be the assigned counter. A tenant counter is authorized by
+        // tenant/warehouse access and is intentionally not assignment-bound.
         if (isStaff(actor) && (audit.getAssignedTo() == null
                 || !actor.getId().equals(audit.getAssignedTo().getId()))) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);
