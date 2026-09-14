@@ -3,6 +3,7 @@ package fu.stockspace.stockspace_be.wms.dataexchange.job;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 class WmsImportJobMappingTest {
 
@@ -12,5 +13,6 @@ class WmsImportJobMappingTest {
         assertEquals(4, WmsImportJobStatus.values().length);
         assertEquals(WmsImportType.SKU_CATALOG, WmsImportType.valueOf("SKU_CATALOG"));
         assertEquals(WmsImportJobStatus.APPLIED, WmsImportJobStatus.valueOf("APPLIED"));
+        assertNull(WmsImportJob.builder().build().getVersion());
     }
 }

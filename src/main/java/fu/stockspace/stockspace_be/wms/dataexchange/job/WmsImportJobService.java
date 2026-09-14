@@ -75,12 +75,12 @@ public class WmsImportJobService {
                 .validRows(inputs.size() - invalidRows)
                 .invalidRows(invalidRows)
                 .build();
-        jobRepository.save(job);
+        WmsImportJob persistedJob = jobRepository.saveAndFlush(job);
 
         List<WmsImportRow> rows = new ArrayList<>();
         for (WmsImportRowInput input : inputs) {
             WmsImportRow row = new WmsImportRow();
-            row.setJob(job);
+            row.setJob(persistedJob);
             row.setSheetName(input.sheetName());
             row.setRowNumber(input.rowNumber());
             row.setGroupKey(input.groupKey());
@@ -91,7 +91,7 @@ public class WmsImportJobService {
             rows.add(row);
         }
         rowRepository.saveAll(rows);
-        return job;
+        return persistedJob;
     }
 
     public WmsImportJobResponse getJob(UUID tenantId, UUID actorId, UUID jobId) {
