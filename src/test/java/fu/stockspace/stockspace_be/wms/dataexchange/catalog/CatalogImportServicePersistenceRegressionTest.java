@@ -25,8 +25,6 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.Pageable;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.transaction.PlatformTransactionManager;
 
@@ -69,9 +67,9 @@ class CatalogImportServicePersistenceRegressionTest {
         User actor = User.builder().id(ACTOR_ID).build();
         when(entityManager.getReference(User.class, TENANT_ID)).thenReturn(tenant);
         when(entityManager.getReference(User.class, ACTOR_ID)).thenReturn(actor);
-        when(uomRepository.findAllActiveByTenantOrSystem(eq(TENANT_ID), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(UnitOfMeasure.builder()
-                        .id(UUID.randomUUID()).code("KG").name("Kilogram").build())));
+        when(uomRepository.findActiveVisibleByCode(eq(TENANT_ID), eq("KG")))
+                .thenReturn(Optional.of(UnitOfMeasure.builder()
+                        .id(UUID.randomUUID()).code("KG").name("Kilogram").build()));
 
         AtomicReference<WmsImportJob> persisted = new AtomicReference<>();
         when(jobRepository.saveAndFlush(any(WmsImportJob.class))).thenAnswer(invocation -> {
