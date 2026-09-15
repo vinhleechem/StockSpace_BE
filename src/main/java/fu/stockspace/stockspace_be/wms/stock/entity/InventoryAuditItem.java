@@ -84,4 +84,15 @@ public class InventoryAuditItem extends BaseEntity {
 
     @Column(name = "variance_reason", columnDefinition = "text")
     private String varianceReason;
+
+    /**
+     * SNAPSHOT items came from book stock when the count round started.
+     * UNEXPECTED items were physically found by the counter during the audit.
+     * Nullable at schema level so existing installations can add this column safely;
+     * all newly-created rows receive an explicit value.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "item_origin", length = 20)
+    @Builder.Default
+    private AuditItemOrigin itemOrigin = AuditItemOrigin.SNAPSHOT;
 }

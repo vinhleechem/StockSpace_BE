@@ -8,6 +8,7 @@ import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
@@ -15,6 +16,9 @@ import fu.stockspace.stockspace_be.staff.entity.TenantMember;
 import fu.stockspace.stockspace_be.staff.repository.StaffWarehouseAssignmentRepository;
 import fu.stockspace.stockspace_be.staff.repository.TenantMemberRepository;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
+import fu.stockspace.stockspace_be.warehouse.entity.WarehouseBin;
+import fu.stockspace.stockspace_be.warehouse.entity.WarehouseLayout;
+import fu.stockspace.stockspace_be.warehouse.entity.WarehouseRack;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
 import fu.stockspace.stockspace_be.wms.product.entity.ProductSku;
 import fu.stockspace.stockspace_be.wms.product.entity.UnitOfMeasure;
@@ -23,6 +27,8 @@ import fu.stockspace.stockspace_be.wms.receipt.entity.DocumentType;
 import fu.stockspace.stockspace_be.wms.receipt.service.InventoryReceiptService;
 import fu.stockspace.stockspace_be.wms.stock.dto.*;
 import fu.stockspace.stockspace_be.wms.stock.entity.AuditStatus;
+import fu.stockspace.stockspace_be.wms.stock.entity.AuditItemOrigin;
+import fu.stockspace.stockspace_be.wms.stock.entity.AuditScopeType;
 import fu.stockspace.stockspace_be.wms.stock.entity.InventoryAudit;
 import fu.stockspace.stockspace_be.wms.stock.entity.InventoryAuditItem;
 import fu.stockspace.stockspace_be.wms.stock.entity.StockBatch;
@@ -980,6 +986,7 @@ class InventoryAuditServiceTest {
 
         assertEquals(AuditStatus.IN_PROGRESS, response.getStatus());
         assertEquals(1, response.getItems().size());
+        assertEquals(AuditItemOrigin.SNAPSHOT, response.getItems().get(0).getItemOrigin());
         verify(auditLockService).acquire(draft);
     }
 
@@ -1020,5 +1027,138 @@ class InventoryAuditServiceTest {
 
         assertThrows(RuntimeException.class, () -> inventoryAuditService.approveAudit(approverId, auditId));
         verify(inventoryReceiptService, never()).createAuditAdjustmentReceipt(any(), any(), any(), any(), any(), anyInt());
+    }
+
+    @Test
+    void testAddUnexpectedItem_RackScopePersistsOriginAndSelectedBin() {
+        WarehouseRack rack = rackInWarehouse(warehouse, "RACK-01");
+        WarehouseBin bin = binInRack(rack, "BIN-01");
+        InventoryAudit audit = inProgressAudit(AuditScopeType.RACK, rack, null);
+        when(auditRepository.findByIdForUpdate(auditId)).thenReturn(Optional.of(audit));
+        when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, userId))
+                .thenReturn(Optional.of(productSku));
+        when(productSkuRepository.findByIdAndIsDeletedFalse(skuId)).thenReturn(Optional.of(productSku));
+        when(warehouseBinRepository.findByIdAndIsDeletedFalse(bin.getId())).thenReturn(Optional.of(bin));
+        when(auditItemRepository.findByAuditIdAndCountRoundOrderById(auditId, 1))
+                .thenReturn(new ArrayList<>());
+
+        InventoryAuditResponse response = inventoryAuditService.addUnexpectedItem(userId, auditId,
+                AddUnexpectedAuditItemRequest.builder()
+                        .skuId(skuId).rackId(rack.getId()).binId(bin.getId())
+                        .actualQuantity(2).build());
+
+        InventoryAuditItem saved = responseItemSavedByRepository();
+        assertEquals(AuditItemOrigin.UNEXPECTED, saved.getItemOrigin());
+        assertEquals(rack.getId(), saved.getRack().getId());
+        assertEquals(bin.getId(), saved.getBin().getId());
+        assertEquals(AuditItemOrigin.UNEXPECTED, response.getItems().get(0).getItemOrigin());
+        assertEquals(skuId, response.getItems().get(0).getSkuId());
+        assertEquals(rack.getId(), response.getScopeRackId());
+        assertEquals(bin.getId(), response.getItems().get(0).getBinId());
+    }
+
+    @Test
+    void testAddUnexpectedItem_RackScopeRequiresBin() {
+        WarehouseRack rack = rackInWarehouse(warehouse, "RACK-01");
+        InventoryAudit audit = inProgressAudit(AuditScopeType.RACK, rack, null);
+        when(auditRepository.findByIdForUpdate(auditId)).thenReturn(Optional.of(audit));
+        when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, userId))
+                .thenReturn(Optional.of(productSku));
+
+        BadRequestException exception = assertThrows(BadRequestException.class,
+                () -> inventoryAuditService.addUnexpectedItem(userId, auditId,
+                        AddUnexpectedAuditItemRequest.builder()
+                                .skuId(skuId).actualQuantity(1).build()));
+
+        assertEquals(ErrorCode.AUDIT_SCOPE_INVALID.getMessage(), exception.getMessage());
+        verify(auditItemRepository, never()).save(any());
+    }
+
+    @Test
+    void testAddUnexpectedItem_WarehouseScopeRejectsBinFromAnotherRack() {
+        WarehouseRack selectedRack = rackInWarehouse(warehouse, "RACK-01");
+        WarehouseRack otherRack = rackInWarehouse(warehouse, "RACK-02");
+        WarehouseBin otherBin = binInRack(otherRack, "BIN-02");
+        InventoryAudit audit = inProgressAudit(AuditScopeType.WAREHOUSE, null, null);
+        when(auditRepository.findByIdForUpdate(auditId)).thenReturn(Optional.of(audit));
+        when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, userId))
+                .thenReturn(Optional.of(productSku));
+        when(warehouseRackRepository.findByIdAndIsDeletedFalse(selectedRack.getId()))
+                .thenReturn(Optional.of(selectedRack));
+        when(warehouseBinRepository.findByIdAndIsDeletedFalse(otherBin.getId()))
+                .thenReturn(Optional.of(otherBin));
+
+        assertThrows(BadRequestException.class,
+                () -> inventoryAuditService.addUnexpectedItem(userId, auditId,
+                        AddUnexpectedAuditItemRequest.builder()
+                                .skuId(skuId).rackId(selectedRack.getId()).binId(otherBin.getId())
+                                .actualQuantity(1).build()));
+        verify(auditItemRepository, never()).save(any());
+    }
+
+    @Test
+    void testAddUnexpectedItem_WarehouseScopeRequiresBothRackAndBin() {
+        WarehouseRack rack = rackInWarehouse(warehouse, "RACK-01");
+        InventoryAudit audit = inProgressAudit(AuditScopeType.WAREHOUSE, null, null);
+        when(auditRepository.findByIdForUpdate(auditId)).thenReturn(Optional.of(audit));
+        when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, userId))
+                .thenReturn(Optional.of(productSku));
+
+        assertThrows(BadRequestException.class,
+                () -> inventoryAuditService.addUnexpectedItem(userId, auditId,
+                        AddUnexpectedAuditItemRequest.builder()
+                                .skuId(skuId).rackId(rack.getId()).actualQuantity(1).build()));
+        verify(warehouseRackRepository, never()).findByIdAndIsDeletedFalse(any());
+        verify(auditItemRepository, never()).save(any());
+    }
+
+    @Test
+    void testAddUnexpectedItem_DuplicateSkuAndLocationReturnsSpecificConflict() {
+        WarehouseRack rack = rackInWarehouse(warehouse, "RACK-01");
+        WarehouseBin bin = binInRack(rack, "BIN-01");
+        InventoryAudit audit = inProgressAudit(AuditScopeType.BIN, null, bin);
+        InventoryAuditItem existing = InventoryAuditItem.builder()
+                .id(UUID.randomUUID()).audit(audit).skuId(skuId).rack(rack).bin(bin)
+                .expectedQuantity(4).countRound(1).build();
+        when(auditRepository.findByIdForUpdate(auditId)).thenReturn(Optional.of(audit));
+        when(productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(skuId, userId))
+                .thenReturn(Optional.of(productSku));
+        when(auditItemRepository.findByAuditIdAndCountRoundOrderById(auditId, 1))
+                .thenReturn(new ArrayList<>(List.of(existing)));
+
+        ResourceConflictException exception = assertThrows(ResourceConflictException.class,
+                () -> inventoryAuditService.addUnexpectedItem(userId, auditId,
+                        AddUnexpectedAuditItemRequest.builder()
+                                .skuId(skuId).actualQuantity(2).build()));
+
+        assertEquals(ErrorCode.AUDIT_ITEM_DUPLICATE, exception.getErrorCode());
+        verify(auditItemRepository, never()).save(any());
+    }
+
+    private InventoryAuditItem responseItemSavedByRepository() {
+        org.mockito.ArgumentCaptor<InventoryAuditItem> captor =
+                org.mockito.ArgumentCaptor.forClass(InventoryAuditItem.class);
+        verify(auditItemRepository).save(captor.capture());
+        return captor.getValue();
+    }
+
+    private InventoryAudit inProgressAudit(
+            AuditScopeType scopeType, WarehouseRack scopeRack, WarehouseBin scopeBin) {
+        return InventoryAudit.builder()
+                .id(auditId).warehouse(warehouse).tenant(tenantUser).requestedBy(tenantUser)
+                .scopeType(scopeType).scopeRack(scopeRack).scopeBin(scopeBin)
+                .status(AuditStatus.IN_PROGRESS).countRound(1).build();
+    }
+
+    private WarehouseRack rackInWarehouse(Warehouse targetWarehouse, String code) {
+        WarehouseLayout layout = WarehouseLayout.builder()
+                .id(UUID.randomUUID()).warehouse(targetWarehouse).build();
+        return WarehouseRack.builder()
+                .id(UUID.randomUUID()).layout(layout).name(code).code(code).build();
+    }
+
+    private WarehouseBin binInRack(WarehouseRack rack, String code) {
+        return WarehouseBin.builder()
+                .id(UUID.randomUUID()).rack(rack).name(code).code(code).build();
     }
 }

@@ -28,6 +28,7 @@ import fu.stockspace.stockspace_be.wms.stock.dto.*;
 import fu.stockspace.stockspace_be.wms.stock.entity.AuditStatus;
 import fu.stockspace.stockspace_be.wms.stock.entity.AuditScopeType;
 import fu.stockspace.stockspace_be.wms.stock.entity.AuditCountStatus;
+import fu.stockspace.stockspace_be.wms.stock.entity.AuditItemOrigin;
 import fu.stockspace.stockspace_be.wms.stock.entity.InventoryAudit;
 import fu.stockspace.stockspace_be.wms.stock.entity.InventoryAuditItem;
 import fu.stockspace.stockspace_be.wms.stock.entity.InventoryAuditAdjustment;
@@ -121,20 +122,30 @@ public class InventoryAuditService {
 
     private InventoryAuditItemResponse mapItemToResponse(InventoryAuditItem item) {
         StockBatch batch = item.getBatch();
-        UUID skuId = batch != null ? batch.getSkuId() : item.getSkuId();
+        UUID skuId = skuIdOf(item);
         ProductSku sku = skuId == null ? null : productSkuRepository.findByIdAndIsDeletedFalse(skuId).orElse(null);
         UnitOfMeasure uom = sku != null ? sku.getUom() : null;
+        WarehouseRack rack = rackOf(item);
+        WarehouseBin bin = binOf(item);
+        AuditItemOrigin itemOrigin = item.getItemOrigin();
+        if (itemOrigin == null) {
+            // Compatibility for rows created before item_origin was introduced.
+            itemOrigin = item.getExpectedQuantity() == 0
+                    ? AuditItemOrigin.UNEXPECTED : AuditItemOrigin.SNAPSHOT;
+        }
 
         return InventoryAuditItemResponse.builder()
                 .id(item.getId())
                 .batchId(batch != null ? batch.getId() : null)
+                .skuId(skuId)
                 .skuCode(sku != null ? sku.getSkuCode() : null)
                 .skuName(sku != null ? sku.getName() : null)
                 .uomSymbol(uom != null ? uom.getCode() : null)
-                .rackName(batch != null && batch.getRack() != null ? batch.getRack().getName()
-                        : item.getRack() != null ? item.getRack().getName() : null)
-                .binName(batch != null && batch.getBin() != null ? batch.getBin().getName()
-                        : item.getBin() != null ? item.getBin().getName() : null)
+                .rackId(idOf(rack))
+                .rackName(rack != null ? rack.getName() : null)
+                .binId(idOf(bin))
+                .binName(bin != null ? bin.getName() : null)
+                .itemOrigin(itemOrigin)
                 .expectedQuantity(item.getExpectedQuantity())
                 .actualQuantity(item.getActualQuantity())
                 .discrepancy(item.getDiscrepancy())
@@ -152,6 +163,9 @@ public class InventoryAuditService {
         List<InventoryAuditItemResponse> itemResponses = items.stream()
                 .map(this::mapItemToResponse)
                 .collect(Collectors.toList());
+        WarehouseBin scopeBin = audit.getScopeBin();
+        WarehouseRack scopeRack = audit.getScopeRack() != null
+                ? audit.getScopeRack() : scopeBin != null ? scopeBin.getRack() : null;
 
         return InventoryAuditResponse.builder()
                 .id(audit.getId())
@@ -171,6 +185,10 @@ public class InventoryAuditService {
                 .updatedAt(audit.getUpdatedAt())
                 .countRound(audit.getCountRound())
                 .scopeType(audit.getScopeType())
+                .scopeRackId(idOf(scopeRack))
+                .scopeRackName(scopeRack != null ? scopeRack.getName() : null)
+                .scopeBinId(idOf(scopeBin))
+                .scopeBinName(scopeBin != null ? scopeBin.getName() : null)
                 .assignedToId(audit.getAssignedTo() != null ? audit.getAssignedTo().getId() : null)
                 .assignedToName(audit.getAssignedTo() != null ? audit.getAssignedTo().getFullName() : null)
                 .startedAt(audit.getStartedAt())
@@ -277,6 +295,7 @@ public class InventoryAuditService {
                             .skuId(entry.getKey().skuId())
                             .rack(representative.getRack())
                             .bin(representative.getBin())
+                            .itemOrigin(AuditItemOrigin.SNAPSHOT)
                             .expectedQuantity(entry.getValue().stream()
                                     .mapToInt(StockBatch::getQuantity).sum())
                             .countRound(startedAudit.getCountRound())
@@ -370,50 +389,19 @@ public class InventoryAuditService {
         productSkuRepository.findByIdAndTenantIdOrSystemAndIsDeletedFalse(request.getSkuId(), tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.SKU_NOT_FOUND));
 
-        WarehouseRack rack = request.getRackId() == null ? audit.getScopeRack()
-                : warehouseRackRepository.findByIdAndIsDeletedFalse(request.getRackId())
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RACK_NOT_FOUND));
-        WarehouseBin bin = request.getBinId() == null ? audit.getScopeBin()
-                : warehouseBinRepository.findByIdAndIsDeletedFalse(request.getBinId())
-                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_BIN_NOT_FOUND));
-        if (rack == null && bin != null) {
-            rack = bin.getRack();
-        }
-        if (rack != null && (rack.getLayout() == null || rack.getLayout().getWarehouse() == null
-                || !audit.getWarehouse().getId().equals(rack.getLayout().getWarehouse().getId()))) {
-            throw new BadRequestException(ErrorCode.AUDIT_SCOPE_INVALID);
-        }
-        if (bin != null && (bin.getRack() == null || bin.getRack().getLayout() == null
-                || bin.getRack().getLayout().getWarehouse() == null
-                || !audit.getWarehouse().getId().equals(
-                bin.getRack().getLayout().getWarehouse().getId()))) {
-                throw new BadRequestException(ErrorCode.AUDIT_SCOPE_INVALID);
-        }
-        if (audit.getScopeType() == AuditScopeType.WAREHOUSE && rack == null && bin == null) {
-            throw new BadRequestException(ErrorCode.AUDIT_SCOPE_INVALID);
-        }
-        if (audit.getScopeType() == AuditScopeType.RACK
-                && (rack == null || !rack.getId().equals(audit.getScopeRack().getId()))) {
-            throw new BadRequestException(ErrorCode.AUDIT_SCOPE_INVALID);
-        }
-        if (audit.getScopeType() == AuditScopeType.BIN
-                && (bin == null || !bin.getId().equals(audit.getScopeBin().getId()))) {
-            throw new BadRequestException(ErrorCode.AUDIT_SCOPE_INVALID);
-        }
-
-        final WarehouseRack resolvedRack = rack;
-        final WarehouseBin resolvedBin = bin;
+        AuditItemLocation location = resolveUnexpectedItemLocation(audit, request);
+        WarehouseRack resolvedRack = location.rack();
+        WarehouseBin resolvedBin = location.bin();
         List<InventoryAuditItem> current = currentAuditItems(audit);
-        boolean duplicate = current.stream().anyMatch(item -> request.getSkuId().equals(item.getSkuId())
-                && ((item.getBin() == null && resolvedBin == null)
-                || (item.getBin() != null && resolvedBin != null && item.getBin().getId().equals(resolvedBin.getId())))
-                && ((item.getRack() == null && resolvedRack == null)
-                || (item.getRack() != null && resolvedRack != null && item.getRack().getId().equals(resolvedRack.getId()))));
+        boolean duplicate = current.stream().anyMatch(item -> request.getSkuId().equals(skuIdOf(item))
+                && sameId(binOf(item), resolvedBin)
+                && sameId(rackOf(item), resolvedRack));
         if (duplicate) {
-            throw new BadRequestException(ErrorCode.AUDIT_SCOPE_INVALID);
+            throw new ResourceConflictException(ErrorCode.AUDIT_ITEM_DUPLICATE);
         }
         InventoryAuditItem item = InventoryAuditItem.builder()
                 .audit(audit).skuId(request.getSkuId()).rack(resolvedRack).bin(resolvedBin)
+                .itemOrigin(AuditItemOrigin.UNEXPECTED)
                 .expectedQuantity(0).actualQuantity(request.getActualQuantity())
                 .discrepancy(request.getActualQuantity()).countRound(audit.getCountRound())
                 .countStatus(AuditCountStatus.COUNTED).countedBy(actor)
@@ -421,6 +409,71 @@ public class InventoryAuditService {
         auditItemRepository.save(item);
         current.add(item);
         return maskCounterResponse(mapToResponse(audit, current), actor);
+    }
+
+    private AuditItemLocation resolveUnexpectedItemLocation(
+            InventoryAudit audit, AddUnexpectedAuditItemRequest request) {
+        AuditScopeType scopeType = audit.getScopeType() == null
+                ? AuditScopeType.WAREHOUSE : audit.getScopeType();
+
+        if (scopeType == AuditScopeType.BIN) {
+            WarehouseBin scopeBin = audit.getScopeBin();
+            WarehouseRack scopeRack = scopeBin == null ? null : scopeBin.getRack();
+            if (scopeBin == null || scopeRack == null
+                    || !locationBelongsToWarehouse(audit, scopeRack, scopeBin)
+                    || (request.getRackId() != null && !request.getRackId().equals(scopeRack.getId()))
+                    || (request.getBinId() != null && !request.getBinId().equals(scopeBin.getId()))) {
+                throw new BadRequestException(ErrorCode.AUDIT_SCOPE_INVALID);
+            }
+            return new AuditItemLocation(scopeRack, scopeBin);
+        }
+
+        if (scopeType == AuditScopeType.RACK) {
+            WarehouseRack scopeRack = audit.getScopeRack();
+            if (scopeRack == null || request.getBinId() == null
+                    || (request.getRackId() != null && !request.getRackId().equals(scopeRack.getId()))) {
+                throw new BadRequestException(ErrorCode.AUDIT_SCOPE_INVALID);
+            }
+            WarehouseBin selectedBin = findAuditBin(request.getBinId());
+            if (!locationBelongsToWarehouse(audit, scopeRack, selectedBin)) {
+                throw new BadRequestException(ErrorCode.AUDIT_SCOPE_INVALID);
+            }
+            return new AuditItemLocation(scopeRack, selectedBin);
+        }
+
+        if (request.getRackId() == null || request.getBinId() == null) {
+            throw new BadRequestException(ErrorCode.AUDIT_SCOPE_INVALID);
+        }
+        WarehouseRack selectedRack = findAuditRack(request.getRackId());
+        WarehouseBin selectedBin = findAuditBin(request.getBinId());
+        if (!locationBelongsToWarehouse(audit, selectedRack, selectedBin)) {
+            throw new BadRequestException(ErrorCode.AUDIT_SCOPE_INVALID);
+        }
+        return new AuditItemLocation(selectedRack, selectedBin);
+    }
+
+    private WarehouseRack findAuditRack(UUID rackId) {
+        return warehouseRackRepository.findByIdAndIsDeletedFalse(rackId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.RACK_NOT_FOUND));
+    }
+
+    private WarehouseBin findAuditBin(UUID binId) {
+        return warehouseBinRepository.findByIdAndIsDeletedFalse(binId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_BIN_NOT_FOUND));
+    }
+
+    private boolean locationBelongsToWarehouse(
+            InventoryAudit audit, WarehouseRack rack, WarehouseBin bin) {
+        return rack != null
+                && rack.getLayout() != null
+                && rack.getLayout().getWarehouse() != null
+                && audit.getWarehouse().getId().equals(rack.getLayout().getWarehouse().getId())
+                && bin != null
+                && bin.getRack() != null
+                && rack.getId().equals(bin.getRack().getId())
+                && bin.getRack().getLayout() != null
+                && bin.getRack().getLayout().getWarehouse() != null
+                && audit.getWarehouse().getId().equals(bin.getRack().getLayout().getWarehouse().getId());
     }
 
     @Transactional
@@ -612,9 +665,23 @@ public class InventoryAuditService {
         return auditItemRepository.findByAuditIdAndCountRoundOrderById(audit.getId(), audit.getCountRound());
     }
 
+    private UUID skuIdOf(InventoryAuditItem item) {
+        return item.getSkuId() != null ? item.getSkuId()
+                : item.getBatch() != null ? item.getBatch().getSkuId() : null;
+    }
+
+    private WarehouseRack rackOf(InventoryAuditItem item) {
+        return item.getRack() != null ? item.getRack()
+                : item.getBatch() != null ? item.getBatch().getRack() : null;
+    }
+
+    private WarehouseBin binOf(InventoryAuditItem item) {
+        return item.getBin() != null ? item.getBin()
+                : item.getBatch() != null ? item.getBatch().getBin() : null;
+    }
+
     private void reconcileAuditItem(UUID userId, UUID auditId, InventoryAudit audit, InventoryAuditItem item) {
-        UUID skuId = item.getSkuId() != null ? item.getSkuId()
-                : item.getBatch() == null ? null : item.getBatch().getSkuId();
+        UUID skuId = skuIdOf(item);
         if (skuId == null) {
             throw new BadRequestException(ErrorCode.AUDIT_SCOPE_INVALID);
         }
@@ -710,6 +777,9 @@ public class InventoryAuditService {
     }
 
     private record BatchScopeKey(UUID skuId, UUID rackId, UUID binId) {
+    }
+
+    private record AuditItemLocation(WarehouseRack rack, WarehouseBin bin) {
     }
 
     private UUID resolveAuditTenantId(InventoryAudit audit) {

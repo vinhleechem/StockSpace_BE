@@ -41,6 +41,10 @@ public class InventoryAuditResponse {
     private List<InventoryAuditItemResponse> items;
     private int countRound;
     private AuditScopeType scopeType;
+    private UUID scopeRackId;
+    private String scopeRackName;
+    private UUID scopeBinId;
+    private String scopeBinName;
     private UUID assignedToId;
     private String assignedToName;
     private LocalDateTime startedAt;
