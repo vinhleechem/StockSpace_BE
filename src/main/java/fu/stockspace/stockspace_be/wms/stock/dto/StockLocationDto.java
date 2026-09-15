@@ -20,8 +20,8 @@ public class StockLocationDto {
     private String warehouseName;
     private String rackName;
     private String binName;
-    private Integer quantity;
-    private Integer reservedQuantity;
-    private Integer availableQuantity;
+    private int quantity;
+    private int reservedQuantity;
+    private int availableQuantity;
     private boolean quantityMasked;
 }

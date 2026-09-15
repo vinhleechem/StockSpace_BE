@@ -32,10 +32,10 @@ public class StockBatchResponse {
     private UUID binId;
     private String binName;
 
-    /** Null while the batch is inside the current staff blind-count scope. */
-    private Integer quantity;
-    private Integer reservedQuantity;
-    private Integer availableQuantity;
+    /** When true, quantity fields are placeholders and must not be displayed as numbers. */
+    private int quantity;
+    private int reservedQuantity;
+    private int availableQuantity;
     private boolean quantityMasked;
     private LocalDateTime arrivalDate;
     private LocalDateTime createdAt;
