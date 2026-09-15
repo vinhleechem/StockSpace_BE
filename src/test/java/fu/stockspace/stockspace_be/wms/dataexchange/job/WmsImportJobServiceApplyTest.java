@@ -13,6 +13,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
+import org.springframework.dao.QueryTimeoutException;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -109,5 +110,22 @@ class WmsImportJobServiceApplyTest {
 
         assertEquals(WmsImportJobStatus.FAILED, job.getStatus());
         verify(jobRepository).save(job);
+    }
+
+    @Test
+    void preservesOriginalFailureWhenFailureRecordingFails() {
+        when(jobRepository.findByIdForUpdate(jobId))
+                .thenReturn(Optional.of(job))
+                .thenThrow(new QueryTimeoutException("failure recording lock timed out"));
+        when(jobRepository.existsByTenantIdAndImportTypeAndContentSha256AndStatusAndIsActiveTrueAndIsDeletedFalse(
+                tenantId, WmsImportType.SKU_CATALOG, job.getContentSha256(), WmsImportJobStatus.APPLIED))
+                .thenReturn(false);
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> service.applyJob(tenantId, tenantId, jobId,
+                        ignored -> { throw new IllegalStateException("domain failed"); }));
+
+        assertEquals("domain failed", failure.getMessage());
+        assertEquals(WmsImportJobStatus.VALIDATED, job.getStatus());
     }
 }
