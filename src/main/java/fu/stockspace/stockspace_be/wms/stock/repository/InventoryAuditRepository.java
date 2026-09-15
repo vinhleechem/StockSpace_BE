@@ -106,4 +106,18 @@ public interface InventoryAuditRepository extends JpaRepository<InventoryAudit, 
             @Param("tenantId") UUID tenantId,
             Pageable pageable
     );
+
+    @Query("""
+            select a from InventoryAudit a
+            where a.tenant.id = :tenantId
+              and a.assignedTo.id = :staffId
+              and a.status in :statuses
+              and a.isActive = true
+              and a.isDeleted = false
+            order by a.startedAt desc, a.createdAt desc, a.id desc
+            """)
+    List<InventoryAudit> findActiveBlindCountAudits(
+            @Param("tenantId") UUID tenantId,
+            @Param("staffId") UUID staffId,
+            @Param("statuses") Collection<AuditStatus> statuses);
 }

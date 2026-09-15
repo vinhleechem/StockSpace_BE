@@ -37,4 +37,5 @@ public class WarehouseStockOverviewResponse {
     private long availableQuantity;
     private BigDecimal totalWeightKg;
     private BigDecimal totalVolumeM3;
+    private boolean quantityMasked;
 }

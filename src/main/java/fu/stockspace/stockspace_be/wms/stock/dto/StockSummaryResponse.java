@@ -21,8 +21,10 @@ public class StockSummaryResponse {
     private String skuName;
     private String uomSymbol;
     private String uomName;
+    /** When true, quantity fields are placeholders and must not be displayed as numbers. */
     private int totalQuantity;
     private int reservedQuantity;
     private int availableQuantity;
+    private boolean quantityMasked;
     private List<StockLocationDto> locations;
 }

@@ -23,4 +23,5 @@ public class StockLocationDto {
     private int quantity;
     private int reservedQuantity;
     private int availableQuantity;
+    private boolean quantityMasked;
 }

@@ -17,6 +17,10 @@ import fu.stockspace.stockspace_be.wms.stock.dto.StockLocationDto;
 import fu.stockspace.stockspace_be.wms.stock.dto.StockSummaryResponse;
 import fu.stockspace.stockspace_be.wms.stock.dto.WarehouseStockOverviewResponse;
 import fu.stockspace.stockspace_be.wms.stock.entity.StockBatch;
+import fu.stockspace.stockspace_be.wms.stock.entity.AuditScopeType;
+import fu.stockspace.stockspace_be.wms.stock.entity.AuditStatus;
+import fu.stockspace.stockspace_be.wms.stock.entity.InventoryAudit;
+import fu.stockspace.stockspace_be.wms.stock.repository.InventoryAuditRepository;
 import fu.stockspace.stockspace_be.wms.stock.repository.StockBatchRepository;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferReservationStatus;
 import fu.stockspace.stockspace_be.wms.transfer.repository.StockTransferReservationRepository;
@@ -28,6 +32,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -44,7 +49,11 @@ public class StockBatchService {
     private final TenantWarehouseAccessService accessService;
     private final InventoryAuditLockService inventoryAuditLockService;
     private final StockTransferReservationRepository transferReservationRepository;
+    private final InventoryAuditRepository inventoryAuditRepository;
     private final Clock businessClock;
+
+    private static final Set<AuditStatus> BLIND_COUNT_STATUSES = Set.of(
+            AuditStatus.IN_PROGRESS, AuditStatus.REOPENED, AuditStatus.RECOUNT_REQUIRED);
 
 
 
@@ -68,9 +77,14 @@ public class StockBatchService {
 
     @Transactional(readOnly = true)
     public PagedResponse<StockBatchResponse> getStockByWarehouse(
-            UUID tenantId, UUID warehouseId, UUID staffId, Pageable pageable) {
+        UUID tenantId, UUID warehouseId, UUID staffId, Pageable pageable) {
         requireActiveWarehouseAccess(tenantId, warehouseId, staffId);
-        return getStockByWarehouse(tenantId, warehouseId, pageable);
+        warehouseRepository.findById(warehouseId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
+        List<InventoryAudit> audits = activeBlindCountAudits(tenantId, warehouseId, staffId);
+        Page<StockBatch> page = stockBatchRepository.findByWarehouseIdAndTenantId(
+                warehouseId, tenantId, pageable);
+        return PagedResponse.fromPage(page, batch -> mapToResponse(batch, audits));
     }
 
 
@@ -121,7 +135,42 @@ public class StockBatchService {
     public PagedResponse<WarehouseStockOverviewResponse> getStockOverviewByWarehouse(
             UUID tenantId, UUID warehouseId, UUID staffId, Pageable pageable) {
         requireActiveWarehouseAccess(tenantId, warehouseId, staffId);
-        return getStockOverviewByWarehouse(tenantId, warehouseId, pageable);
+        Warehouse warehouse = warehouseRepository.findById(warehouseId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
+        List<InventoryAudit> audits = activeBlindCountAudits(tenantId, warehouseId, staffId);
+        List<StockBatch> warehouseBatches = audits.isEmpty() ? List.of()
+                : stockBatchRepository.findAllByWarehouseIdAndTenantId(warehouseId, tenantId);
+        if (warehouseBatches == null) warehouseBatches = List.of();
+        Set<UUID> maskedSkuIds = audits.isEmpty() ? Set.of() : warehouseBatches.stream()
+                .filter(batch -> isInAnyAuditScope(batch, audits))
+                .map(StockBatch::getSkuId)
+                .collect(Collectors.toSet());
+        Page<ProductSkuRepository.WarehouseStockOverviewProjection> page =
+                productSkuRepository.findWarehouseStockOverview(tenantId, warehouseId, pageable);
+        return PagedResponse.fromPage(page, row -> {
+            boolean masked = maskedSkuIds.contains(row.getSkuId());
+            long reserved = transferReservationRepository == null ? 0L
+                    : transferReservationRepository.sumActiveQuantityBySkuAndWarehouse(row.getSkuId(), warehouseId);
+            return WarehouseStockOverviewResponse.builder()
+                    .skuId(row.getSkuId())
+                    .skuCode(row.getSkuCode())
+                    .skuName(row.getSkuName())
+                    .categoryId(row.getCategoryId())
+                    .categoryName(row.getCategoryName())
+                    .uomSymbol(row.getUomSymbol())
+                    .uomName(row.getUomName())
+                    .unitWeightKg(row.getUnitWeightKg())
+                    .unitVolumeM3(row.getUnitVolumeM3())
+                    .warehouseId(warehouse.getId())
+                    .warehouseName(warehouse.getName())
+                    .totalQuantity(masked ? 0L : row.getTotalQuantity())
+                    .reservedQuantity(masked ? 0L : reserved)
+                    .availableQuantity(masked ? 0L : Math.max(0L, row.getTotalQuantity() - reserved))
+                    .totalWeightKg(masked ? null : row.getTotalWeightKg())
+                    .totalVolumeM3(masked ? null : row.getTotalVolumeM3())
+                    .quantityMasked(masked)
+                    .build();
+        });
     }
 
 
@@ -183,6 +232,8 @@ public class StockBatchService {
                 skuId, tenantId, LocalDate.now(businessClock))
                 : stockBatchRepository.findBySkuIdInActiveAssignedTenantWarehouses(
                 skuId, tenantId, staffId, LocalDate.now(businessClock));
+        List<InventoryAudit> audits = activeBlindCountAudits(tenantId, null, staffId);
+        boolean quantityMasked = batches.stream().anyMatch(batch -> isInAnyAuditScope(batch, audits));
         int totalQuantity = batches.stream().mapToInt(StockBatch::getQuantity).sum();
         int reservedQuantity = transferReservationRepository == null ? 0 : batches.stream()
                 .mapToInt(batch -> (int) Math.min(Integer.MAX_VALUE,
@@ -191,22 +242,24 @@ public class StockBatchService {
                 .sum();
 
         List<StockLocationDto> locations = batches.stream()
-                .map(b -> StockLocationDto.builder()
+                .map(b -> {
+                    boolean masked = isInAnyAuditScope(b, audits);
+                    int reservedForBatch = transferReservationRepository == null ? 0
+                            : (int) Math.min(Integer.MAX_VALUE,
+                            transferReservationRepository.sumQuantityByBatchAndStatusExcludingTransfer(
+                                    b.getId(), StockTransferReservationStatus.ACTIVE, null));
+                    return StockLocationDto.builder()
                         .batchId(b.getId())
                         .warehouseId(b.getWarehouse() != null ? b.getWarehouse().getId() : null)
                         .warehouseName(b.getWarehouse() != null ? b.getWarehouse().getName() : null)
                         .rackName(b.getRack() != null ? b.getRack().getName() : null)
                         .binName(b.getBin() != null ? b.getBin().getName() : null)
-                        .quantity(b.getQuantity())
-                        .reservedQuantity(transferReservationRepository == null ? 0
-                                : (int) Math.min(Integer.MAX_VALUE,
-                                transferReservationRepository.sumQuantityByBatchAndStatusExcludingTransfer(
-                                        b.getId(), StockTransferReservationStatus.ACTIVE, null)))
-                        .availableQuantity(Math.max(0, b.getQuantity() - (transferReservationRepository == null ? 0
-                                : (int) Math.min(Integer.MAX_VALUE,
-                                transferReservationRepository.sumQuantityByBatchAndStatusExcludingTransfer(
-                                        b.getId(), StockTransferReservationStatus.ACTIVE, null)))))
-                        .build())
+                        .quantity(masked ? 0 : b.getQuantity())
+                        .reservedQuantity(masked ? 0 : reservedForBatch)
+                        .availableQuantity(masked ? 0 : Math.max(0, b.getQuantity() - reservedForBatch))
+                        .quantityMasked(masked)
+                        .build();
+                })
                 .collect(Collectors.toList());
 
         return StockSummaryResponse.builder()
@@ -215,9 +268,10 @@ public class StockBatchService {
                 .skuName(sku.getName())
                 .uomSymbol(uom != null ? uom.getCode() : null)
                 .uomName(uom != null ? uom.getName() : null)
-                .totalQuantity(totalQuantity)
-                .reservedQuantity(reservedQuantity)
-                .availableQuantity(Math.max(0, totalQuantity - reservedQuantity))
+                .totalQuantity(quantityMasked ? 0 : totalQuantity)
+                .reservedQuantity(quantityMasked ? 0 : reservedQuantity)
+                .availableQuantity(quantityMasked ? 0 : Math.max(0, totalQuantity - reservedQuantity))
+                .quantityMasked(quantityMasked)
                 .locations(locations)
                 .build();
     }
@@ -286,12 +340,17 @@ public class StockBatchService {
 
 
     public StockBatchResponse mapToResponse(StockBatch b) {
+        return mapToResponse(b, List.of());
+    }
+
+    private StockBatchResponse mapToResponse(StockBatch b, List<InventoryAudit> audits) {
         ProductSku sku = productSkuRepository.findByIdAndIsDeletedFalse(b.getSkuId()).orElse(null);
         UnitOfMeasure uom = sku != null ? sku.getUom() : null;
         int reservedQuantity = transferReservationRepository == null || b.getId() == null ? 0
                 : (int) Math.min(Integer.MAX_VALUE,
                 transferReservationRepository.sumQuantityByBatchAndStatusExcludingTransfer(
                         b.getId(), StockTransferReservationStatus.ACTIVE, null));
+        boolean masked = isInAnyAuditScope(b, audits);
 
         return StockBatchResponse.builder()
                 .id(b.getId())
@@ -306,13 +365,42 @@ public class StockBatchService {
                 .rackName(b.getRack() != null ? b.getRack().getName() : null)
                 .binId(b.getBin() != null ? b.getBin().getId() : null)
                 .binName(b.getBin() != null ? b.getBin().getName() : null)
-                .quantity(b.getQuantity())
-                .reservedQuantity(reservedQuantity)
-                .availableQuantity(Math.max(0, b.getQuantity() - reservedQuantity))
+                .quantity(masked ? 0 : b.getQuantity())
+                .reservedQuantity(masked ? 0 : reservedQuantity)
+                .availableQuantity(masked ? 0 : Math.max(0, b.getQuantity() - reservedQuantity))
+                .quantityMasked(masked)
                 .arrivalDate(b.getArrivalDate())
                 .createdAt(b.getCreatedAt())
                 .updatedAt(b.getUpdatedAt())
                 .build();
+    }
+
+    private List<InventoryAudit> activeBlindCountAudits(UUID tenantId, UUID warehouseId, UUID staffId) {
+        if (staffId == null || tenantId == null || inventoryAuditRepository == null) {
+            return List.of();
+        }
+        List<InventoryAudit> audits = inventoryAuditRepository.findActiveBlindCountAudits(
+                tenantId, staffId, BLIND_COUNT_STATUSES);
+        if (audits == null) return List.of();
+        return audits
+                .stream()
+                .filter(audit -> warehouseId == null || audit.getWarehouse() != null
+                        && warehouseId.equals(audit.getWarehouse().getId()))
+                .toList();
+    }
+
+    private boolean isInAnyAuditScope(StockBatch batch, List<InventoryAudit> audits) {
+        if (batch == null || audits == null || audits.isEmpty()) return false;
+        return audits.stream().anyMatch(audit -> {
+            AuditScopeType scope = audit.getScopeType() == null ? AuditScopeType.WAREHOUSE : audit.getScopeType();
+            if (scope == AuditScopeType.WAREHOUSE) return true;
+            if (scope == AuditScopeType.RACK) {
+                return audit.getScopeRack() != null && batch.getRack() != null
+                        && audit.getScopeRack().getId().equals(batch.getRack().getId());
+            }
+            return audit.getScopeBin() != null && batch.getBin() != null
+                    && audit.getScopeBin().getId().equals(batch.getBin().getId());
+        });
     }
 
 
