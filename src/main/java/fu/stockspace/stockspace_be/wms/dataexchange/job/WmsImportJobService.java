@@ -14,6 +14,8 @@ import fu.stockspace.stockspace_be.wms.stock.entity.InventoryAudit;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.PessimisticLockingFailureException;
+import org.springframework.dao.QueryTimeoutException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -155,8 +157,13 @@ public class WmsImportJobService {
             TransactionTemplate transaction = new TransactionTemplate(transactionManager);
             transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
             return transaction.execute(status -> {
-                WmsImportJob job = jobRepository.findByIdForUpdate(jobId)
-                        .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WMS_IMPORT_JOB_NOT_FOUND));
+                WmsImportJob job;
+                try {
+                    job = jobRepository.findByIdForUpdate(jobId)
+                            .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WMS_IMPORT_JOB_NOT_FOUND));
+                } catch (PessimisticLockingFailureException | QueryTimeoutException ex) {
+                    throw new ResourceConflictException(ErrorCode.WMS_IMPORT_APPLY_IN_PROGRESS);
+                }
                 assertReadable(job, tenantId, actorId);
                 if (job.getStatus() != WmsImportJobStatus.VALIDATED) {
                     throw new ResourceConflictException(ErrorCode.WMS_IMPORT_JOB_INVALID_STATUS);
