@@ -88,7 +88,6 @@ public class CatalogImportService {
         return jobService.getJob(tenantId, actorId, job.getId());
     }
 
-    @Transactional
     public WmsImportJobResponse apply(UUID tenantId, UUID actorId, UUID jobId) {
         WmsImportJob job = jobService.getValidatedJobForTenant(tenantId, actorId, jobId);
         if (job.getImportType() != WmsImportType.SKU_CATALOG || job.getWarehouse() != null || job.getAudit() != null) {

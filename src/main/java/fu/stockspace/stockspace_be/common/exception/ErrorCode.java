@@ -163,6 +163,7 @@ public enum ErrorCode {
     WMS_IMPORT_JOB_INVALID_STATUS("Trạng thái import job không cho phép thao tác này", HttpStatus.CONFLICT),
     WMS_IMPORT_ALREADY_APPLIED("File import này đã được áp dụng trước đó", HttpStatus.CONFLICT),
     WMS_IMPORT_STALE("Import job đã cũ và không còn an toàn để áp dụng", HttpStatus.CONFLICT),
+    WMS_IMPORT_APPLY_IN_PROGRESS("Import job đang được xử lý, vui lòng thử lại sau", HttpStatus.CONFLICT),
 
 
     CHAT_SESSION_NOT_FOUND("Phiên hội thoại không tồn tại", HttpStatus.NOT_FOUND),

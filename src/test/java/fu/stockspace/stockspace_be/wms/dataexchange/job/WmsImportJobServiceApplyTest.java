@@ -2,6 +2,7 @@ package fu.stockspace.stockspace_be.wms.dataexchange.job;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fu.stockspace.stockspace_be.auth.entity.User;
+import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.wms.dataexchange.config.DataExchangeProperties;
 import jakarta.persistence.EntityManager;
@@ -13,6 +14,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
+import org.springframework.dao.PessimisticLockingFailureException;
+import org.springframework.dao.QueryTimeoutException;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -109,5 +112,35 @@ class WmsImportJobServiceApplyTest {
 
         assertEquals(WmsImportJobStatus.FAILED, job.getStatus());
         verify(jobRepository).save(job);
+    }
+
+    @Test
+    void preservesOriginalFailureWhenFailureRecordingFails() {
+        when(jobRepository.findByIdForUpdate(jobId))
+                .thenReturn(Optional.of(job))
+                .thenThrow(new QueryTimeoutException("failure recording lock timed out"));
+        when(jobRepository.existsByTenantIdAndImportTypeAndContentSha256AndStatusAndIsActiveTrueAndIsDeletedFalse(
+                tenantId, WmsImportType.SKU_CATALOG, job.getContentSha256(), WmsImportJobStatus.APPLIED))
+                .thenReturn(false);
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> service.applyJob(tenantId, tenantId, jobId,
+                        ignored -> { throw new IllegalStateException("domain failed"); }));
+
+        assertEquals("domain failed", failure.getMessage());
+        assertEquals(WmsImportJobStatus.VALIDATED, job.getStatus());
+    }
+
+    @Test
+    void rejectsApplyWhenTheJobLockIsUnavailable() {
+        when(jobRepository.findByIdForUpdate(jobId))
+                .thenThrow(new PessimisticLockingFailureException("job is locked"));
+
+        ResourceConflictException failure = assertThrows(ResourceConflictException.class,
+                () -> service.applyJob(tenantId, tenantId, jobId,
+                        ignored -> { throw new AssertionError("domain callback must not run"); }));
+
+        assertEquals(ErrorCode.WMS_IMPORT_APPLY_IN_PROGRESS, failure.getErrorCode());
+        assertEquals(WmsImportJobStatus.VALIDATED, job.getStatus());
     }
 }
