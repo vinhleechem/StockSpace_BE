@@ -21,8 +21,10 @@ public class StockSummaryResponse {
     private String skuName;
     private String uomSymbol;
     private String uomName;
-    private int totalQuantity;
-    private int reservedQuantity;
-    private int availableQuantity;
+    /** Null while any location for this SKU is inside the current blind-count scope. */
+    private Integer totalQuantity;
+    private Integer reservedQuantity;
+    private Integer availableQuantity;
+    private boolean quantityMasked;
     private List<StockLocationDto> locations;
 }

@@ -2,6 +2,7 @@ package fu.stockspace.stockspace_be.wms.dataexchange.inventory;
 
 import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
+import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
@@ -9,6 +10,9 @@ import fu.stockspace.stockspace_be.wms.dataexchange.config.DataExchangePropertie
 import fu.stockspace.stockspace_be.wms.dataexchange.xlsx.XlsxFileException;
 import fu.stockspace.stockspace_be.wms.dataexchange.xlsx.XlsxWorkbookWriter;
 import fu.stockspace.stockspace_be.wms.stock.repository.InventorySnapshotRow;
+import fu.stockspace.stockspace_be.wms.stock.repository.InventoryAuditRepository;
+import fu.stockspace.stockspace_be.wms.stock.entity.AuditStatus;
+import fu.stockspace.stockspace_be.wms.stock.entity.InventoryAudit;
 import fu.stockspace.stockspace_be.wms.stock.repository.StockBatchRepository;
 import fu.stockspace.stockspace_be.wms.transfer.repository.StockTransferReservationRepository;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +31,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -40,12 +45,24 @@ public class InventorySnapshotExportService {
     private final StockTransferReservationRepository reservationRepository;
     private final StockFingerprintService fingerprintService;
     private final DataExchangeProperties properties;
+    private final InventoryAuditRepository inventoryAuditRepository;
 
     @Transactional(readOnly = true)
     public byte[] export(UUID tenantId, UUID warehouseId, UUID staffId) {
         accessService.requireActiveContract(tenantId, warehouseId);
         if (staffId != null) {
             accessService.requireActiveStaffAssignment(staffId, tenantId, warehouseId);
+            List<InventoryAudit> activeAudits =
+                    inventoryAuditRepository == null ? List.of() : inventoryAuditRepository.findActiveBlindCountAudits(
+                            tenantId, staffId, Set.of(AuditStatus.IN_PROGRESS, AuditStatus.REOPENED,
+                                    AuditStatus.RECOUNT_REQUIRED));
+            boolean blindCountActive = activeAudits != null && activeAudits.stream()
+                    .anyMatch(audit -> audit.getWarehouse() != null
+                            && warehouseId.equals(audit.getWarehouse().getId()));
+            if (blindCountActive) {
+                throw new ResourceConflictException(ErrorCode.AUDIT_MOVEMENT_LOCKED,
+                        "Không thể xuất snapshot trong khi staff đang kiểm kê mù");
+            }
         }
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
