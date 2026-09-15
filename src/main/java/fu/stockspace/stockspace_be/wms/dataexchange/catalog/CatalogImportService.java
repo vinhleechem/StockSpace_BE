@@ -15,6 +15,7 @@ import fu.stockspace.stockspace_be.wms.dataexchange.job.WmsImportJob;
 import fu.stockspace.stockspace_be.wms.dataexchange.job.WmsImportJobCommand;
 import fu.stockspace.stockspace_be.wms.dataexchange.job.WmsImportJobResponse;
 import fu.stockspace.stockspace_be.wms.dataexchange.job.WmsImportJobService;
+import fu.stockspace.stockspace_be.wms.dataexchange.job.WmsImportRow;
 import fu.stockspace.stockspace_be.wms.dataexchange.job.WmsImportRowInput;
 import fu.stockspace.stockspace_be.wms.dataexchange.job.WmsImportType;
 import fu.stockspace.stockspace_be.wms.dataexchange.xlsx.XlsxWorkbookReader;
@@ -99,10 +100,14 @@ public class CatalogImportService {
     }
 
     private WmsImportJobResponse applyRows(UUID tenantId, WmsImportJob job) {
-        List<fu.stockspace.stockspace_be.wms.dataexchange.job.WmsImportRow> rows =
+        List<WmsImportRow> rows =
                 jobServiceRows(job.getId());
+        Map<UUID, UnitOfMeasure> resolvedUoms = preflightUoms(tenantId, rows);
         Map<String, UUID> createdCategories = new HashMap<>();
         for (var row : rows) {
+            if (!"CATEGORIES".equals(row.getSheetName())) {
+                continue;
+            }
             if (row.getValidationErrors() != null && !row.getValidationErrors().isEmpty()) {
                 continue;
             }
@@ -119,6 +124,9 @@ public class CatalogImportService {
             }
         }
         for (var row : rows) {
+            if (!"SKUS".equals(row.getSheetName())) {
+                continue;
+            }
             if (row.getValidationErrors() != null && !row.getValidationErrors().isEmpty()) {
                 continue;
             }
@@ -128,7 +136,12 @@ public class CatalogImportService {
                 continue;
             }
             UUID categoryId = resolveCategoryId(tenantId, payload, createdCategories);
-            UnitOfMeasure uom = resolveUom(tenantId, string(payload.get("uom_code")));
+            UnitOfMeasure uom = resolvedUoms.get(row.getId());
+            if (uom == null) {
+                throw new ResourceNotFoundException(ErrorCode.UOM_NOT_FOUND,
+                        "KhÃ´ng tÃ¬m tháº¥y Ä‘Æ¡n vá»‹ tÃ­nh cho SKU '"
+                                + string(payload.get("sku_code")) + "'");
+            }
             BigDecimal weight = decimal(payload.get("unit_weight_kg"));
             BigDecimal volume = decimal(payload.get("unit_volume_m3"));
             if ("CREATE".equals(action)) {
@@ -146,6 +159,24 @@ public class CatalogImportService {
             }
         }
         return jobService.getJob(tenantId, tenantId, job.getId());
+    }
+
+    private Map<UUID, UnitOfMeasure> preflightUoms(UUID tenantId, List<WmsImportRow> rows) {
+        Map<UUID, UnitOfMeasure> resolved = new HashMap<>();
+        for (WmsImportRow row : rows) {
+            if (!"SKUS".equals(row.getSheetName())) {
+                continue;
+            }
+            if (row.getValidationErrors() != null && !row.getValidationErrors().isEmpty()) {
+                continue;
+            }
+            Map<String, Object> payload = row.getNormalizedPayload();
+            if ("SKIP".equals(string(payload.get("action")))) {
+                continue;
+            }
+            resolved.put(row.getId(), resolveUom(tenantId, string(payload.get("uom_code")), row));
+        }
+        return resolved;
     }
 
     private List<fu.stockspace.stockspace_be.wms.dataexchange.job.WmsImportRow> jobServiceRows(UUID jobId) {
@@ -368,9 +399,15 @@ public class CatalogImportService {
         return created;
     }
 
-    private UnitOfMeasure resolveUom(UUID tenantId, String code) {
+    private UnitOfMeasure resolveUom(UUID tenantId, String code, WmsImportRow row) {
         UnitOfMeasure uom = findUom(tenantId, code);
-        if (uom == null) throw new ResourceNotFoundException(ErrorCode.UOM_NOT_FOUND);
+        if (uom == null) {
+            Map<String, Object> payload = row.getNormalizedPayload();
+            throw new ResourceNotFoundException(ErrorCode.UOM_NOT_FOUND,
+                    "KhÃ´ng tÃ¬m tháº¥y Ä‘Æ¡n vá»‹ tÃ­nh '" + code + "' cho SKU '"
+                            + string(payload.get("sku_code")) + "' táº¡i "
+                            + row.getSheetName() + " row " + row.getRowNumber());
+        }
         return uom;
     }
 
