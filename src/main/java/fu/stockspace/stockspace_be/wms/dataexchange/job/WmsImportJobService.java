@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
 @Service
@@ -153,6 +154,7 @@ public class WmsImportJobService {
     public <T> T applyJob(UUID tenantId, UUID actorId, UUID jobId,
                           Function<WmsImportJob, T> domainApply) {
         AtomicBoolean domainStarted = new AtomicBoolean(false);
+        AtomicReference<WmsImportType> importType = new AtomicReference<>();
         try {
             TransactionTemplate transaction = new TransactionTemplate(transactionManager);
             transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -164,6 +166,7 @@ public class WmsImportJobService {
                 } catch (PessimisticLockingFailureException | QueryTimeoutException ex) {
                     throw new ResourceConflictException(ErrorCode.WMS_IMPORT_APPLY_IN_PROGRESS);
                 }
+                importType.set(job.getImportType());
                 assertReadable(job, tenantId, actorId);
                 if (job.getStatus() != WmsImportJobStatus.VALIDATED) {
                     throw new ResourceConflictException(ErrorCode.WMS_IMPORT_JOB_INVALID_STATUS);
@@ -185,15 +188,26 @@ public class WmsImportJobService {
                 throw new ResourceConflictException(ErrorCode.WMS_IMPORT_ALREADY_APPLIED);
             }
             if (domainStarted.get()) {
+                logApplyFailure(jobId, importType.get(), ex);
                 recordFailureSafely(jobId, ex);
             }
             throw ex;
         } catch (RuntimeException ex) {
             if (domainStarted.get()) {
+                logApplyFailure(jobId, importType.get(), ex);
                 recordFailureSafely(jobId, ex);
             }
             throw ex;
         }
+    }
+
+    private void logApplyFailure(UUID jobId, WmsImportType importType, RuntimeException failure) {
+        Throwable rootCause = failure;
+        while (rootCause.getCause() != null && rootCause.getCause() != rootCause) {
+            rootCause = rootCause.getCause();
+        }
+        log.warn("Import apply failed: jobId={}, importType={}, exceptionType={}, rootCauseType={}",
+                jobId, importType, failure.getClass().getName(), rootCause.getClass().getName(), failure);
     }
 
     public WmsImportJob getValidatedJobForTenant(UUID tenantId, UUID actorId, UUID jobId) {

@@ -42,6 +42,45 @@ POST /api/tenant/wms-data/inventory-audits/count-imports/{jobId}/apply
 
 All validate endpoints receive the workbook as multipart field `file`.
 
+## SKU catalog apply contract
+
+The catalog workbook contains `_META`, `CATEGORIES`, `SKUS`, and the
+read-only `UOM_LOOKUP` sheet from the catalog export. `UOM_LOOKUP` is provided
+for reference only; it is never imported.
+
+The Apply service keeps the sheet boundaries explicit:
+
+- Only rows from `CATEGORIES` may create tenant categories.
+- Only rows from `SKUS` may create or update tenant SKUs.
+- Rows with validation errors and rows whose action is `SKIP` are ignored by
+  Apply.
+- A category row is never interpreted as a SKU row, and a SKU row is never
+  interpreted as a category row.
+
+For every actionable `SKUS` row, `uom_code` is resolved case-insensitively to
+an active, non-deleted unit of measure visible to the tenant. A tenant-owned
+UOM has priority over a system UOM with the same code; the system UOM is used
+only when the tenant has no active UOM with that code. The UOM is resolved for
+all actionable SKU rows before any category or SKU write starts. Therefore, a
+missing or no-longer-visible UOM fails the job without partially creating the
+catalog.
+
+The normal validation response reports an unavailable UOM as
+`UOM_NOT_VISIBLE`. Apply repeats the lookup as a defense-in-depth check; a
+stale or invalid job is recorded as `FAILED` with `UOM_NOT_FOUND` context.
+After a job is `FAILED`, correct the workbook and validate a new job. Do not
+retry the failed job.
+
+The job can be reloaded with:
+
+```text
+GET /api/tenant/wms-data/imports/{jobId}
+```
+
+The response contains the authoritative job status and failure message. The
+catalog export remains the source of truth for the next editable workbook;
+existing system rows and the `UOM_LOOKUP` sheet remain read-only.
+
 ## Job status contract
 
 | Status | Meaning | FE action |
