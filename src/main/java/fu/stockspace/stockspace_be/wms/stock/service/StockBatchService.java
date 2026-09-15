@@ -77,8 +77,10 @@ public class StockBatchService {
 
     @Transactional(readOnly = true)
     public PagedResponse<StockBatchResponse> getStockByWarehouse(
-            UUID tenantId, UUID warehouseId, UUID staffId, Pageable pageable) {
+        UUID tenantId, UUID warehouseId, UUID staffId, Pageable pageable) {
         requireActiveWarehouseAccess(tenantId, warehouseId, staffId);
+        warehouseRepository.findById(warehouseId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
         List<InventoryAudit> audits = activeBlindCountAudits(tenantId, warehouseId, staffId);
         Page<StockBatch> page = stockBatchRepository.findByWarehouseIdAndTenantId(
                 warehouseId, tenantId, pageable);
