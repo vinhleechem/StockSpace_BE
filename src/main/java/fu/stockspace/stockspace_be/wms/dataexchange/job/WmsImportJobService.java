@@ -13,6 +13,9 @@ import fu.stockspace.stockspace_be.wms.dataexchange.xlsx.XlsxWorkbookWriter;
 import fu.stockspace.stockspace_be.wms.stock.entity.InventoryAudit;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.PessimisticLockingFailureException;
+import org.springframework.dao.QueryTimeoutException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -36,6 +39,7 @@ import java.util.function.Function;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class WmsImportJobService {
 
     private final WmsImportJobRepository jobRepository;
@@ -151,9 +155,15 @@ public class WmsImportJobService {
         AtomicBoolean domainStarted = new AtomicBoolean(false);
         try {
             TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+            transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
             return transaction.execute(status -> {
-                WmsImportJob job = jobRepository.findByIdForUpdate(jobId)
-                        .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WMS_IMPORT_JOB_NOT_FOUND));
+                WmsImportJob job;
+                try {
+                    job = jobRepository.findByIdForUpdate(jobId)
+                            .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WMS_IMPORT_JOB_NOT_FOUND));
+                } catch (PessimisticLockingFailureException | QueryTimeoutException ex) {
+                    throw new ResourceConflictException(ErrorCode.WMS_IMPORT_APPLY_IN_PROGRESS);
+                }
                 assertReadable(job, tenantId, actorId);
                 if (job.getStatus() != WmsImportJobStatus.VALIDATED) {
                     throw new ResourceConflictException(ErrorCode.WMS_IMPORT_JOB_INVALID_STATUS);
@@ -174,10 +184,13 @@ public class WmsImportJobService {
             if (ex.getMessage() != null && ex.getMessage().contains("ux_wms_import_jobs_applied_content")) {
                 throw new ResourceConflictException(ErrorCode.WMS_IMPORT_ALREADY_APPLIED);
             }
+            if (domainStarted.get()) {
+                recordFailureSafely(jobId, ex);
+            }
             throw ex;
         } catch (RuntimeException ex) {
             if (domainStarted.get()) {
-                recordFailure(jobId, ex.getMessage());
+                recordFailureSafely(jobId, ex);
             }
             throw ex;
         }
@@ -212,6 +225,15 @@ public class WmsImportJobService {
                     ? "Import apply failed" : message.substring(0, Math.min(message.length(), 2000)));
             jobRepository.save(job);
         }));
+    }
+
+    private void recordFailureSafely(UUID jobId, RuntimeException originalFailure) {
+        try {
+            recordFailure(jobId, originalFailure.getMessage());
+        } catch (RuntimeException failureRecordingFailure) {
+            log.error("Unable to record import apply failure for job {}. Original failure is preserved.",
+                    jobId, failureRecordingFailure);
+        }
     }
 
     private WmsImportJobResponse toResponse(WmsImportJob job, boolean includeErrors) {
