@@ -149,6 +149,7 @@ public enum ErrorCode {
     AUDIT_ALREADY_PROCESSED("Phiếu kiểm kê đã được xử lý (APPROVED/REJECTED)", HttpStatus.BAD_REQUEST),
     AUDIT_INVALID_STATUS("Trạng thái phiếu kiểm kê không hợp lệ để thực hiện hành động này", HttpStatus.BAD_REQUEST),
     AUDIT_SCOPE_INVALID("Phạm vi kiểm kê không hợp lệ", HttpStatus.BAD_REQUEST),
+    AUDIT_ITEM_DUPLICATE("SKU này đã có tại vị trí kiểm kê. Vui lòng cập nhật tổng số lượng thực tế trên dòng hiện có", HttpStatus.CONFLICT),
     AUDIT_COUNT_INCOMPLETE("Chưa nhập đủ số lượng thực tế cho phiếu kiểm kê", HttpStatus.BAD_REQUEST),
     AUDIT_MOVEMENT_LOCKED("Kho đang bị khóa để kiểm kê, không thể thay đổi tồn kho", HttpStatus.CONFLICT),
     AUDIT_RECOUNT_RESERVED("Kho đang có phiếu chờ kiểm kê lại, không thể bắt đầu phiếu kiểm kê khác", HttpStatus.CONFLICT),
