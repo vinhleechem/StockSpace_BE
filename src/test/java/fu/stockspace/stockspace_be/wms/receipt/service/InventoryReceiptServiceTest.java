@@ -1596,6 +1596,40 @@ class InventoryReceiptServiceTest {
     }
 
     @Test
+    void tenantReceiptListToleratesLegacyItemWithoutLocation() {
+        InventoryReceipt receipt = InventoryReceipt.builder()
+                .id(UUID.randomUUID())
+                .tenant(tenantUser)
+                .warehouse(warehouse)
+                .createdBy(tenantUser)
+                .type(DocumentType.INBOUND)
+                .status(ApprovalStatus.PENDING)
+                .build();
+        InventoryReceiptItem legacyItem = InventoryReceiptItem.builder()
+                .id(UUID.randomUUID())
+                .receipt(receipt)
+                .sku(productSku)
+                .quantity(2)
+                .rack(null)
+                .bin(null)
+                .build();
+        Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 20);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
+        when(receiptRepository.findByTenantIdAndWarehouseIdAndTypeAndIsDeletedFalse(
+                userId, warehouseId, DocumentType.INBOUND, pageable))
+                .thenReturn(new PageImpl<>(List.of(receipt), pageable, 1));
+        when(receiptItemRepository.findByReceiptId(receipt.getId())).thenReturn(List.of(legacyItem));
+
+        PagedResponse<InventoryReceiptResponse> result = receiptService.getReceiptsByWarehouse(
+                userId, warehouseId, DocumentType.INBOUND, pageable);
+
+        assertEquals(1, result.getTotalElements());
+        assertEquals(1, result.getContent().get(0).getItems().size());
+        assertNull(result.getContent().get(0).getItems().get(0).getRackId());
+        assertNull(result.getContent().get(0).getItems().get(0).getBinId());
+    }
+
+    @Test
     void exportReceiptsToCsv_IncludesSenderAndReceiverColumns() {
         InventoryReceipt receipt = InventoryReceipt.builder()
                 .id(UUID.randomUUID())

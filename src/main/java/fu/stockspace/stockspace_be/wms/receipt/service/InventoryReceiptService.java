@@ -893,27 +893,32 @@ public class InventoryReceiptService {
             InventoryReceipt receipt,
             List<InventoryReceiptItem> items,
             OutboundPickingSuggestionResponse pickList) {
-        List<ReceiptItemResponse> itemResponses = items.stream().map(item -> ReceiptItemResponse.builder()
-                .id(item.getId())
-                .skuId(item.getSku().getId())
-                .skuCode(item.getSku().getSkuCode())
-                .skuName(item.getSku().getName())
-                .quantity(item.getQuantity())
-                .rackId(item.getRack().getId())
-                .rackName(item.getRack().getName())
-                .binId(item.getBin().getId())
-                .binName(item.getBin().getName())
-                .stockBatchId(item.getStockBatch() != null ? item.getStockBatch().getId() : null)
-                .pickSequence(item.getPickSequence())
-                .note(item.getNote())
-                .build()).collect(Collectors.toList());
+        List<ReceiptItemResponse> itemResponses = items.stream().map(item -> {
+            ProductSku sku = item.getSku();
+            WarehouseRack rack = item.getRack();
+            WarehouseBin bin = item.getBin();
+            return ReceiptItemResponse.builder()
+                    .id(item.getId())
+                    .skuId(sku != null ? sku.getId() : null)
+                    .skuCode(sku != null ? sku.getSkuCode() : null)
+                    .skuName(sku != null ? sku.getName() : null)
+                    .quantity(item.getQuantity())
+                    .rackId(rack != null ? rack.getId() : null)
+                    .rackName(rack != null ? rack.getName() : null)
+                    .binId(bin != null ? bin.getId() : null)
+                    .binName(bin != null ? bin.getName() : null)
+                    .stockBatchId(item.getStockBatch() != null ? item.getStockBatch().getId() : null)
+                    .pickSequence(item.getPickSequence())
+                    .note(item.getNote())
+                    .build();
+        }).collect(Collectors.toList());
 
         return InventoryReceiptResponse.builder()
                 .id(receipt.getId())
-                .warehouseId(receipt.getWarehouse().getId())
-                .warehouseName(receipt.getWarehouse().getName())
-                .createdById(receipt.getCreatedBy().getId())
-                .createdByFullName(receipt.getCreatedBy().getFullName())
+                .warehouseId(receipt.getWarehouse() != null ? receipt.getWarehouse().getId() : null)
+                .warehouseName(receipt.getWarehouse() != null ? receipt.getWarehouse().getName() : null)
+                .createdById(receipt.getCreatedBy() != null ? receipt.getCreatedBy().getId() : null)
+                .createdByFullName(receipt.getCreatedBy() != null ? receipt.getCreatedBy().getFullName() : null)
                 .type(receipt.getType())
                 .signatureData(receipt.getSignatureData())
                 .senderName(receipt.getSenderName())
