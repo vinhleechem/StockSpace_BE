@@ -151,6 +151,7 @@ public enum ErrorCode {
     AUDIT_SCOPE_INVALID("Phạm vi kiểm kê không hợp lệ", HttpStatus.BAD_REQUEST),
     AUDIT_COUNT_INCOMPLETE("Chưa nhập đủ số lượng thực tế cho phiếu kiểm kê", HttpStatus.BAD_REQUEST),
     AUDIT_MOVEMENT_LOCKED("Kho đang bị khóa để kiểm kê, không thể thay đổi tồn kho", HttpStatus.CONFLICT),
+    AUDIT_RECOUNT_RESERVED("Kho đang có phiếu chờ kiểm kê lại, không thể bắt đầu phiếu kiểm kê khác", HttpStatus.CONFLICT),
     AUDIT_STOCK_CHANGED("Tồn kho đã thay đổi trong lúc kiểm kê, cần kiểm tra lại", HttpStatus.CONFLICT),
 
 

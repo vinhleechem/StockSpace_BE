@@ -26,6 +26,9 @@ public interface InventoryAuditRepository extends JpaRepository<InventoryAudit, 
 
     Page<InventoryAudit> findByStatusAndIsDeletedFalse(AuditStatus status, Pageable pageable);
 
+    boolean existsByWarehouseIdAndStatusAndIsActiveTrueAndIsDeletedFalse(
+            UUID warehouseId, AuditStatus status);
+
     @Query("""
             select a from InventoryAudit a
             where a.isDeleted = false
