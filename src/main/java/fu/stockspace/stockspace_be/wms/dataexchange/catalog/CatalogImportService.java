@@ -375,9 +375,7 @@ public class CatalogImportService {
     }
 
     private UnitOfMeasure findUom(UUID tenantId, String code) {
-        return uomRepository.findAllActiveByTenantOrSystem(tenantId,
-                        org.springframework.data.domain.PageRequest.of(0, 1000)).stream()
-                .filter(item -> item.getCode().equalsIgnoreCase(code)).findFirst().orElse(null);
+        return uomRepository.findActiveVisibleByCode(tenantId, code).orElse(null);
     }
 
     private Map<String, Object> asObjectMap(Object value) {
