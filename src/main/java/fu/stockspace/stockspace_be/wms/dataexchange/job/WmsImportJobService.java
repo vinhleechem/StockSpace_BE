@@ -151,6 +151,7 @@ public class WmsImportJobService {
         AtomicBoolean domainStarted = new AtomicBoolean(false);
         try {
             TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+            transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
             return transaction.execute(status -> {
                 WmsImportJob job = jobRepository.findByIdForUpdate(jobId)
                         .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WMS_IMPORT_JOB_NOT_FOUND));
