@@ -257,7 +257,7 @@ class TenantChatToolsTest {
                                 .skuName("Sản phẩm A")
                                 .categoryName("Hàng khô")
                                 .uomSymbol("THUNG")
-                                .totalQuantity(350)
+                                .totalQuantity(350L)
                                 .totalWeightKg(new BigDecimal("700"))
                                 .totalVolumeM3(new BigDecimal("12.5"))
                                 .build()))
