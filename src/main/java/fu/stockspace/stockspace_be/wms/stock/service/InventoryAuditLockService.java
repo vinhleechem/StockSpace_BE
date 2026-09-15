@@ -4,6 +4,8 @@ import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
 import fu.stockspace.stockspace_be.wms.stock.entity.InventoryAudit;
 import fu.stockspace.stockspace_be.wms.stock.entity.InventoryAuditLock;
+import fu.stockspace.stockspace_be.wms.stock.entity.AuditStatus;
+import fu.stockspace.stockspace_be.wms.stock.repository.InventoryAuditRepository;
 import fu.stockspace.stockspace_be.wms.stock.repository.InventoryAuditLockRepository;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +26,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class InventoryAuditLockService {
     private final InventoryAuditLockRepository lockRepository;
+    private final InventoryAuditRepository auditRepository;
     private final WarehouseRepository warehouseRepository;
 
     @Transactional
@@ -36,6 +39,15 @@ public class InventoryAuditLockService {
         if (lockRepository.findActiveForUpdate(warehouseId).isPresent()) {
             throw new ResourceConflictException(ErrorCode.AUDIT_MOVEMENT_LOCKED,
                     "Kho đang có một phiếu kiểm kê đang thực hiện");
+        }
+        // RECOUNT_REQUIRED releases the movement lock so stock can be made safe,
+        // but it still reserves the next count for that audit. Run this check
+        // while holding the warehouse row lock so a new draft and the recount
+        // cannot start concurrently and both believe they own the warehouse.
+        if (audit.getStatus() != AuditStatus.RECOUNT_REQUIRED
+                && auditRepository.existsByWarehouseIdAndStatusAndIsActiveTrueAndIsDeletedFalse(
+                        warehouseId, AuditStatus.RECOUNT_REQUIRED)) {
+            throw new ResourceConflictException(ErrorCode.AUDIT_RECOUNT_RESERVED);
         }
         try {
             return lockRepository.saveAndFlush(InventoryAuditLock.builder()
