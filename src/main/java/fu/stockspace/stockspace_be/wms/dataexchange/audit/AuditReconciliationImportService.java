@@ -125,7 +125,6 @@ public class AuditReconciliationImportService {
         return jobService.getJob(tenantId, actorId, job.getId());
     }
 
-    @Transactional
     public AuditReconciliationApplyResponse apply(UUID actorId, UUID jobId) {
         User actor = userRepository.findById(actorId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
