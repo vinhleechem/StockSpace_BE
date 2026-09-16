@@ -2,7 +2,7 @@ package fu.stockspace.stockspace_be.wms.transfer.entity;
 
 /**
  * Condition recorded when returned stock is received at the source warehouse.
- * A return is either usable stock or a rejected/non-usable record.
+ * Both conditions are booked into source inventory; REJECTED keeps its audit note.
  */
 public enum StockTransferReturnDisposition {
     GOOD,

@@ -31,7 +31,7 @@ public class StockTransferReturnLineRequest {
     @Builder.Default
     private StockTransferReturnDisposition disposition = StockTransferReturnDisposition.GOOD;
 
-    /** Required when the returned quantity is not accepted as usable stock. */
+    /** Required when the returned quantity is marked REJECTED. */
     @Size(max = 2000)
     private String note;
 }
