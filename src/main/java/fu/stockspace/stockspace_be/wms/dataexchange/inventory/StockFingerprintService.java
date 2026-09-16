@@ -42,7 +42,6 @@ public class StockFingerprintService {
                     value.put("batch_id", item.getBatchId());
                     value.put("quantity", item.getQuantity());
                     value.put("status", item.getStatus());
-                    value.put("updated_at", item.getUpdatedAt());
                     return value;
                 }).toList();
         Map<String, Object> root = new LinkedHashMap<>();
@@ -64,7 +63,6 @@ public class StockFingerprintService {
         value.put("bin_id", item.getBin() == null ? null : item.getBin().getId());
         value.put("quantity", item.getQuantity());
         value.put("arrival_date", item.getArrivalDate());
-        value.put("updated_at", item.getUpdatedAt());
         return value;
     }
 }

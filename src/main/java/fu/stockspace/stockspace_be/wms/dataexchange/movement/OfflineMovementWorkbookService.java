@@ -42,10 +42,12 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -344,8 +346,8 @@ public class OfflineMovementWorkbookService {
         LocalDateTime occurredAt = parseTimestamp(string(payload.get("occurred_at")));
         if (occurredAt == null) {
             addError(errors, "OCCURRED_AT_INVALID", "occurred_at phải là ISO-8601 date-time");
-        } else if (occurredAt.isBefore(generatedAt) || occurredAt.isAfter(now)) {
-            addError(errors, "OCCURRED_AT_OUT_OF_RANGE", "occurred_at phải nằm từ generated_at đến thời điểm hiện tại");
+        } else if (occurredAt.isAfter(now)) {
+            addError(errors, "OCCURRED_AT_OUT_OF_RANGE", "occurred_at không được nằm trong tương lai");
         } else {
             payload.put("occurred_at", occurredAt.toString());
         }
@@ -365,7 +367,7 @@ public class OfflineMovementWorkbookService {
             } else if (!hasPermission(actor, "INBOUND_CREATE")) {
                 addError(errors, "INBOUND_PERMISSION_REQUIRED", "Tài khoản không có quyền tạo phiếu nhập");
             } else {
-                Location location = validateLocation(warehouseId, rackCode, binCode, errors);
+                Location location = validateLocation(warehouseId, tenantId, rackCode, binCode, errors);
                 if (location != null) putLocationIds(payload, location);
             }
         } else if ("OUTBOUND".equals(type)) {
@@ -376,7 +378,7 @@ public class OfflineMovementWorkbookService {
                 addError(errors, "OUTBOUND_PERMISSION_REQUIRED", "Tài khoản không có quyền tạo phiếu xuất");
             }
             if (hasRack && hasBin) {
-                Location location = validateLocation(warehouseId, rackCode, binCode, errors);
+                Location location = validateLocation(warehouseId, tenantId, rackCode, binCode, errors);
                 if (location != null) putLocationIds(payload, location);
             }
         }
@@ -430,16 +432,13 @@ public class OfflineMovementWorkbookService {
         }
     }
 
-    private Location validateLocation(UUID warehouseId, String rackCode, String binCode,
+    private Location validateLocation(UUID warehouseId, UUID tenantId, String rackCode, String binCode,
                                       List<Map<String, String>> errors) {
-        WarehouseLayout currentLayout = layoutRepository.findByWarehouseId(warehouseId).stream()
-                .filter(this::activeLayout)
-                .filter(candidate -> candidate.getTenant() != null)
-                .max(Comparator.comparing(WarehouseLayout::getUpdatedAt,
-                        Comparator.nullsLast(Comparator.naturalOrder())))
-                .orElse(null);
-        if (currentLayout == null) {
-            addError(errors, "LAYOUT_NOT_FOUND", "Warehouse chưa có tenant layout hoạt động");
+        WarehouseLayout currentLayout;
+        try {
+            currentLayout = activeTenantLayout(warehouseId, tenantId);
+        } catch (ResourceNotFoundException ex) {
+            addError(errors, "LAYOUT_NOT_FOUND", "Warehouse chưa có layout hoạt động");
             return null;
         }
         WarehouseRack rack = rackRepository.findAllByLayoutId(currentLayout.getId()).stream()
@@ -575,6 +574,16 @@ public class OfflineMovementWorkbookService {
         }
     }
 
+    private static final List<DateTimeFormatter> DATE_TIME_FORMATTERS = List.of(
+            DateTimeFormatter.ISO_LOCAL_DATE_TIME,
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"),
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"),
+            DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss"),
+            DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"),
+            DateTimeFormatter.ofPattern("yyyy-MM-dd"),
+            DateTimeFormatter.ofPattern("dd/MM/yyyy")
+    );
+
     private LocalDateTime parseTimestamp(Object value) {
         String text = string(value);
         if (text.isBlank()) return null;
@@ -584,11 +593,18 @@ public class OfflineMovementWorkbookService {
             try {
                 return OffsetDateTime.parse(text).atZoneSameInstant(BUSINESS_ZONE).toLocalDateTime();
             } catch (DateTimeParseException ignoredAgain) {
-                try {
-                    return LocalDateTime.parse(text);
-                } catch (DateTimeParseException ignoredFinal) {
-                    return null;
+                for (DateTimeFormatter formatter : DATE_TIME_FORMATTERS) {
+                    try {
+                        try {
+                            return LocalDateTime.parse(text, formatter);
+                        } catch (DateTimeParseException tryDateOnly) {
+                            return LocalDate.parse(text, formatter).atStartOfDay();
+                        }
+                    } catch (DateTimeParseException ignoredFinal) {
+                        // try next format
+                    }
                 }
+                return null;
             }
         }
     }
