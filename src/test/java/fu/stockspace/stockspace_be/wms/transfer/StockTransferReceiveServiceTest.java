@@ -425,7 +425,10 @@ class StockTransferReceiveServiceTest {
 
     @Test
     void receiveTransfer_requiresNoteForNonGoodDisposition() {
-        stubDestinationValidationDependencies();
+        when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+        when(transferRepository.findByIdForUpdate(transfer.getId())).thenReturn(Optional.of(transfer));
+        when(layoutRepository.findByWarehouseIdAndTenantId(destinationWarehouseId, tenantId))
+                .thenReturn(Optional.of(tenantLayout));
 
         ReceiveStockTransferRequest request = ReceiveStockTransferRequest.builder()
                 .allowPartial(true)
