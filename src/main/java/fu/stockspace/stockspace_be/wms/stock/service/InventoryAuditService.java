@@ -564,7 +564,10 @@ public class InventoryAuditService {
         audit.setReviewReason(reason.trim());
         audit.setReviewedAt(LocalDateTime.now());
         audit = auditRepository.save(audit);
-        auditLockService.release(auditId);
+        // Keep the warehouse locked throughout the unresolved recount flow.
+        // For the normal path this reuses the lock already held since start;
+        // it also repairs a legacy record that reached SUBMITTED without one.
+        auditLockService.acquire(audit);
         pushAuditNotification(audit.getAssignedTo() != null ? audit.getAssignedTo().getId() : audit.getRequestedBy().getId(),
                 "Yêu cầu kiểm kê lại", "Phiếu kiểm kê kho " + audit.getWarehouse().getName()
                         + " cần được đếm lại: " + reason.trim());

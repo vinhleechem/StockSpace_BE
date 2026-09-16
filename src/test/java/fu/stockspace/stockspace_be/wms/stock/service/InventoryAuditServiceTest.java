@@ -991,6 +991,22 @@ class InventoryAuditServiceTest {
     }
 
     @Test
+    void testRequestRecountKeepsWarehouseLock() {
+        when(auditRepository.findByIdForUpdate(auditId)).thenReturn(Optional.of(submittedAudit));
+        when(auditRepository.save(any(InventoryAudit.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(auditItemRepository.findByAuditIdAndCountRoundOrderById(auditId, submittedAudit.getCountRound()))
+                .thenReturn(Collections.emptyList());
+
+        InventoryAuditResponse response = inventoryAuditService.requestRecount(
+                approverId, auditId, "Kiểm tra lại chênh lệch");
+
+        assertEquals(AuditStatus.RECOUNT_REQUIRED, response.getStatus());
+        verify(auditLockService).acquire(submittedAudit);
+        verify(auditLockService, never()).release(auditId);
+    }
+
+    @Test
     void testSubmitAudit_RejectsIncompleteCount() {
         InventoryAudit inProgress = InventoryAudit.builder()
                 .id(auditId).warehouse(warehouse).tenant(tenantUser).requestedBy(tenantUser)
