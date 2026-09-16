@@ -67,9 +67,10 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.never;
@@ -607,7 +608,14 @@ class StockTransferReceiveServiceTest {
                 .fullName("Source Picker")
                 .roles(Set.of(Role.builder().name(RoleType.ROLE_STAFF.name()).build()))
                 .build();
+        UUID destinationStaffId = UUID.randomUUID();
+        User destinationStaff = User.builder()
+                .id(destinationStaffId)
+                .fullName("Destination Receiver")
+                .roles(Set.of(Role.builder().name(RoleType.ROLE_STAFF.name()).build()))
+                .build();
         transfer.setSourceStaff(sourceStaff);
+        transfer.setDestinationStaff(destinationStaff);
         item.setShippedQuantity(5);
         when(userRepository.findById(staffId)).thenReturn(Optional.of(sourceStaff));
         when(tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(staffId))
@@ -623,9 +631,15 @@ class StockTransferReceiveServiceTest {
 
         assertEquals(StockTransferStatus.RETURN_REQUESTED, response.getStatus());
         assertEquals(StockTransferStatus.RETURN_REQUESTED, transfer.getStatus());
-        assertNull(transfer.getDestinationStaff());
+        assertEquals(destinationStaff, transfer.getDestinationStaff());
+        assertEquals(destinationStaffId, response.getDestinationStaff().getId());
         verify(accessService).requireActiveStaffAssignment(
                 staffId, tenantId, sourceWarehouseId);
+        verify(notificationService).push(
+                eq(destinationStaffId),
+                eq("Chuyến đã bị thu hồi về kho nguồn"),
+                anyString(),
+                eq("TRANSFER"));
         verify(receiptRepository, never()).save(any());
         verify(stockBatchRepository, never()).save(any());
     }
