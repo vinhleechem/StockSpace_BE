@@ -1936,6 +1936,10 @@ public class StockTransferService {
             StockTransferItem item = itemsById.get(allocationRequest.getItemId());
             StockTransferReceiptDisposition disposition = allocationRequest.getDisposition() == null
                     ? StockTransferReceiptDisposition.GOOD : allocationRequest.getDisposition();
+            if (disposition == StockTransferReceiptDisposition.QUARANTINE) {
+                throw new BadRequestException(ErrorCode.STOCK_TRANSFER_INVALID_ALLOCATION,
+                        "Disposition QUARANTINE không còn được hỗ trợ; hãy chọn DAMAGED hoặc REJECTED");
+            }
             String note = normalizeAllocationNote(allocationRequest.getNote());
             if (disposition != StockTransferReceiptDisposition.GOOD && note == null) {
                 throw new BadRequestException(ErrorCode.STOCK_TRANSFER_INVALID_ALLOCATION,

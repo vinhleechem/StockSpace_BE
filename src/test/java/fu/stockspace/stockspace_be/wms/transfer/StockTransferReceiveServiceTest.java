@@ -405,7 +405,7 @@ class StockTransferReceiveServiceTest {
                                 .quantity(2).disposition(StockTransferReceiptDisposition.GOOD).build(),
                         StockTransferDestinationAllocationRequest.builder()
                                 .itemId(itemId).destinationRackId(rackId).destinationBinId(binId)
-                                .quantity(2).disposition(StockTransferReceiptDisposition.QUARANTINE)
+                                .quantity(2).disposition(StockTransferReceiptDisposition.DAMAGED)
                                 .note("Cần kiểm tra chất lượng").build(),
                         StockTransferDestinationAllocationRequest.builder()
                                 .itemId(itemId).destinationRackId(rackId).destinationBinId(binId)
@@ -437,7 +437,24 @@ class StockTransferReceiveServiceTest {
                 .allowPartial(true)
                 .destinationAllocations(List.of(StockTransferDestinationAllocationRequest.builder()
                         .itemId(itemId).destinationRackId(rackId).destinationBinId(binId).quantity(5)
-                        .disposition(StockTransferReceiptDisposition.QUARANTINE).build()))
+                        .disposition(StockTransferReceiptDisposition.REJECTED).build()))
+                .build();
+
+        assertThrows(BadRequestException.class,
+                () -> transferService.receiveTransfer(tenantId, transfer.getId(), request));
+        verify(receiptRepository, never()).save(any());
+        verify(stockBatchRepository, never()).save(any(StockBatch.class));
+    }
+
+    @Test
+    void receiveTransfer_rejectsLegacyQuarantineDisposition() {
+        stubReceiveDependencies();
+
+        ReceiveStockTransferRequest request = ReceiveStockTransferRequest.builder()
+                .destinationAllocations(List.of(StockTransferDestinationAllocationRequest.builder()
+                        .itemId(itemId).destinationRackId(rackId).destinationBinId(binId).quantity(5)
+                        .disposition(StockTransferReceiptDisposition.QUARANTINE)
+                        .note("Legacy quarantine value").build()))
                 .build();
 
         assertThrows(BadRequestException.class,
