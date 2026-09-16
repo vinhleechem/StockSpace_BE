@@ -139,7 +139,7 @@ public class CatalogImportService {
             UnitOfMeasure uom = resolvedUoms.get(row.getId());
             if (uom == null) {
                 throw new ResourceNotFoundException(ErrorCode.UOM_NOT_FOUND,
-                        "KhÃ´ng tÃ¬m tháº¥y Ä‘Æ¡n vá»‹ tÃ­nh cho SKU '"
+                        "Không tìm thấy đơn vị tính cho SKU '"
                                 + string(payload.get("sku_code")) + "'");
             }
             BigDecimal weight = decimal(payload.get("unit_weight_kg"));
@@ -404,8 +404,8 @@ public class CatalogImportService {
         if (uom == null) {
             Map<String, Object> payload = row.getNormalizedPayload();
             throw new ResourceNotFoundException(ErrorCode.UOM_NOT_FOUND,
-                    "KhÃ´ng tÃ¬m tháº¥y Ä‘Æ¡n vá»‹ tÃ­nh '" + code + "' cho SKU '"
-                            + string(payload.get("sku_code")) + "' táº¡i "
+                    "Không tìm thấy đơn vị tính '" + code + "' cho SKU '"
+                            + string(payload.get("sku_code")) + "' tại "
                             + row.getSheetName() + " row " + row.getRowNumber());
         }
         return uom;

@@ -518,9 +518,9 @@ public class StockTransferService {
             User tenant = transfer.getTenant();
             if (tenant != null) {
                 recordEvent(saved, from, saved.getStatus(), "SLA_OVERDUE", tenant,
-                        "QuÃ¡ expectedArrivalAt mÃ  chÆ°a nháº­n Ä‘á»§ hÃ ng", null);
-                notifyTransferCreator(saved, "Chuyá»ƒn kho quÃ¡ SLA",
-                        transferRoute(saved) + " Ä‘Ã£ quÃ¡ SLA nháº­n hÃ ng. Cáº§n xÃ¡c minh, retry hoáº·c quay Ä‘áº§u.",
+                        "Quá expectedArrivalAt mà chưa nhận đủ hàng", null);
+                notifyTransferCreator(saved, "Chuyển kho quá SLA",
+                        transferRoute(saved) + " đã quá SLA nhận hàng. Cần xác minh, retry hoặc quay đầu.",
                         "overdue");
             }
             count++;
@@ -848,7 +848,7 @@ public class StockTransferService {
         }
         if (transfer.getItems().stream().anyMatch(item -> item.getReceivedQuantity() > 0)) {
             throw new ResourceConflictException(ErrorCode.STOCK_TRANSFER_INVALID_ALLOCATION,
-                    "ÄÃ£ nháº­n má»™t pháº§n hÃ ng, hÃ£y dÃ¹ng close-short thay vÃ¬ tá»« chá»‘i toÃ n chuyá»n");
+                    "Đã nhận một phần hàng, hãy dùng close-short thay vì từ chối toàn chuyến");
         }
         requireReceiptRejectionAccess(actor, tenantId, transfer);
         String reason = normalizeDecisionReason(request);
@@ -860,8 +860,8 @@ public class StockTransferService {
         recordEvent(saved, from, saved.getStatus(), "REJECT_RECEIPT", actor, reason, idempotencyKey);
         saveCommand(tenantId, saved, "REJECT_RECEIPT", idempotencyKey,
                 requestHash("REJECT_RECEIPT", transferId, request));
-        notifyTransferCreator(saved, "Kho Ä‘Ã­ch tá»« chá»‘i nháº­n chuyá»ƒn kho",
-                transferRoute(saved) + " bá»‹ tá»« chá»‘i. LÃ½ do: " + reason, "reject-receipt");
+        notifyTransferCreator(saved, "Kho đích từ chối nhận chuyển kho",
+                transferRoute(saved) + " bị từ chối. Lý do: " + reason, "reject-receipt");
         return mapToResponse(saved);
     }
 
@@ -895,7 +895,7 @@ public class StockTransferService {
         int returnable = returnableQuantity(transfer);
         if (returnable <= 0) {
             throw new ResourceConflictException(ErrorCode.STOCK_TRANSFER_INVALID_ALLOCATION,
-                    "KhÃ´ng cÃ²n sá»‘ lÆ°á»£ng Ä‘ang trÃªn chặng xuáº¥t Ä‘á»ƒ thu há»“i");
+                    "Không còn số lượng đang trên chặng xuất để thu hồi");
         }
 
         String reason = normalizeDecisionReason(request);
@@ -938,7 +938,7 @@ public class StockTransferService {
                 .anyMatch(item -> item.getReceivedQuantity() < item.getRequestedQuantity());
         if (!hasReceived || !incomplete) {
             throw new ResourceConflictException(ErrorCode.STOCK_TRANSFER_INVALID_ALLOCATION,
-                    "KhÃ´ng cÃ³ phÃ¡t sinh nháº­n thiáº¿u Ä‘á»ƒ Ä‘Ã³ng nháº­n");
+                    "Không có phát sinh nhận thiếu để đóng nhận");
         }
         requireTenantMutationAccess(tenantId, transfer);
         String reason = normalizeDecisionReason(request);
@@ -984,7 +984,7 @@ public class StockTransferService {
         int outstanding = outstandingQuantity(transfer);
         if (outstanding <= 0) {
             throw new ResourceConflictException(ErrorCode.STOCK_TRANSFER_INVALID_ALLOCATION,
-                    "KhÃ´ng cÃ²n sá»‘ lÆ°á»£ng Ä‘ang chá» Ä‘á»ƒ retry");
+                    "Không còn số lượng đang chờ để retry");
         }
         String reason = normalizeRetryReason(request.getReason());
         StockTransferStatus from = transfer.getStatus();
@@ -1040,19 +1040,17 @@ public class StockTransferService {
         if (previous != null) return previous;
         if (transfer.getStatus() != StockTransferStatus.RECEIVE_REJECTED
                 && transfer.getStatus() != StockTransferStatus.SHORT_RECEIVED
-                && transfer.getStatus() != StockTransferStatus.RECONCILING
-                && transfer.getStatus() != StockTransferStatus.PARTIALLY_RETURNED) {
+                && transfer.getStatus() != StockTransferStatus.RECONCILING) {
             throw new ResourceConflictException(ErrorCode.STOCK_TRANSFER_INVALID_STATUS);
         }
         int returnable = returnableQuantity(transfer);
         if (returnable <= 0) {
             throw new ResourceConflictException(ErrorCode.STOCK_TRANSFER_INVALID_ALLOCATION,
-                    "KhÃ´ng cÃ²n sá»‘ lÆ°á»£ng cÃ³ thá»ƒ return");
+                    "Không còn số lượng có thể return");
         }
         requireTenantMutationAccess(tenantId, transfer);
         String reason = normalizeDecisionReason(request);
-        Warehouse returnSource = transfer.getStatus() == StockTransferStatus.PARTIALLY_RETURNED
-                ? currentReturnAttemptSource(transfer) : activeDestinationWarehouse(transfer);
+        Warehouse returnSource = activeDestinationWarehouse(transfer);
         StockTransferStatus from = transfer.getStatus();
         transfer.setDecisionReason(reason);
         transfer.setDestinationStaff(null);
@@ -1098,7 +1096,8 @@ public class StockTransferService {
         StockTransferResponse previous = findPreviousCommandResult(tenantId, transfer, "RECEIVE_RETURN",
                 idempotencyKey, requestHash("RECEIVE_RETURN", transferId, request));
         if (previous != null) return previous;
-        if (transfer.getStatus() != StockTransferStatus.RETURN_IN_TRANSIT) {
+        if (transfer.getStatus() != StockTransferStatus.RETURN_IN_TRANSIT
+                && transfer.getStatus() != StockTransferStatus.PARTIALLY_RETURNED) {
             throw new ResourceConflictException(ErrorCode.STOCK_TRANSFER_INVALID_STATUS);
         }
         requireTenantMutationAccess(tenantId, transfer);
@@ -1115,14 +1114,14 @@ public class StockTransferService {
         for (StockTransferReturnLineRequest line : request.getLines()) {
             if (!seen.add(line.getItemId()) || !items.containsKey(line.getItemId())) {
                 throw new BadRequestException(ErrorCode.STOCK_TRANSFER_INVALID_ALLOCATION,
-                        "Return line khÃ´ng thuá»™c transfer hoáº·c bá»‹ láº·p");
+                        "Return line không thuộc transfer hoặc bị lặp");
             }
             StockTransferItem item = items.get(line.getItemId());
             int available = Math.max(0, item.getShippedQuantity()
                     - item.getReceivedGoodQuantity() - item.getReturnedQuantity());
             if (line.getQuantity() > available) {
                 throw new BadRequestException(ErrorCode.STOCK_TRANSFER_INVALID_ALLOCATION,
-                        "Sá»‘ lÆ°á»£ng return vÆ°á»£t pháº§n hÃ ng cÃ²n cÃ³ thá»ƒ thu há»“i");
+                        "Số lượng return vượt phần hàng còn có thể thu hồi");
             }
             WarehouseRack rack = findAndValidateReturnRack(line.getSourceRackId(), sourceLayout);
             WarehouseBin bin = findAndValidateReturnBin(line.getSourceBinId(), rack, sourceLayout);
@@ -1170,7 +1169,7 @@ public class StockTransferService {
         int remaining = returnableQuantity(transfer);
         if (!request.isAllowPartial() && remaining > 0) {
             throw new BadRequestException(ErrorCode.STOCK_TRANSFER_INVALID_ALLOCATION,
-                    "Return chÆ°a Ä‘á»§ sá»‘ lÆ°á»£ng; báº­t allowPartial náº¿u nháº­n nhiá»u Ä‘á»£t");
+                    "Return chưa đủ số lượng; bật allowPartial nếu nhận nhiều đợt");
         }
         StockTransferStatus from = transfer.getStatus();
         if (remaining == 0) {
@@ -1693,13 +1692,6 @@ public class StockTransferService {
     private StockTransferAttempt currentAttempt(StockTransfer transfer) {
         if (attemptRepository == null || transfer.getId() == null) return null;
         return attemptRepository.findTopByTransferIdOrderBySequenceNoDesc(transfer.getId()).orElse(null);
-    }
-
-    private Warehouse currentReturnAttemptSource(StockTransfer transfer) {
-        StockTransferAttempt attempt = currentAttempt(transfer);
-        return attempt != null && attempt.getType() == StockTransferAttemptType.RETURN
-                && attempt.getSourceWarehouse() != null
-                ? attempt.getSourceWarehouse() : activeDestinationWarehouse(transfer);
     }
 
     private void markCurrentAttemptInTransit(StockTransfer transfer, User actor, int shippedQuantity) {
