@@ -64,4 +64,7 @@ public class StockTransferDestinationAllocation extends BaseEntity {
     @Column(name = "disposition", nullable = false, length = 20)
     @Builder.Default
     private StockTransferReceiptDisposition disposition = StockTransferReceiptDisposition.GOOD;
+
+    @Column(name = "note", columnDefinition = "text")
+    private String note;
 }

@@ -161,6 +161,7 @@ final class ChatToolLocalization {
             case "REJECT_RECEIPT" -> "Từ chối nhận hàng";
             case "CLOSE_SHORT" -> "Đóng xử lý nhận thiếu";
             case "RETRY", "DISPATCH_RETRY" -> "Yêu cầu chuyển lại";
+            case "RECALL_IN_TRANSIT" -> "Thu hồi chuyến đang vận chuyển";
             case "REQUEST_RETURN" -> "Yêu cầu quay đầu";
             case "DISPATCH_RETURN" -> "Xuất chuyến quay đầu";
             case "RECEIVE_RETURN" -> "Nhận hàng quay về";

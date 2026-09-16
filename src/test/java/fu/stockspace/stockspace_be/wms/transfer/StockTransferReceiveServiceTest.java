@@ -65,6 +65,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
@@ -368,13 +369,19 @@ class StockTransferReceiveServiceTest {
                 .allowPartial(true)
                 .destinationAllocations(List.of(StockTransferDestinationAllocationRequest.builder()
                         .itemId(itemId).destinationRackId(rackId).destinationBinId(binId).quantity(5)
-                        .disposition(StockTransferReceiptDisposition.DAMAGED).build()))
+                        .disposition(StockTransferReceiptDisposition.DAMAGED)
+                        .note("Bao bì rách khi nhận").build()))
                 .build();
         StockTransferResponse response = transferService.receiveTransfer(
                 tenantId, transfer.getId(), request);
         assertEquals(StockTransferStatus.RECONCILING, response.getStatus());
         assertEquals(5, item.getReceivedDamagedQuantity());
         verify(stockBatchRepository, never()).save(any(StockBatch.class));
+        assertEquals("Bao bì rách khi nhận", item.getDestinationAllocations().get(0).getNote());
+        ArgumentCaptor<InventoryReceiptItem> receiptItemCaptor =
+                ArgumentCaptor.forClass(InventoryReceiptItem.class);
+        verify(receiptItemRepository).save(receiptItemCaptor.capture());
+        assertEquals("Bao bì rách khi nhận", receiptItemCaptor.getValue().getNote());
 
         StockTransferResponse reconciled = transferService.reconcileTransfer(
                 tenantId, transfer.getId(), StockTransferReconcileRequest.builder()
@@ -395,10 +402,12 @@ class StockTransferReceiveServiceTest {
                                 .quantity(2).disposition(StockTransferReceiptDisposition.GOOD).build(),
                         StockTransferDestinationAllocationRequest.builder()
                                 .itemId(itemId).destinationRackId(rackId).destinationBinId(binId)
-                                .quantity(2).disposition(StockTransferReceiptDisposition.QUARANTINE).build(),
+                                .quantity(2).disposition(StockTransferReceiptDisposition.QUARANTINE)
+                                .note("Cần kiểm tra chất lượng").build(),
                         StockTransferDestinationAllocationRequest.builder()
                                 .itemId(itemId).destinationRackId(rackId).destinationBinId(binId)
-                                .quantity(1).disposition(StockTransferReceiptDisposition.REJECTED).build()))
+                                .quantity(1).disposition(StockTransferReceiptDisposition.REJECTED)
+                                .note("Không đạt điều kiện nhập kho").build()))
                 .build();
 
         StockTransferResponse response = transferService.receiveTransfer(
@@ -412,6 +421,26 @@ class StockTransferReceiveServiceTest {
         verify(stockBatchRepository, times(1)).save(any(StockBatch.class));
         verify(transactionRepository, times(1)).save(any(InventoryTransaction.class));
         verify(receiptItemRepository, times(3)).save(any(InventoryReceiptItem.class));
+    }
+
+    @Test
+    void receiveTransfer_requiresNoteForNonGoodDisposition() {
+        when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+        when(transferRepository.findByIdForUpdate(transfer.getId())).thenReturn(Optional.of(transfer));
+        when(layoutRepository.findByWarehouseIdAndTenantId(destinationWarehouseId, tenantId))
+                .thenReturn(Optional.of(tenantLayout));
+
+        ReceiveStockTransferRequest request = ReceiveStockTransferRequest.builder()
+                .allowPartial(true)
+                .destinationAllocations(List.of(StockTransferDestinationAllocationRequest.builder()
+                        .itemId(itemId).destinationRackId(rackId).destinationBinId(binId).quantity(5)
+                        .disposition(StockTransferReceiptDisposition.QUARANTINE).build()))
+                .build();
+
+        assertThrows(BadRequestException.class,
+                () -> transferService.receiveTransfer(tenantId, transfer.getId(), request));
+        verify(receiptRepository, never()).save(any());
+        verify(stockBatchRepository, never()).save(any(StockBatch.class));
     }
 
     @Test
@@ -535,6 +564,66 @@ class StockTransferReceiveServiceTest {
 
         assertEquals(StockTransferStatus.RECEIVE_REJECTED, response.getStatus());
         assertEquals(StockTransferStatus.RECEIVE_REJECTED, transfer.getStatus());
+        verify(receiptRepository, never()).save(any());
+        verify(stockBatchRepository, never()).save(any());
+    }
+
+    @Test
+    void rejectReceipt_allowsAssignedDestinationStaffBeforeArrive() {
+        UUID staffId = UUID.randomUUID();
+        User destinationStaff = User.builder()
+                .id(staffId)
+                .fullName("Destination Receiver")
+                .roles(Set.of(Role.builder().name(RoleType.ROLE_STAFF.name()).build()))
+                .build();
+        transfer.setDestinationStaff(destinationStaff);
+        when(userRepository.findById(staffId)).thenReturn(Optional.of(destinationStaff));
+        when(tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(staffId))
+                .thenReturn(Optional.of(TenantMember.builder().user(destinationStaff).tenant(tenant).build()));
+        when(transferRepository.findByIdForUpdate(transfer.getId())).thenReturn(Optional.of(transfer));
+        when(transferRepository.save(any(StockTransfer.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        StockTransferResponse response = transferService.rejectReceipt(
+                staffId, transfer.getId(), StockTransferDecisionRequest.builder()
+                        .reason("Kho đích báo đóng cửa trước khi xe đến")
+                        .build(), "reject-before-arrive");
+
+        assertEquals(StockTransferStatus.RECEIVE_REJECTED, response.getStatus());
+        assertEquals(StockTransferStatus.RECEIVE_REJECTED, transfer.getStatus());
+        verify(accessService).requireActiveStaffAssignment(
+                staffId, tenantId, destinationWarehouseId);
+        verify(receiptRepository, never()).save(any());
+        verify(stockBatchRepository, never()).save(any());
+    }
+
+    @Test
+    void recallInTransit_returnsDispatchedLegWithoutChangingInventory() {
+        UUID staffId = UUID.randomUUID();
+        User sourceStaff = User.builder()
+                .id(staffId)
+                .fullName("Source Picker")
+                .roles(Set.of(Role.builder().name(RoleType.ROLE_STAFF.name()).build()))
+                .build();
+        transfer.setSourceStaff(sourceStaff);
+        item.setShippedQuantity(5);
+        when(userRepository.findById(staffId)).thenReturn(Optional.of(sourceStaff));
+        when(tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(staffId))
+                .thenReturn(Optional.of(TenantMember.builder().user(sourceStaff).tenant(tenant).build()));
+        when(transferRepository.findByIdForUpdate(transfer.getId())).thenReturn(Optional.of(transfer));
+        when(transferRepository.save(any(StockTransfer.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        StockTransferResponse response = transferService.recallInTransit(
+                staffId, transfer.getId(), StockTransferDecisionRequest.builder()
+                        .reason("Kho đích báo không thể tiếp nhận")
+                        .build(), "recall-in-transit");
+
+        assertEquals(StockTransferStatus.RETURN_REQUESTED, response.getStatus());
+        assertEquals(StockTransferStatus.RETURN_REQUESTED, transfer.getStatus());
+        assertNull(transfer.getDestinationStaff());
+        verify(accessService).requireActiveStaffAssignment(
+                staffId, tenantId, sourceWarehouseId);
         verify(receiptRepository, never()).save(any());
         verify(stockBatchRepository, never()).save(any());
     }

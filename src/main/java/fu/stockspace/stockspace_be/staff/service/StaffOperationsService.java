@@ -49,6 +49,8 @@ public class StaffOperationsService {
     private static final String PICK = "PICK";
     private static final String ARRIVE = "ARRIVE";
     private static final String RECEIVE = "RECEIVE";
+    private static final String REJECT_RECEIPT = "REJECT_RECEIPT";
+    private static final String RECALL = "RECALL";
 
     private final TenantMemberRepository tenantMemberRepository;
     private final TenantWarehouseAccessService accessService;
@@ -250,15 +252,28 @@ public class StaffOperationsService {
         if (pickAction) {
             actions.add(PICK);
         }
+        if (sourceAssignee
+                && (transfer.getStatus() == StockTransferStatus.IN_TRANSIT
+                || transfer.getStatus() == StockTransferStatus.OVERDUE)) {
+            actions.add(RECALL);
+        }
         if (destinationAssignee) {
+            boolean noQuantityReceived = transfer.getItems() == null
+                    || transfer.getItems().stream().noneMatch(item -> item.getReceivedQuantity() > 0);
             if (transfer.getStatus() == StockTransferStatus.IN_TRANSIT
                     || transfer.getStatus() == StockTransferStatus.OVERDUE) {
                 actions.add(ARRIVE);
                 actions.add(RECEIVE);
+                if (noQuantityReceived) {
+                    actions.add(REJECT_RECEIPT);
+                }
             } else if (transfer.getStatus() == StockTransferStatus.ARRIVED_AT_DESTINATION
                     || transfer.getStatus() == StockTransferStatus.RECEIVING
                     || transfer.getStatus() == StockTransferStatus.PARTIALLY_RECEIVED) {
                 actions.add(RECEIVE);
+                if (noQuantityReceived) {
+                    actions.add(REJECT_RECEIPT);
+                }
             }
         }
         Warehouse operationWarehouse = destinationAssignee && !pickAction ? destination : source;

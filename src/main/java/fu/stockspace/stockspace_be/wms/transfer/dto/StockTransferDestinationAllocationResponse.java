@@ -23,4 +23,5 @@ public class StockTransferDestinationAllocationResponse {
     private String destinationBinName;
     private int quantity;
     private StockTransferReceiptDisposition disposition;
+    private String note;
 }

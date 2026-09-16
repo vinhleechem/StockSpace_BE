@@ -4,6 +4,7 @@ import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferReceiptDispo
 
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -33,4 +34,12 @@ public class StockTransferDestinationAllocationRequest {
 
     @Builder.Default
     private StockTransferReceiptDisposition disposition = StockTransferReceiptDisposition.GOOD;
+
+    /**
+     * Explanation recorded by the destination receiver when the physical stock
+     * is not accepted as GOOD.  The service applies the conditional requirement
+     * because Bean Validation cannot compare this field with disposition.
+     */
+    @Size(max = 2000, message = "Ghi chú không được vượt quá 2000 ký tự")
+    private String note;
 }

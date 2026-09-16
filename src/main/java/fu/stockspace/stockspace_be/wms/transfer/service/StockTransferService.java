@@ -703,6 +703,7 @@ public class StockTransferService {
             StockTransferDestinationAllocationRequest allocationRequest = reference.request();
             WarehouseRack rack = lockedRacks.get(allocationRequest.getDestinationRackId());
             WarehouseBin bin = lockedBins.get(allocationRequest.getDestinationBinId());
+            String note = normalizeAllocationNote(allocationRequest.getNote());
 
             StockBatch batch = null;
             StockTransferReceiptDisposition disposition = allocationRequest.getDisposition() == null
@@ -733,11 +734,17 @@ public class StockTransferService {
                                 .destinationBin(bin)
                                 .quantity(0)
                                 .disposition(disposition)
+                                .note(note)
                                 .build();
                         item.getDestinationAllocations().add(created);
                         return created;
                     });
             destinationAllocation.setQuantity(destinationAllocation.getQuantity() + allocationRequest.getQuantity());
+            if (note != null) {
+                // The receipt item below preserves every receiving session's note;
+                // this field is the latest note shown on the transfer allocation.
+                destinationAllocation.setNote(note);
+            }
             item.setReceivedQuantity(item.getReceivedQuantity() + allocationRequest.getQuantity());
             if (disposition == StockTransferReceiptDisposition.GOOD) {
                 item.setReceivedGoodQuantity(item.getReceivedGoodQuantity() + allocationRequest.getQuantity());
@@ -751,6 +758,7 @@ public class StockTransferService {
                     .rack(rack)
                     .bin(bin)
                     .stockBatch(batch)
+                    .note(note)
                     .build());
             if (batch != null) {
                 transactionRepository.save(InventoryTransaction.builder()
@@ -814,12 +822,19 @@ public class StockTransferService {
         return mapToResponse(saved);
     }
 
-    /** A destination can refuse a shipment before any quantity is booked into stock. */
+    /**
+     * A destination can refuse a shipment before any quantity is booked into stock.
+     *
+     * The tenant may make the final decision, while the assigned destination
+     * staff may also refuse the receipt when the truck is still IN_TRANSIT (or
+     * has arrived but no quantity has been booked yet).  Source staff is not
+     * allowed through the destination-assignment check.
+     */
     @Transactional
     public StockTransferResponse rejectReceipt(UUID userId, UUID transferId,
                                                StockTransferDecisionRequest request,
                                                String idempotencyKey) {
-        User actor = findTenantActor(userId);
+        User actor = findUser(userId);
         UUID tenantId = resolveTenantId(actor);
         StockTransfer transfer = lockTenantTransfer(tenantId, transferId);
         StockTransferResponse previous = findPreviousCommandResult(tenantId, transfer, "REJECT_RECEIPT",
@@ -835,7 +850,7 @@ public class StockTransferService {
             throw new ResourceConflictException(ErrorCode.STOCK_TRANSFER_INVALID_ALLOCATION,
                     "ÄÃ£ nháº­n má»™t pháº§n hÃ ng, hÃ£y dÃ¹ng close-short thay vÃ¬ tá»« chá»‘i toÃ n chuyá»n");
         }
-        requireTenantMutationAccess(tenantId, transfer);
+        requireReceiptRejectionAccess(actor, tenantId, transfer);
         String reason = normalizeDecisionReason(request);
         StockTransferStatus from = transfer.getStatus();
         transfer.setDecisionReason(reason);
@@ -847,6 +862,60 @@ public class StockTransferService {
                 requestHash("REJECT_RECEIPT", transferId, request));
         notifyTransferCreator(saved, "Kho Ä‘Ã­ch tá»« chá»‘i nháº­n chuyá»ƒn kho",
                 transferRoute(saved) + " bá»‹ tá»« chá»‘i. LÃ½ do: " + reason, "reject-receipt");
+        return mapToResponse(saved);
+    }
+
+    /**
+     * Recall a dispatched transfer while it is still on the outbound leg.
+     * This is a source-side operation and is deliberately distinct from a
+     * destination's REJECT_RECEIPT decision.  No stock is changed here; the
+     * normal RETURN_REQUESTED -> RETURN_IN_TRANSIT -> receive-return workflow
+     * completes the physical recovery.
+     */
+    @Transactional
+    public StockTransferResponse recallInTransit(UUID userId, UUID transferId,
+                                                 StockTransferDecisionRequest request,
+                                                 String idempotencyKey) {
+        User actor = findUser(userId);
+        UUID tenantId = resolveTenantId(actor);
+        StockTransfer transfer = lockTenantTransfer(tenantId, transferId);
+        String command = "RECALL_IN_TRANSIT";
+        String requestHash = requestHash(command, transferId, request);
+        StockTransferResponse previous = findPreviousCommandResult(
+                tenantId, transfer, command, idempotencyKey, requestHash);
+        if (previous != null) {
+            return previous;
+        }
+        if (transfer.getStatus() != StockTransferStatus.IN_TRANSIT
+                && transfer.getStatus() != StockTransferStatus.OVERDUE) {
+            throw new ResourceConflictException(ErrorCode.STOCK_TRANSFER_INVALID_STATUS);
+        }
+        requireInTransitRecallAccess(actor, tenantId, transfer);
+        requireTenantMutationAccess(tenantId, transfer);
+        int returnable = returnableQuantity(transfer);
+        if (returnable <= 0) {
+            throw new ResourceConflictException(ErrorCode.STOCK_TRANSFER_INVALID_ALLOCATION,
+                    "KhÃ´ng cÃ²n sá»‘ lÆ°á»£ng Ä‘ang trÃªn chặng xuáº¥t Ä‘á»ƒ thu há»“i");
+        }
+
+        String reason = normalizeDecisionReason(request);
+        StockTransferStatus from = transfer.getStatus();
+        transfer.setDecisionReason(reason);
+        transfer.setDestinationStaff(null);
+        transfer.setStatus(StockTransferStatus.RETURN_REQUESTED);
+        StockTransfer saved = transferRepository.save(transfer);
+
+        // Close the outbound leg before creating its return leg so the event
+        // remains attached to the leg that was recalled.
+        markCurrentAttemptCancelled(saved, actor, reason);
+        recordEvent(saved, from, saved.getStatus(), command, actor, reason, idempotencyKey);
+        createAttempt(saved, StockTransferAttemptType.RETURN,
+                activeDestinationWarehouse(saved), saved.getSourceWarehouse(),
+                returnable, actor, reason);
+        saveCommand(tenantId, saved, command, idempotencyKey, requestHash);
+        notifyTransferCreator(saved, "Đã thu hồi chặng chuyển kho đang vận chuyển",
+                transferRoute(saved) + " được yêu cầu quay về kho nguồn. Lý do: " + reason,
+                "recall-in-transit");
         return mapToResponse(saved);
     }
 
@@ -1402,7 +1471,8 @@ public class StockTransferService {
                             .append(allocation.getDestinationRackId()).append(':')
                             .append(allocation.getDestinationBinId()).append(':')
                             .append(allocation.getQuantity()).append(':')
-                            .append(allocation.getDisposition()));
+                            .append(allocation.getDisposition()).append(':')
+                            .append(normalizeAllocationNote(allocation.getNote())));
         }
         return sha256(canonical.toString());
     }
@@ -1539,6 +1609,37 @@ public class StockTransferService {
         return actor;
     }
 
+    private void requireReceiptRejectionAccess(User actor, UUID tenantId,
+                                               StockTransfer transfer) {
+        if (isStaff(actor)) {
+            // Only the receiver assigned to the active destination may refuse
+            // the shipment.  This also deliberately excludes source staff.
+            requireDestinationReceivingAccess(actor, tenantId, transfer);
+        } else if (!hasRole(actor, RoleType.ROLE_TENANT)) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        }
+        requireTenantMutationAccess(tenantId, transfer);
+    }
+
+    private void requireInTransitRecallAccess(User actor, UUID tenantId,
+                                              StockTransfer transfer) {
+        if (!isStaff(actor)) {
+            if (!hasRole(actor, RoleType.ROLE_TENANT)) {
+                throw new ForbiddenException(ErrorCode.FORBIDDEN);
+            }
+            return;
+        }
+
+        User assignedSourceStaff = transfer.getSourceStaff();
+        if (assignedSourceStaff == null
+                || !actor.getId().equals(assignedSourceStaff.getId())) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN,
+                    "Only the assigned source staff can recall this transfer");
+        }
+        accessService.requireActiveStaffAssignment(
+                actor.getId(), tenantId, transfer.getSourceWarehouse().getId());
+    }
+
     private StockTransfer lockTenantTransfer(UUID tenantId, UUID transferId) {
         return transferRepository.findByIdForUpdate(transferId)
                 .filter(candidate -> candidate.getTenant() != null
@@ -1624,6 +1725,15 @@ public class StockTransferService {
         StockTransferAttempt attempt = currentAttempt(transfer);
         if (attempt == null) return;
         attempt.setStatus(StockTransferAttemptStatus.REJECTED);
+        attempt.setReason(reason);
+        attempt.setCompletedAt(LocalDateTime.now());
+        attemptRepository.save(attempt);
+    }
+
+    private void markCurrentAttemptCancelled(StockTransfer transfer, User actor, String reason) {
+        StockTransferAttempt attempt = currentAttempt(transfer);
+        if (attempt == null) return;
+        attempt.setStatus(StockTransferAttemptStatus.CANCELLED);
         attempt.setReason(reason);
         attempt.setCompletedAt(LocalDateTime.now());
         attemptRepository.save(attempt);
@@ -1819,6 +1929,11 @@ public class StockTransferService {
             StockTransferItem item = itemsById.get(allocationRequest.getItemId());
             StockTransferReceiptDisposition disposition = allocationRequest.getDisposition() == null
                     ? StockTransferReceiptDisposition.GOOD : allocationRequest.getDisposition();
+            String note = normalizeAllocationNote(allocationRequest.getNote());
+            if (disposition != StockTransferReceiptDisposition.GOOD && note == null) {
+                throw new BadRequestException(ErrorCode.STOCK_TRANSFER_INVALID_ALLOCATION,
+                        "Phải nhập ghi chú cho disposition khác GOOD");
+            }
             if (item == null || !locations.add(new DestinationLocationKey(
                     allocationRequest.getItemId(), allocationRequest.getDestinationRackId(),
                     allocationRequest.getDestinationBinId(), disposition))) {
@@ -1867,6 +1982,14 @@ public class StockTransferService {
                 .thenComparing(reference -> reference.request().getDestinationBinId())
                 .thenComparing(reference -> reference.item().getId()));
         return references;
+    }
+
+    private String normalizeAllocationNote(String note) {
+        if (note == null) {
+            return null;
+        }
+        String normalized = note.trim();
+        return normalized.isBlank() ? null : normalized;
     }
 
     private Map<UUID, WarehouseRack> lockDestinationRacks(
@@ -2269,6 +2392,7 @@ public class StockTransferService {
                 .quantity(allocation.getQuantity())
                 .disposition(allocation.getDisposition() == null
                         ? StockTransferReceiptDisposition.GOOD : allocation.getDisposition())
+                .note(allocation.getNote())
                 .build();
     }
 
