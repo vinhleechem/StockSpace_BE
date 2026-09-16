@@ -21,4 +21,6 @@ public class StockTransferSourceAllocationResponse {
     private UUID sourceBinId;
     private String sourceBinName;
     private int quantity;
+    private int pickedQuantity;
+    private int remainingQuantity;
 }
