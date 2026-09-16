@@ -901,7 +901,6 @@ public class StockTransferService {
         String reason = normalizeDecisionReason(request);
         StockTransferStatus from = transfer.getStatus();
         transfer.setDecisionReason(reason);
-        transfer.setDestinationStaff(null);
         transfer.setStatus(StockTransferStatus.RETURN_REQUESTED);
         StockTransfer saved = transferRepository.save(transfer);
 
@@ -916,6 +915,7 @@ public class StockTransferService {
         notifyTransferCreator(saved, "Đã thu hồi chặng chuyển kho đang vận chuyển",
                 transferRoute(saved) + " được yêu cầu quay về kho nguồn. Lý do: " + reason,
                 "recall-in-transit");
+        notifyDestinationStaffReturnRequested(saved, saved.getDestinationStaff(), reason);
         return mapToResponse(saved);
     }
 
@@ -1053,7 +1053,6 @@ public class StockTransferService {
         Warehouse returnSource = activeDestinationWarehouse(transfer);
         StockTransferStatus from = transfer.getStatus();
         transfer.setDecisionReason(reason);
-        transfer.setDestinationStaff(null);
         transfer.setStatus(StockTransferStatus.RETURN_REQUESTED);
         StockTransfer saved = transferRepository.save(transfer);
         createAttempt(saved, StockTransferAttemptType.RETURN, returnSource,
@@ -1061,6 +1060,7 @@ public class StockTransferService {
         recordEvent(saved, from, saved.getStatus(), "REQUEST_RETURN", actor, reason, idempotencyKey);
         saveCommand(tenantId, saved, "REQUEST_RETURN", idempotencyKey,
                 requestHash("REQUEST_RETURN", transferId, request));
+        notifyDestinationStaffReturnRequested(saved, saved.getDestinationStaff(), reason);
         return mapToResponse(saved);
     }
 
@@ -1229,7 +1229,6 @@ public class StockTransferService {
         String reason = request.getReason() == null ? request.getResolution().name() : request.getReason().trim();
         transfer.setDecisionReason(reason.isBlank() ? request.getResolution().name() : reason);
         if (request.getResolution() == fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferReconciliationResolution.RETURN_TO_SOURCE) {
-            transfer.setDestinationStaff(null);
             transfer.setStatus(StockTransferStatus.RETURN_REQUESTED);
         } else if (request.getResolution() == fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferReconciliationResolution.DECLARE_LOST) {
             transfer.setStatus(StockTransferStatus.LOST);
@@ -1241,6 +1240,8 @@ public class StockTransferService {
             createAttempt(savedTransfer, StockTransferAttemptType.RETURN,
                     activeDestinationWarehouse(savedTransfer), savedTransfer.getSourceWarehouse(),
                     returnableQuantity(savedTransfer), reconciler, savedTransfer.getDecisionReason());
+            notifyDestinationStaffReturnRequested(savedTransfer, savedTransfer.getDestinationStaff(),
+                    savedTransfer.getDecisionReason());
         }
         recordEvent(savedTransfer, previous, savedTransfer.getStatus(),
                 "RECONCILE_" + request.getResolution().name(), reconciler,
@@ -1582,6 +1583,20 @@ public class StockTransferService {
                 "Bạn được giao nhận chuyển kho",
                 "Bạn được giao nhận " + transferRoute(transfer) + ".",
                 "assign-destination-staff",
+                transfer.getId());
+    }
+
+    private void notifyDestinationStaffReturnRequested(StockTransfer transfer,
+                                                       User destinationStaff,
+                                                       String reason) {
+        if (destinationStaff == null || destinationStaff.getId() == null) {
+            return;
+        }
+        notifySafely(
+                destinationStaff.getId(),
+                "Chuyến đã bị thu hồi về kho nguồn",
+                transferRoute(transfer) + " đã bị thu hồi về kho nguồn. Lý do: " + reason,
+                "return-requested",
                 transfer.getId());
     }
 
