@@ -33,6 +33,8 @@ import fu.stockspace.stockspace_be.wms.stock.repository.StockBatchRepository;
 import fu.stockspace.stockspace_be.wms.transfer.dto.ReceiveStockTransferRequest;
 import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferDecisionRequest;
 import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferDestinationAllocationRequest;
+import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferReturnLineRequest;
+import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferReturnRequest;
 import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferResponse;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransfer;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferDestinationAllocation;
@@ -649,6 +651,56 @@ class StockTransferReceiveServiceTest {
         verify(receiptRepository, never()).save(any());
     }
 
+    @Test
+    void receiveReturn_continuesPartiallyReturnedLegAndCompletesOnRemainder() {
+        transfer.setStatus(StockTransferStatus.PARTIALLY_RETURNED);
+        item.setShippedQuantity(2);
+        item.setReceivedGoodQuantity(0);
+        item.setReturnedQuantity(1);
+        stubReturnDependencies();
+
+        StockTransferReturnRequest request = StockTransferReturnRequest.builder()
+                .reason("Receive the remaining returned unit")
+                .allowPartial(true)
+                .lines(List.of(StockTransferReturnLineRequest.builder()
+                        .itemId(itemId)
+                        .quantity(1)
+                        .sourceRackId(rackId)
+                        .sourceBinId(binId)
+                        .build()))
+                .build();
+
+        StockTransferResponse response = transferService.receiveReturn(
+                tenantId, transfer.getId(), request, "receive-return-remainder");
+
+        assertEquals(StockTransferStatus.RETURNED, response.getStatus());
+        assertEquals(StockTransferStatus.RETURNED, transfer.getStatus());
+        assertEquals(2, item.getReturnedQuantity());
+        assertEquals(sourceWarehouseId, transfer.getActiveDestinationWarehouse().getId());
+        verify(receiptRepository).save(any(InventoryReceipt.class));
+        verify(stockBatchRepository).save(any(StockBatch.class));
+        verify(transactionRepository).save(any(InventoryTransaction.class));
+        verify(transferRepository).save(transfer);
+    }
+
+    @Test
+    void requestReturn_rejectsCreatingAnotherLegAfterPartialReturn() {
+        transfer.setStatus(StockTransferStatus.PARTIALLY_RETURNED);
+        item.setShippedQuantity(2);
+        item.setReturnedQuantity(1);
+        when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+        when(transferRepository.findByIdForUpdate(transfer.getId())).thenReturn(Optional.of(transfer));
+
+        assertThrows(ResourceConflictException.class,
+                () -> transferService.requestReturn(tenantId, transfer.getId(),
+                        StockTransferDecisionRequest.builder()
+                                .reason("Do not create a duplicate return leg")
+                                .build(), "duplicate-return"));
+
+        verify(receiptRepository, never()).save(any());
+        verify(transferRepository, never()).save(any(StockTransfer.class));
+    }
+
     private void stubReceiveDependencies() {
         stubDestinationValidationDependencies();
         when(rackRepository.findByIdForUpdate(rackId)).thenReturn(Optional.of(destinationRack));
@@ -661,6 +713,27 @@ class StockTransferReceiveServiceTest {
         lenient().when(transactionRepository.save(any(InventoryTransaction.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         lenient().when(stockBatchRepository.save(any(StockBatch.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(transferRepository.save(any(StockTransfer.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    private void stubReturnDependencies() {
+        when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+        when(transferRepository.findByIdForUpdate(transfer.getId())).thenReturn(Optional.of(transfer));
+        when(layoutRepository.findByWarehouseIdAndTenantId(sourceWarehouseId, tenantId))
+                .thenReturn(Optional.of(tenantLayout));
+        when(rackRepository.findByIdForUpdate(rackId)).thenReturn(Optional.of(destinationRack));
+        when(binRepository.findByIdForUpdate(binId)).thenReturn(Optional.of(destinationBin));
+        when(stockBatchRepository.findActivePhysicalLoadsByWarehouseIdAndTenantId(
+                sourceWarehouseId, tenantId)).thenReturn(List.of());
+        when(receiptRepository.save(any(InventoryReceipt.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(receiptItemRepository.save(any(InventoryReceiptItem.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(stockBatchRepository.save(any(StockBatch.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(transactionRepository.save(any(InventoryTransaction.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(transferRepository.save(any(StockTransfer.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));

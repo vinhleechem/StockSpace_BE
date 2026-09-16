@@ -258,7 +258,7 @@ class SubscriptionServiceTest {
     }
 
     @Test
-    @DisplayName("6. Háº¡ cáº¥p gÃ³i bá»‹ cháº·n náº¿u chá»‰ tháº¥p hÆ¡n vá» giÃ¡")
+    @DisplayName("6. Hạ cấp gói bị chặn nếu chỉ thấp hơn về giá")
     void purchasePackage_DowngradeBlocked_WhenOnlyPriceIsLower() {
         PurchasePackageRequest request = new PurchasePackageRequest(packageBasicId);
         packageBasic.setMaxStaff(packagePro.getMaxStaff());
