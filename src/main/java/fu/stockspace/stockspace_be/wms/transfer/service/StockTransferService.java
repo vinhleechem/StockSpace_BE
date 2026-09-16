@@ -1149,19 +1149,15 @@ public class StockTransferService {
             StockTransferItem item = items.get(line.getItemId());
             WarehouseRack rack = returnRacks.get(line.getSourceRackId());
             WarehouseBin bin = returnBins.get(line.getSourceBinId());
-            StockTransferReturnDisposition disposition = returnDisposition(line);
             String note = normalizeAllocationNote(line.getNote());
-            StockBatch batch = null;
-            if (disposition == StockTransferReturnDisposition.GOOD) {
-                batch = stockBatchRepository.save(StockBatch.builder()
-                        .skuId(item.getSku().getId())
-                        .warehouse(transfer.getSourceWarehouse())
-                        .rack(rack)
-                        .bin(bin)
-                        .quantity(line.getQuantity())
-                        .arrivalDate(LocalDateTime.now())
-                        .build());
-            }
+            StockBatch batch = stockBatchRepository.save(StockBatch.builder()
+                    .skuId(item.getSku().getId())
+                    .warehouse(transfer.getSourceWarehouse())
+                    .rack(rack)
+                    .bin(bin)
+                    .quantity(line.getQuantity())
+                    .arrivalDate(LocalDateTime.now())
+                    .build());
             receiptItemRepository.save(InventoryReceiptItem.builder()
                     .receipt(receipt)
                     .sku(item.getSku())
@@ -1171,13 +1167,11 @@ public class StockTransferService {
                     .stockBatch(batch)
                     .note(note)
                     .build());
-            if (batch != null) {
-                transactionRepository.save(InventoryTransaction.builder()
-                        .receipt(receipt)
-                        .batch(batch)
-                        .quantityChanged(line.getQuantity())
-                        .build());
-            }
+            transactionRepository.save(InventoryTransaction.builder()
+                    .receipt(receipt)
+                    .batch(batch)
+                    .quantityChanged(line.getQuantity())
+                    .build());
             item.setReturnedQuantity(item.getReturnedQuantity() + line.getQuantity());
             incoming += line.getQuantity();
         }
@@ -1834,9 +1828,6 @@ public class StockTransferService {
         Map<UUID, List<PhysicalLoadLine>> incomingByRack = new LinkedHashMap<>();
         Map<UUID, List<PhysicalLoadLine>> incomingByBin = new LinkedHashMap<>();
         for (StockTransferReturnLineRequest line : lines) {
-            if (returnDisposition(line) != StockTransferReturnDisposition.GOOD) {
-                continue;
-            }
             ProductSku sku = items.get(line.getItemId()).getSku();
             PhysicalLoadLine loadLine = new PhysicalLoadLine(
                     line.getSourceRackId(), line.getSourceBinId(), sku.getId(), sku.getSkuCode(), sku.getName(),

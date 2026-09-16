@@ -68,7 +68,6 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -720,7 +719,7 @@ class StockTransferReceiveServiceTest {
     }
 
     @Test
-    void receiveReturn_recordsRejectedStockWithoutCreatingAvailableInventory() {
+    void receiveReturn_addsRejectedStockToSourceInventoryWithAuditNote() {
         transfer.setStatus(StockTransferStatus.RETURN_IN_TRANSIT);
         item.setShippedQuantity(2);
         item.setReceivedGoodQuantity(0);
@@ -737,6 +736,8 @@ class StockTransferReceiveServiceTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(receiptItemRepository.save(any(InventoryReceiptItem.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
+        when(stockBatchRepository.save(any(StockBatch.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         when(transferRepository.save(any(StockTransfer.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -748,7 +749,7 @@ class StockTransferReceiveServiceTest {
                         .sourceRackId(rackId)
                         .sourceBinId(binId)
                         .disposition(StockTransferReturnDisposition.REJECTED)
-                        .note("Vỏ sản phẩm nứt, không thể đưa vào tồn khả dụng")
+                        .note("Vỏ sản phẩm nứt, cần theo dõi riêng tại kho nguồn")
                         .build()))
                 .build();
 
@@ -757,14 +758,14 @@ class StockTransferReceiveServiceTest {
 
         assertEquals(StockTransferStatus.RETURNED, response.getStatus());
         assertEquals(2, item.getReturnedQuantity());
-        verify(stockBatchRepository, never()).save(any(StockBatch.class));
-        verify(transactionRepository, never()).save(any(InventoryTransaction.class));
+        verify(stockBatchRepository).save(any(StockBatch.class));
+        verify(transactionRepository).save(any(InventoryTransaction.class));
         ArgumentCaptor<InventoryReceiptItem> receiptItemCaptor =
                 ArgumentCaptor.forClass(InventoryReceiptItem.class);
         verify(receiptItemRepository).save(receiptItemCaptor.capture());
-        assertEquals("Vỏ sản phẩm nứt, không thể đưa vào tồn khả dụng",
+        assertEquals("Vỏ sản phẩm nứt, cần theo dõi riêng tại kho nguồn",
                 receiptItemCaptor.getValue().getNote());
-        assertNull(receiptItemCaptor.getValue().getStockBatch());
+        assertNotNull(receiptItemCaptor.getValue().getStockBatch());
     }
 
     @Test
