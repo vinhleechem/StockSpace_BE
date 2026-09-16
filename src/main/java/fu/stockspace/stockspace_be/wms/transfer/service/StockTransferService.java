@@ -703,6 +703,7 @@ public class StockTransferService {
             StockTransferDestinationAllocationRequest allocationRequest = reference.request();
             WarehouseRack rack = lockedRacks.get(allocationRequest.getDestinationRackId());
             WarehouseBin bin = lockedBins.get(allocationRequest.getDestinationBinId());
+            String note = normalizeAllocationNote(allocationRequest.getNote());
 
             StockBatch batch = null;
             StockTransferReceiptDisposition disposition = allocationRequest.getDisposition() == null
@@ -733,11 +734,17 @@ public class StockTransferService {
                                 .destinationBin(bin)
                                 .quantity(0)
                                 .disposition(disposition)
+                                .note(note)
                                 .build();
                         item.getDestinationAllocations().add(created);
                         return created;
                     });
             destinationAllocation.setQuantity(destinationAllocation.getQuantity() + allocationRequest.getQuantity());
+            if (note != null) {
+                // The receipt item below preserves every receiving session's note;
+                // this field is the latest note shown on the transfer allocation.
+                destinationAllocation.setNote(note);
+            }
             item.setReceivedQuantity(item.getReceivedQuantity() + allocationRequest.getQuantity());
             if (disposition == StockTransferReceiptDisposition.GOOD) {
                 item.setReceivedGoodQuantity(item.getReceivedGoodQuantity() + allocationRequest.getQuantity());
@@ -751,6 +758,7 @@ public class StockTransferService {
                     .rack(rack)
                     .bin(bin)
                     .stockBatch(batch)
+                    .note(note)
                     .build());
             if (batch != null) {
                 transactionRepository.save(InventoryTransaction.builder()
@@ -1463,7 +1471,8 @@ public class StockTransferService {
                             .append(allocation.getDestinationRackId()).append(':')
                             .append(allocation.getDestinationBinId()).append(':')
                             .append(allocation.getQuantity()).append(':')
-                            .append(allocation.getDisposition()));
+                            .append(allocation.getDisposition()).append(':')
+                            .append(normalizeAllocationNote(allocation.getNote())));
         }
         return sha256(canonical.toString());
     }
@@ -1920,6 +1929,11 @@ public class StockTransferService {
             StockTransferItem item = itemsById.get(allocationRequest.getItemId());
             StockTransferReceiptDisposition disposition = allocationRequest.getDisposition() == null
                     ? StockTransferReceiptDisposition.GOOD : allocationRequest.getDisposition();
+            String note = normalizeAllocationNote(allocationRequest.getNote());
+            if (disposition != StockTransferReceiptDisposition.GOOD && note == null) {
+                throw new BadRequestException(ErrorCode.STOCK_TRANSFER_INVALID_ALLOCATION,
+                        "Phải nhập ghi chú cho disposition khác GOOD");
+            }
             if (item == null || !locations.add(new DestinationLocationKey(
                     allocationRequest.getItemId(), allocationRequest.getDestinationRackId(),
                     allocationRequest.getDestinationBinId(), disposition))) {
@@ -1968,6 +1982,14 @@ public class StockTransferService {
                 .thenComparing(reference -> reference.request().getDestinationBinId())
                 .thenComparing(reference -> reference.item().getId()));
         return references;
+    }
+
+    private String normalizeAllocationNote(String note) {
+        if (note == null) {
+            return null;
+        }
+        String normalized = note.trim();
+        return normalized.isBlank() ? null : normalized;
     }
 
     private Map<UUID, WarehouseRack> lockDestinationRacks(
@@ -2370,6 +2392,7 @@ public class StockTransferService {
                 .quantity(allocation.getQuantity())
                 .disposition(allocation.getDisposition() == null
                         ? StockTransferReceiptDisposition.GOOD : allocation.getDisposition())
+                .note(allocation.getNote())
                 .build();
     }
 

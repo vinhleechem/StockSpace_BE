@@ -369,13 +369,19 @@ class StockTransferReceiveServiceTest {
                 .allowPartial(true)
                 .destinationAllocations(List.of(StockTransferDestinationAllocationRequest.builder()
                         .itemId(itemId).destinationRackId(rackId).destinationBinId(binId).quantity(5)
-                        .disposition(StockTransferReceiptDisposition.DAMAGED).build()))
+                        .disposition(StockTransferReceiptDisposition.DAMAGED)
+                        .note("Bao bì rách khi nhận").build()))
                 .build();
         StockTransferResponse response = transferService.receiveTransfer(
                 tenantId, transfer.getId(), request);
         assertEquals(StockTransferStatus.RECONCILING, response.getStatus());
         assertEquals(5, item.getReceivedDamagedQuantity());
         verify(stockBatchRepository, never()).save(any(StockBatch.class));
+        assertEquals("Bao bì rách khi nhận", item.getDestinationAllocations().get(0).getNote());
+        ArgumentCaptor<InventoryReceiptItem> receiptItemCaptor =
+                ArgumentCaptor.forClass(InventoryReceiptItem.class);
+        verify(receiptItemRepository).save(receiptItemCaptor.capture());
+        assertEquals("Bao bì rách khi nhận", receiptItemCaptor.getValue().getNote());
 
         StockTransferResponse reconciled = transferService.reconcileTransfer(
                 tenantId, transfer.getId(), StockTransferReconcileRequest.builder()
@@ -396,10 +402,12 @@ class StockTransferReceiveServiceTest {
                                 .quantity(2).disposition(StockTransferReceiptDisposition.GOOD).build(),
                         StockTransferDestinationAllocationRequest.builder()
                                 .itemId(itemId).destinationRackId(rackId).destinationBinId(binId)
-                                .quantity(2).disposition(StockTransferReceiptDisposition.QUARANTINE).build(),
+                                .quantity(2).disposition(StockTransferReceiptDisposition.QUARANTINE)
+                                .note("Cần kiểm tra chất lượng").build(),
                         StockTransferDestinationAllocationRequest.builder()
                                 .itemId(itemId).destinationRackId(rackId).destinationBinId(binId)
-                                .quantity(1).disposition(StockTransferReceiptDisposition.REJECTED).build()))
+                                .quantity(1).disposition(StockTransferReceiptDisposition.REJECTED)
+                                .note("Không đạt điều kiện nhập kho").build()))
                 .build();
 
         StockTransferResponse response = transferService.receiveTransfer(
@@ -413,6 +421,23 @@ class StockTransferReceiveServiceTest {
         verify(stockBatchRepository, times(1)).save(any(StockBatch.class));
         verify(transactionRepository, times(1)).save(any(InventoryTransaction.class));
         verify(receiptItemRepository, times(3)).save(any(InventoryReceiptItem.class));
+    }
+
+    @Test
+    void receiveTransfer_requiresNoteForNonGoodDisposition() {
+        stubDestinationValidationDependencies();
+
+        ReceiveStockTransferRequest request = ReceiveStockTransferRequest.builder()
+                .allowPartial(true)
+                .destinationAllocations(List.of(StockTransferDestinationAllocationRequest.builder()
+                        .itemId(itemId).destinationRackId(rackId).destinationBinId(binId).quantity(5)
+                        .disposition(StockTransferReceiptDisposition.QUARANTINE).build()))
+                .build();
+
+        assertThrows(BadRequestException.class,
+                () -> transferService.receiveTransfer(tenantId, transfer.getId(), request));
+        verify(receiptRepository, never()).save(any());
+        verify(stockBatchRepository, never()).save(any(StockBatch.class));
     }
 
     @Test

@@ -49,6 +49,6 @@ public class InventoryReceiptItem {
     @Column(name = "pick_sequence")
     private Integer pickSequence;
 
-    @Column(name = "note")
+    @Column(name = "note", columnDefinition = "text")
     private String note;
 }
