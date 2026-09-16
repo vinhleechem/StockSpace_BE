@@ -43,6 +43,7 @@ import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferItem;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferSourceAllocation;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferStatus;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferReceiptDisposition;
+import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferReturnDisposition;
 import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferReconcileRequest;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferReconciliationResolution;
 import fu.stockspace.stockspace_be.wms.transfer.repository.StockTransferRepository;
@@ -67,6 +68,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -715,6 +717,54 @@ class StockTransferReceiveServiceTest {
         verify(stockBatchRepository).save(any(StockBatch.class));
         verify(transactionRepository).save(any(InventoryTransaction.class));
         verify(transferRepository).save(transfer);
+    }
+
+    @Test
+    void receiveReturn_recordsRejectedStockWithoutCreatingAvailableInventory() {
+        transfer.setStatus(StockTransferStatus.RETURN_IN_TRANSIT);
+        item.setShippedQuantity(2);
+        item.setReceivedGoodQuantity(0);
+        item.setReturnedQuantity(0);
+        when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+        when(transferRepository.findByIdForUpdate(transfer.getId())).thenReturn(Optional.of(transfer));
+        when(layoutRepository.findByWarehouseIdAndTenantId(sourceWarehouseId, tenantId))
+                .thenReturn(Optional.of(tenantLayout));
+        when(rackRepository.findByIdForUpdate(rackId)).thenReturn(Optional.of(destinationRack));
+        when(binRepository.findByIdForUpdate(binId)).thenReturn(Optional.of(destinationBin));
+        when(stockBatchRepository.findActivePhysicalLoadsByWarehouseIdAndTenantId(
+                sourceWarehouseId, tenantId)).thenReturn(List.of());
+        when(receiptRepository.save(any(InventoryReceipt.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(receiptItemRepository.save(any(InventoryReceiptItem.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(transferRepository.save(any(StockTransfer.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        StockTransferReturnRequest request = StockTransferReturnRequest.builder()
+                .reason("Hàng hư hỏng được trả về kho nguồn")
+                .lines(List.of(StockTransferReturnLineRequest.builder()
+                        .itemId(itemId)
+                        .quantity(2)
+                        .sourceRackId(rackId)
+                        .sourceBinId(binId)
+                        .disposition(StockTransferReturnDisposition.REJECTED)
+                        .note("Vỏ sản phẩm nứt, không thể đưa vào tồn khả dụng")
+                        .build()))
+                .build();
+
+        StockTransferResponse response = transferService.receiveReturn(
+                tenantId, transfer.getId(), request, "receive-rejected-return");
+
+        assertEquals(StockTransferStatus.RETURNED, response.getStatus());
+        assertEquals(2, item.getReturnedQuantity());
+        verify(stockBatchRepository, never()).save(any(StockBatch.class));
+        verify(transactionRepository, never()).save(any(InventoryTransaction.class));
+        ArgumentCaptor<InventoryReceiptItem> receiptItemCaptor =
+                ArgumentCaptor.forClass(InventoryReceiptItem.class);
+        verify(receiptItemRepository).save(receiptItemCaptor.capture());
+        assertEquals("Vỏ sản phẩm nứt, không thể đưa vào tồn khả dụng",
+                receiptItemCaptor.getValue().getNote());
+        assertNull(receiptItemCaptor.getValue().getStockBatch());
     }
 
     @Test

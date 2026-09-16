@@ -72,6 +72,7 @@ import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferReservationS
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferEvent;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferCommand;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferReceiptDisposition;
+import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferReturnDisposition;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferPickLine;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferAttempt;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferAttemptStatus;
@@ -1117,6 +1118,12 @@ public class StockTransferService {
                         "Return line không thuộc transfer hoặc bị lặp");
             }
             StockTransferItem item = items.get(line.getItemId());
+            StockTransferReturnDisposition disposition = returnDisposition(line);
+            String note = normalizeAllocationNote(line.getNote());
+            if (disposition == StockTransferReturnDisposition.REJECTED && note == null) {
+                throw new BadRequestException(ErrorCode.STOCK_TRANSFER_INVALID_ALLOCATION,
+                        "Phải nhập ghi chú cho hàng return REJECTED");
+            }
             int available = Math.max(0, item.getShippedQuantity()
                     - item.getReceivedGoodQuantity() - item.getReturnedQuantity());
             if (line.getQuantity() > available) {
@@ -1142,14 +1149,19 @@ public class StockTransferService {
             StockTransferItem item = items.get(line.getItemId());
             WarehouseRack rack = returnRacks.get(line.getSourceRackId());
             WarehouseBin bin = returnBins.get(line.getSourceBinId());
-            StockBatch batch = stockBatchRepository.save(StockBatch.builder()
-                    .skuId(item.getSku().getId())
-                    .warehouse(transfer.getSourceWarehouse())
-                    .rack(rack)
-                    .bin(bin)
-                    .quantity(line.getQuantity())
-                    .arrivalDate(LocalDateTime.now())
-                    .build());
+            StockTransferReturnDisposition disposition = returnDisposition(line);
+            String note = normalizeAllocationNote(line.getNote());
+            StockBatch batch = null;
+            if (disposition == StockTransferReturnDisposition.GOOD) {
+                batch = stockBatchRepository.save(StockBatch.builder()
+                        .skuId(item.getSku().getId())
+                        .warehouse(transfer.getSourceWarehouse())
+                        .rack(rack)
+                        .bin(bin)
+                        .quantity(line.getQuantity())
+                        .arrivalDate(LocalDateTime.now())
+                        .build());
+            }
             receiptItemRepository.save(InventoryReceiptItem.builder()
                     .receipt(receipt)
                     .sku(item.getSku())
@@ -1157,12 +1169,15 @@ public class StockTransferService {
                     .rack(rack)
                     .bin(bin)
                     .stockBatch(batch)
+                    .note(note)
                     .build());
-            transactionRepository.save(InventoryTransaction.builder()
-                    .receipt(receipt)
-                    .batch(batch)
-                    .quantityChanged(line.getQuantity())
-                    .build());
+            if (batch != null) {
+                transactionRepository.save(InventoryTransaction.builder()
+                        .receipt(receipt)
+                        .batch(batch)
+                        .quantityChanged(line.getQuantity())
+                        .build());
+            }
             item.setReturnedQuantity(item.getReturnedQuantity() + line.getQuantity());
             incoming += line.getQuantity();
         }
@@ -1180,7 +1195,7 @@ public class StockTransferService {
                 : StockTransferStatus.PARTIALLY_RETURNED);
         StockTransfer saved = transferRepository.save(transfer);
         markCurrentAttemptReturned(saved, actor, incoming, remaining == 0);
-        recordEvent(saved, from, saved.getStatus(), "RECEIVE_RETURN", actor, null, idempotencyKey);
+        recordEvent(saved, from, saved.getStatus(), "RECEIVE_RETURN", actor, request.getReason(), idempotencyKey);
         saveCommand(tenantId, saved, "RECEIVE_RETURN", idempotencyKey,
                 requestHash("RECEIVE_RETURN", transferId, request));
         return mapToResponse(saved);
@@ -1819,6 +1834,9 @@ public class StockTransferService {
         Map<UUID, List<PhysicalLoadLine>> incomingByRack = new LinkedHashMap<>();
         Map<UUID, List<PhysicalLoadLine>> incomingByBin = new LinkedHashMap<>();
         for (StockTransferReturnLineRequest line : lines) {
+            if (returnDisposition(line) != StockTransferReturnDisposition.GOOD) {
+                continue;
+            }
             ProductSku sku = items.get(line.getItemId()).getSku();
             PhysicalLoadLine loadLine = new PhysicalLoadLine(
                     line.getSourceRackId(), line.getSourceBinId(), sku.getId(), sku.getSkuCode(), sku.getName(),
@@ -1853,6 +1871,11 @@ public class StockTransferService {
             throw new BadRequestException(ErrorCode.STOCK_TRANSFER_DECISION_REASON_REQUIRED);
         }
         return reason.trim();
+    }
+
+    private StockTransferReturnDisposition returnDisposition(StockTransferReturnLineRequest line) {
+        return line.getDisposition() == null
+                ? StockTransferReturnDisposition.GOOD : line.getDisposition();
     }
 
     private String displayName(User user) {
