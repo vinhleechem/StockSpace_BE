@@ -448,7 +448,10 @@ class StockTransferReceiveServiceTest {
 
     @Test
     void receiveTransfer_rejectsLegacyQuarantineDisposition() {
-        stubReceiveDependencies();
+        when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+        when(transferRepository.findByIdForUpdate(transfer.getId())).thenReturn(Optional.of(transfer));
+        when(layoutRepository.findByWarehouseIdAndTenantId(destinationWarehouseId, tenantId))
+                .thenReturn(Optional.of(tenantLayout));
 
         ReceiveStockTransferRequest request = ReceiveStockTransferRequest.builder()
                 .destinationAllocations(List.of(StockTransferDestinationAllocationRequest.builder()
