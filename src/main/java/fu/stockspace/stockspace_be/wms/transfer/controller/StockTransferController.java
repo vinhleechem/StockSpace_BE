@@ -164,6 +164,19 @@ public class StockTransferController {
         return ResponseEntity.ok(ApiResponse.success("Đã ghi nhận kho đích từ chối nhận", response));
     }
 
+    @PostMapping("/{id}/recall")
+    @PreAuthorize("@rbac.hasPermission('INVENTORY_UPDATE')")
+    @Operation(summary = "Thu hồi chặng chuyển kho đang vận chuyển về kho nguồn")
+    public ResponseEntity<ApiResponse<StockTransferResponse>> recallInTransit(
+            @PathVariable UUID id,
+            @Valid @RequestBody StockTransferDecisionRequest request,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+        StockTransferResponse response = transferService.recallInTransit(
+                SecurityUtil.getCurrentUserId(), id, request, idempotencyKey);
+        return ResponseEntity.ok(ApiResponse.success(
+                "Đã tạo yêu cầu thu hồi chặng đang vận chuyển", response));
+    }
+
     @PatchMapping("/{id}/close-short")
     @PreAuthorize("@rbac.hasPermission('INVENTORY_UPDATE')")
     public ResponseEntity<ApiResponse<StockTransferResponse>> closeShortReceipt(

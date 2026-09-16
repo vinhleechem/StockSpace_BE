@@ -65,6 +65,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
@@ -505,6 +506,66 @@ class StockTransferReceiveServiceTest {
 
         assertEquals(StockTransferStatus.RECEIVE_REJECTED, response.getStatus());
         assertEquals(StockTransferStatus.RECEIVE_REJECTED, transfer.getStatus());
+        verify(receiptRepository, never()).save(any());
+        verify(stockBatchRepository, never()).save(any());
+    }
+
+    @Test
+    void rejectReceipt_allowsAssignedDestinationStaffBeforeArrive() {
+        UUID staffId = UUID.randomUUID();
+        User destinationStaff = User.builder()
+                .id(staffId)
+                .fullName("Destination Receiver")
+                .roles(Set.of(Role.builder().name(RoleType.ROLE_STAFF.name()).build()))
+                .build();
+        transfer.setDestinationStaff(destinationStaff);
+        when(userRepository.findById(staffId)).thenReturn(Optional.of(destinationStaff));
+        when(tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(staffId))
+                .thenReturn(Optional.of(TenantMember.builder().user(destinationStaff).tenant(tenant).build()));
+        when(transferRepository.findByIdForUpdate(transfer.getId())).thenReturn(Optional.of(transfer));
+        when(transferRepository.save(any(StockTransfer.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        StockTransferResponse response = transferService.rejectReceipt(
+                staffId, transfer.getId(), StockTransferDecisionRequest.builder()
+                        .reason("Kho đích báo đóng cửa trước khi xe đến")
+                        .build(), "reject-before-arrive");
+
+        assertEquals(StockTransferStatus.RECEIVE_REJECTED, response.getStatus());
+        assertEquals(StockTransferStatus.RECEIVE_REJECTED, transfer.getStatus());
+        verify(accessService).requireActiveStaffAssignment(
+                staffId, tenantId, destinationWarehouseId);
+        verify(receiptRepository, never()).save(any());
+        verify(stockBatchRepository, never()).save(any());
+    }
+
+    @Test
+    void recallInTransit_returnsDispatchedLegWithoutChangingInventory() {
+        UUID staffId = UUID.randomUUID();
+        User sourceStaff = User.builder()
+                .id(staffId)
+                .fullName("Source Picker")
+                .roles(Set.of(Role.builder().name(RoleType.ROLE_STAFF.name()).build()))
+                .build();
+        transfer.setSourceStaff(sourceStaff);
+        item.setShippedQuantity(5);
+        when(userRepository.findById(staffId)).thenReturn(Optional.of(sourceStaff));
+        when(tenantMemberRepository.findByUserIdAndIsActiveTrueAndIsDeletedFalse(staffId))
+                .thenReturn(Optional.of(TenantMember.builder().user(sourceStaff).tenant(tenant).build()));
+        when(transferRepository.findByIdForUpdate(transfer.getId())).thenReturn(Optional.of(transfer));
+        when(transferRepository.save(any(StockTransfer.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        StockTransferResponse response = transferService.recallInTransit(
+                staffId, transfer.getId(), StockTransferDecisionRequest.builder()
+                        .reason("Kho đích báo không thể tiếp nhận")
+                        .build(), "recall-in-transit");
+
+        assertEquals(StockTransferStatus.RETURN_REQUESTED, response.getStatus());
+        assertEquals(StockTransferStatus.RETURN_REQUESTED, transfer.getStatus());
+        assertNull(transfer.getDestinationStaff());
+        verify(accessService).requireActiveStaffAssignment(
+                staffId, tenantId, sourceWarehouseId);
         verify(receiptRepository, never()).save(any());
         verify(stockBatchRepository, never()).save(any());
     }

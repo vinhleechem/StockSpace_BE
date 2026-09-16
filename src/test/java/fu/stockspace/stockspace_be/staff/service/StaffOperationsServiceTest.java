@@ -133,7 +133,31 @@ class StaffOperationsServiceTest {
 
         assertEquals(1, response.getTotalElements());
         assertEquals(warehouseBId, response.getContent().get(0).getWarehouseId());
-        assertEquals(List.of("VIEW", "ARRIVE", "RECEIVE"),
+        assertEquals(List.of("VIEW", "ARRIVE", "RECEIVE", "REJECT_RECEIPT"),
+                response.getContent().get(0).getAllowedActions());
+    }
+
+    @Test
+    void getOperationsReturnsRecallActionForAssignedSourceStaffInTransit() {
+        when(accessService.findAccessibleContractWarehouses(tenantId, staffId))
+                .thenReturn(List.of(warehouseA));
+        StockTransfer transfer = StockTransfer.builder()
+                .id(UUID.randomUUID())
+                .sourceWarehouse(warehouseA)
+                .destinationWarehouse(warehouseB)
+                .sourceStaff(User.builder().id(staffId).build())
+                .status(StockTransferStatus.IN_TRANSIT)
+                .createdAt(LocalDateTime.of(2026, 9, 10, 10, 0))
+                .build();
+        when(transferRepository.findActiveOperationsForStaff(tenantId, List.of(warehouseAId)))
+                .thenReturn(List.of());
+        when(transferRepository.findAssignedSourceOperationsForStaff(tenantId, staffId))
+                .thenReturn(List.of(transfer));
+
+        PagedResponse<StaffOperationResponse> response = operationsService.getOperations(
+                staffId, tenantId, warehouseAId, "TRANSFER", null, PageRequest.of(0, 20));
+
+        assertEquals(List.of("VIEW", "RECALL"),
                 response.getContent().get(0).getAllowedActions());
     }
 
