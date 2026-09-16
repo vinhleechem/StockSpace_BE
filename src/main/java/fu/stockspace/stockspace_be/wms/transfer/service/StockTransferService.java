@@ -2236,8 +2236,9 @@ public class StockTransferService {
             Map<UUID, Long> pickedQuantitiesByAllocation) {
         WarehouseRack rack = allocation.getSourceRack();
         WarehouseBin bin = allocation.getSourceBin();
-        int pickedQuantity = Math.toIntExact(Math.max(0L,
-                pickedQuantitiesByAllocation.getOrDefault(allocation.getId(), 0L)));
+        long picked = allocation.getId() == null
+                ? 0L : pickedQuantitiesByAllocation.getOrDefault(allocation.getId(), 0L);
+        int pickedQuantity = Math.toIntExact(Math.max(0L, picked));
         int remainingQuantity = Math.max(allocation.getQuantity() - pickedQuantity, 0);
         return StockTransferSourceAllocationResponse.builder()
                 .id(allocation.getId())
