@@ -1817,9 +1817,11 @@ public class StockTransferService {
 
         for (StockTransferDestinationAllocationRequest allocationRequest : request.getDestinationAllocations()) {
             StockTransferItem item = itemsById.get(allocationRequest.getItemId());
+            StockTransferReceiptDisposition disposition = allocationRequest.getDisposition() == null
+                    ? StockTransferReceiptDisposition.GOOD : allocationRequest.getDisposition();
             if (item == null || !locations.add(new DestinationLocationKey(
                     allocationRequest.getItemId(), allocationRequest.getDestinationRackId(),
-                    allocationRequest.getDestinationBinId()))) {
+                    allocationRequest.getDestinationBinId(), disposition))) {
                 throw new BadRequestException(ErrorCode.STOCK_TRANSFER_INVALID_ALLOCATION,
                         "Destination allocation không thuộc transfer hoặc bị lặp");
             }
@@ -2136,7 +2138,8 @@ public class StockTransferService {
                                                   WarehouseBin bin) {
     }
 
-    private record DestinationLocationKey(UUID itemId, UUID rackId, UUID binId) {
+    private record DestinationLocationKey(UUID itemId, UUID rackId, UUID binId,
+                                          StockTransferReceiptDisposition disposition) {
     }
 
     private StockTransferResponse mapToResponse(StockTransfer transfer) {
