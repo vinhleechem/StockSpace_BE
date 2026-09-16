@@ -386,6 +386,36 @@ class StockTransferReceiveServiceTest {
     }
 
     @Test
+    void receiveTransfer_allowsDifferentDispositionsInSameDestinationBin() {
+        stubReceiveDependencies();
+
+        ReceiveStockTransferRequest request = ReceiveStockTransferRequest.builder()
+                .destinationAllocations(List.of(
+                        StockTransferDestinationAllocationRequest.builder()
+                                .itemId(itemId).destinationRackId(rackId).destinationBinId(binId)
+                                .quantity(2).disposition(StockTransferReceiptDisposition.GOOD).build(),
+                        StockTransferDestinationAllocationRequest.builder()
+                                .itemId(itemId).destinationRackId(rackId).destinationBinId(binId)
+                                .quantity(2).disposition(StockTransferReceiptDisposition.QUARANTINE).build(),
+                        StockTransferDestinationAllocationRequest.builder()
+                                .itemId(itemId).destinationRackId(rackId).destinationBinId(binId)
+                                .quantity(1).disposition(StockTransferReceiptDisposition.REJECTED).build()))
+                .build();
+
+        StockTransferResponse response = transferService.receiveTransfer(
+                tenantId, transfer.getId(), request);
+
+        assertEquals(StockTransferStatus.RECONCILING, response.getStatus());
+        assertEquals(5, item.getReceivedQuantity());
+        assertEquals(2, item.getReceivedGoodQuantity());
+        assertEquals(3, item.getReceivedDamagedQuantity());
+        assertEquals(3, item.getDestinationAllocations().size());
+        verify(stockBatchRepository, times(1)).save(any(StockBatch.class));
+        verify(transactionRepository, times(1)).save(any(InventoryTransaction.class));
+        verify(receiptItemRepository, times(3)).save(any(InventoryReceiptItem.class));
+    }
+
+    @Test
     void receiveTransfer_rejectsRetryAfterCompletionWithoutMutation() {
         transfer.setStatus(StockTransferStatus.COMPLETED);
         when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
