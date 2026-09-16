@@ -1,9 +1,11 @@
 package fu.stockspace.stockspace_be.wms.dataexchange.job;
 
 import jakarta.persistence.LockModeType;
+import jakarta.persistence.QueryHint;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
@@ -37,6 +39,7 @@ public interface WmsImportJobRepository extends JpaRepository<WmsImportJob, UUID
             WmsImportJobStatus status);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "0"))
     @Query("select j from WmsImportJob j where j.id = :id and j.isDeleted = false")
     Optional<WmsImportJob> findByIdForUpdate(@Param("id") UUID id);
 }

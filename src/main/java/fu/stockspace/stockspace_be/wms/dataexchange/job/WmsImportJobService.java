@@ -13,6 +13,9 @@ import fu.stockspace.stockspace_be.wms.dataexchange.xlsx.XlsxWorkbookWriter;
 import fu.stockspace.stockspace_be.wms.stock.entity.InventoryAudit;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.PessimisticLockingFailureException;
+import org.springframework.dao.QueryTimeoutException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -32,10 +35,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class WmsImportJobService {
 
     private final WmsImportJobRepository jobRepository;
@@ -149,11 +154,19 @@ public class WmsImportJobService {
     public <T> T applyJob(UUID tenantId, UUID actorId, UUID jobId,
                           Function<WmsImportJob, T> domainApply) {
         AtomicBoolean domainStarted = new AtomicBoolean(false);
+        AtomicReference<WmsImportType> importType = new AtomicReference<>();
         try {
             TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+            transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
             return transaction.execute(status -> {
-                WmsImportJob job = jobRepository.findByIdForUpdate(jobId)
-                        .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WMS_IMPORT_JOB_NOT_FOUND));
+                WmsImportJob job;
+                try {
+                    job = jobRepository.findByIdForUpdate(jobId)
+                            .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WMS_IMPORT_JOB_NOT_FOUND));
+                } catch (PessimisticLockingFailureException | QueryTimeoutException ex) {
+                    throw new ResourceConflictException(ErrorCode.WMS_IMPORT_APPLY_IN_PROGRESS);
+                }
+                importType.set(job.getImportType());
                 assertReadable(job, tenantId, actorId);
                 if (job.getStatus() != WmsImportJobStatus.VALIDATED) {
                     throw new ResourceConflictException(ErrorCode.WMS_IMPORT_JOB_INVALID_STATUS);
@@ -174,13 +187,27 @@ public class WmsImportJobService {
             if (ex.getMessage() != null && ex.getMessage().contains("ux_wms_import_jobs_applied_content")) {
                 throw new ResourceConflictException(ErrorCode.WMS_IMPORT_ALREADY_APPLIED);
             }
+            if (domainStarted.get()) {
+                logApplyFailure(jobId, importType.get(), ex);
+                recordFailureSafely(jobId, ex);
+            }
             throw ex;
         } catch (RuntimeException ex) {
             if (domainStarted.get()) {
-                recordFailure(jobId, ex.getMessage());
+                logApplyFailure(jobId, importType.get(), ex);
+                recordFailureSafely(jobId, ex);
             }
             throw ex;
         }
+    }
+
+    private void logApplyFailure(UUID jobId, WmsImportType importType, RuntimeException failure) {
+        Throwable rootCause = failure;
+        while (rootCause.getCause() != null && rootCause.getCause() != rootCause) {
+            rootCause = rootCause.getCause();
+        }
+        log.warn("Import apply failed: jobId={}, importType={}, exceptionType={}, rootCauseType={}",
+                jobId, importType, failure.getClass().getName(), rootCause.getClass().getName(), failure);
     }
 
     public WmsImportJob getValidatedJobForTenant(UUID tenantId, UUID actorId, UUID jobId) {
@@ -212,6 +239,15 @@ public class WmsImportJobService {
                     ? "Import apply failed" : message.substring(0, Math.min(message.length(), 2000)));
             jobRepository.save(job);
         }));
+    }
+
+    private void recordFailureSafely(UUID jobId, RuntimeException originalFailure) {
+        try {
+            recordFailure(jobId, originalFailure.getMessage());
+        } catch (RuntimeException failureRecordingFailure) {
+            log.error("Unable to record import apply failure for job {}. Original failure is preserved.",
+                    jobId, failureRecordingFailure);
+        }
     }
 
     private WmsImportJobResponse toResponse(WmsImportJob job, boolean includeErrors) {

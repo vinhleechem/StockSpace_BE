@@ -23,8 +23,6 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.time.LocalDateTime;
@@ -82,8 +80,8 @@ class CatalogImportServiceValidationTest {
                 .code("KG")
                 .name("Kilogram")
                 .build();
-        when(uomRepository.findAllActiveByTenantOrSystem(eq(TENANT_ID), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(uom)));
+        when(uomRepository.findActiveVisibleByCode(eq(TENANT_ID), eq("KG")))
+                .thenReturn(java.util.Optional.of(uom));
 
         WmsImportJob job = WmsImportJob.builder()
                 .id(JOB_ID)

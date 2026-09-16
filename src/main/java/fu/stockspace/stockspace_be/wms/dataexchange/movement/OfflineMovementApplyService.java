@@ -239,7 +239,9 @@ public class OfflineMovementApplyService {
     private WarehouseLayout currentTenantLayout(UUID tenantId, UUID warehouseId) {
         return layoutRepository.findByWarehouseIdAndTenantId(warehouseId, tenantId)
                 .filter(layout -> layout.isActive() && !layout.isDeleted())
-                .orElseThrow(() -> new ResourceConflictException(ErrorCode.WMS_IMPORT_STALE));
+                .orElseGet(() -> layoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId)
+                        .filter(layout -> layout.isActive() && !layout.isDeleted())
+                        .orElseThrow(() -> new ResourceConflictException(ErrorCode.WMS_IMPORT_STALE)));
     }
 
     private void registerSummaryNotification(UUID tenantId, String warehouseName, int receiptCount) {
