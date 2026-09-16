@@ -22,7 +22,8 @@ DRAFT / IN_PROGRESS / SUBMITTED / EDIT_REQUESTED / REOPENED / RECOUNT_REQUIRED -
 `start` snapshots the current stock and acquires a warehouse movement lock.
 Inbound, outbound, transfer and audit adjustments are rejected while the lock
 is active. This conservative first version prevents a count from becoming
-stale; the lock is released by approve, recount or cancel.
+stale; the lock is released by approve or cancel. A `RECOUNT_REQUIRED` audit
+keeps its lock and reuses it when the next count round starts.
 
 ## Endpoints
 

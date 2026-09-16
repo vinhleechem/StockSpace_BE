@@ -99,4 +99,28 @@ class InventoryAuditLockServiceTest {
                 .existsByWarehouseIdAndStatusAndIsActiveTrueAndIsDeletedFalse(any(), any());
         verify(lockRepository).saveAndFlush(any(InventoryAuditLock.class));
     }
+
+    @Test
+    void acquireReusesTheExistingLockWhenTheSameAuditStartsRecount() {
+        UUID warehouseId = UUID.randomUUID();
+        UUID auditId = UUID.randomUUID();
+        Warehouse warehouse = Warehouse.builder().id(warehouseId).build();
+        InventoryAudit recount = InventoryAudit.builder()
+                .id(auditId)
+                .warehouse(warehouse)
+                .status(AuditStatus.RECOUNT_REQUIRED)
+                .build();
+        InventoryAuditLock existingLock = InventoryAuditLock.builder()
+                .audit(recount)
+                .warehouse(warehouse)
+                .build();
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(lockRepository.findActiveForUpdate(warehouseId)).thenReturn(Optional.of(existingLock));
+
+        InventoryAuditLock acquired = lockService.acquire(recount);
+
+        assertEquals(existingLock, acquired);
+        verify(lockRepository, never()).saveAndFlush(any(InventoryAuditLock.class));
+        verifyNoInteractions(auditRepository);
+    }
 }

@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -21,6 +22,12 @@ import java.util.UUID;
  * This is conservative but guarantees that an untracked movement cannot make
  * the count stale. The lock can be narrowed after every stock mutation path is
  * routed through a single movement ledger.
+ *
+ * The lock is held after start for every unresolved workflow state:
+ * {@code IN_PROGRESS}, {@code SUBMITTED}, {@code EDIT_REQUESTED},
+ * {@code REOPENED}, and {@code RECOUNT_REQUIRED}. A recount is still part of
+ * the unresolved audit; allowing stock movements before the next count would
+ * make the recount impossible to reconcile with the submitted result.
  */
 @Service
 @RequiredArgsConstructor
@@ -36,14 +43,22 @@ public class InventoryAuditLockService {
             warehouseRepository.findByIdForUpdate(warehouseId)
                     .orElseThrow(() -> new ResourceConflictException(ErrorCode.WAREHOUSE_NOT_FOUND));
         }
-        if (lockRepository.findActiveForUpdate(warehouseId).isPresent()) {
+        Optional<InventoryAuditLock> activeLock = lockRepository.findActiveForUpdate(warehouseId);
+        if (activeLock.isPresent()) {
+            InventoryAuditLock existingLock = activeLock.get();
+            UUID existingAuditId = existingLock.getAudit() == null
+                    ? null : existingLock.getAudit().getId();
+            // Starting the next recount round must reuse the lock that this
+            // audit already owns instead of treating it as a competing audit.
+            if (existingAuditId != null && existingAuditId.equals(audit.getId())) {
+                return existingLock;
+            }
             throw new ResourceConflictException(ErrorCode.AUDIT_MOVEMENT_LOCKED,
                     "Kho đang có một phiếu kiểm kê đang thực hiện");
         }
-        // RECOUNT_REQUIRED releases the movement lock so stock can be made safe,
-        // but it still reserves the next count for that audit. Run this check
-        // while holding the warehouse row lock so a new draft and the recount
-        // cannot start concurrently and both believe they own the warehouse.
+        // Keep this reservation check as a defensive guard for legacy data where
+        // a RECOUNT_REQUIRED audit has no lock. Normally the active lock check
+        // above is what prevents another audit from starting.
         if (audit.getStatus() != AuditStatus.RECOUNT_REQUIRED
                 && auditRepository.existsByWarehouseIdAndStatusAndIsActiveTrueAndIsDeletedFalse(
                         warehouseId, AuditStatus.RECOUNT_REQUIRED)) {
