@@ -2140,6 +2140,7 @@ public class StockTransferService {
     }
 
     private StockTransferResponse mapToResponse(StockTransfer transfer) {
+        Map<UUID, Long> pickedQuantitiesByAllocation = loadPickedQuantitiesByAllocation(transfer);
         return StockTransferResponse.builder()
                 .id(transfer.getId())
                 .transferNo(transfer.getTransferNo())
@@ -2150,7 +2151,9 @@ public class StockTransferService {
                 .sourceStaff(actor(transfer.getSourceStaff()))
                 .destinationStaff(actor(transfer.getDestinationStaff()))
                 .note(transfer.getNote())
-                .items(transfer.getItems().stream().map(this::mapItem).toList())
+                .items(transfer.getItems().stream()
+                        .map(item -> mapItem(item, pickedQuantitiesByAllocation))
+                        .toList())
                 .attempts(mapAttempts(transfer))
                 .createdBy(actor(transfer.getCreatedBy()))
                 .approvedBy(actor(transfer.getApprovedBy()))
@@ -2173,7 +2176,8 @@ public class StockTransferService {
                 .build();
     }
 
-    private StockTransferItemResponse mapItem(StockTransferItem item) {
+    private StockTransferItemResponse mapItem(StockTransferItem item,
+                                              Map<UUID, Long> pickedQuantitiesByAllocation) {
         ProductSku sku = item.getSku();
         return StockTransferItemResponse.builder()
                 .id(item.getId())
@@ -2189,15 +2193,53 @@ public class StockTransferService {
                 .receivedDamagedQuantity(item.getReceivedDamagedQuantity())
                 .returnedQuantity(item.getReturnedQuantity())
                 .sourceAllocations(item.getSourceAllocations().stream()
-                        .map(this::mapSourceAllocation).toList())
+                        .map(allocation -> mapSourceAllocation(allocation, pickedQuantitiesByAllocation))
+                        .toList())
                 .destinationAllocations(item.getDestinationAllocations().stream()
                         .map(this::mapDestinationAllocation).toList())
                 .build();
     }
 
-    private StockTransferSourceAllocationResponse mapSourceAllocation(StockTransferSourceAllocation allocation) {
+    private Map<UUID, Long> loadPickedQuantitiesByAllocation(StockTransfer transfer) {
+        if (pickLineRepository == null || transfer.getItems() == null) {
+            return Map.of();
+        }
+
+        Set<UUID> allocationIds = new HashSet<>();
+        for (StockTransferItem item : transfer.getItems()) {
+            if (item.getSourceAllocations() == null) {
+                continue;
+            }
+            for (StockTransferSourceAllocation allocation : item.getSourceAllocations()) {
+                if (allocation.getId() != null) {
+                    allocationIds.add(allocation.getId());
+                }
+            }
+        }
+        if (allocationIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<UUID, Long> pickedQuantities = new LinkedHashMap<>();
+        for (StockTransferPickLineRepository.AllocationPickTotal total
+                : pickLineRepository.sumPickedByAllocationIds(allocationIds)) {
+            if (total.getAllocationId() != null) {
+                pickedQuantities.put(total.getAllocationId(),
+                        total.getPickedQuantity() == null ? 0L : total.getPickedQuantity());
+            }
+        }
+        return pickedQuantities;
+    }
+
+    private StockTransferSourceAllocationResponse mapSourceAllocation(
+            StockTransferSourceAllocation allocation,
+            Map<UUID, Long> pickedQuantitiesByAllocation) {
         WarehouseRack rack = allocation.getSourceRack();
         WarehouseBin bin = allocation.getSourceBin();
+        long picked = allocation.getId() == null
+                ? 0L : pickedQuantitiesByAllocation.getOrDefault(allocation.getId(), 0L);
+        int pickedQuantity = Math.toIntExact(Math.max(0L, picked));
+        int remainingQuantity = Math.max(allocation.getQuantity() - pickedQuantity, 0);
         return StockTransferSourceAllocationResponse.builder()
                 .id(allocation.getId())
                 .sourceStockBatchId(allocation.getSourceStockBatch().getId())
@@ -2206,6 +2248,8 @@ public class StockTransferService {
                 .sourceBinId(bin.getId())
                 .sourceBinName(bin.getName())
                 .quantity(allocation.getQuantity())
+                .pickedQuantity(pickedQuantity)
+                .remainingQuantity(remainingQuantity)
                 .build();
     }
 

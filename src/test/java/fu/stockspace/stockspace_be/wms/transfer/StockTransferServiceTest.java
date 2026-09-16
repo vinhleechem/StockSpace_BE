@@ -27,8 +27,11 @@ import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferResponse;
 import fu.stockspace.stockspace_be.wms.transfer.dto.StockTransferSourceAllocationRequest;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransfer;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferAttempt;
+import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferItem;
+import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferSourceAllocation;
 import fu.stockspace.stockspace_be.wms.transfer.entity.StockTransferStatus;
 import fu.stockspace.stockspace_be.wms.transfer.repository.StockTransferAttemptRepository;
+import fu.stockspace.stockspace_be.wms.transfer.repository.StockTransferPickLineRepository;
 import fu.stockspace.stockspace_be.wms.transfer.repository.StockTransferRepository;
 import fu.stockspace.stockspace_be.wms.transfer.service.StockTransferService;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
@@ -66,6 +69,8 @@ class StockTransferServiceTest {
     private StockTransferRepository transferRepository;
     @Mock
     private StockTransferAttemptRepository attemptRepository;
+    @Mock
+    private StockTransferPickLineRepository pickLineRepository;
     @Mock
     private WarehouseRepository warehouseRepository;
     @Mock
@@ -157,10 +162,103 @@ class StockTransferServiceTest {
         assertEquals(1, response.getItems().size());
         assertEquals(10, response.getItems().get(0).getRequestedQuantity());
         assertEquals(10, response.getItems().get(0).getSourceAllocations().get(0).getQuantity());
+        assertEquals(0, response.getItems().get(0).getSourceAllocations().get(0).getPickedQuantity());
+        assertEquals(10, response.getItems().get(0).getSourceAllocations().get(0).getRemainingQuantity());
         assertTrue(response.getItems().get(0).getDestinationAllocations().isEmpty());
         assertEquals(20, sourceBatch.getQuantity());
         verify(stockBatchRepository, never()).save(any());
         verify(notificationService, never()).push(any(), any(), any(), any());
+    }
+
+    @Test
+    void getTransfer_returnsPickingProgressForEachSourceAllocation() {
+        UUID transferId = UUID.randomUUID();
+        UUID itemId = UUID.randomUUID();
+        UUID allocationId = UUID.randomUUID();
+        UUID unpickedAllocationId = UUID.randomUUID();
+        WarehouseRack secondRack = WarehouseRack.builder()
+                .id(UUID.randomUUID())
+                .name("Rack B")
+                .build();
+        WarehouseBin secondBin = WarehouseBin.builder()
+                .id(UUID.randomUUID())
+                .rack(secondRack)
+                .name("Bin B")
+                .build();
+        StockBatch secondBatch = StockBatch.builder()
+                .id(UUID.randomUUID())
+                .skuId(skuId)
+                .warehouse(sourceWarehouse)
+                .rack(secondRack)
+                .bin(secondBin)
+                .quantity(3)
+                .build();
+
+        StockTransfer transfer = StockTransfer.builder()
+                .id(transferId)
+                .transferNo("TRF-PARTIAL-PICK")
+                .tenant(tenant)
+                .sourceWarehouse(sourceWarehouse)
+                .destinationWarehouse(destinationWarehouse)
+                .activeDestinationWarehouse(destinationWarehouse)
+                .createdBy(tenant)
+                .status(StockTransferStatus.PICKING)
+                .build();
+        StockTransferItem item = StockTransferItem.builder()
+                .id(itemId)
+                .transfer(transfer)
+                .sku(sku)
+                .requestedQuantity(7)
+                .reservedQuantity(7)
+                .pickedQuantity(2)
+                .build();
+        StockTransferSourceAllocation allocation = StockTransferSourceAllocation.builder()
+                .id(allocationId)
+                .item(item)
+                .sourceStockBatch(sourceBatch)
+                .sourceRack(sourceRack)
+                .sourceBin(sourceBin)
+                .quantity(4)
+                .build();
+        StockTransferSourceAllocation unpickedAllocation = StockTransferSourceAllocation.builder()
+                .id(unpickedAllocationId)
+                .item(item)
+                .sourceStockBatch(secondBatch)
+                .sourceRack(secondRack)
+                .sourceBin(secondBin)
+                .quantity(3)
+                .build();
+        item.setSourceAllocations(List.of(allocation, unpickedAllocation));
+        transfer.setItems(List.of(item));
+
+        StockTransferPickLineRepository.AllocationPickTotal pickTotal =
+                new StockTransferPickLineRepository.AllocationPickTotal() {
+                    @Override
+                    public UUID getAllocationId() {
+                        return allocationId;
+                    }
+
+                    @Override
+                    public Long getPickedQuantity() {
+                        return 2L;
+                    }
+                };
+        when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+        when(transferRepository.findByIdAndTenantIdAndIsDeletedFalse(transferId, tenantId))
+                .thenReturn(Optional.of(transfer));
+        when(pickLineRepository.sumPickedByAllocationIds(Set.of(allocationId, unpickedAllocationId)))
+                .thenReturn(List.of(pickTotal));
+        when(attemptRepository.findByTransferIdOrderBySequenceNoAsc(transferId))
+                .thenReturn(List.of());
+
+        StockTransferResponse response = transferService.getTransfer(tenantId, transferId);
+
+        assertEquals(2, response.getItems().get(0).getPickedQuantity());
+        assertEquals(2, response.getItems().get(0).getSourceAllocations().get(0).getPickedQuantity());
+        assertEquals(2, response.getItems().get(0).getSourceAllocations().get(0).getRemainingQuantity());
+        assertEquals(0, response.getItems().get(0).getSourceAllocations().get(1).getPickedQuantity());
+        assertEquals(3, response.getItems().get(0).getSourceAllocations().get(1).getRemainingQuantity());
+        verify(pickLineRepository).sumPickedByAllocationIds(Set.of(allocationId, unpickedAllocationId));
     }
 
     @Test
