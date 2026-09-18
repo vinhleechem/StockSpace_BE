@@ -10,6 +10,8 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundE
 import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
 import fu.stockspace.stockspace_be.listing.entity.ListingOrderStatus;
 import fu.stockspace.stockspace_be.listing.repository.ListingOrderRepository;
+import fu.stockspace.stockspace_be.inspection.entity.InspectionReport;
+import fu.stockspace.stockspace_be.inspection.repository.InspectionReportRepository;
 import fu.stockspace.stockspace_be.warehouse.dto.*;
 import fu.stockspace.stockspace_be.warehouse.entity.*;
 import fu.stockspace.stockspace_be.warehouse.repository.*;
@@ -24,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import fu.stockspace.stockspace_be.notification.service.NotificationService;
+import fu.stockspace.stockspace_be.inspection.entity.InspectionStatus;
 
 import fu.stockspace.stockspace_be.auth.util.SecurityUtil;
 import java.time.Clock;
@@ -61,6 +64,7 @@ public class WarehouseService {
     private final NotificationService notificationService;
     private final TenantWarehouseAccessService tenantWarehouseAccessService;
     private final ListingOrderRepository listingOrderRepository;
+    private final InspectionReportRepository inspectionReportRepository;
     private final WarehouseLayoutRepository warehouseLayoutRepository;
     private final Clock publicationClock;
     private final WarehousePublicationEditPolicy publicationEditPolicy;
@@ -534,14 +538,24 @@ public class WarehouseService {
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
 
         warehouse.setVerified(true);
+        LocalDateTime now = LocalDateTime.now(publicationClock);
+        listingOrderRepository.findOpenPaidByWarehouseIdForUpdate(warehouseId, now).stream()
+                .findFirst()
+                .ifPresent(order -> {
+                    warehouse.setPublishedAt(order.getPeriodStart());
+                    warehouse.setVisibleUntil(order.getPeriodEnd());
+                    log.info("Resumed paid publication {} for warehouse {} after inspection passed",
+                            order.getId(), warehouseId);
+                });
         warehouseRepository.save(warehouse);
         log.info("Warehouse {} verified via inspection", warehouseId);
     }
 
     /**
-     * A failed inspection invalidates both the verification flag and any
-     * currently visible publication. The warehouse remains AVAILABLE so the
-     * owner can fix it and request another inspection.
+     * A failed inspection invalidates the verification flag and hides the
+     * current publication. An open paid order is intentionally kept so the
+     * owner can resume the remaining paid period after passing inspection
+     * again without paying for a second listing package.
      */
     @Transactional
     public void markAsFailedByInspection(UUID warehouseId) {
@@ -553,15 +567,13 @@ public class WarehouseService {
         warehouse.setVisibleUntil(null);
 
         LocalDateTime now = LocalDateTime.now(publicationClock);
-        listingOrderRepository.findOpenPaidByWarehouseIdForUpdate(warehouseId, now)
-                .forEach(order -> {
-                    order.setStatus(ListingOrderStatus.TERMINATED);
-                    listingOrderRepository.save(order);
-                });
+        boolean hasOpenPaidOrder = !listingOrderRepository
+                .findOpenPaidByWarehouseIdForUpdate(warehouseId, now)
+                .isEmpty();
 
         warehouseRepository.save(warehouse);
-        log.info("Warehouse {} failed inspection; verification and publication invalidated",
-                warehouseId);
+        log.info("Warehouse {} failed inspection; verification and publication invalidated; paid order preserved={}",
+                warehouseId, hasOpenPaidOrder);
     }
 
 
@@ -584,7 +596,20 @@ public class WarehouseService {
 
     @Transactional(readOnly = true)
     public Warehouse getOwnedWarehouseForContract(UUID ownerId, UUID warehouseId) {
-        return getOwnedWarehouse(ownerId, warehouseId);
+        Warehouse warehouse = getOwnedWarehouse(ownerId, warehouseId);
+        InspectionReport latestReport = inspectionReportRepository.findByWarehouseId(warehouseId)
+                .stream()
+                .max(Comparator.comparing(
+                        InspectionReport::getCreatedAt,
+                        Comparator.nullsFirst(LocalDateTime::compareTo)))
+                .orElse(null);
+
+        if (latestReport != null && latestReport.getStatus() == InspectionStatus.FAILED) {
+            throw new BadRequestException(
+                    ErrorCode.WAREHOUSE_NOT_AVAILABLE,
+                    "Warehouse failed the latest inspection and cannot be used for a new contract");
+        }
+        return warehouse;
     }
 
     /**
@@ -649,13 +674,27 @@ public class WarehouseService {
     }
 
     private WarehouseResponse mapToResponse(Warehouse w) {
-        return mapToResponse(w, null, null);
+        return mapToResponse(w, null, null, findLatestInspectionStatus(w.getId()));
     }
 
     private WarehouseResponse mapToResponse(
             Warehouse w,
             UUID currentListingOrderId,
             ListingOrderStatus currentListingOrderStatus
+    ) {
+        return mapToResponse(
+                w,
+                currentListingOrderId,
+                currentListingOrderStatus,
+                findLatestInspectionStatus(w.getId())
+        );
+    }
+
+    private WarehouseResponse mapToResponse(
+            Warehouse w,
+            UUID currentListingOrderId,
+            ListingOrderStatus currentListingOrderStatus,
+            String inspectionStatus
     ) {
         List<String> urls = w.getImages().stream()
                 .map(WarehouseImage::getImageUrl)
@@ -665,15 +704,19 @@ public class WarehouseService {
 
         java.math.BigDecimal rentalPrice = w.getRentalPrice();
         RentalPricingType pricingType = effectivePricingType(w);
-        String publicationStatus = resolvePublicationStatus(w, currentListingOrderStatus);
+        boolean inspectionFailed = InspectionStatus.FAILED.name().equals(inspectionStatus);
+        String publicationStatus = resolvePublicationStatus(
+                w,
+                currentListingOrderStatus,
+                inspectionFailed);
         boolean canStartPublication = w.isActive()
                 && !w.isDeleted()
-                && w.getStatus() != WarehouseStatus.INACTIVE
-                && w.isVerified();
+                && w.getStatus() == WarehouseStatus.AVAILABLE
+                && !inspectionFailed;
         boolean canRenewPublication = w.isActive()
                 && !w.isDeleted()
                 && w.getStatus() == WarehouseStatus.AVAILABLE
-                && w.isVerified();
+                && !inspectionFailed;
 
         return WarehouseResponse.builder()
                 .id(w.getId())
@@ -690,6 +733,7 @@ public class WarehouseService {
                 .status(w.getStatus().name())
                 .rejectReason(w.getRejectReason())
                 .isVerified(w.isVerified())
+                .inspectionStatus(inspectionStatus)
                 .typeId(w.getType() != null ? w.getType().getId() : null)
                 .typeName(w.getType() != null ? w.getType().getName() : null)
                 .ownerId(w.getOwner() != null ? w.getOwner().getId() : null)
@@ -769,7 +813,8 @@ public class WarehouseService {
 
     private String resolvePublicationStatus(
             Warehouse warehouse,
-            ListingOrderStatus currentListingOrderStatus
+            ListingOrderStatus currentListingOrderStatus,
+            boolean inspectionFailed
     ) {
         if (currentListingOrderStatus == ListingOrderStatus.PENDING_APPROVAL) {
             return PUBLICATION_PENDING_APPROVAL;
@@ -778,7 +823,7 @@ public class WarehouseService {
                 && warehouse.getStatus() == WarehouseStatus.INACTIVE) {
             return PUBLICATION_REFUNDED;
         }
-        if (!warehouse.isVerified()) {
+        if (inspectionFailed) {
             return PUBLICATION_DRAFT;
         }
         if (warehouse.getStatus() != WarehouseStatus.AVAILABLE) {
@@ -804,12 +849,14 @@ public class WarehouseService {
         Map<UUID, ListingOrderRepository.LatestListingOrderState> latestStates = includeListingOrderState
                 ? findLatestListingOrderStates(page.getContent())
                 : Collections.emptyMap();
+        Map<UUID, String> latestInspectionStatuses = findLatestInspectionStatuses(page.getContent());
         List<WarehouseResponse> content = page.getContent().stream()
                 .map(warehouse -> {
                     ListingOrderRepository.LatestListingOrderState latest = latestStates.get(warehouse.getId());
+                    String inspectionStatus = latestInspectionStatuses.get(warehouse.getId());
                     return latest == null
-                            ? mapToResponse(warehouse)
-                            : mapToResponse(warehouse, latest.getOrderId(), latest.getStatus());
+                            ? mapToResponse(warehouse, null, null, inspectionStatus)
+                            : mapToResponse(warehouse, latest.getOrderId(), latest.getStatus(), inspectionStatus);
                 })
                 .collect(Collectors.toList());
 
@@ -821,6 +868,37 @@ public class WarehouseService {
                 .totalPages(page.getTotalPages())
                 .last(page.isLast())
                 .build();
+    }
+
+    private String findLatestInspectionStatus(UUID warehouseId) {
+        if (warehouseId == null) {
+            return null;
+        }
+        return inspectionReportRepository.findByWarehouseId(warehouseId).stream()
+                .filter(report -> report.getStatus() != null)
+                .max(Comparator.comparing(
+                        report -> Optional.ofNullable(report.getUpdatedAt()).orElse(report.getCreatedAt()),
+                        Comparator.nullsFirst(Comparator.naturalOrder())))
+                .map(report -> report.getStatus().name())
+                .orElse(null);
+    }
+
+    private Map<UUID, String> findLatestInspectionStatuses(List<Warehouse> warehouses) {
+        List<UUID> warehouseIds = warehouses.stream()
+                .map(Warehouse::getId)
+                .filter(Objects::nonNull)
+                .toList();
+        if (warehouseIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        return inspectionReportRepository.findLatestByWarehouseIds(warehouseIds).stream()
+                .filter(report -> report.getWarehouse() != null && report.getStatus() != null)
+                .collect(Collectors.toMap(
+                        report -> report.getWarehouse().getId(),
+                        report -> report.getStatus().name(),
+                        (first, ignored) -> first
+                ));
     }
 
     private Map<UUID, ListingOrderRepository.LatestListingOrderState> findLatestListingOrderStates(

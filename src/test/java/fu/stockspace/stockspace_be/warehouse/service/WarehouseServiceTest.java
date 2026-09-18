@@ -28,6 +28,9 @@ import fu.stockspace.stockspace_be.warehouse.repository.WarehouseImageRepository
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseLayoutRepository;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseTypeRepository;
+import fu.stockspace.stockspace_be.inspection.entity.InspectionReport;
+import fu.stockspace.stockspace_be.inspection.entity.InspectionStatus;
+import fu.stockspace.stockspace_be.inspection.repository.InspectionReportRepository;
 import fu.stockspace.stockspace_be.wallet.entity.Transaction;
 import fu.stockspace.stockspace_be.wallet.entity.TransactionStatus;
 import fu.stockspace.stockspace_be.wallet.entity.TransactionType;
@@ -83,6 +86,9 @@ class WarehouseServiceTest {
 
     @Mock
     private ListingOrderRepository listingOrderRepository;
+
+    @Mock
+    private InspectionReportRepository inspectionReportRepository;
 
     @Mock
     private TransactionRepository transactionRepository;
@@ -179,6 +185,8 @@ class WarehouseServiceTest {
     @Test
     void inspectionVerificationDoesNotChangeWarehousePublicationStatus() {
         when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(listingOrderRepository.findOpenPaidByWarehouseIdForUpdate(eq(warehouseId), any()))
+                .thenReturn(List.of());
 
         warehouseService.markAsVerifiedByInspection(warehouseId);
 
@@ -188,7 +196,35 @@ class WarehouseServiceTest {
     }
 
     @Test
-    void failedInspectionClearsVerificationAndTerminatesOpenPublication() {
+    void passedInspectionResumesAnUnexpiredPaidPublicationWithoutNewPayment() {
+        ListingOrder order = ListingOrder.builder()
+                .id(UUID.randomUUID())
+                .warehouse(warehouse)
+                .status(ListingOrderStatus.PAID)
+                .periodStart(NOW.minusDays(2))
+                .periodEnd(NOW.plusDays(8))
+                .build();
+        warehouse.setStatus(WarehouseStatus.AVAILABLE);
+        warehouse.setVerified(false);
+        warehouse.setPublishedAt(null);
+        warehouse.setVisibleUntil(null);
+
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(listingOrderRepository.findOpenPaidByWarehouseIdForUpdate(eq(warehouseId), any()))
+                .thenReturn(List.of(order));
+        when(warehouseRepository.save(any(Warehouse.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        warehouseService.markAsVerifiedByInspection(warehouseId);
+
+        assertTrue(warehouse.isVerified());
+        assertEquals(order.getPeriodStart(), warehouse.getPublishedAt());
+        assertEquals(order.getPeriodEnd(), warehouse.getVisibleUntil());
+        verify(listingOrderRepository, never()).save(any(ListingOrder.class));
+    }
+
+    @Test
+    void failedInspectionClearsVerificationAndPreservesOpenPaidPublication() {
         ListingOrder order = ListingOrder.builder()
                 .id(UUID.randomUUID())
                 .warehouse(warehouse)
@@ -202,8 +238,6 @@ class WarehouseServiceTest {
         when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
         when(listingOrderRepository.findOpenPaidByWarehouseIdForUpdate(eq(warehouseId), any()))
                 .thenReturn(List.of(order));
-        when(listingOrderRepository.save(any(ListingOrder.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
         when(warehouseRepository.save(any(Warehouse.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -212,9 +246,42 @@ class WarehouseServiceTest {
         assertFalse(warehouse.isVerified());
         assertNull(warehouse.getPublishedAt());
         assertNull(warehouse.getVisibleUntil());
-        assertEquals(ListingOrderStatus.TERMINATED, order.getStatus());
-        verify(listingOrderRepository).save(order);
+        assertEquals(ListingOrderStatus.PAID, order.getStatus());
+        verify(listingOrderRepository, never()).save(any(ListingOrder.class));
         verify(warehouseRepository).save(warehouse);
+    }
+
+    @Test
+    void contractSelectionRejectsWarehouseWithLatestFailedInspection() {
+        InspectionReport failedReport = InspectionReport.builder()
+                .id(UUID.randomUUID())
+                .warehouse(warehouse)
+                .status(InspectionStatus.FAILED)
+                .createdAt(NOW)
+                .build();
+
+        when(warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId))
+                .thenReturn(Optional.of(warehouse));
+        when(inspectionReportRepository.findByWarehouseId(warehouseId))
+                .thenReturn(List.of(failedReport));
+
+        BadRequestException exception = assertThrows(
+                BadRequestException.class,
+                () -> warehouseService.getOwnedWarehouseForContract(ownerId, warehouseId));
+
+        assertEquals(fu.stockspace.stockspace_be.common.exception.ErrorCode.WAREHOUSE_NOT_AVAILABLE,
+                exception.getErrorCode());
+    }
+
+    @Test
+    void contractSelectionAllowsWarehouseWithoutInspectionReport() {
+        when(warehouseRepository.findByIdAndOwnerId(warehouseId, ownerId))
+                .thenReturn(Optional.of(warehouse));
+        when(inspectionReportRepository.findByWarehouseId(warehouseId))
+                .thenReturn(List.of());
+
+        assertSame(warehouse,
+                warehouseService.getOwnedWarehouseForContract(ownerId, warehouseId));
     }
 
     @Test
@@ -693,7 +760,7 @@ class WarehouseServiceTest {
     }
 
     @Test
-    void unverifiedWarehouseCannotExposePublicationActions() {
+    void warehouseWithoutInspectionCanExposePublicationActions() {
         warehouse.setStatus(WarehouseStatus.AVAILABLE);
         warehouse.setVerified(false);
         when(warehouseRepository.findByOwnerId(eq(ownerId), any()))
@@ -705,8 +772,44 @@ class WarehouseServiceTest {
                 .get(0);
 
         assertEquals("DRAFT", response.getPublicationStatus());
-        assertFalse(response.isCanPublish());
+        assertTrue(response.isCanPublish());
         assertFalse(response.isCanRenew());
+    }
+
+    @Test
+    void warehouseResponseDistinguishesNoInspectionFromFailedInspection() {
+        warehouse.setStatus(WarehouseStatus.AVAILABLE);
+        warehouse.setVerified(false);
+        when(warehouseRepository.findByOwnerId(eq(ownerId), any()))
+                .thenReturn(new PageImpl<>(List.of(warehouse)));
+        when(inspectionReportRepository.findLatestByWarehouseIds(List.of(warehouseId)))
+                .thenReturn(List.of());
+
+        WarehouseResponse withoutInspection = warehouseService
+                .getMyWarehouses(ownerId, 0, 10, "createdAt", "desc")
+                .getContent()
+                .get(0);
+
+        assertNull(withoutInspection.getInspectionStatus());
+        assertTrue(withoutInspection.isCanPublish());
+
+        InspectionReport failedReport = InspectionReport.builder()
+                .id(UUID.randomUUID())
+                .warehouse(warehouse)
+                .status(InspectionStatus.FAILED)
+                .createdAt(NOW.minusMinutes(1))
+                .updatedAt(NOW)
+                .build();
+        when(inspectionReportRepository.findLatestByWarehouseIds(List.of(warehouseId)))
+                .thenReturn(List.of(failedReport));
+
+        WarehouseResponse withFailedInspection = warehouseService
+                .getMyWarehouses(ownerId, 0, 10, "createdAt", "desc")
+                .getContent()
+                .get(0);
+
+        assertEquals(InspectionStatus.FAILED.name(), withFailedInspection.getInspectionStatus());
+        assertFalse(withFailedInspection.isCanPublish());
     }
 
     @Test

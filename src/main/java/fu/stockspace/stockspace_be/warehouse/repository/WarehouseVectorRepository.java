@@ -55,7 +55,6 @@ public class WarehouseVectorRepository {
                 WHERE w.isActive = true
                   AND w.isDeleted = false
                   AND w.status = fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus.AVAILABLE
-                  AND w.isVerified = true
                   AND w.publishedAt IS NOT NULL
                   AND w.publishedAt <= CURRENT_TIMESTAMP
                   AND w.visibleUntil IS NOT NULL

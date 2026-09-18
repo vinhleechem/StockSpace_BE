@@ -17,6 +17,17 @@ public interface InspectionReportRepository extends JpaRepository<InspectionRepo
 
     List<InspectionReport> findByWarehouseId(UUID warehouseId);
 
+    @Query("""
+            SELECT r FROM InspectionReport r
+            WHERE r.warehouse.id IN :warehouseIds
+              AND r.createdAt = (
+                    SELECT MAX(latest.createdAt)
+                    FROM InspectionReport latest
+                    WHERE latest.warehouse.id = r.warehouse.id
+              )
+            """)
+    List<InspectionReport> findLatestByWarehouseIds(@Param("warehouseIds") List<UUID> warehouseIds);
+
     Page<InspectionReport> findByInspectorId(UUID inspectorId, Pageable pageable);
 
     Page<InspectionReport> findByStatus(InspectionStatus status, Pageable pageable);

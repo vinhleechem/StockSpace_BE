@@ -758,6 +758,8 @@ This section is the authoritative frontend contract for the listing flow.
 Listing publication and warehouse inspection are separate workflows:
 `isVerified` is a badge/filter value and is not a prerequisite for purchasing
 a listing package or for public visibility after Admin publication approval.
+No inspection report is a valid state. Only a latest inspection result of
+`FAILED` blocks a new publication and temporarily hides an existing listing.
 
 ### 12.1 Owner flow
 
@@ -919,7 +921,11 @@ GET /api/inspector/inspections?page=0&size=10
 POST /api/inspector/inspections/{inspectionId}/report
 ```
 
-Do not block the listing package button or public listing on inspection status.
+Do not treat `isVerified=false` as a failed inspection. When
+`inspectionStatus` is `null`, the warehouse has not requested inspection and
+may still be published. Block the listing package button only when the latest
+`inspectionStatus` is `FAILED`; a later `PASSED` result resumes any remaining
+paid publication period.
 After payment, approval, rejection or resubmission, refetch the affected
 warehouse, publication history, wallet and transaction data instead of making
 optimistic state assumptions.

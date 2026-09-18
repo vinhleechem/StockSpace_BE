@@ -6,6 +6,9 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestExcepti
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceNotFoundException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
+import fu.stockspace.stockspace_be.inspection.entity.InspectionReport;
+import fu.stockspace.stockspace_be.inspection.entity.InspectionStatus;
+import fu.stockspace.stockspace_be.inspection.repository.InspectionReportRepository;
 import fu.stockspace.stockspace_be.listing.dto.ListingOrderResponse;
 import fu.stockspace.stockspace_be.listing.dto.PurchaseListingPackageRequest;
 import fu.stockspace.stockspace_be.listing.entity.ListingOrder;
@@ -33,6 +36,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Map;
 import java.util.List;
 import java.util.UUID;
@@ -48,6 +52,7 @@ public class ListingOrderService {
     private final WarehouseRepository warehouseRepository;
     private final TransactionRepository transactionRepository;
     private final WarehouseLayoutRepository warehouseLayoutRepository;
+    private final InspectionReportRepository inspectionReportRepository;
     private final WalletService walletService;
     private final NotificationService notificationService;
     private final Clock businessClock;
@@ -305,9 +310,23 @@ public class ListingOrderService {
                 || warehouse.isDeleted()
                 || warehouse.getStatus() == null
                 || warehouse.getStatus() != WarehouseStatus.AVAILABLE
-                || !warehouse.isVerified()) {
+                || hasLatestFailedInspection(warehouse.getId())) {
             throw new BadRequestException(ErrorCode.WAREHOUSE_NOT_AVAILABLE);
         }
+    }
+
+    private boolean hasLatestFailedInspection(UUID warehouseId) {
+        return inspectionReportRepository.findByWarehouseId(warehouseId).stream()
+                .filter(report -> report.getStatus() != null)
+                .max(Comparator.comparing(
+                        this::inspectionTimestamp,
+                        Comparator.nullsFirst(Comparator.naturalOrder())))
+                .map(report -> report.getStatus() == InspectionStatus.FAILED)
+                .orElse(false);
+    }
+
+    private LocalDateTime inspectionTimestamp(InspectionReport report) {
+        return report.getUpdatedAt() != null ? report.getUpdatedAt() : report.getCreatedAt();
     }
 
     private void validateDefaultLayout(UUID warehouseId) {
