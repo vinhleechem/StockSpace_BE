@@ -2,7 +2,6 @@ package fu.stockspace.stockspace_be.chatbot.tool.impl;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import fu.stockspace.stockspace_be.chatbot.tool.ChatRequestContext;
 import fu.stockspace.stockspace_be.contract.dto.RentalContractResponse;
 import fu.stockspace.stockspace_be.contract.service.ContractService;
 import fu.stockspace.stockspace_be.subscription.dto.ServicePackageResponse;
@@ -11,9 +10,6 @@ import fu.stockspace.stockspace_be.subscription.entity.SubscriptionStatus;
 import fu.stockspace.stockspace_be.subscription.service.SubscriptionService;
 import fu.stockspace.stockspace_be.wallet.dto.WalletResponse;
 import fu.stockspace.stockspace_be.wallet.service.WalletService;
-import fu.stockspace.stockspace_be.wms.stock.service.StockBatchService;
-import fu.stockspace.stockspace_be.common.dto.PagedResponse;
-import fu.stockspace.stockspace_be.wms.stock.dto.WarehouseStockOverviewResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,8 +35,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import fu.stockspace.stockspace_be.common.service.TenantWarehouseAccessService;
-
 @ExtendWith(MockitoExtension.class)
 class TenantChatToolsTest {
 
@@ -52,12 +46,6 @@ class TenantChatToolsTest {
 
     @Mock
     private SubscriptionService subscriptionService;
-
-    @Mock
-    private TenantWarehouseAccessService accessService;
-
-    @Mock
-    private StockBatchService stockBatchService;
 
     private ObjectMapper objectMapper;
     private UUID userId;
@@ -248,59 +236,10 @@ class TenantChatToolsTest {
     }
 
     @Test
-    void getMyStockDelegatesTenantAndWarehouseToSecuredService() throws Exception {
-        UUID warehouseId = UUID.randomUUID();
-        StockBatchService.WarehouseStockSummary summary =
-                new StockBatchService.WarehouseStockSummary(warehouseId, "Kho C", 4, 9, 350);
-        when(stockBatchService.getStockSummaryByWarehouse(userId, warehouseId)).thenReturn(summary);
-        when(stockBatchService.getStockOverviewByWarehouse(
-                eq(userId), eq(warehouseId), any(PageRequest.class)))
-                .thenReturn(PagedResponse.<WarehouseStockOverviewResponse>builder()
-                        .content(List.of(WarehouseStockOverviewResponse.builder()
-                                .skuCode("SKU-01")
-                                .skuName("Sản phẩm A")
-                                .categoryName("Hàng khô")
-                                .uomSymbol("THUNG")
-                                .totalQuantity(350)
-                                .totalWeightKg(new BigDecimal("700"))
-                                .totalVolumeM3(new BigDecimal("12.5"))
-                                .build()))
-                        .totalElements(1)
-                        .build());
-
-        JsonNode result = objectMapper.readTree(
-                new GetMyStockTool(objectMapper, stockBatchService, accessService)
-                        .executeWithContext(Map.of(), new ChatRequestContext(
-                                userId, warehouseId)));
-
-        assertEquals("Kho C", result.get("warehouseName").asText());
-        assertEquals(4, result.get("productCount").asLong());
-        assertEquals(9, result.get("batchCount").asLong());
-        assertEquals(350, result.get("totalQuantity").asLong());
-        assertEquals("SKU-01", result.at("/products/0/skuCode").asText());
-        assertEquals("700", result.at("/products/0/weightKg").asText());
-        assertFalse(result.has("warehouseId"));
-        verify(stockBatchService).getStockSummaryByWarehouse(userId, warehouseId);
-        verify(stockBatchService).getStockOverviewByWarehouse(
-                eq(userId), eq(warehouseId), any(PageRequest.class));
-    }
-
-    @Test
-    void getMyStockRejectsGuestBeforeCallingService() throws Exception {
-        JsonNode result = objectMapper.readTree(
-                new GetMyStockTool(objectMapper, stockBatchService, accessService)
-                        .execute(Map.of("warehouseId", UUID.randomUUID().toString()), null));
-
-        assertTrue(result.has("error"));
-        verifyNoInteractions(stockBatchService);
-    }
-
-    @Test
     void privateToolDescriptionsUseVietnameseBusinessTerms() {
         List<String> descriptions = List.of(
                 new GetMyContractsTool(objectMapper, contractService).getDescription(),
                 new GetContractDetailTool(objectMapper, contractService).getDescription(),
-                new GetMyStockTool(objectMapper, stockBatchService, accessService).getDescription(),
                 new GetMyWalletTool(objectMapper, walletService).getDescription()
         );
 

@@ -104,7 +104,7 @@ public class PromptBuilder {
             - Hãy hiểu câu hỏi theo ý định và thực thể trong lịch sử, không chỉ theo từ khóa của lượt hiện tại.
             - Với câu hỏi nối tiếp, dùng internalId trong bộ nhớ thực thể đã xác minh để gọi đúng tool; không hỏi lại nếu đã xác định được thực thể.
             - Kết quả tool là dữ liệu có thẩm quyền cho nghiệp vụ. Không trộn số liệu cũ trong lịch sử với số liệu mới.
-            - Kết quả tra cứu chính sách có trường citation: khi nêu một quy định, hãy đặt citation ngay sau mệnh đề tương ứng bằng nhãn nguồn và đoạn.
+            - Kết quả tra cứu chính sách có trường citation để hệ thống kiểm chứng nội bộ. Tuyệt đối không hiển thị trường citation, tên nguồn, số đoạn hoặc nhãn kỹ thuật đó trong câu trả lời cho người dùng.
             - Chỉ tổng hợp những gì có trong tool result hoặc evidence. Nếu các nguồn mâu thuẫn, nêu rõ mâu thuẫn và ưu tiên dữ liệu live/mới hơn.
             - Nếu chỉ thiếu evidence cho một phần, vẫn trả lời đầy đủ các phần đã xác minh; chỉ đánh dấu đúng trường còn thiếu và hỏi tối đa một thông tin cần thiết. Không được biến thiếu một con số thành từ chối toàn bộ câu trả lời.
             - Với câu hỏi có nhiều ý, phải xử lý từng ý, không bỏ qua ý ở sau liên từ "và"; mỗi ý dùng nguồn phù hợp.

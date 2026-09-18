@@ -57,11 +57,19 @@ class PromptBuilderTest {
 
             // Internal tool identifiers are intentionally present for the
             // model, but user-facing role/status labels must not leak.
-            String userFacingPrompt = prompt.replace("getTenantDashboard", "");
+            String userFacingPrompt = prompt;
             assertFalse(userFacingPrompt.contains("Tenant"));
             assertFalse(userFacingPrompt.contains("PENDING"));
             assertFalse(userFacingPrompt.contains("ACTIVE"));
         }
+    }
+
+    @Test
+    void citationMetadataIsInternalOnly() {
+        String prompt = promptBuilder.buildSystemPrompt("GUEST");
+
+        assertTrue(prompt.contains("kiểm chứng nội bộ"));
+        assertTrue(prompt.contains("Tuyệt đối không hiển thị trường citation"));
     }
 
     @Test
