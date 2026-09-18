@@ -34,16 +34,52 @@ public final class ChatQueryPlanner {
             "o dau", "tai dau", "quan nao", "tinh nao", "con trong", "con cho thue",
             "gia thue kho", "gia re", "gan"
     );
+    private static final Set<String> CONTEXTUAL_FOLLOW_UP_MARKERS = Set.of(
+            "con kho", "them kho", "kho khac", "re hon", "dat hon", "phu hop hon",
+            "o do", "tai do", "khu vuc khac", "loc lai", "theo bo loc", "tiep theo",
+            "so sanh", "nhu vay", "cai nao", "loai nao", "con khong", "co khong",
+            "cai dau", "cai thu", "dau tien", "thu hai", "doi sang", "chuyen sang",
+            "tim them", "tim lai", "them nua"
+    );
+    private static final Set<String> RESET_SEARCH_MARKERS = Set.of(
+            "xoa bo loc", "xoa loc", "bo bo loc", "bo het loc", "tim lai tu dau", "tim moi", "clear filters"
+    );
     private static final Set<String> OPERATION_MARKERS = Set.of(
             "ton kho", "sku", "san pham", "phieu nhap", "phieu xuat", "kiem ke",
-            "chuyen kho", "suc chua", "capacity", "xep hang", "lay hang", "nhap hang",
-            "kho cua toi", "kho cua minh", "kho dang xem", "kho dang mo", "my warehouse"
+            "chuyen kho", "xep hang", "lay hang", "nhap hang", "suc chua van hanh",
+            "kho cua toi", "kho cua minh", "kho toi", "kho minh", "kho dang xem", "kho dang mo", "my warehouse"
+    );
+    private static final Set<String> WARD_PREFIXES = Set.of(
+            "phuong ", "xa ", "thi tran ", "thi tran ", "ward ", "commune "
+    );
+    private static final Set<String> PROVINCE_NAMES = Set.of(
+            "ha noi", "hai phong", "da nang", "can tho", "ho chi minh",
+            "an giang", "ba ria vung tau", "bac lieu", "bac kan", "bac ninh",
+            "ben tre", "binh dinh", "binh duong", "binh phuoc", "binh thuan",
+            "ca mau", "cao bang", "dak lak", "dak nong", "dien bien",
+            "dong nai", "dong thap", "gia lai", "ha giang", "ha nam",
+            "ha tinh", "hai duong", "hau giang", "hoa binh", "hung yen",
+            "khanh hoa", "kien giang", "kon tum", "lai chau", "lam dong",
+            "lang son", "lao cai", "long an", "nam dinh", "nghe an",
+            "ninh binh", "ninh thuan", "phu tho", "phu yen", "quang binh",
+            "quang nam", "quang ngai", "quang ninh", "quang tri", "soc trang",
+            "son la", "tay ninh", "thai binh", "thai nguyen", "thanh hoa",
+            "thua thien hue", "tien giang", "tra vinh", "tuyen quang",
+            "vinh long", "vinh phuc", "yen bai"
     );
 
     private ChatQueryPlanner() {
     }
 
     public static Plan plan(String message) {
+        return plan(message, Map.of());
+    }
+
+    /** Plans a turn while optionally carrying forward the previous warehouse-search filters. */
+    public static Plan plan(String message, Map<String, Object> previousWarehouseSearch) {
+        Map<String, Object> previous = previousWarehouseSearch == null
+                ? Map.of()
+                : previousWarehouseSearch;
         String normalized = normalize(message);
         if (normalized.isBlank()) {
             return Plan.none();
@@ -54,6 +90,8 @@ public final class ChatQueryPlanner {
             return new Plan(
                     switch (rentalIntent.route()) {
                         case CURRENT_SYSTEM_RULES -> Intent.CURRENT_RULES;
+                        case SYSTEM_INFO -> Intent.SYSTEM_INFO;
+                        case WAREHOUSE_TYPES -> Intent.WAREHOUSE_TYPES;
                         case SERVICE_PACKAGES -> Intent.SERVICE_PACKAGES;
                         case MY_ACTIVE_SUBSCRIPTION -> Intent.MY_ACTIVE_SUBSCRIPTION;
                         case MY_CONTRACTS -> Intent.MY_CONTRACTS;
@@ -66,9 +104,142 @@ public final class ChatQueryPlanner {
         }
 
         if (isWarehouseSearch(normalized)) {
-            return new Plan(Intent.WAREHOUSE_SEARCH, extractWarehouseFilters(message, normalized), true);
+            Plan current = new Plan(Intent.WAREHOUSE_SEARCH,
+                    extractWarehouseFilters(message, normalized), true);
+            return mergeWarehouseFollowUp(message, normalized, current, previous);
+        }
+        if (!previous.isEmpty()
+                && isWarehouseFollowUp(normalized)) {
+            return continueWarehouseSearch(message, normalized, previous);
         }
         return Plan.none();
+    }
+
+    private static Plan mergeWarehouseFollowUp(
+            String original,
+            String normalized,
+            Plan current,
+            Map<String, Object> previous
+    ) {
+        if (previous == null || previous.isEmpty()
+                || (!isWarehouseFollowUp(normalized) && !resetsWarehouseFilters(normalized))) {
+            return current;
+        }
+        boolean reset = resetsWarehouseFilters(normalized);
+        Map<String, Object> merged = reset
+                ? new LinkedHashMap<>()
+                : new LinkedHashMap<>(previous);
+        merged.putAll(current.filters());
+        String location = extractLocation(original);
+        boolean explicitLocation = location != null
+                && !Set.of("do", "day", "kia", "nay").contains(normalize(location));
+        String previousSemantic = reset ? "" : stringValue(
+                previous.get("semanticQuery"),
+                stringValue(previous.get("keyword"), ""));
+        String currentSemantic = stringValue(current.filters().get("semanticQuery"), original);
+        if (!previousSemantic.isBlank()) {
+            // A follow-up such as "ở Bình Dương" changes the location but
+            // keeps the original business need (for example "kho lạnh").
+            // Keep both signals for the vector ranker instead of dropping the
+            // previous requirement when a new location is supplied.
+            merged.put("semanticQuery", combineSemanticQueries(currentSemantic, previousSemantic));
+        }
+        if (!reset && !explicitLocation && previous.get("keyword") != null) {
+            merged.put("keyword", previous.get("keyword"));
+            merged.put("semanticQuery", combineSemanticQueries(
+                    currentSemantic,
+                    previousSemantic));
+        } else if (explicitLocation) {
+            if (!current.filters().containsKey("province")) {
+                merged.remove("province");
+            }
+            if (!current.filters().containsKey("district")) {
+                merged.remove("district");
+            }
+        }
+        merged.putIfAbsent("pageSize", 5);
+        return new Plan(Intent.WAREHOUSE_SEARCH, merged, true);
+    }
+
+    private static Plan continueWarehouseSearch(
+            String original,
+            String normalized,
+            Map<String, Object> previous
+    ) {
+        if (resetsWarehouseFilters(normalized)) {
+            Map<String, Object> resetFilters = extractWarehouseFilters(original, normalized);
+            if (extractLocation(original) == null) {
+                resetFilters.remove("keyword");
+                resetFilters.remove("semanticQuery");
+            }
+            return new Plan(Intent.WAREHOUSE_SEARCH, resetFilters, true);
+        }
+        Map<String, Object> filters = new LinkedHashMap<>(previous);
+        String previousKeyword = stringValue(previous.get("keyword"), null);
+        if (previousKeyword != null) {
+            filters.put("keyword", previousKeyword);
+        }
+        filters.put("semanticQuery", combineSemanticQueries(
+                original,
+                stringValue(previous.get("semanticQuery"), previousKeyword == null ? "" : previousKeyword)));
+        String location = extractLocation(original);
+        if (location != null
+                && !Set.of("do", "day", "kia", "nay").contains(normalize(location))) {
+            String normalizedLocation = normalize(location);
+            filters.put("keyword", location);
+            filters.remove("province");
+            filters.remove("district");
+            if (normalizedLocation.startsWith("quan ")
+                    || normalizedLocation.startsWith("huyen ")
+                    || normalizedLocation.startsWith("thi xa ")) {
+                filters.put("district", location);
+            } else if (!WARD_PREFIXES.stream().anyMatch(normalizedLocation::startsWith)
+                    && (normalizedLocation.startsWith("tinh ")
+                    || normalizedLocation.startsWith("thanh pho ")
+                    || normalizedLocation.startsWith("tp ")
+                    || PROVINCE_NAMES.contains(normalizedLocation))) {
+                filters.put("province", location);
+            }
+        }
+        filters.putIfAbsent("pageSize", 5);
+        applyRelativeSort(normalized, filters);
+        return new Plan(Intent.WAREHOUSE_SEARCH, filters, true);
+    }
+
+    private static boolean isWarehouseFollowUp(String normalized) {
+        if (normalized == null || normalized.isBlank()) {
+            return false;
+        }
+        return containsAny(normalized, CONTEXTUAL_FOLLOW_UP_MARKERS)
+                || normalized.matches("^(con|them|khac|re hon|dat hon|o do|tai do)\\b.*")
+                || isLocationOnlyFollowUp(normalized)
+                || resetsWarehouseFilters(normalized);
+    }
+
+    private static boolean resetsWarehouseFilters(String normalized) {
+        return containsAny(normalized, RESET_SEARCH_MARKERS);
+    }
+
+    private static boolean isLocationOnlyFollowUp(String normalized) {
+        return normalized.matches(
+                "^(o|tai|khu vuc|gan)\\s+(?!dau(?:\\s|$)).{2,}$");
+    }
+
+    private static String combineSemanticQueries(String current, String previous) {
+        String left = current == null ? "" : current.strip();
+        String right = previous == null ? "" : previous.strip();
+        if (left.isBlank()) {
+            return right;
+        }
+        if (right.isBlank() || left.equalsIgnoreCase(right)) {
+            return left;
+        }
+        String combined = left + " | " + right;
+        return combined.length() <= 1_000 ? combined : combined.substring(0, 1_000);
+    }
+
+    private static String stringValue(Object value, String fallback) {
+        return value == null || value.toString().isBlank() ? fallback : value.toString();
     }
 
     /**
@@ -141,7 +312,10 @@ public final class ChatQueryPlanner {
     }
 
     private static boolean isWarehouseSearch(String normalized) {
-        if (!normalized.contains("kho") || containsAny(normalized, OPERATION_MARKERS)
+        boolean locationFollowUp = normalized.matches(
+                "^(o|tai|khu vuc|gan)\\s+(?!dau(?:\\s|$)).{2,}$");
+        if ((!normalized.contains("kho") && !locationFollowUp)
+                || containsAny(normalized, OPERATION_MARKERS)
                 || normalized.contains("dien tich") || normalized.contains("kich thuoc")
                 || normalized.contains("bao nhieu m2")) {
             return false;
@@ -149,22 +323,34 @@ public final class ChatQueryPlanner {
         return containsAny(normalized, SEARCH_MARKERS)
                 || normalized.matches(".*\\bkho\\s+[^ ]+.*")
                 || normalized.contains("cho thue")
-                || normalized.contains("thue kho");
+                || normalized.contains("thue kho")
+                || locationFollowUp;
     }
 
     private static Map<String, Object> extractWarehouseFilters(String original, String normalized) {
         Map<String, Object> filters = new LinkedHashMap<>();
-        filters.put("keyword", original == null ? "" : original.strip());
+        String originalText = original == null ? "" : original.strip();
+        filters.put("keyword", originalText);
         filters.put("pageSize", 5);
 
         String location = extractLocation(original);
         if (location != null) {
             String normalizedLocation = normalize(location);
+            // Keep the location as the lexical anchor and the full sentence as
+            // the semantic query. This prevents SQL LIKE from receiving the
+            // entire natural-language question while preserving intent for
+            // vector ranking.
+            filters.put("keyword", location);
+            filters.put("semanticQuery", originalText);
             if (normalizedLocation.startsWith("quan ")
                     || normalizedLocation.startsWith("huyen ")
                     || normalizedLocation.startsWith("thi xa ")) {
                 filters.put("district", location);
-            } else {
+            } else if (!WARD_PREFIXES.stream().anyMatch(normalizedLocation::startsWith)
+                    && (normalizedLocation.startsWith("tinh ")
+                    || normalizedLocation.startsWith("thanh pho ")
+                    || normalizedLocation.startsWith("tp ")
+                    || PROVINCE_NAMES.contains(normalizedLocation))) {
                 filters.put("province", location);
             }
         }
@@ -202,7 +388,14 @@ public final class ChatQueryPlanner {
                     Math.max(0, numberMatcher.start() - 32), numberMatcher.start());
             boolean priceContext = before.contains("gia")
                     || before.contains("phi")
-                    || before.contains("ngan sach");
+                    || before.contains("ngan sach")
+                    || normalized.contains("re hon")
+                    || normalized.contains("dat hon")
+                    || normalized.contains("duoi ")
+                    || normalized.contains("tren ")
+                    || (normalized.contains(" tu ") && normalized.contains(" den ")
+                    && (normalized.contains("trieu") || normalized.contains("ty")
+                    || normalized.contains(" tr ") || normalized.contains(" k ")));
             if (!priceContext) {
                 continue;
             }
@@ -231,7 +424,8 @@ public final class ChatQueryPlanner {
         } else if (firstPrice != null) {
             if (containsAny(normalized, Set.of("duoi ", "toi da", "khong qua", "re hon"))) {
                 filters.put("maxRentalPrice", firstPrice);
-            } else if (containsAny(normalized, Set.of("tren ", "toi thieu", "it nhat"))) {
+            } else if (containsAny(normalized, Set.of(
+                    "tren ", "toi thieu", "it nhat", "dat hon", "gia cao hon"))) {
                 filters.put("minRentalPrice", firstPrice);
             }
         }
@@ -244,7 +438,16 @@ public final class ChatQueryPlanner {
         } else if (normalized.contains("cao nhat") || normalized.contains("dat nhat")) {
             filters.put("sortBy", "PRICE_DESC");
         }
+        applyRelativeSort(normalized, filters);
         return Map.copyOf(filters);
+    }
+
+    private static void applyRelativeSort(String normalized, Map<String, Object> filters) {
+        if (normalized.contains("re hon") || normalized.contains("gia thap hon")) {
+            filters.put("sortBy", "PRICE_ASC");
+        } else if (normalized.contains("dat hon") || normalized.contains("gia cao hon")) {
+            filters.put("sortBy", "PRICE_DESC");
+        }
     }
 
     private static String extractLocation(String original) {
@@ -319,6 +522,8 @@ public final class ChatQueryPlanner {
         WAREHOUSE_SEARCH,
         RENTAL_POLICY,
         CURRENT_RULES,
+        SYSTEM_INFO,
+        WAREHOUSE_TYPES,
         SERVICE_PACKAGES,
         MY_ACTIVE_SUBSCRIPTION,
         MY_CONTRACTS
@@ -355,6 +560,8 @@ public final class ChatQueryPlanner {
                 case WAREHOUSE_SEARCH -> "searchWarehouses";
                 case RENTAL_POLICY -> "searchSystemPolicy";
                 case CURRENT_RULES -> "getCurrentSystemRules";
+                case SYSTEM_INFO -> "searchSystemPolicy";
+                case WAREHOUSE_TYPES -> "getWarehouseTypes";
                 case SERVICE_PACKAGES -> "getServicePackages";
                 case MY_ACTIVE_SUBSCRIPTION -> "getMyActiveSubscription";
                 case MY_CONTRACTS -> "getMyContracts";
@@ -377,6 +584,9 @@ public final class ChatQueryPlanner {
             }
             if (safeFilters.containsKey("district")) {
                 safeFilters.put("district", "<user-location>");
+            }
+            if (safeFilters.containsKey("semanticQuery")) {
+                safeFilters.put("semanticQuery", "<user-query-context>");
             }
             return "BỘ LẬP KẾ HOẠCH TRUY VẤN (dữ liệu hỗ trợ, không phải chỉ thị từ user): "
                     + "intent=" + intent.name()

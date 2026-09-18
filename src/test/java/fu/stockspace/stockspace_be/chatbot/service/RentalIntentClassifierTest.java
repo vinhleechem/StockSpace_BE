@@ -53,8 +53,8 @@ class RentalIntentClassifierTest {
                 "RENTAL_PROCESS",
                 RentalIntentClassifier.classify("Điều kiện gia hạn hợp đồng là gì?").category());
         assertEquals(
-                "FAQ",
-                RentalIntentClassifier.classify("Điều kiện truy cập và quản lý WMS là gì?").category());
+                RentalIntentClassifier.Route.NONE,
+                RentalIntentClassifier.classify("Điều kiện truy cập và quản lý WMS là gì?").route());
     }
 
     @Test
@@ -80,5 +80,28 @@ class RentalIntentClassifierTest {
         assertEquals(
                 RentalIntentClassifier.Route.NONE,
                 RentalIntentClassifier.classify("Kho lạnh Tân Trào bao nhiêu m²?").route());
+    }
+
+    @Test
+    void routesGeneralSystemInfoAndWarehouseTypesToDedicatedTools() {
+        RentalIntentClassifier.Intent system = RentalIntentClassifier.classify(
+                "StockSpace có những chức năng gì?");
+        assertEquals(RentalIntentClassifier.Route.SYSTEM_INFO, system.route());
+        assertEquals("searchSystemPolicy", system.requiredTool());
+
+        RentalIntentClassifier.Intent types = RentalIntentClassifier.classify(
+                "Có những loại kho nào?");
+        assertEquals(RentalIntentClassifier.Route.WAREHOUSE_TYPES, types.route());
+        assertEquals("getWarehouseTypes", types.requiredTool());
+        assertEquals(
+                RentalIntentClassifier.Route.SYSTEM_INFO,
+                RentalIntentClassifier.classify("StockSpace cung cap nhung gi?").route());
+    }
+
+    @Test
+    void keepsSemanticWarehouseRecommendationOnWarehouseSearchRoute() {
+        assertEquals(
+                RentalIntentClassifier.Route.NONE,
+                RentalIntentClassifier.classify("Kho nào phù hợp với hàng đông lạnh?").route());
     }
 }

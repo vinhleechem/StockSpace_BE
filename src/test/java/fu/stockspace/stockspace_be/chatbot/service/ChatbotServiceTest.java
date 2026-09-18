@@ -17,6 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Duration;
@@ -43,6 +44,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -63,6 +65,9 @@ class ChatbotServiceTest {
     @Mock
     private ActiveWarehouseContextResolver activeWarehouseContextResolver;
 
+    @Mock
+    private ObjectProvider<StructuredQueryPlanner> structuredQueryPlanner;
+
     private OpenRouterClient openRouterClient;
     private ChatStreamRuntime chatStreamRuntime;
     private ChatbotService service;
@@ -82,7 +87,8 @@ class ChatbotServiceTest {
                 promptBuilder,
                 activeWarehouseContextResolver,
                 new AuthenticatedChatRateLimiter(),
-                chatStreamRuntime
+                chatStreamRuntime,
+                structuredQueryPlanner
         );
         lenient().when(subscriptionService.hasActiveSubscription(any(UUID.class))).thenReturn(true);
         ReflectionTestUtils.setField(service, "maxAgentIterations", 4);
@@ -325,13 +331,14 @@ class ChatbotServiceTest {
 
         verify(searchTool).executeWithContext(
                 org.mockito.ArgumentMatchers.argThat(args ->
-                        message.equals(args.get("keyword"))
+                        "Bình Dương".equals(args.get("keyword"))
+                                && message.equals(args.get("semanticQuery"))
                                 && new java.math.BigDecimal("15000000").equals(args.get("maxRentalPrice"))),
                 any(ChatRequestContext.class));
     }
 
     @Test
-    void routesEnglishInventorySuggestionAndExplainsMissingContract() {
+    void doesNotRouteEnglishInventorySuggestionThroughChatbotWmsTools() {
         UUID userId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
         ChatTool stockTool = namedTool("getMyStock");
@@ -358,8 +365,8 @@ class ChatbotServiceTest {
         ChatResponse result = service.processTenantMessage(
                 userId, new SendMessageRequest(null, message));
 
-        assertTrue(result.botReply().contains("hợp đồng thuê kho"));
-        verify(stockTool).executeWithContext(eq(Map.of()), eq(context));
+        assertTrue(result.botReply().contains("module Quản lý kho"));
+        verifyNoInteractions(stockTool);
     }
 
     @Test

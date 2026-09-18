@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -58,6 +59,9 @@ public class ConversationMemoryService {
     ) {
         List<ConversationMemory.EntityReference> discovered = new ArrayList<>();
         LinkedHashSet<String> tools = new LinkedHashSet<>();
+        Map<String, Object> lastWarehouseSearch = current == null
+                ? Map.of()
+                : current.lastWarehouseSearch();
         if (traces != null) {
             for (ToolExecutionTrace trace : traces) {
                 if (trace == null || !trace.successful()) {
@@ -65,6 +69,9 @@ public class ConversationMemoryService {
                 }
                 tools.add(trace.toolName());
                 discovered.addAll(extractEntities(trace));
+                if ("searchWarehouses".equals(trace.toolName())) {
+                    lastWarehouseSearch = trace.arguments();
+                }
             }
         }
         return ConversationMemory.merged(
@@ -72,7 +79,8 @@ public class ConversationMemoryService {
                 discovered,
                 List.copyOf(tools),
                 MAX_ENTITIES,
-                MAX_RECENT_TOOLS
+                MAX_RECENT_TOOLS,
+                lastWarehouseSearch
         );
     }
 
@@ -85,7 +93,8 @@ public class ConversationMemoryService {
                 memory.entities(),
                 memory.recentTools(),
                 MAX_ENTITIES,
-                MAX_RECENT_TOOLS
+                MAX_RECENT_TOOLS,
+                memory.lastWarehouseSearch()
         );
     }
 

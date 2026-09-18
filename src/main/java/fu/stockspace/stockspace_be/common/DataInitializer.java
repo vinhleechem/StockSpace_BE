@@ -259,6 +259,14 @@ public class DataInitializer implements CommandLineRunner {
         private void seedSystemKnowledge() {
                 List<KnowledgeSeed> seeds = List.of(
                                 new KnowledgeSeed(
+                                                "kb.stockspace-overview.current",
+                                                KnowledgeCategory.FAQ,
+                                                "StockSpace là gì và hệ thống hỗ trợ những gì?",
+                                                "StockSpace là nền tảng kết nối nhu cầu thuê kho với các bài đăng kho đang công khai. "
+                                                                + "Người dùng có thể tìm kho theo tên, vị trí, loại kho, nhu cầu lưu trữ, giá và sức chứa; xem chi tiết bài đăng, loại kho và sơ đồ công khai nếu có. "
+                                                                + "Hệ thống cũng cung cấp thông tin chính sách, quy trình thuê, gói dịch vụ, cấu hình công khai, hợp đồng, ví và thông báo theo quyền của tài khoản. "
+                                                                + "Thông tin vận hành chuyên sâu của tenant được thực hiện trong module Quản lý kho, không phải chatbot."),
+                                new KnowledgeSeed(
                                                 "kb.damage-claims.current",
                                                 KnowledgeCategory.INSURANCE,
                                                 "Bảo hiểm & Đền bù hàng hóa hư hỏng",

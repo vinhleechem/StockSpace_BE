@@ -15,6 +15,8 @@ import org.springframework.data.repository.query.Param;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.Collection;
+import java.util.List;
 import java.util.UUID;
 
 public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
@@ -31,6 +33,18 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
 
     @Query("SELECT w FROM Warehouse w WHERE w.isDeleted = false")
     Page<Warehouse> findAll(Pageable pageable);
+
+    @EntityGraph(attributePaths = "type")
+    @Query("""
+            SELECT w FROM Warehouse w
+            WHERE w.isDeleted = false
+            ORDER BY w.updatedAt ASC, w.id ASC
+            """)
+    List<Warehouse> findSearchIndexCandidates(Pageable pageable);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT w FROM Warehouse w WHERE w.id IN :ids ORDER BY w.id ASC")
+    List<Warehouse> findAllByIdInForUpdate(@Param("ids") Collection<UUID> ids);
 
     @Query("SELECT COUNT(w) FROM Warehouse w WHERE w.isDeleted = false")
     long count();

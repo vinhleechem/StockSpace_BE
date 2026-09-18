@@ -6,6 +6,9 @@ import fu.stockspace.stockspace_be.common.entity.SystemPolicy;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
+import org.hibernate.annotations.Array;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -37,6 +40,8 @@ import java.util.UUID;
 @AllArgsConstructor
 @SuperBuilder
 public class Warehouse extends BaseEntity {
+
+    public static final int SEARCH_EMBEDDING_DIMENSIONS = 1536;
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -109,6 +114,28 @@ public class Warehouse extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "policy_version_id", nullable = false)
     private SystemPolicy policy;
+
+    /**
+     * Embedding of the public warehouse profile used only for semantic search.
+     * Eligibility and tenant visibility are still enforced by the repository
+     * query; the vector is never an authorization boundary.
+     */
+    @JdbcTypeCode(SqlTypes.VECTOR)
+    @Array(length = SEARCH_EMBEDDING_DIMENSIONS)
+    @Column(name = "search_embedding", columnDefinition = "vector(1536)")
+    private float[] searchEmbedding;
+
+    @Column(name = "search_embedding_str", columnDefinition = "TEXT")
+    private String searchEmbeddingStr;
+
+    @Column(name = "search_embedding_model", length = 150)
+    private String searchEmbeddingModel;
+
+    @Column(name = "search_embedding_dimensions")
+    private Integer searchEmbeddingDimensions;
+
+    @Column(name = "search_content_hash", length = 64)
+    private String searchContentHash;
 
 
 

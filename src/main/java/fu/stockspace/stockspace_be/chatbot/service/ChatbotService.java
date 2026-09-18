@@ -19,6 +19,7 @@ import fu.stockspace.stockspace_be.common.exception.exceptions.ChatProviderExcep
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
@@ -29,6 +30,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -77,7 +79,7 @@ public class ChatbotService {
             "chuyen kho", "suc chua", "tai trong", "the tich", "dien tich", "kich thuoc",
             "hop dong", "goi dich vu", "goi cua toi", "bao hiem", "dat coc", "tien coc",
             "gia thue", "phi luu kho", "so du", "vi cua toi", "don hang", "xuat hang",
-            "nhap hang", "nhap xuat", "inventory", "stock", "receipt", "inbound", "outbound",
+            "nhap hang", "nhap xuat", "inventory", "receipt", "inbound", "outbound",
             "audit", "transfer", "capacity", "warehouse", "contract", "subscription", "wallet",
             "balance"
     );
@@ -90,6 +92,7 @@ public class ChatbotService {
     private final ActiveWarehouseContextResolver activeWarehouseContextResolver;
     private final AuthenticatedChatRateLimiter authenticatedRateLimiter;
     private final ChatStreamRuntime chatStreamRuntime;
+    private final ObjectProvider<StructuredQueryPlanner> structuredQueryPlanner;
 
     @Value("${app.chatbot.max-agent-iterations:6}")
     private int maxAgentIterations = 6;
@@ -298,13 +301,14 @@ public class ChatbotService {
         // Rental answers are emitted only after the mandatory evidence gate
         // completes.  Buffering these deltas avoids showing an ungrounded
         // partial answer when a live-rule lookup fails midway through SSE.
-        boolean evidenceQuestion = requiresSystemEvidence(userMessage);
+        ChatQueryPlanner.Plan queryPlan = planQuery(userMessage, memory);
+        boolean evidenceQuestion = requiresSystemEvidence(userMessage, memory, queryPlan);
         Consumer<String> safeDeltaConsumer = evidenceQuestion ? ignored -> { } : deltaConsumer;
         List<Map<String, Object>> conversation = new ArrayList<>();
         conversation.add(Map.of("role", "system", "content", systemPrompt));
         conversation.addAll(history);
         appendMemoryContext(conversation, memory, userMessage);
-        appendQueryPlanContext(conversation, userMessage);
+        appendQueryPlanContext(conversation, userMessage, memory, queryPlan);
         conversation.add(OpenRouterClient.buildContent("user", userMessage));
         List<ToolExecutionTrace> traces = new ArrayList<>();
 
@@ -320,15 +324,12 @@ public class ChatbotService {
         preloadWarehouseDimensionLookup(
                 conversation, allowedByName, memory, userMessage,
                 context, traces, statusConsumer, cancelled);
-        preloadOperationalLookup(
-                conversation, allowedByName, userMessage,
-                context, traces, statusConsumer, cancelled);
         preloadWarehouseSearch(
-                conversation, allowedByName, userMessage,
-                context, traces, statusConsumer, cancelled);
+                conversation, allowedByName, userMessage, memory,
+                queryPlan, context, traces, statusConsumer, cancelled);
         preloadRentalLookup(
                 conversation, allowedByName, userMessage,
-                context, traces, statusConsumer, cancelled);
+                queryPlan, context, traces, statusConsumer, cancelled);
         AiResponse response = completeStreamingWithinDeadline(
                 conversation,
                 allowedTools,
@@ -419,9 +420,11 @@ public class ChatbotService {
                                 capAssistantResponse(response.text()),
                                 userMessage,
                                 allowedByName,
-                                traces),
-                        userMessage, allowedByName, traces),
-                userMessage, traces);
+                                traces,
+                                memory,
+                                queryPlan),
+                        userMessage, allowedByName, traces, queryPlan),
+                userMessage, traces, memory, queryPlan);
         // Evidence questions are buffered until this point, so one bounded
         // repair pass can safely rewrite unsupported numeric claims before the
         // final SSE event is emitted.
@@ -475,11 +478,12 @@ public class ChatbotService {
                                   List<ChatTool> allowedTools,
                                   ChatRequestContext context,
                                   ConversationMemory memory) {
+        ChatQueryPlanner.Plan queryPlan = planQuery(userMessage, memory);
         List<Map<String, Object>> conversation = new ArrayList<>();
         conversation.add(Map.of("role", "system", "content", systemPrompt));
         conversation.addAll(history);
         appendMemoryContext(conversation, memory, userMessage);
-        appendQueryPlanContext(conversation, userMessage);
+        appendQueryPlanContext(conversation, userMessage, memory, queryPlan);
         conversation.add(OpenRouterClient.buildContent("user", userMessage));
         List<ToolExecutionTrace> traces = new ArrayList<>();
 
@@ -494,15 +498,12 @@ public class ChatbotService {
         preloadWarehouseDimensionLookup(
                 conversation, allowedByName, memory, userMessage,
                 context, traces, null, null);
-        preloadOperationalLookup(
-                conversation, allowedByName, userMessage,
-                context, traces, null, null);
         preloadWarehouseSearch(
-                conversation, allowedByName, userMessage,
-                context, traces, null, null);
+                conversation, allowedByName, userMessage, memory,
+                queryPlan, context, traces, null, null);
         preloadRentalLookup(
                 conversation, allowedByName, userMessage,
-                context, traces, null, null);
+                queryPlan, context, traces, null, null);
         AiResponse response = completeWithinDeadline(
                 conversation,
                 allowedTools,
@@ -584,9 +585,11 @@ public class ChatbotService {
                                 capAssistantResponse(response.text()),
                                 userMessage,
                                 allowedByName,
-                                traces),
-                        userMessage, allowedByName, traces),
-                userMessage, traces);
+                                traces,
+                                memory,
+                                queryPlan),
+                        userMessage, allowedByName, traces, queryPlan),
+                userMessage, traces, memory, queryPlan);
         candidate = repairNumericClaims(
                 conversation,
                 allowedTools,
@@ -619,9 +622,13 @@ public class ChatbotService {
 
     private void appendQueryPlanContext(
             List<Map<String, Object>> conversation,
-            String userMessage
+            String userMessage,
+            ConversationMemory memory,
+            ChatQueryPlanner.Plan queryPlan
     ) {
-        String planContext = ChatQueryPlanner.plan(userMessage).promptContext();
+        String planContext = queryPlan == null
+                ? ""
+                : queryPlan.promptContext();
         if (!planContext.isBlank()) {
             conversation.add(Map.of("role", "system", "content", planContext));
         }
@@ -644,12 +651,16 @@ public class ChatbotService {
             List<Map<String, Object>> conversation,
             Map<String, ChatTool> allowedByName,
             String userMessage,
+            ConversationMemory memory,
+            ChatQueryPlanner.Plan queryPlan,
             ChatRequestContext context,
             List<ToolExecutionTrace> traces,
             Consumer<String> statusConsumer,
             BooleanSupplier cancelled
     ) {
-        ChatQueryPlanner.Plan plan = ChatQueryPlanner.plan(userMessage);
+        ChatQueryPlanner.Plan plan = queryPlan == null
+                ? ChatQueryPlanner.Plan.none()
+                : queryPlan;
         if (plan.intent() != ChatQueryPlanner.Intent.WAREHOUSE_SEARCH
                 || allowedByName == null || traces == null) {
             return;
@@ -771,12 +782,23 @@ public class ChatbotService {
             List<Map<String, Object>> conversation,
             Map<String, ChatTool> allowedByName,
             String userMessage,
+            ChatQueryPlanner.Plan queryPlan,
             ChatRequestContext context,
             List<ToolExecutionTrace> traces,
             Consumer<String> statusConsumer,
             BooleanSupplier cancelled
     ) {
-        List<ChatQueryPlanner.SubQuery> subQueries = ChatQueryPlanner.decompose(userMessage);
+        List<ChatQueryPlanner.SubQuery> subQueries = new ArrayList<>(
+                ChatQueryPlanner.decompose(userMessage));
+        if (subQueries.isEmpty()) {
+            RentalIntentClassifier.Intent modelIntent = rentalIntentFromPlan(queryPlan);
+            if (modelIntent.route() != RentalIntentClassifier.Route.NONE) {
+                subQueries.add(new ChatQueryPlanner.SubQuery(
+                        userMessage,
+                        modelIntent,
+                        rentalToolArguments(modelIntent, userMessage)));
+            }
+        }
         if (subQueries.isEmpty() || allowedByName == null || traces == null) {
             return;
         }
@@ -828,101 +850,6 @@ public class ChatbotService {
         }
     }
 
-    /**
-     * Deterministically routes common WMS questions before the model runs.
-     * This is especially important for short English suggestions such as
-     * "Check my inventory", where the Vietnamese-only marker gate previously
-     * allowed a generic answer without ever calling getMyStock.
-     */
-    private void preloadOperationalLookup(
-            List<Map<String, Object>> conversation,
-            Map<String, ChatTool> allowedByName,
-            String userMessage,
-            ChatRequestContext context,
-            List<ToolExecutionTrace> traces,
-            Consumer<String> statusConsumer,
-            BooleanSupplier cancelled
-    ) {
-        if (allowedByName == null || traces == null) {
-            return;
-        }
-        String toolName = operationalToolForMessage(userMessage);
-        if (toolName == null) {
-            return;
-        }
-        ChatTool tool = allowedByName.get(toolName);
-        if (tool == null || !hasRequiredSubscription(tool, context)) {
-            return;
-        }
-        if (cancelled != null) {
-            ensureStreamActive(cancelled);
-        }
-        if (statusConsumer != null) {
-            statusConsumer.accept("retrieving");
-        }
-
-        Map<String, Object> args = context != null && context.activeWarehouseId() != null
-                ? Map.of("warehouseId", context.activeWarehouseId().toString())
-                : Map.of();
-        OpenRouterClient.FunctionCall functionCall = new OpenRouterClient.FunctionCall(
-                "wms_" + UUID.randomUUID(), toolName, args);
-        conversation.add(openRouterClient.buildAssistantToolCall(functionCall));
-        long startedAt = System.nanoTime();
-        String toolResult;
-        boolean successful = false;
-        try {
-            toolResult = capToolResult(tool.executeWithContext(args, context));
-            successful = isSuccessfulToolResult(toolResult);
-        } catch (Exception exception) {
-            log.warn("[AgenticLoop] Deterministic WMS lookup failed tool={} type={}",
-                    toolName, exception.getClass().getSimpleName());
-            toolResult = TOOL_FAILURE;
-        }
-        traces.add(new ToolExecutionTrace(
-                toolName,
-                args,
-                toolResult,
-                successful,
-                Duration.ofNanos(System.nanoTime() - startedAt).toMillis()
-        ));
-        conversation.add(openRouterClient.buildToolResult(functionCall, toolResult));
-        if (statusConsumer != null) {
-            statusConsumer.accept("processing");
-        }
-    }
-
-    private String operationalToolForMessage(String userMessage) {
-        String normalized = SemanticQueryExpansion.normalize(userMessage);
-        if (normalized.isBlank()) {
-            return null;
-        }
-        if (containsAny(normalized, Set.of(
-                "phieu", "receipt", "inbound", "outbound", "nhap xuat", "nhap hang", "xuat hang"))) {
-            return "getInventoryReceipts";
-        }
-        if (containsAny(normalized, Set.of(
-                "kiem ke", "audit", "inventory audit", "chenh lech"))) {
-            return "getInventoryAudits";
-        }
-        if (containsAny(normalized, Set.of(
-                "chuyen kho", "transfer", "dieu chuyen"))) {
-            return "getStockTransfers";
-        }
-        if (containsAny(normalized, Set.of(
-                "suc chua", "capacity", "tai trong", "the tich", "weight", "volume"))) {
-            return "getWarehouseCapacity";
-        }
-        if (containsAny(normalized, Set.of(
-                "danh muc san pham", "product catalog", "catalog", "product list"))) {
-            return "getMyProductCatalog";
-        }
-        if (containsAny(normalized, Set.of(
-                "ton kho", "inventory", "stock", "sku", "hang trong kho", "san pham trong kho"))) {
-            return "getMyStock";
-        }
-        return null;
-    }
-
     private boolean containsAny(String normalized, Set<String> markers) {
         return markers.stream().anyMatch(normalized::contains);
     }
@@ -941,6 +868,31 @@ public class ChatbotService {
             args.put("category", intent.category());
         }
         return Map.copyOf(args);
+    }
+
+    private RentalIntentClassifier.Intent rentalIntentFromPlan(
+            ChatQueryPlanner.Plan plan
+    ) {
+        if (plan == null) {
+            return RentalIntentClassifier.Intent.none();
+        }
+        return switch (plan.intent()) {
+            case RENTAL_POLICY -> new RentalIntentClassifier.Intent(
+                    RentalIntentClassifier.Route.SYSTEM_POLICY, null);
+            case CURRENT_RULES -> new RentalIntentClassifier.Intent(
+                    RentalIntentClassifier.Route.CURRENT_SYSTEM_RULES, null);
+            case SYSTEM_INFO -> new RentalIntentClassifier.Intent(
+                    RentalIntentClassifier.Route.SYSTEM_INFO, "FAQ");
+            case WAREHOUSE_TYPES -> new RentalIntentClassifier.Intent(
+                    RentalIntentClassifier.Route.WAREHOUSE_TYPES, null);
+            case SERVICE_PACKAGES -> new RentalIntentClassifier.Intent(
+                    RentalIntentClassifier.Route.SERVICE_PACKAGES, null);
+            case MY_ACTIVE_SUBSCRIPTION -> new RentalIntentClassifier.Intent(
+                    RentalIntentClassifier.Route.MY_ACTIVE_SUBSCRIPTION, null);
+            case MY_CONTRACTS -> new RentalIntentClassifier.Intent(
+                    RentalIntentClassifier.Route.MY_CONTRACTS, null);
+            case NONE, WAREHOUSE_SEARCH -> RentalIntentClassifier.Intent.none();
+        };
     }
 
     private String rentalRoutingGuard(
@@ -962,9 +914,20 @@ public class ChatbotService {
             String reply,
             String userMessage,
             Map<String, ChatTool> allowedByName,
-            List<ToolExecutionTrace> traces
+            List<ToolExecutionTrace> traces,
+            ChatQueryPlanner.Plan queryPlan
     ) {
-        List<ChatQueryPlanner.SubQuery> subQueries = ChatQueryPlanner.decompose(userMessage);
+        List<ChatQueryPlanner.SubQuery> subQueries = new ArrayList<>(
+                ChatQueryPlanner.decompose(userMessage));
+        if (subQueries.isEmpty()) {
+            RentalIntentClassifier.Intent modelIntent = rentalIntentFromPlan(queryPlan);
+            if (modelIntent.route() != RentalIntentClassifier.Route.NONE) {
+                subQueries.add(new ChatQueryPlanner.SubQuery(
+                        userMessage,
+                        modelIntent,
+                        rentalToolArguments(modelIntent, userMessage)));
+            }
+        }
         if (subQueries.isEmpty()) {
             return reply;
         }
@@ -1014,6 +977,8 @@ public class ChatbotService {
                 case MY_ACTIVE_SUBSCRIPTION -> "gói dịch vụ cá nhân";
                 case SERVICE_PACKAGES -> "gói dịch vụ";
                 case CURRENT_SYSTEM_RULES -> "quy định hiện hành";
+                case SYSTEM_INFO -> "thông tin hệ thống";
+                case WAREHOUSE_TYPES -> "các loại kho";
                 default -> "câu hỏi còn lại";
             };
         }
@@ -1021,7 +986,7 @@ public class ChatbotService {
             case "INSURANCE" -> "bảo hiểm và đền bù";
             case "CANCELLATION" -> "hủy hợp đồng";
             case "RENTAL_PROCESS" -> "quy trình thuê kho";
-            case "FAQ" -> "điều kiện WMS/FAQ";
+            case "FAQ" -> "thông tin hệ thống";
             default -> "chính sách liên quan";
         };
     }
@@ -1030,9 +995,13 @@ public class ChatbotService {
             String reply,
             String userMessage,
             Map<String, ChatTool> allowedByName,
-            List<ToolExecutionTrace> traces
+            List<ToolExecutionTrace> traces,
+            ConversationMemory memory,
+            ChatQueryPlanner.Plan queryPlan
     ) {
-        ChatQueryPlanner.Plan plan = ChatQueryPlanner.plan(userMessage);
+        ChatQueryPlanner.Plan plan = queryPlan == null
+                ? ChatQueryPlanner.Plan.none()
+                : queryPlan;
         if (plan.intent() != ChatQueryPlanner.Intent.WAREHOUSE_SEARCH) {
             return reply;
         }
@@ -1053,11 +1022,19 @@ public class ChatbotService {
     private String enforceSystemEvidence(
             String reply,
             String userMessage,
-            List<ToolExecutionTrace> traces
+            List<ToolExecutionTrace> traces,
+            ConversationMemory memory,
+            ChatQueryPlanner.Plan queryPlan
     ) {
-        ChatQueryPlanner.Plan plan = ChatQueryPlanner.plan(userMessage);
+        if (isUnsupportedWmsQuestion(userMessage, memory)) {
+            return "Tính năng này thuộc module Quản lý kho của tenant và hiện không được thực hiện trong chatbot. "
+                    + "Bạn hãy mở module Quản lý kho để xem tồn kho, phiếu, kiểm kê hoặc chuyển kho.";
+        }
+        ChatQueryPlanner.Plan plan = queryPlan == null
+                ? ChatQueryPlanner.Plan.none()
+                : queryPlan;
         if (plan.intent() != ChatQueryPlanner.Intent.NONE
-                || !requiresSystemEvidence(userMessage)) {
+                || !requiresSystemEvidence(userMessage, memory, plan)) {
             return reply;
         }
         boolean verified = traces != null && traces.stream().anyMatch(trace ->
@@ -1065,78 +1042,102 @@ public class ChatbotService {
         if (verified) {
             return reply;
         }
-        String toolFailure = safeOperationalFailureReply(userMessage, traces);
-        if (toolFailure != null) {
-            return toolFailure;
-        }
         return "Tôi chưa thể đọc dữ liệu nghiệp vụ trong phiên này nên không muốn đoán sai. "
                 + "Bạn vui lòng thử lại sau.";
     }
 
-    private boolean requiresSystemEvidence(String userMessage) {
-        ChatQueryPlanner.Plan plan = ChatQueryPlanner.plan(userMessage);
+    private boolean isUnsupportedWmsQuestion(String userMessage, ConversationMemory memory) {
+        String normalized = SemanticQueryExpansion.normalize(userMessage);
+        if (normalized.isBlank()) {
+            return false;
+        }
+        // Public warehouse capacity/volume filters are valid search criteria;
+        // only operational questions should be redirected to the WMS module.
+        if (hasUnsupportedWmsMarkers(normalized)) {
+            return true;
+        }
+        Map<String, Object> previousSearch = memory == null
+                ? Map.of()
+                : memory.lastWarehouseSearch();
+        if (ChatQueryPlanner.plan(userMessage, previousSearch).intent()
+                == ChatQueryPlanner.Intent.WAREHOUSE_SEARCH) {
+            return false;
+        }
+        return false;
+    }
+
+    private boolean hasUnsupportedWmsMarkers(String normalized) {
+        if (containsAny(normalized, Set.of(
+                "ton kho", "sku", "hang trong kho", "san pham trong kho", "phieu nhap",
+                "phieu xuat", "nhap xuat", "kiem ke", "chenh lech kiem ke", "chuyen kho",
+                "putaway", "picking", "suc chua ke", "o chua", "tai trong van hanh",
+                "the tich van hanh", "warehouse capacity", "rack capacity", "bin capacity",
+                "so do van hanh", "layout van hanh", "layout kho toi", "layout kho minh",
+                "so do kho toi", "so do kho minh", "suc chua kho cua toi", "suc chua kho toi",
+                "suc chua kho minh", "wms", "quan ly wms", "truy cap wms", "dieu kien wms"
+        ))) {
+            return true;
+        }
+        if (normalized.contains("suc chua")
+                && containsAny(normalized, Set.of(
+                "cua toi", "cua minh", "kho toi", "kho minh", "van hanh",
+                "rack", "bin", "o chua"))) {
+            return true;
+        }
+        if (normalized.contains("layout")
+                && containsAny(normalized, Set.of(
+                "kho toi", "kho minh", "cua toi", "cua minh", "van hanh"))) {
+            return true;
+        }
+        // Match English WMS terms as whole words so "StockSpace" is safe.
+        return Set.of("sku", "inbound", "outbound", "receipt", "inventory",
+                        "stock", "audit", "transfer", "putaway", "picking")
+                .stream()
+                .anyMatch(token -> normalized.matches(".*(?:^|\\s)" + Pattern.quote(token) + "(?:\\s|$).*"));
+    }
+
+    private ChatQueryPlanner.Plan planQuery(
+            String userMessage,
+            ConversationMemory memory
+    ) {
+        Map<String, Object> previousSearch = memory == null
+                ? Map.of()
+                : memory.lastWarehouseSearch();
+        String normalized = SemanticQueryExpansion.normalize(userMessage);
+        if (hasUnsupportedWmsMarkers(normalized)) {
+            return ChatQueryPlanner.Plan.none();
+        }
+        ChatQueryPlanner.Plan deterministic = ChatQueryPlanner.plan(
+                userMessage, previousSearch);
+        StructuredQueryPlanner modelPlanner = structuredQueryPlanner.getIfAvailable();
+        if (modelPlanner != null) {
+            ChatQueryPlanner.Plan modelPlan = modelPlanner.plan(
+                    userMessage, previousSearch);
+            if (modelPlan.intent() != ChatQueryPlanner.Intent.NONE) {
+                if (modelPlan.intent() == ChatQueryPlanner.Intent.WAREHOUSE_SEARCH
+                        && deterministic.intent() == ChatQueryPlanner.Intent.WAREHOUSE_SEARCH) {
+                    Map<String, Object> mergedFilters = new LinkedHashMap<>(
+                            deterministic.filters());
+                    mergedFilters.putAll(modelPlan.filters());
+                    return new ChatQueryPlanner.Plan(
+                            modelPlan.intent(), mergedFilters, true);
+                }
+                return modelPlan;
+            }
+        }
+        return deterministic;
+    }
+
+    private boolean requiresSystemEvidence(
+            String userMessage,
+            ConversationMemory memory,
+            ChatQueryPlanner.Plan plan
+    ) {
         if (plan.requiresEvidence()) {
             return true;
         }
         String normalized = SemanticQueryExpansion.normalize(userMessage);
         return SYSTEM_EVIDENCE_MARKERS.stream().anyMatch(normalized::contains);
-    }
-
-    private String safeOperationalFailureReply(
-            String userMessage,
-            List<ToolExecutionTrace> traces
-    ) {
-        String expectedTool = operationalToolForMessage(userMessage);
-        if (expectedTool == null || traces == null) {
-            return null;
-        }
-        ToolExecutionTrace failed = traces.stream()
-                .filter(trace -> trace != null && !trace.successful())
-                .filter(trace -> expectedTool.equals(trace.toolName()))
-                .reduce((first, second) -> second)
-                .orElse(null);
-        if (failed == null) {
-            return null;
-        }
-        String error = extractToolError(failed.result());
-        if (error == null || error.isBlank()) {
-            return null;
-        }
-        String normalized = SemanticQueryExpansion.normalize(error);
-        if (normalized.contains("can dang nhap")) {
-            return "Bạn cần đăng nhập để xem dữ liệu tồn kho của mình.";
-        }
-        if (normalized.contains("dang thue nhieu kho")) {
-            return error + " Vui lòng gửi tên kho muốn kiểm tra.";
-        }
-        if (normalized.contains("chua co hop dong")) {
-            return "Bạn chưa có hợp đồng thuê kho đang hiệu lực nên chưa thể xem tồn kho.";
-        }
-        if ("getMyStock".equals(expectedTool)
-                && normalized.contains("khong the lay thong tin ton kho")) {
-            return "Hệ thống chưa đọc được dữ liệu tồn kho lúc này. Vui lòng thử lại sau.";
-        }
-        return null;
-    }
-
-    private String extractToolError(String result) {
-        if (result == null || result.isBlank()) {
-            return null;
-        }
-        int marker = result.indexOf("\"error\"");
-        if (marker < 0) {
-            return null;
-        }
-        int colon = result.indexOf(':', marker + 7);
-        int openingQuote = colon < 0 ? -1 : result.indexOf('"', colon + 1);
-        int closingQuote = openingQuote < 0 ? -1 : result.lastIndexOf('"');
-        if (openingQuote < 0 || closingQuote <= openingQuote) {
-            return null;
-        }
-        return result.substring(openingQuote + 1, closingQuote)
-                .replace("\\\"", "\"")
-                .replace("\\n", " ")
-                .trim();
     }
 
     private boolean isSuccessfulToolResult(String toolResult) {

@@ -25,14 +25,9 @@ class PromptBuilderTest {
         assertFalse(prompt.contains("cứ list ra"));
         assertTrue(prompt.contains("getServicePackages"));
         assertTrue(prompt.contains("getMyActiveSubscription"));
-        assertTrue(prompt.contains("getInventoryReceipts"));
-        assertTrue(prompt.contains("getInventoryAudits"));
-        assertTrue(prompt.contains("getStockTransfers"));
-        assertTrue(prompt.contains("getTenantDashboard"));
         assertTrue(prompt.contains("pricingType"));
         assertTrue(prompt.contains("sortBy"));
         assertTrue(prompt.contains("truyền keyword"));
-        assertTrue(prompt.contains("getWarehouseCapacity"));
         assertTrue(prompt.contains("getCurrentSystemRules"));
         assertTrue(prompt.contains("previewSubscriptionChange"));
         assertTrue(prompt.contains("Tiền thuê kho được hai bên thanh toán ngoài StockSpace"));
@@ -41,6 +36,7 @@ class PromptBuilderTest {
         assertTrue(prompt.contains("floorAreaM2"));
         assertTrue(prompt.contains("capacity"));
         assertTrue(prompt.contains("matchedBySemanticKeyword"));
+        assertTrue(prompt.contains("module Quản lý kho"));
     }
 
     @Test
@@ -48,8 +44,7 @@ class PromptBuilderTest {
         String prompt = promptBuilder.buildSystemPrompt("GUEST");
 
         assertTrue(prompt.contains("thông tin liên hệ"));
-        assertTrue(prompt.contains("phiếu nhập xuất"));
-        assertTrue(prompt.contains("chuyển kho"));
+        assertTrue(prompt.contains("dữ liệu WMS"));
         assertTrue(prompt.contains("askLoginPrompt"));
     }
 
@@ -84,10 +79,10 @@ class PromptBuilderTest {
         String prompt = promptBuilder.buildSystemPrompt(
                 "ROLE_TENANT",
                 List.of(),
-                new ChatRequestContext(UUID.randomUUID(), UUID.randomUUID(), "Kho Bình Tân", "transfer"));
+                new ChatRequestContext(UUID.randomUUID(), UUID.randomUUID(), "Kho Bình Tân", "warehouse"));
 
         assertTrue(prompt.contains("Ngữ cảnh màn hình đã xác minh"));
-        assertTrue(prompt.contains("transfer"));
+        assertTrue(prompt.contains("warehouse"));
     }
 
     @Test

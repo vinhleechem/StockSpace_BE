@@ -13,12 +13,14 @@ import java.util.regex.Pattern;
 
 /**
  * Small, structured memory that survives between chat turns. It deliberately
- * stores entity references instead of raw tool payloads so prompts stay small
- * and operational data is always refreshed through a tool before answering.
+ * stores entity references and a bounded set of public-search filters instead
+ * of raw tool payloads so prompts stay small and operational data is always
+ * refreshed through a tool before answering.
  */
 public record ConversationMemory(
         List<EntityReference> entities,
-        List<String> recentTools
+        List<String> recentTools,
+        Map<String, Object> lastWarehouseSearch
 ) {
 
     private static final int MAX_ENTITIES_IN_PROMPT = 12;
@@ -30,15 +32,7 @@ public record ConversationMemory(
     private static final Set<String> WAREHOUSE_ID_TOOLS = Set.of(
             "getWarehouseDetail",
             "getPublicWarehouseLayout",
-            "getWarehouseOwnerContact",
-            "getMyStock",
-            "getInventoryReceipts",
-            "getInventoryAudits",
-            "getStockTransfers",
-            "getWarehouseCapacity",
-            "getMyWarehouseLayout",
-            "suggestPutaway",
-            "suggestOutboundPicking"
+            "getWarehouseOwnerContact"
     );
     private static final Set<String> MEMORY_ENTITY_TYPES = Set.of(
             "warehouse", "contract", "product", "service_package"
@@ -47,14 +41,20 @@ public record ConversationMemory(
     public ConversationMemory {
         entities = entities == null ? List.of() : List.copyOf(entities);
         recentTools = recentTools == null ? List.of() : List.copyOf(recentTools);
+        lastWarehouseSearch = sanitizeSearchContext(lastWarehouseSearch);
+    }
+
+    /** Backwards-compatible constructor for sessions/tests created before search context was persisted. */
+    public ConversationMemory(List<EntityReference> entities, List<String> recentTools) {
+        this(entities, recentTools, Map.of());
     }
 
     public static ConversationMemory empty() {
-        return new ConversationMemory(List.of(), List.of());
+        return new ConversationMemory(List.of(), List.of(), Map.of());
     }
 
     public boolean isEmpty() {
-        return entities.isEmpty() && recentTools.isEmpty();
+        return entities.isEmpty() && recentTools.isEmpty() && lastWarehouseSearch.isEmpty();
     }
 
     /**
@@ -63,7 +63,7 @@ public record ConversationMemory(
      * from reaching the user.
      */
     public String promptContext(String userMessage) {
-        if (entities.isEmpty()) {
+        if (entities.isEmpty() && lastWarehouseSearch.isEmpty()) {
             return "";
         }
 
@@ -74,6 +74,11 @@ public record ConversationMemory(
                 - Không bao giờ hiển thị ID nội bộ cho người dùng.
                 - Luôn gọi lại tool phù hợp để lấy dữ liệu hiện tại; không dùng bộ nhớ này làm số liệu nghiệp vụ.
                 """);
+        if (!lastWarehouseSearch.isEmpty()) {
+            prompt.append("- Ngữ cảnh tìm kho gần nhất (chỉ dùng để hiểu câu nối tiếp, phải gọi lại searchWarehouses): ")
+                    .append(promptSafeSearchContext())
+                    .append('\n');
+        }
         ordered.stream().limit(MAX_ENTITIES_IN_PROMPT).forEach(entity -> prompt
                 .append("- ")
                 .append(entity.type())
@@ -91,6 +96,20 @@ public record ConversationMemory(
                     .append(". Gọi getPublicWarehouseLayout với internalId trên trước khi trả lời.\n");
         }
         return prompt.toString().trim();
+    }
+
+    private Map<String, Object> promptSafeSearchContext() {
+        Map<String, Object> safe = new LinkedHashMap<>();
+        lastWarehouseSearch.forEach((key, value) -> {
+            if ("keyword".equals(key) || "semanticQuery".equals(key)) {
+                safe.put(key, "<user-query-context>");
+            } else if ("province".equals(key) || "district".equals(key)) {
+                safe.put(key, "<user-location>");
+            } else {
+                safe.put(key, value);
+            }
+        });
+        return Map.copyOf(safe);
     }
 
     /**
@@ -196,6 +215,19 @@ public record ConversationMemory(
             int maxTools
     ) {
         ConversationMemory safeCurrent = current == null ? empty() : current;
+        return merged(safeCurrent, discovered, tools, maxEntities, maxTools,
+                safeCurrent.lastWarehouseSearch());
+    }
+
+    static ConversationMemory merged(
+            ConversationMemory current,
+            List<EntityReference> discovered,
+            List<String> tools,
+            int maxEntities,
+            int maxTools,
+            Map<String, Object> warehouseSearchContext
+    ) {
+        ConversationMemory safeCurrent = current == null ? empty() : current;
         Map<String, EntityReference> mergedEntities = new LinkedHashMap<>();
         if (discovered != null) {
             for (EntityReference entity : discovered) {
@@ -220,8 +252,32 @@ public record ConversationMemory(
 
         return new ConversationMemory(
                 mergedEntities.values().stream().limit(Math.max(1, maxEntities)).toList(),
-                mergedTools.stream().limit(Math.max(1, maxTools)).toList()
+                mergedTools.stream().limit(Math.max(1, maxTools)).toList(),
+                warehouseSearchContext
         );
+    }
+
+    private static Map<String, Object> sanitizeSearchContext(Map<String, Object> raw) {
+        if (raw == null || raw.isEmpty()) {
+            return Map.of();
+        }
+        Set<String> allowed = Set.of(
+                "keyword", "semanticQuery", "province", "district", "pricingType",
+                "minRentalPrice", "maxRentalPrice", "minCapacity", "maxCapacity",
+                "isVerified", "sortBy"
+        );
+        Map<String, Object> safe = new LinkedHashMap<>();
+        raw.forEach((key, value) -> {
+            if (!allowed.contains(key) || value == null) {
+                return;
+            }
+            if (value instanceof String text && text.length() <= 500 && !text.isBlank()) {
+                safe.put(key, text.trim());
+            } else if (value instanceof Number || value instanceof Boolean) {
+                safe.put(key, value);
+            }
+        });
+        return Map.copyOf(safe);
     }
 
     private static boolean isUuid(Object value) {
