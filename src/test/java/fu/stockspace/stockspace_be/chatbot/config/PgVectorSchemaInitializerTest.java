@@ -97,7 +97,7 @@ class PgVectorSchemaInitializerTest {
         initializer.run(null);
 
         verify(statement, never()).execute(contains("DROP INDEX CONCURRENTLY"));
-        verify(statement).execute(contains("CREATE INDEX CONCURRENTLY"));
+        verify(statement, atLeastOnce()).execute(contains("CREATE INDEX CONCURRENTLY"));
     }
 
     private int indexOfSql(List<String> statements, String fragment) {

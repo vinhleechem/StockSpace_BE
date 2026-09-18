@@ -298,6 +298,9 @@ public class ChatbotService {
                                            Consumer<String> deltaConsumer,
                                            Consumer<String> statusConsumer,
                                            BooleanSupplier cancelled) {
+        if (isUnsupportedWmsQuestion(userMessage, memory)) {
+            return new AgentRunResult(unsupportedWmsReply(), List.of());
+        }
         // Rental answers are emitted only after the mandatory evidence gate
         // completes.  Buffering these deltas avoids showing an ungrounded
         // partial answer when a live-rule lookup fails midway through SSE.
@@ -478,6 +481,9 @@ public class ChatbotService {
                                   List<ChatTool> allowedTools,
                                   ChatRequestContext context,
                                   ConversationMemory memory) {
+        if (isUnsupportedWmsQuestion(userMessage, memory)) {
+            return new AgentRunResult(unsupportedWmsReply(), List.of());
+        }
         ChatQueryPlanner.Plan queryPlan = planQuery(userMessage, memory);
         List<Map<String, Object>> conversation = new ArrayList<>();
         conversation.add(Map.of("role", "system", "content", systemPrompt));
@@ -1027,8 +1033,7 @@ public class ChatbotService {
             ChatQueryPlanner.Plan queryPlan
     ) {
         if (isUnsupportedWmsQuestion(userMessage, memory)) {
-            return "Tính năng này thuộc module Quản lý kho của tenant và hiện không được thực hiện trong chatbot. "
-                    + "Bạn hãy mở module Quản lý kho để xem tồn kho, phiếu, kiểm kê hoặc chuyển kho.";
+            return unsupportedWmsReply();
         }
         ChatQueryPlanner.Plan plan = queryPlan == null
                 ? ChatQueryPlanner.Plan.none()
@@ -1064,6 +1069,11 @@ public class ChatbotService {
             return false;
         }
         return false;
+    }
+
+    private String unsupportedWmsReply() {
+        return "Tính năng này thuộc module Quản lý kho của tenant và hiện không được thực hiện trong chatbot. "
+                + "Bạn hãy mở module Quản lý kho để xem tồn kho, phiếu, kiểm kê hoặc chuyển kho.";
     }
 
     private boolean hasUnsupportedWmsMarkers(String normalized) {

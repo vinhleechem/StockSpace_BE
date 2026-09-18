@@ -50,7 +50,7 @@ public final class ChatQueryPlanner {
             "kho cua toi", "kho cua minh", "kho toi", "kho minh", "kho dang xem", "kho dang mo", "my warehouse"
     );
     private static final Set<String> WARD_PREFIXES = Set.of(
-            "phuong ", "xa ", "thi tran ", "thi tran ", "ward ", "commune "
+            "phuong ", "xa ", "thi tran ", "ward ", "commune "
     );
     private static final Set<String> PROVINCE_NAMES = Set.of(
             "ha noi", "hai phong", "da nang", "can tho", "ho chi minh",

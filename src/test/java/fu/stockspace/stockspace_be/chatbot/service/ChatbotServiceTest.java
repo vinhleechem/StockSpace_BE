@@ -37,6 +37,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
@@ -44,7 +45,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -181,15 +181,12 @@ class ChatbotServiceTest {
     }
 
     @Test
-    void passesActiveWarehouseContextToAllowedToolWithoutGivingItToModelArgs() {
+    void redirectsTenantWmsQuestionsToWarehouseModuleWithoutCallingTools() {
         UUID userId = UUID.randomUUID();
         UUID warehouseId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
         ChatTool allowedTool = namedTool("getMyStock");
         List<ChatTool> allowedTools = List.of(allowedTool);
-        OpenRouterClient.FunctionCall stockCall = new OpenRouterClient.FunctionCall(
-                "call_stock", "getMyStock", Map.of());
-
         when(conversationStore.prepareUserSession(userId, null))
                 .thenReturn(new PreparedChatSession(sessionId, null, List.of()));
         when(toolRegistry.getToolsForRole("ROLE_TENANT")).thenReturn(allowedTools);
@@ -201,29 +198,16 @@ class ChatbotServiceTest {
                 eq("ROLE_TENANT"), eq(allowedTools), eq(resolvedContext)))
                 .thenReturn("system prompt");
         when(conversationStore.appendUserTurn(
-                eq(userId), eq(sessionId), eq("Xem tồn kho kho hiện tại"), eq("Kho đang có 10 sản phẩm.")))
+                eq(userId), eq(sessionId), eq("Xem tồn kho kho hiện tại"),
+                contains("module Quản lý kho")))
                 .thenReturn(LocalDateTime.of(2026, 8, 16, 9, 0));
-        when(allowedTool.executeWithContext(
-                org.mockito.ArgumentMatchers.anyMap(),
-                org.mockito.ArgumentMatchers.any(ChatRequestContext.class)))
-                .thenReturn("{\"warehouseName\":\"Kho A\",\"productCount\":10}");
-        doReturn(
-                new OpenRouterClient.AiResponse(null, stockCall),
-                new OpenRouterClient.AiResponse("Kho đang có 10 sản phẩm.", null)
-        ).when(openRouterClient).complete(
-                anyList(), eq(allowedTools), org.mockito.ArgumentMatchers.any(Duration.class));
-
-        service.processTenantMessage(
+        ChatResponse result = service.processTenantMessage(
                 userId,
                 new SendMessageRequest(null, "Xem tồn kho kho hiện tại", warehouseId)
         );
 
-        ArgumentCaptor<ChatRequestContext> contextCaptor =
-                ArgumentCaptor.forClass(ChatRequestContext.class);
-        verify(allowedTool).executeWithContext(
-                eq(Map.of()), contextCaptor.capture());
-        assertEquals(userId, contextCaptor.getValue().userId());
-        assertEquals(warehouseId, contextCaptor.getValue().activeWarehouseId());
+        assertTrue(result.botReply().contains("module Quản lý kho"));
+        verify(allowedTool, never()).executeWithContext(anyMap(), any(ChatRequestContext.class));
     }
 
     @Test
@@ -352,21 +336,15 @@ class ChatbotServiceTest {
         when(activeWarehouseContextResolver.resolve(userId, null)).thenReturn(context);
         when(promptBuilder.buildSystemPrompt(eq("ROLE_TENANT"), eq(allowedTools), eq(context)))
                 .thenReturn("system prompt");
-        when(stockTool.executeWithContext(anyMap(), eq(context)))
-                .thenReturn("{\"error\":\"Bạn chưa có hợp đồng thuê kho nào đang hiệu lực để xem tồn kho.\"}");
         when(conversationStore.appendUserTurn(
                 eq(userId), eq(sessionId), eq(message), anyString()))
                 .thenReturn(LocalDateTime.now());
-        doReturn(new OpenRouterClient.AiResponse(
-                "I cannot access your inventory right now.", null))
-                .when(openRouterClient).complete(
-                        anyList(), eq(allowedTools), any(Duration.class));
 
         ChatResponse result = service.processTenantMessage(
                 userId, new SendMessageRequest(null, message));
 
         assertTrue(result.botReply().contains("module Quản lý kho"));
-        verifyNoInteractions(stockTool);
+        verify(stockTool, never()).executeWithContext(anyMap(), eq(context));
     }
 
     @Test
@@ -483,7 +461,7 @@ class ChatbotServiceTest {
 
     private ChatTool namedTool(String name) {
         ChatTool tool = mock(ChatTool.class);
-        when(tool.getName()).thenReturn(name);
+        lenient().when(tool.getName()).thenReturn(name);
         return tool;
     }
 }
