@@ -415,6 +415,33 @@ public class ContractService {
     }
 
     /**
+     * Recalls a contract that is waiting for tenant confirmation so the owner
+     * can correct and submit it again. The submitted terms and layout are
+     * intentionally kept as the starting point for the next edit.
+     */
+    @Transactional
+    public RentalContractResponse recallOwnerContract(UUID ownerId, UUID contractId) {
+        RentalContract contract = findDirectContractForOwnerRecall(ownerId, contractId);
+        if (contract.getStatus() != ContractStatus.PENDING_TENANT_CONFIRM) {
+            throw new BadRequestException(ErrorCode.INVALID_CONTRACT_STATUS,
+                    "Only PENDING_TENANT_CONFIRM contracts can be recalled");
+        }
+        if (contract.getRenewedFromContract() != null) {
+            requireRenewalMutationDeadline(contract);
+        }
+
+        contract.setStatus(ContractStatus.DRAFT);
+        contract.setSubmittedAt(null);
+        contract.setConfirmedAt(null);
+        contract.setChangeRequestReason(null);
+        contract.setRejectionReason(null);
+        contract = contractRepository.save(contract);
+
+        notifyTenantOfRecall(contract);
+        return mapToResponse(contract, ownerId);
+    }
+
+    /**
      * Revalidates and submits a renewal successor. Lock order is deliberately
      * warehouse, source contract, successor so concurrent renewal operations
      * serialize around the same physical warehouse and source lifecycle.
@@ -551,6 +578,22 @@ public class ContractService {
         return contract;
     }
 
+    private RentalContract findDirectContractForOwnerRecall(UUID ownerId, UUID contractId) {
+        RentalContract contract = contractRepository.findByIdForUpdate(contractId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND));
+        if (!contract.isActive() || contract.isDeleted()) {
+            throw new ResourceNotFoundException(ErrorCode.CONTRACT_NOT_FOUND);
+        }
+        if (contract.getOwner() == null || contract.getTenant() == null || contract.getWarehouse() == null) {
+            throw new BadRequestException(ErrorCode.INVALID_CONTRACT_STATUS,
+                    "This operation requires a direct rental contract");
+        }
+        if (!ownerId.equals(contract.getOwner().getId())) {
+            throw new ForbiddenException(ErrorCode.FORBIDDEN);
+        }
+        return contract;
+    }
+
     private void applyDraftTerms(RentalContract contract, DraftTerms terms, String ownerNote) {
         contract.setStartDate(terms.startDate());
         contract.setEndDate(terms.endDate());
@@ -612,6 +655,22 @@ public class ContractService {
                             : "CONTRACT_RENEWAL_SUBMITTED");
         } catch (Exception e) {
             log.warn("Failed to push direct contract notification for {}: {}",
+                    contract.getId(), e.getMessage());
+        }
+    }
+
+    private void notifyTenantOfRecall(RentalContract contract) {
+        try {
+            notificationService.push(
+                    contract.getTenant().getId(),
+                    "Rental contract withdrawn",
+                    "The owner withdrew the rental contract for warehouse "
+                            + contract.getWarehouse().getName() + " for editing.",
+                    contract.getRenewedFromContract() == null
+                            ? "CONTRACT_RECALLED"
+                            : "CONTRACT_RENEWAL_RECALLED");
+        } catch (Exception e) {
+            log.warn("Failed to push contract recall notification for {}: {}",
                     contract.getId(), e.getMessage());
         }
     }
@@ -1381,6 +1440,7 @@ public class ContractService {
                 .canEdit(actionFlags.canEdit())
                 .canDelete(actionFlags.canDelete())
                 .canSubmit(actionFlags.canSubmit())
+                .canRecall(actionFlags.canRecall())
                 .canConfirm(actionFlags.canConfirm())
                 .canRequestChanges(actionFlags.canRequestChanges())
                 .canReject(actionFlags.canReject())
@@ -1438,6 +1498,7 @@ public class ContractService {
         boolean mutableStatus = status == ContractStatus.DRAFT
                 || status == ContractStatus.CHANGES_REQUESTED;
         boolean ownerCanEdit = ownerViewer && mutableStatus;
+        boolean ownerCanRecall = ownerViewer && status == ContractStatus.PENDING_TENANT_CONFIRM;
         boolean canEditContractLayout = ownerCanEdit
                 && contract.getRenewedFromContract() == null
                 && contract.getPricingType() != RentalPricingType.FIXED_MONTHLY;
@@ -1456,6 +1517,7 @@ public class ContractService {
                 ownerCanEdit,
                 ownerViewer && status == ContractStatus.DRAFT,
                 ownerCanEdit,
+                ownerCanRecall,
                 tenantCanReview,
                 tenantCanReview,
                 tenantCanReview,
@@ -1621,6 +1683,7 @@ public class ContractService {
     private record ActionFlags(boolean canEdit,
                                boolean canDelete,
                                boolean canSubmit,
+                               boolean canRecall,
                                boolean canConfirm,
                                boolean canRequestChanges,
                                boolean canReject,
@@ -1630,7 +1693,7 @@ public class ContractService {
                                boolean canEditContractLayout,
                                boolean canCreateRenewal) {
         private static final ActionFlags NONE = new ActionFlags(
-                false, false, false, false, false, false, false, false, false, false, false);
+                false, false, false, false, false, false, false, false, false, false, false, false);
     }
 
 

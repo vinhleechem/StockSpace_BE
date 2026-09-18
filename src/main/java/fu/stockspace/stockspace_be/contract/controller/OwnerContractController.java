@@ -121,6 +121,16 @@ public class OwnerContractController {
         return ResponseEntity.ok(ApiResponse.success("Rental contract submitted to tenant", response));
     }
 
+    @PostMapping("/{contractId}/recall")
+    @PreAuthorize("@rbac.hasPermission('CONTRACT_OWNER_MANAGE')")
+    @Operation(summary = "Recall a submitted rental contract for editing")
+    public ResponseEntity<ApiResponse<RentalContractResponse>> recall(
+            @PathVariable UUID contractId) {
+        RentalContractResponse response = contractService
+                .recallOwnerContract(getCurrentUserId(), contractId);
+        return ResponseEntity.ok(ApiResponse.success("Rental contract recalled for editing", response));
+    }
+
     @DeleteMapping("/{contractId}")
     @PreAuthorize("@rbac.hasPermission('CONTRACT_OWNER_MANAGE')")
     @Operation(summary = "Delete a rental contract draft")
