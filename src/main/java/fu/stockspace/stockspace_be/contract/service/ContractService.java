@@ -74,6 +74,12 @@ public class ContractService {
                 .map(contract -> mapToResponse(contract, tenantId));
     }
 
+    @Transactional(readOnly = true)
+    public long countCurrentActiveContractsAsTenant(UUID tenantId) {
+        return contractRepository.countCurrentDirectActiveContractsByTenantId(
+                tenantId, LocalDate.now(businessClock));
+    }
+
 
 
     @Transactional(readOnly = true)

@@ -84,7 +84,48 @@ class AnswerEvidenceVerifierTest {
         );
 
         assertTrue(result.contains("kiểm tra điều khoản"));
-        assertTrue(result.contains("[số liệu chưa xác minh]"));
+        assertFalse(result.contains("[số liệu chưa xác minh]"));
+        assertFalse(result.contains("30 ngày"));
+        assertTrue(result.contains("chưa được hiển thị"));
+    }
+
+    @Test
+    void acceptsIsoContractDatesRenderedInVietnameseFormat() {
+        ToolExecutionTrace trace = new ToolExecutionTrace(
+                "getMyContracts", Map.of(),
+                "{\"activeContractCount\":2,\"contracts\":["
+                        + "{\"startDate\":\"2026-09-19\",\"endDate\":\"2026-10-31\"}]}",
+                true, 1);
+
+        AnswerEvidenceVerifier.Verification verification = AnswerEvidenceVerifier.verify(
+                "Bạn hiện có 2 hợp đồng. Hợp đồng này có hiệu lực từ 19/09/2026 đến 31/10/2026.",
+                List.of(trace));
+
+        assertTrue(verification.valid());
+    }
+
+    @Test
+    void rejectsDateRecombinedFromOtherwiseSupportedDateParts() {
+        ToolExecutionTrace trace = new ToolExecutionTrace(
+                "getMyContracts", Map.of(),
+                "{\"contracts\":[{\"startDate\":\"2026-09-19\","
+                        + "\"endDate\":\"2026-10-31\"}]}",
+                true, 1);
+
+        AnswerEvidenceVerifier.Verification verification = AnswerEvidenceVerifier.verify(
+                "Hợp đồng bắt đầu ngày 19/10/2026.", List.of(trace));
+
+        assertFalse(verification.valid());
+        assertEquals("19/10/2026", verification.unsupportedNumber());
+    }
+
+    @Test
+    void neverReturnsInternalUnverifiedMarkerFromModelText() {
+        String result = AnswerEvidenceVerifier.sanitize(
+                "Kho A có [số liệu chưa xác minh] hợp đồng.", null, List.of());
+
+        assertFalse(result.contains("[số liệu chưa xác minh]"));
+        assertTrue(result.contains("chưa thể hiển thị chính xác"));
     }
 
     @Test

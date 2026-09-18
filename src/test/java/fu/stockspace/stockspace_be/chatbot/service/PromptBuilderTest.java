@@ -37,6 +37,8 @@ class PromptBuilderTest {
         assertTrue(prompt.contains("capacity"));
         assertTrue(prompt.contains("matchedBySemanticKeyword"));
         assertTrue(prompt.contains("module Quản lý kho"));
+        assertTrue(prompt.contains("activeContractCount"));
+        assertTrue(prompt.contains("startDate/endDate"));
     }
 
     @Test
