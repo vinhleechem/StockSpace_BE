@@ -1,13 +1,17 @@
 package fu.stockspace.stockspace_be.chatbot.tool.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import fu.stockspace.stockspace_be.chatbot.client.EmbeddingClient;
 import fu.stockspace.stockspace_be.chatbot.service.SemanticQueryExpansion;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatTool;
 import fu.stockspace.stockspace_be.warehouse.entity.RentalPricingType;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
 import fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus;
 import fu.stockspace.stockspace_be.warehouse.repository.WarehouseRepository;
-import lombok.RequiredArgsConstructor;
+import fu.stockspace.stockspace_be.warehouse.repository.WarehouseVectorRepository;
+import fu.stockspace.stockspace_be.warehouse.repository.WarehouseVectorRepository.WarehouseVectorMatch;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -31,7 +35,6 @@ import java.util.regex.Pattern;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class SearchWarehousesTool implements ChatTool {
 
     private static final int DEFAULT_RESULT_LIMIT = 5;
@@ -63,10 +66,15 @@ public class SearchWarehousesTool implements ChatTool {
                     + "|\\b(?:ở\\s+đâu|o\\s+dau|tại\\s+đâu|tai\\s+dau)\\b"
                     + "|\\b(?:như\\s+thế\\s+nào|nhu\\s the\\s nao)\\b)"
     );
+    private static final Pattern SEARCH_INTENT_NOISE = Pattern.compile(
+            "(?iu)\\b(?:tìm|tim|kiếm|kiem|cho\\s+tôi|cho\\s+toi|giúp\\s+tôi|giup\\s+toi"
+                    + "|tôi\\s+cần|toi\\s+can|cần\\s+tìm|can\\s+tim|có\\s+kho\\s+nào|co\\s+kho\\s+nao"
+                    + "|kho\\s+nào|kho\\s+nao|phù\\s+hợp|phu\\s+hop)\\b"
+    );
     private static final Set<String> SEMANTIC_STOP_WORDS = Set.of(
             "ai", "ban", "bao", "bao nhieu", "cach", "can", "cho", "co", "cua",
             "de", "gi", "giup", "hay", "hoi", "khong", "la", "minh", "muon",
-            "nao", "neu", "nhu", "nha", "o", "phu", "toi", "tim", "toi can",
+            "nao", "neu", "nhu", "nha", "o", "toi", "tim", "toi can",
             "kho", "bai", "luu", "tru", "hang", "hoa", "va", "ve", "voi", "xin", "xem"
     );
     private static final List<SemanticConcept> SEMANTIC_CONCEPTS = List.of(
@@ -98,6 +106,29 @@ public class SearchWarehousesTool implements ChatTool {
 
     private final WarehouseRepository warehouseRepository;
     private final ObjectMapper objectMapper;
+    private final EmbeddingClient embeddingClient;
+    private final WarehouseVectorRepository warehouseVectorRepository;
+    private final boolean pgVectorEnabled;
+
+    @Autowired
+    public SearchWarehousesTool(
+            WarehouseRepository warehouseRepository,
+            ObjectMapper objectMapper,
+            EmbeddingClient embeddingClient,
+            WarehouseVectorRepository warehouseVectorRepository,
+            @Value("${app.chatbot.rag.pgvector.enabled:true}") boolean pgVectorEnabled
+    ) {
+        this.warehouseRepository = warehouseRepository;
+        this.objectMapper = objectMapper;
+        this.embeddingClient = embeddingClient;
+        this.warehouseVectorRepository = warehouseVectorRepository;
+        this.pgVectorEnabled = pgVectorEnabled;
+    }
+
+    /** Kept for focused unit tests that exercise lexical search only. */
+    public SearchWarehousesTool(WarehouseRepository warehouseRepository, ObjectMapper objectMapper) {
+        this(warehouseRepository, objectMapper, null, null, false);
+    }
 
     @Override
     public String getName() {
@@ -111,8 +142,8 @@ public class SearchWarehousesTool implements ChatTool {
                 + "Có thể lọc riêng tỉnh/thành, quận/huyện và cách tính giá, rồi sắp xếp theo giá hoặc sức chứa. "
                 + "Giá niêm yết có thể là giá cố định theo tháng, giá mỗi m² mỗi tháng hoặc để thỏa thuận; "
                 + "nếu người dùng không nêu tiêu chí, gọi với tham số rỗng để lấy các kho đang công khai. "
-                + "Tìm kiếm có thể hiểu nhu cầu lưu trữ gần nghĩa (ví dụ kho lạnh với bảo quản thực phẩm, "
-                + "nông sản hoặc đông lạnh) và xếp hạng kết quả gần đúng; hãy kiểm tra mô tả trước khi kết luận. "
+                + "Tìm kiếm kết hợp địa chỉ/từ khóa chính xác với pgvector trên hồ sơ kho để hiểu nhu cầu lưu trữ gần nghĩa "
+                + "(ví dụ kho lạnh với bảo quản thực phẩm, nông sản hoặc đông lạnh) và xếp hạng kết quả; hãy kiểm tra mô tả trước khi kết luận. "
                 + "Nếu cần diện tích hoặc kích thước, dùng warehouseId trong kết quả để gọi getPublicWarehouseLayout; "
                 + "không dùng capacity hay giá/m² để suy ra diện tích.";
     }
@@ -122,6 +153,8 @@ public class SearchWarehousesTool implements ChatTool {
         Map<String, Object> properties = new LinkedHashMap<>();
         properties.put("keyword", Map.of("type", "string", "description",
                 "Tên, địa chỉ, tỉnh/thành, quận/huyện, loại kho hoặc loại hàng cần lưu trữ; không đưa các từ hỏi diện tích như bao nhiêu m2 vào keyword"));
+        properties.put("semanticQuery", Map.of("type", "string", "description",
+                "Mô tả đầy đủ nhu cầu lưu trữ để xếp hạng bằng semantic search; không dùng để thay thế bộ lọc địa điểm hoặc giá"));
         properties.put("province", Map.of("type", "string", "description",
                 "Tỉnh/thành phố cần lọc; có thể nhập một phần tên"));
         properties.put("district", Map.of("type", "string", "description",
@@ -149,6 +182,10 @@ public class SearchWarehousesTool implements ChatTool {
             Map<String, Object> safeParams = params == null ? Map.of() : params;
             String requestedKeyword = getStringParam(safeParams, "keyword");
             String keyword = cleanEntitySearchKeyword(requestedKeyword);
+            String semanticQuery = getStringParam(safeParams, "semanticQuery");
+            if (semanticQuery == null) {
+                semanticQuery = requestedKeyword;
+            }
             String province = getLikeStringParam(safeParams, "province");
             String district = getLikeStringParam(safeParams, "district");
             RentalPricingType pricingType = getPricingTypeParam(safeParams, "pricingType");
@@ -175,6 +212,43 @@ public class SearchWarehousesTool implements ChatTool {
                     results = search("%" + strippedKeyword.toLowerCase(Locale.ROOT) + "%",
                             province, district, pricingType,
                             minPrice, maxPrice, minCapacity, maxCapacity, isVerified, page, pageSize, sort);
+                }
+            }
+
+            // Run vector ranking for a natural-language query or whenever the
+            // lexical pass found nothing. Exact-name lookups remain lexical so
+            // a semantically similar warehouse cannot replace the named one.
+            boolean needsSemanticRanking = results.isEmpty()
+                    || (semanticQuery != null && keyword != null
+                    && !semanticQuery.equalsIgnoreCase(keyword));
+            if (page == 0 && needsSemanticRanking && semanticQuery != null && !semanticQuery.isBlank()) {
+                Page<WarehouseVectorMatch> vectorMatches;
+                try {
+                    vectorMatches = searchByVector(
+                            semanticQuery,
+                            keyword,
+                            province, district, pricingType,
+                            minPrice, maxPrice, minCapacity, maxCapacity, isVerified,
+                            pageSize, sort);
+                } catch (RuntimeException exception) {
+                    log.warn("[SearchWarehousesTool] pgvector retrieval unavailable; using lexical fallback (cause={})",
+                            exception.getClass().getSimpleName());
+                    vectorMatches = Page.empty(PageRequest.of(0, pageSize, sort));
+                }
+                if (!vectorMatches.isEmpty()) {
+                    Map<String, Object> response = baseVectorResponse(vectorMatches);
+                    response.put("matchedByExactKeyword", !results.isEmpty());
+                    response.put("matchedBySemanticKeyword", true);
+                    response.put("matchMode", results.isEmpty() ? "VECTOR" : "HYBRID_VECTOR");
+                    response.put("requestedKeyword", requestedKeyword);
+                    if (keyword != null && requestedKeyword != null
+                            && !requestedKeyword.equals(keyword)) {
+                        addSearchKeywordMetadata(response, requestedKeyword, keyword);
+                    }
+                    response.put("semanticBackend", "pgvector");
+                    response.put("guidance",
+                            "Kết quả đã được lọc theo điều kiện công khai và xếp hạng theo mức độ phù hợp ngữ nghĩa; hãy kiểm tra địa chỉ và mô tả trước khi chọn.");
+                    return objectMapper.writeValueAsString(response);
                 }
             }
 
@@ -258,7 +332,8 @@ public class SearchWarehousesTool implements ChatTool {
             return null;
         }
         String cleaned = DIMENSION_QUESTION.matcher(keyword).replaceAll(" ");
-        cleaned = ENTITY_QUESTION_NOISE.matcher(cleaned).replaceAll(" ")
+        cleaned = ENTITY_QUESTION_NOISE.matcher(cleaned).replaceAll(" ");
+        cleaned = SEARCH_INTENT_NOISE.matcher(cleaned).replaceAll(" ")
                 .replaceAll("[?!,:;]+", " ")
                 .replaceAll("\\s+", " ")
                 .trim();
@@ -291,6 +366,15 @@ public class SearchWarehousesTool implements ChatTool {
                 null, province, district, pricingType,
                 minPrice, maxPrice, minCapacity, maxCapacity, isVerified,
                 0, NORMALIZED_SEARCH_CANDIDATE_LIMIT, sort);
+        // A user may omit Vietnamese diacritics ("Binh Duong", "An Phu")
+        // while the structured columns retain them. Retry over the public
+        // candidate set and let the normalized scorer match the address.
+        if (candidates.isEmpty() && (province != null || district != null)) {
+            candidates = search(
+                    null, null, null, pricingType,
+                    minPrice, maxPrice, minCapacity, maxCapacity, isVerified,
+                    0, NORMALIZED_SEARCH_CANDIDATE_LIMIT, sort);
+        }
         SemanticQuery semanticQuery = buildSemanticQuery(keyword);
         if (semanticQuery.normalized().isBlank()
                 || (semanticQuery.queryTerms().isEmpty()
@@ -309,6 +393,61 @@ public class SearchWarehousesTool implements ChatTool {
                 .map(ScoredWarehouse::warehouse)
                 .toList();
         return new PageImpl<>(pageContent, PageRequest.of(0, pageSize, sort), scored.size());
+    }
+
+    private Page<WarehouseVectorMatch> searchByVector(
+            String semanticQuery,
+            String cleanedKeyword,
+            String province,
+            String district,
+            RentalPricingType pricingType,
+            BigDecimal minPrice,
+            BigDecimal maxPrice,
+            BigDecimal minCapacity,
+            BigDecimal maxCapacity,
+            Boolean isVerified,
+            int pageSize,
+            Sort sort
+    ) {
+        if (!pgVectorEnabled || embeddingClient == null || warehouseVectorRepository == null) {
+            return Page.empty(PageRequest.of(0, pageSize, sort));
+        }
+        List<Float> query;
+        try {
+            query = embeddingClient.getEmbedding(semanticQuery,
+                    Warehouse.SEARCH_EMBEDDING_DIMENSIONS);
+        } catch (RuntimeException exception) {
+            log.warn("[SearchWarehousesTool] Warehouse embedding unavailable; using lexical fallback (cause={})",
+                    exception.getClass().getSimpleName());
+            return Page.empty(PageRequest.of(0, pageSize, sort));
+        }
+        if (query == null || query.size() != Warehouse.SEARCH_EMBEDDING_DIMENSIONS) {
+            return Page.empty(PageRequest.of(0, pageSize, sort));
+        }
+        float[] vector = new float[query.size()];
+        for (int index = 0; index < query.size(); index++) {
+            Float value = query.get(index);
+            if (value == null || !Float.isFinite(value)) {
+                return Page.empty(PageRequest.of(0, pageSize, sort));
+            }
+            vector[index] = value;
+        }
+        String lexicalAnchor = cleanedKeyword == null || cleanedKeyword.isBlank()
+                || semanticQuery.equalsIgnoreCase(cleanedKeyword)
+                ? null
+                : "%" + cleanedKeyword.toLowerCase(Locale.ROOT) + "%";
+        List<WarehouseVectorMatch> matches = warehouseVectorRepository.findNearest(
+                vector,
+                embeddingClient.getEmbeddingModel(),
+                lexicalAnchor,
+                province, district, pricingType,
+                minPrice, maxPrice, minCapacity, maxCapacity, isVerified,
+                Math.max(pageSize, DEFAULT_RESULT_LIMIT)
+        ).stream()
+                .filter(match -> match.similarity() >= 0.35)
+                .limit(pageSize)
+                .toList();
+        return new PageImpl<>(matches, PageRequest.of(0, pageSize, sort), matches.size());
     }
 
     private SemanticQuery buildSemanticQuery(String keyword) {
@@ -441,6 +580,21 @@ public class SearchWarehousesTool implements ChatTool {
         result.put("totalPages", page.getTotalPages());
         result.put("hasMore", !page.isLast());
         result.put("warehouses", page.getContent().stream().map(this::toMap).toList());
+        return result;
+    }
+
+    private Map<String, Object> baseVectorResponse(Page<WarehouseVectorMatch> page) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("total", page.getTotalElements());
+        result.put("page", page.getNumber());
+        result.put("pageSize", page.getSize());
+        result.put("totalPages", page.getTotalPages());
+        result.put("hasMore", !page.isLast());
+        result.put("warehouses", page.getContent().stream().map(match -> {
+            Map<String, Object> warehouse = toMap(match.warehouse());
+            warehouse.put("semanticScore", match.similarity());
+            return warehouse;
+        }).toList());
         return result;
     }
 

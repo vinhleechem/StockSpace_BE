@@ -31,6 +31,16 @@ public final class RentalIntentClassifier {
             "dang ap dung", "live", "cau hinh cong khai",
             "chinh sach hien hanh", "quy dinh hien hanh"
     );
+    private static final Set<String> WAREHOUSE_TYPE_WORDS = Set.of(
+            "loai kho", "cac loai kho"
+    );
+    private static final Set<String> SYSTEM_INFO_WORDS = Set.of(
+            "stockspace la gi", "he thong la gi", "thong tin he thong", "chuc nang", "chuc nang he thong",
+            "cach su dung stockspace", "huong dan su dung", "gioi thieu stockspace",
+            "gioi thieu he thong", "stockspace cung cap", "nen tang cung cap",
+            "he thong ho tro", "lam duoc gi", "co the lam gi", "chuc nang nao",
+            "ve stockspace"
+    );
     private static final Set<String> SUBSCRIPTION_WORDS = Set.of(
             "goi cua toi", "goi dang dung", "goi hien tai", "goi co ban cua toi",
             "goi dich vu cua toi", "goi toi dang dung", "goi dang su dung",
@@ -65,7 +75,14 @@ public final class RentalIntentClassifier {
 
     public static Intent classify(String message) {
         String text = normalize(message);
-        if (text.isBlank() || isWarehouseLookup(text) || containsAny(text, DIMENSION_WORDS)) {
+        if (text.isBlank() || containsAny(text, DIMENSION_WORDS)) {
+            return Intent.none();
+        }
+
+        if (containsAny(text, WAREHOUSE_TYPE_WORDS)) {
+            return new Intent(Route.WAREHOUSE_TYPES, null);
+        }
+        if (isWarehouseLookup(text)) {
             return Intent.none();
         }
 
@@ -77,6 +94,9 @@ public final class RentalIntentClassifier {
         }
         if (containsAny(text, CURRENT_RULE_WORDS)) {
             return new Intent(Route.CURRENT_SYSTEM_RULES, null);
+        }
+        if (containsAny(text, SYSTEM_INFO_WORDS)) {
+            return new Intent(Route.SYSTEM_INFO, "FAQ");
         }
         if (containsAny(text, CONTRACT_WORDS)
                 && containsAny(text, PRIVATE_CONTRACT_MARKERS)) {
@@ -99,10 +119,6 @@ public final class RentalIntentClassifier {
         if (containsAny(text, Set.of(
                 "gia han", "tai ky", "noi tiep hop dong", "hop dong moi", "hop dong thue"))) {
             return new Intent(Route.SYSTEM_POLICY, "RENTAL_PROCESS");
-        }
-        if (containsAny(text, Set.of(
-                "quyen truy cap wms", "truy cap wms", "quan ly wms", "dieu kien wms"))) {
-            return new Intent(Route.SYSTEM_POLICY, "FAQ");
         }
         if (containsAny(text, Set.of(
                 "quy trinh", "thu tuc", "dat coc", "hoan coc", "khi nao duoc thue"))) {
@@ -172,6 +188,8 @@ public final class RentalIntentClassifier {
         NONE,
         SYSTEM_POLICY,
         CURRENT_SYSTEM_RULES,
+        SYSTEM_INFO,
+        WAREHOUSE_TYPES,
         SERVICE_PACKAGES,
         MY_ACTIVE_SUBSCRIPTION,
         MY_CONTRACTS
@@ -186,6 +204,8 @@ public final class RentalIntentClassifier {
             return switch (route) {
                 case SYSTEM_POLICY -> "searchSystemPolicy";
                 case CURRENT_SYSTEM_RULES -> "getCurrentSystemRules";
+                case SYSTEM_INFO -> "searchSystemPolicy";
+                case WAREHOUSE_TYPES -> "getWarehouseTypes";
                 case SERVICE_PACKAGES -> "getServicePackages";
                 case MY_ACTIVE_SUBSCRIPTION -> "getMyActiveSubscription";
                 case MY_CONTRACTS -> "getMyContracts";

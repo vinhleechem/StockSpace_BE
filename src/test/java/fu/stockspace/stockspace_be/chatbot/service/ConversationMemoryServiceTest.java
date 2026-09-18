@@ -68,4 +68,25 @@ class ConversationMemoryServiceTest {
     void invalidStoredMemoryIsIgnored() {
         assertTrue(service.read("not-json").isEmpty());
     }
+
+    @Test
+    void remembersSearchFiltersForContextualFollowUp() {
+        ConversationMemory memory = service.merge(
+                ConversationMemory.empty(),
+                List.of(new ToolExecutionTrace(
+                        "searchWarehouses",
+                        Map.of(
+                                "keyword", "Bình Dương",
+                                "province", "Bình Dương",
+                                "semanticQuery", "Tìm kho lạnh ở Bình Dương"
+                        ),
+                        "{\"total\":0,\"warehouses\":[]}",
+                        true,
+                        5
+                )));
+
+        assertEquals("Bình Dương", memory.lastWarehouseSearch().get("province"));
+        assertTrue(memory.promptContext("còn kho nào không?")
+                .contains("Ngữ cảnh tìm kho gần nhất"));
+    }
 }

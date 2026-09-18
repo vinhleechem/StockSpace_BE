@@ -25,23 +25,13 @@ class ChatToolRegistryTest {
             "askLoginPrompt",
             "getMyContracts",
             "getContractDetail",
-            "getTenantDashboard",
             "getMyActiveWarehouses",
             "getWarehouseOwnerContact",
-            "getMyWarehouseLayout",
-            "getMyProductCatalog",
-            "getMyStock",
-            "getInventoryReceipts",
-            "getInventoryAudits",
-            "getStockTransfers",
-            "getWarehouseCapacity",
             "getMyWallet",
             "getMyWalletActivity",
             "getMyNotifications",
             "getMyActiveSubscription",
-            "previewSubscriptionChange",
-            "suggestPutaway",
-            "suggestOutboundPicking"
+            "previewSubscriptionChange"
     );
 
     @Test
@@ -57,23 +47,13 @@ class ChatToolRegistryTest {
         assertTrue(tenant.containsAll(List.of(
                 "getMyContracts",
                 "getContractDetail",
-                "getTenantDashboard",
                 "getMyActiveWarehouses",
                 "getWarehouseOwnerContact",
-                "getMyWarehouseLayout",
-                "getMyProductCatalog",
-                "getMyStock",
-                "getInventoryReceipts",
-                "getInventoryAudits",
-                "getStockTransfers",
-                "getWarehouseCapacity",
                 "getMyWallet",
                 "getMyWalletActivity",
                 "getMyNotifications",
                 "getMyActiveSubscription",
-                "previewSubscriptionChange",
-                "suggestPutaway",
-                "suggestOutboundPicking"
+                "previewSubscriptionChange"
         )));
         assertTrue(guest.contains("getServicePackages"));
         assertTrue(guest.containsAll(List.of(
@@ -85,18 +65,18 @@ class ChatToolRegistryTest {
     }
 
     @Test
-    void keepsReadOnlyObservationToolsWhenTenantHasNoActiveSubscription() {
+    void tenantChatbotDoesNotExposeDeepWmsTools() {
         ChatToolRegistry registry = new ChatToolRegistry(requiredTools());
         List<ChatTool> tenantTools = registry.getToolsForRole("ROLE_TENANT");
 
         List<String> locked = names(
                 ChatToolRegistry.filterForActiveSubscription(tenantTools, false));
 
-        assertTrue(locked.contains("getMyStock"));
-        assertTrue(locked.contains("getInventoryReceipts"));
-        assertTrue(locked.contains("getWarehouseCapacity"));
-        assertTrue(locked.contains("getInventoryAudits"));
-        assertTrue(locked.contains("getStockTransfers"));
+        assertFalse(locked.contains("getMyStock"));
+        assertFalse(locked.contains("getInventoryReceipts"));
+        assertFalse(locked.contains("getWarehouseCapacity"));
+        assertFalse(locked.contains("getInventoryAudits"));
+        assertFalse(locked.contains("getStockTransfers"));
         assertFalse(locked.contains("getMyWarehouseLayout"));
         assertFalse(locked.contains("suggestPutaway"));
         assertTrue(locked.containsAll(List.of(

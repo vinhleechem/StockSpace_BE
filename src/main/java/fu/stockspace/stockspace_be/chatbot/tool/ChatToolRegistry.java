@@ -44,39 +44,22 @@ public class ChatToolRegistry {
             List.of(
                     "getMyContracts",
                     "getContractDetail",
-                    "getTenantDashboard",
                     "getMyActiveWarehouses",
                     "getWarehouseOwnerContact",
-                    "getMyWarehouseLayout",
-                    "getMyProductCatalog",
-                    "getMyStock",
-                    "getInventoryReceipts",
-                    "getInventoryAudits",
-                    "getStockTransfers",
-                    "getWarehouseCapacity",
                     "getMyWallet",
                     "getMyWalletActivity",
                     "getMyNotifications",
                     "getMyActiveSubscription",
-                    "previewSubscriptionChange",
-                    "suggestPutaway",
-                    "suggestOutboundPicking"
+                    "previewSubscriptionChange"
             )
     );
 
     /**
-     * Tools whose underlying domain service requires the WMS subscription.
-     *
-     * Read-only observation tools deliberately do not belong here: an active
-     * rental contract is enough to observe a tenant's own warehouse data.
-     * Keeping this list aligned with the domain access policy prevents the
-     * chatbot from hiding data that the normal read APIs already expose.
+     * Reserved for chatbot capabilities that may be added later and require a
+     * subscription. Deep WMS operations are intentionally not exposed to the
+     * chatbot at all; they remain in the warehouse-management screens.
      */
-    private static final Set<String> SUBSCRIPTION_REQUIRED_TOOL_NAMES = Set.of(
-            "getMyWarehouseLayout",
-            "suggestPutaway",
-            "suggestOutboundPicking"
-    );
+    private static final Set<String> SUBSCRIPTION_REQUIRED_TOOL_NAMES = Set.of();
     private final Map<String, List<ChatTool>> toolsByRole;
     private final Map<String, ChatTool> toolsByName;
 
