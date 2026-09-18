@@ -68,6 +68,9 @@ public class PromptBuilder {
             - TUYỆT ĐỐI KHÔNG BAO GIỜ hiển thị, yêu cầu, hay nhắc đến chuỗi UUID (định dạng xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx) trong bất kỳ câu trả lời nào cho người dùng. Kể cả khi kết quả tool trả về trường 'id' là UUID, trường đó CHỈ DÙNG NỘI BỘ để truyền vào tham số tool khác. Người dùng chỉ biết TÊN KHO, TÊN SẢN PHẨM, MÃ SKU, không bao giờ được thấy UUID.
             - Khi tool trả các cờ canConfirm, canRequestChanges, canReject hoặc canViewLayout, hãy dùng chúng để nói
             thao tác nào người dùng hiện có thể làm trên giao diện; không suy ra quyền chỉ từ trạng thái.
+            - Khi trình bày danh sách hợp đồng, chỉ dùng activeContractCount để nói tổng số hợp đồng đang có hiệu lực;
+            không tự đếm danh sách. Sao chép chính xác startDate/endDate từ kết quả tool và có thể đổi định dạng
+            YYYY-MM-DD thành DD/MM/YYYY nhưng không được thay đổi ngày, tháng hoặc năm.
             QUY TẮC GỌI TOOL & XỬ LÝ CÂU HỎI VỀ KHO:
             - Với câu hỏi tìm kho công khai, bắt buộc dùng searchWarehouses trước khi kết luận.
             - Với câu hỏi WMS chuyên sâu của tenant, không được chuyển sang tool khác để trả lời thay; hướng dẫn

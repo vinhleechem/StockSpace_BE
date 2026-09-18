@@ -324,6 +324,31 @@ class PublicWarehouseChatToolsTest {
     }
 
     @Test
+    void searchWarehousesCanonicalizesCityAliasesFromModelArguments() throws Exception {
+        Warehouse warehouse = Warehouse.builder()
+                .id(UUID.randomUUID())
+                .name("Kho TP.HCM")
+                .provinceName("Thành phố Hồ Chí Minh")
+                .status(WarehouseStatus.AVAILABLE)
+                .build();
+        when(warehouseRepository.searchPublicForChat(
+                eq("%hồ chí minh%"), eq("%hồ chí minh%"), eq(null), eq(null),
+                eq(null), eq(null), eq(null), eq(null), eq(null), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(warehouse)));
+
+        JsonNode result = objectMapper.readTree(
+                new SearchWarehousesTool(warehouseRepository, objectMapper).execute(Map.of(
+                        "keyword", "TP.HCM",
+                        "province", "TP.HCM"), null));
+
+        assertEquals(1, result.get("total").asInt());
+        assertEquals("Kho TP.HCM", result.at("/warehouses/0/name").asText());
+        verify(warehouseRepository).searchPublicForChat(
+                eq("%hồ chí minh%"), eq("%hồ chí minh%"), eq(null), eq(null),
+                eq(null), eq(null), eq(null), eq(null), eq(null), any(Pageable.class));
+    }
+
+    @Test
     void everyPublicToolSchemaUsesLowercaseJsonSchemaTypes() {
         Map<String, Object> searchSchema =
                 new SearchWarehousesTool(warehouseRepository, objectMapper).getParameterSchema();

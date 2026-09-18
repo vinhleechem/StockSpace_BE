@@ -2,6 +2,8 @@ package fu.stockspace.stockspace_be.chatbot.service;
 
 import java.math.BigDecimal;
 import java.text.Normalizer;
+import java.time.DateTimeException;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -17,10 +19,15 @@ import java.util.regex.Pattern;
  */
 public final class AnswerEvidenceVerifier {
 
+    private static final String INTERNAL_UNVERIFIED_MARKER = "[số liệu chưa xác minh]";
     private static final Pattern NUMBER = Pattern.compile(
             "(?<![\\p{L}\\d])([0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]+)?|[0-9]+)"
                     + "(?:\\s*(ty|tỷ|trieu|triệu|tr|k))?(?![\\p{L}\\d])",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE
+    );
+    private static final Pattern NUMERIC_DATE = Pattern.compile(
+            "(?<!\\d)(?:(\\d{4})-(\\d{1,2})-(\\d{1,2})"
+                    + "|(\\d{1,2})[/-](\\d{1,2})[/-](\\d{4}))(?!\\d)"
     );
 
     private AnswerEvidenceVerifier() {
@@ -40,8 +47,10 @@ public final class AnswerEvidenceVerifier {
             return Verification.ok();
         }
         Set<String> evidenceNumbers = new LinkedHashSet<>();
+        Set<LocalDate> evidenceDates = new LinkedHashSet<>();
         addNumbers(evidenceNumbers, userMessage);
         addDerivedNumbers(evidenceNumbers, userMessage);
+        addDates(evidenceDates, userMessage);
         if (traces == null) {
             traces = List.of();
         }
@@ -56,12 +65,20 @@ public final class AnswerEvidenceVerifier {
                     evidenceNumbers.add(canonical);
                 }
             }
+            addDates(evidenceDates, trace.result());
         }
 
+        List<DateMention> replyDates = findDates(reply);
+        for (DateMention date : replyDates) {
+            if (date.value() == null || !evidenceDates.contains(date.value())) {
+                return new Verification(false, reply.substring(date.start(), date.end()));
+            }
+        }
         Matcher replyMatcher = NUMBER.matcher(reply);
         while (replyMatcher.find()) {
             String raw = replyMatcher.group(1);
-            if (isListMarker(reply, replyMatcher.start(), replyMatcher.end())
+            if (isInsideDate(replyMatcher.start(), replyMatcher.end(), replyDates)
+                    || isListMarker(reply, replyMatcher.start(), replyMatcher.end())
                     || isLikelyYear(raw)) {
                 continue;
             }
@@ -101,34 +118,28 @@ public final class AnswerEvidenceVerifier {
             List<ToolExecutionTrace> traces
     ) {
         Verification verification = verify(reply, userMessage, traces);
-        if (verification.valid() || reply == null || reply.isBlank()) {
+        if (reply == null || reply.isBlank()) {
             return reply;
         }
-
-        Set<String> evidenceNumbers = new LinkedHashSet<>();
-        addNumbers(evidenceNumbers, userMessage);
-        addDerivedNumbers(evidenceNumbers, userMessage);
-        if (traces != null) {
-            for (ToolExecutionTrace trace : traces) {
-                if (trace != null && trace.successful()) {
-                    addNumbers(evidenceNumbers, trace.result());
-                }
-            }
+        if (verification.valid() && !reply.contains(INTERNAL_UNVERIFIED_MARKER)) {
+            return reply;
         }
 
         List<String> safeSegments = new ArrayList<>();
         for (String segment : reply.split("(?<=[.!?])\\s+|\\R+")) {
             String trimmed = segment.trim();
-            if (!trimmed.isBlank()) {
-                safeSegments.add(replaceUnsupportedNumbers(trimmed, evidenceNumbers));
+            if (!trimmed.isBlank()
+                    && !trimmed.contains(INTERNAL_UNVERIFIED_MARKER)
+                    && verify(trimmed, userMessage, traces).valid()) {
+                safeSegments.add(trimmed);
             }
         }
         if (safeSegments.isEmpty()) {
-            return "Tôi đã tra cứu nhưng chưa có cơ sở để xác nhận con số cụ thể. "
-                    + "Bạn có thể cho biết kho, hợp đồng hoặc mã giao dịch liên quan không?";
+            return "Tôi đã tra cứu nhưng chưa thể hiển thị chính xác các số liệu trong kết quả. "
+                    + "Bạn vui lòng thử lại sau hoặc kiểm tra trực tiếp trên màn hình nghiệp vụ tương ứng.";
         }
         return String.join(" ", safeSegments)
-                + " Phần số liệu chưa có trong dữ liệu xác minh nên cần đối chiếu thêm.";
+                + " Một số chi tiết số liệu chưa đối chiếu được với dữ liệu hệ thống nên chưa được hiển thị.";
     }
 
     private static void addNumbers(Set<String> target, String text) {
@@ -142,6 +153,39 @@ public final class AnswerEvidenceVerifier {
                 target.add(canonical);
             }
         }
+    }
+
+    private static void addDates(Set<LocalDate> target, String text) {
+        for (DateMention date : findDates(text)) {
+            if (date.value() != null) {
+                target.add(date.value());
+            }
+        }
+    }
+
+    private static List<DateMention> findDates(String text) {
+        if (text == null || text.isBlank()) {
+            return List.of();
+        }
+        List<DateMention> dates = new ArrayList<>();
+        Matcher matcher = NUMERIC_DATE.matcher(text);
+        while (matcher.find()) {
+            try {
+                boolean iso = matcher.group(1) != null;
+                int year = Integer.parseInt(matcher.group(iso ? 1 : 6));
+                int month = Integer.parseInt(matcher.group(iso ? 2 : 5));
+                int day = Integer.parseInt(matcher.group(iso ? 3 : 4));
+                dates.add(new DateMention(
+                        matcher.start(), matcher.end(), LocalDate.of(year, month, day)));
+            } catch (DateTimeException | NumberFormatException exception) {
+                dates.add(new DateMention(matcher.start(), matcher.end(), null));
+            }
+        }
+        return dates;
+    }
+
+    private static boolean isInsideDate(int start, int end, List<DateMention> dates) {
+        return dates.stream().anyMatch(date -> start >= date.start() && end <= date.end());
     }
 
     /**
@@ -213,36 +257,6 @@ public final class AnswerEvidenceVerifier {
         };
     }
 
-    private static String replaceUnsupportedNumbers(
-            String segment,
-            Set<String> evidenceNumbers
-    ) {
-        Matcher matcher = NUMBER.matcher(segment);
-        StringBuilder result = new StringBuilder(segment.length());
-        int cursor = 0;
-        boolean replaced = false;
-        while (matcher.find()) {
-            String raw = matcher.group(1);
-            if (isListMarker(segment, matcher.start(), matcher.end())
-                    || isLikelyYear(raw)) {
-                continue;
-            }
-            String canonical = canonicalNumber(raw, matcher.group(2));
-            if (canonical == null || evidenceNumbers.contains(canonical)) {
-                continue;
-            }
-            result.append(segment, cursor, matcher.start());
-            result.append("[số liệu chưa xác minh]");
-            cursor = matcher.end();
-            replaced = true;
-        }
-        if (!replaced) {
-            return segment;
-        }
-        result.append(segment, cursor, segment.length());
-        return result.toString();
-    }
-
     private static boolean isListMarker(String text, int start, int end) {
         int lineStart = text.lastIndexOf('\n', Math.max(0, start - 1)) + 1;
         String prefix = text.substring(lineStart, start).trim();
@@ -300,5 +314,8 @@ public final class AnswerEvidenceVerifier {
     }
 
     private record NumericMention(int start, int end, BigDecimal value) {
+    }
+
+    private record DateMention(int start, int end, LocalDate value) {
     }
 }

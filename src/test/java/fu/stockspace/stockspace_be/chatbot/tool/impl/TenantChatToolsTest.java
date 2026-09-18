@@ -95,11 +95,14 @@ class TenantChatToolsTest {
                 .build();
         when(contractService.getMyContractsAsTenant(userId, 0, 10))
                 .thenReturn(new PageImpl<>(List.of(contract), PageRequest.of(0, 10), 1));
+        when(contractService.countCurrentActiveContractsAsTenant(userId)).thenReturn(1L);
 
         JsonNode result = objectMapper.readTree(
                 new GetMyContractsTool(objectMapper, contractService).execute(Map.of(), userId));
 
         assertEquals(1, result.get("total").asLong());
+        assertEquals(1, result.get("activeContractCount").asLong());
+        assertEquals(1, result.get("returnedContractCount").asLong());
         assertEquals(contractId.toString(), result.at("/contracts/0/id").asText());
         assertEquals("Kho A", result.at("/contracts/0/warehouseName").asText());
         assertEquals("Đang có hiệu lực", result.at("/contracts/0/status").asText());
@@ -111,6 +114,7 @@ class TenantChatToolsTest {
         assertTrue(result.at("/contracts/0/canConfirm").asBoolean());
         assertTrue(result.at("/contracts/0/canManageWms").asBoolean());
         verify(contractService).getMyContractsAsTenant(userId, 0, 10);
+        verify(contractService).countCurrentActiveContractsAsTenant(userId);
     }
 
     @Test

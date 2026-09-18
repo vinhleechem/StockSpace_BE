@@ -53,11 +53,14 @@ public class GetMyContractsTool implements ChatTool {
             int pageSize = ChatToolParameters.pageSize(params, 10, 30);
             Page<RentalContractResponse> page = contractService.getMyContractsAsTenant(
                     userId, pageNumber, pageSize);
+            long activeContractCount = contractService.countCurrentActiveContractsAsTenant(userId);
             List<Map<String, Object>> contracts = page.getContent().stream()
                     .map(this::toSafeContractSummary)
                     .toList();
 
             Map<String, Object> result = new LinkedHashMap<>();
+            result.put("activeContractCount", activeContractCount);
+            result.put("returnedContractCount", contracts.size());
             result.put("contracts", contracts);
             result.put("page", page.getNumber());
             result.put("total", page.getTotalElements());

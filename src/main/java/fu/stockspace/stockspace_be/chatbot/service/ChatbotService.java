@@ -1232,7 +1232,9 @@ public class ChatbotService {
                 "role", "system",
                 "content", "Câu trả lời vừa rồi có claim số liệu chưa có trong bằng chứng. "
                         + "Hãy viết lại toàn bộ câu trả lời, chỉ giữ số trong dữ liệu tool hoặc câu hỏi của user. "
-                        + "Không tự tính hoặc bịa số; nếu thiếu số thì nói rõ trường nào chưa xác minh. "
+                        + "Với hợp đồng, chỉ dùng activeContractCount cho số hợp đồng đang hiệu lực và phải sao chép "
+                        + "đúng startDate/endDate; có thể đổi YYYY-MM-DD sang DD/MM/YYYY nhưng không đổi giá trị. "
+                        + "Không tự tính hoặc bịa số; nếu thiếu số thì diễn đạt tự nhiên rằng chi tiết đó chưa có. "
                         + "Không gọi tool trong lượt sửa này."
         ));
         try {
