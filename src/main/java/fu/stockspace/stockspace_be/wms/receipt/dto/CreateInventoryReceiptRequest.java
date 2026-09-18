@@ -3,6 +3,7 @@ package fu.stockspace.stockspace_be.wms.receipt.dto;
 import fu.stockspace.stockspace_be.wms.receipt.entity.DocumentType;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.*;
@@ -25,9 +26,11 @@ public class CreateInventoryReceiptRequest {
 
     private String signatureData;
 
+    @NotBlank(message = "Tên nơi gửi không được để trống")
     @Size(max = 255, message = "Tên nơi gửi không được vượt quá 255 ký tự")
     private String senderName;
 
+    @NotBlank(message = "Tên nơi nhận không được để trống")
     @Size(max = 255, message = "Tên nơi nhận không được vượt quá 255 ký tự")
     private String receiverName;
 
