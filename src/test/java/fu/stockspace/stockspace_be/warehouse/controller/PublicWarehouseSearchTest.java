@@ -4,6 +4,7 @@ import fu.stockspace.stockspace_be.common.dto.PagedResponse;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.warehouse.dto.WarehouseResponse;
 import fu.stockspace.stockspace_be.warehouse.dto.WarehouseSearchRequest;
+import fu.stockspace.stockspace_be.warehouse.dto.WarehouseLayoutResponse;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseLayoutService;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseService;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseTypeService;
@@ -16,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -220,6 +222,21 @@ class PublicWarehouseSearchTest {
         ));
 
         verifyNoInteractions(warehouseService);
+    }
+
+    @Test
+    void publicLayoutAlwaysUsesPublicVisibilityRules() {
+        UUID warehouseId = UUID.randomUUID();
+        WarehouseLayoutResponse layout = WarehouseLayoutResponse.builder()
+                .warehouseId(warehouseId)
+                .build();
+        when(warehouseLayoutService.getLayoutTree(warehouseId, null, "PUBLIC"))
+                .thenReturn(layout);
+
+        ResponseEntity<?> response = controller().getLayout(warehouseId);
+
+        assertEquals(200, response.getStatusCode().value());
+        verify(warehouseLayoutService).getLayoutTree(warehouseId, null, "PUBLIC");
     }
 
     private PublicWarehouseController controller() {

@@ -33,7 +33,8 @@ public class WarehouseResponse {
     @Schema(allowableValues = {"AVAILABLE", "PENDING_APPROVAL", "INACTIVE"})
     private String status;
     private String rejectReason;
-    private boolean isVerified;
+    @Schema(description = "Inspection result flag: true=PASSED, false=FAILED, null=no completed inspection")
+    private Boolean verified;
     @Schema(description = "Latest inspection report status; null means no inspection request exists",
             allowableValues = {"PENDING", "IN_PROGRESS", "PASSED", "FAILED"})
     private String inspectionStatus;
