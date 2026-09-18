@@ -46,7 +46,6 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 
@@ -71,8 +70,11 @@ public class ChatbotService {
             "Xin lỗi, tôi chưa thể hoàn thành yêu cầu này. Vui lòng diễn đạt ngắn gọn hơn hoặc thử lại sau.";
 
     private static final String TENANT_ROLE = "ROLE_TENANT";
-    private static final Pattern CITATION_LABEL = Pattern.compile(
-            "\\\"label\\\"\\s*:\\s*\\\"([^\\\"]{1,240})\\\""
+    private static final Pattern USER_CITATION = Pattern.compile(
+            "(?iu)\\s*\\[[^\\]\\r\\n]{1,240}(?:đoạn|doan)\\s*\\d+\\]"
+    );
+    private static final Pattern USER_CITATION_FOOTER = Pattern.compile(
+            "(?is)\\s*(?:Nguồn tham khảo|Nguon tham khao)\\s*:\\s*.*$"
     );
     private static final Set<String> SYSTEM_EVIDENCE_MARKERS = Set.of(
             "ton kho", "sku", "san pham", "phieu", "phieu nhap", "phieu xuat", "kiem ke",
@@ -442,9 +444,8 @@ public class ChatbotService {
             );
         }
         return new AgentRunResult(
-                enforceCitations(
-                        AnswerEvidenceVerifier.sanitize(candidate, userMessage, traces),
-                        traces),
+                sanitizeUserVisibleCitations(
+                        AnswerEvidenceVerifier.sanitize(candidate, userMessage, traces)),
                 traces
         );
     }
@@ -605,9 +606,8 @@ public class ChatbotService {
                 traces
         );
         return new AgentRunResult(
-                enforceCitations(
-                        AnswerEvidenceVerifier.sanitize(candidate, userMessage, traces),
-                        traces),
+                sanitizeUserVisibleCitations(
+                        AnswerEvidenceVerifier.sanitize(candidate, userMessage, traces)),
                 traces
         );
     }
@@ -1180,35 +1180,19 @@ public class ChatbotService {
     }
 
     /**
-     * Makes provenance visible even when a model forgets to repeat the
-     * citation returned by a retrieval tool. This is deliberately additive:
-     * the model still controls the explanation, while the backend guarantees a
-     * source label is present for every policy lookup.
+     * Citation metadata remains available to the evidence verifier and memory,
+     * but source labels are implementation details and must never reach users.
      */
-    private String enforceCitations(String reply, List<ToolExecutionTrace> traces) {
-        if (reply == null || reply.isBlank() || traces == null || traces.isEmpty()
-                || isEvidenceFallback(reply)) {
+    private String sanitizeUserVisibleCitations(String reply) {
+        if (reply == null || reply.isBlank()) {
             return reply;
         }
-        java.util.LinkedHashSet<String> labels = new java.util.LinkedHashSet<>();
-        for (ToolExecutionTrace trace : traces) {
-            if (trace == null || !trace.successful()
-                    || !"searchSystemPolicy".equals(trace.toolName())) {
-                continue;
-            }
-            Matcher matcher = CITATION_LABEL.matcher(trace.result());
-            while (matcher.find() && labels.size() < 3) {
-                String label = matcher.group(1).trim();
-                if (!label.isBlank()) {
-                    labels.add(label);
-                }
-            }
-        }
-        if (labels.isEmpty() || labels.stream().allMatch(reply::contains)) {
-            return reply;
-        }
-        String suffix = "\n\nNguồn tham khảo: " + String.join("; ", labels);
-        return capAssistantResponse(reply + suffix);
+        String sanitized = USER_CITATION_FOOTER.matcher(reply).replaceFirst("");
+        sanitized = USER_CITATION.matcher(sanitized).replaceAll("");
+        return sanitized
+                .replaceAll("[ \\t]{2,}", " ")
+                .replaceAll("(?m)^[ \\t]*\\r?\\n", "")
+                .trim();
     }
 
     private String repairNumericClaims(
