@@ -39,6 +39,8 @@ class PromptBuilderTest {
         assertTrue(prompt.contains("module Quản lý kho"));
         assertTrue(prompt.contains("activeContractCount"));
         assertTrue(prompt.contains("startDate/endDate"));
+        assertTrue(prompt.contains("matchedByExactKeyword=true"));
+        assertTrue(prompt.contains("khớp đúng từ khóa người dùng"));
         assertTrue(prompt.contains("chỉ dùng một bullet cho mỗi kho"));
         assertTrue(prompt.contains("Không tạo bullet riêng cho"));
         assertTrue(prompt.contains("Nếu chỉ có một kho, ưu tiên trả lời bằng đoạn văn"));

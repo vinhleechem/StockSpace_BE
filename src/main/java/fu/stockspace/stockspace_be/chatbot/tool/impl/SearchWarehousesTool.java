@@ -67,6 +67,12 @@ public class SearchWarehousesTool implements ChatTool {
                     + "|\\b(?:ở\\s+đâu|o\\s+dau|tại\\s+đâu|tai\\s+dau)\\b"
                     + "|\\b(?:như\\s+thế\\s+nào|nhu\\s the\\s nao)\\b)"
     );
+    private static final Pattern PRICING_QUESTION_NOISE = Pattern.compile(
+            "(?iu)\\b(?:và\\s+|va\\s+)?(?:(?:tính|tinh)\\s+)?(?:giá|gia)?\\s*theo\\s+"
+                    + "(?:tháng|thang|m2|m²|mét\\s+vuông|met\\s+vuong)"
+                    + "(?:\\s+(?:hay|hoặc|hoac)\\s+"
+                    + "(?:tháng|thang|m2|m²|mét\\s+vuông|met\\s+vuong))?\\b"
+    );
     private static final Pattern SEARCH_INTENT_NOISE = Pattern.compile(
             "(?iu)\\b(?:tìm|tim|kiếm|kiem|cho\\s+tôi|cho\\s+toi|giúp\\s+tôi|giup\\s+toi"
                     + "|tôi\\s+cần|toi\\s+can|cần\\s+tìm|can\\s+tim|có\\s+kho\\s+nào|co\\s+kho\\s+nao"
@@ -191,6 +197,9 @@ public class SearchWarehousesTool implements ChatTool {
             String province = getProvinceLikeParam(safeParams, "province");
             String district = getLikeStringParam(safeParams, "district");
             RentalPricingType pricingType = getPricingTypeParam(safeParams, "pricingType");
+            if (isPricingModelComparison(requestedKeyword, semanticQuery)) {
+                pricingType = null;
+            }
             BigDecimal minPrice = getNonNegativeDecimalParam(safeParams, "minRentalPrice");
             BigDecimal maxPrice = getNonNegativeDecimalParam(safeParams, "maxRentalPrice");
             BigDecimal minCapacity = getNonNegativeDecimalParam(safeParams, "minCapacity");
@@ -335,12 +344,26 @@ public class SearchWarehousesTool implements ChatTool {
         }
         String cleaned = DIMENSION_QUESTION.matcher(keyword).replaceAll(" ");
         cleaned = ENTITY_QUESTION_NOISE.matcher(cleaned).replaceAll(" ");
+        cleaned = PRICING_QUESTION_NOISE.matcher(cleaned).replaceAll(" ");
         cleaned = SEARCH_INTENT_NOISE.matcher(cleaned).replaceAll(" ")
                 .replaceAll("[?!,:;]+", " ")
                 .replaceAll("\\s+", " ")
                 .trim();
         // Do not turn a standalone dimension question into a broad listing.
         return cleaned.isBlank() ? keyword.trim() : cleaned;
+    }
+
+    private boolean isPricingModelComparison(String requestedKeyword, String semanticQuery) {
+        String normalized = normalizeSearchText(
+                semanticQuery == null || semanticQuery.isBlank() ? requestedKeyword : semanticQuery);
+        boolean mentionsSquareMeter = normalized.contains("m2")
+                || normalized.contains("met vuong");
+        boolean mentionsMonthly = normalized.contains("theo thang")
+                || normalized.contains("moi thang");
+        boolean asksEitherOr = normalized.contains(" hay ")
+                || normalized.contains(" hoac ")
+                || normalized.contains(" so voi ");
+        return mentionsSquareMeter && mentionsMonthly && asksEitherOr;
     }
 
     private void addSearchKeywordMetadata(Map<String, Object> response,
@@ -563,7 +586,9 @@ public class SearchWarehousesTool implements ChatTool {
         String decomposed = Normalizer.normalize(value, Normalizer.Form.NFD);
         String withoutDiacritics = DIACRITICS.matcher(decomposed).replaceAll("")
                 .replace('đ', 'd')
-                .replace('Đ', 'D');
+                .replace('Đ', 'D')
+                .replace('²', '2')
+                .replace('³', '3');
         return NON_WORD.matcher(withoutDiacritics.toLowerCase(Locale.ROOT))
                 .replaceAll(" ")
                 .trim()

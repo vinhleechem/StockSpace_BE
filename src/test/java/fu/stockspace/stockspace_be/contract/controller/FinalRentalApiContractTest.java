@@ -35,7 +35,7 @@ class FinalRentalApiContractTest {
                 .map(Field::getName)
                 .collect(Collectors.toSet());
         assertTrue(fields.containsAll(Set.of(
-                "canEdit", "canDelete", "canSubmit", "canConfirm", "canRequestChanges",
+                "canEdit", "canDelete", "canSubmit", "canRecall", "canConfirm", "canRequestChanges",
                 "canReject", "canViewLayout", "canManageWms")));
 
         Field files = RentalContractResponse.class.getDeclaredField("paperContractFiles");

@@ -218,6 +218,7 @@ Số commit là 12–10 và phần của VIỆT ANH chứa nhiều thay đổi 
   - **API cuối:**
     - `PUT /api/owner/contracts/{contractId}`.
     - `POST /api/owner/contracts/{contractId}/submit`.
+    - `POST /api/owner/contracts/{contractId}/recall` khi Owner cần thu hồi Contract đang chờ Tenant xác nhận để chỉnh sửa.
   - **Update rules:**
     - Chỉ sửa terms, dates, price theo mode, dimensions/layout khi `DRAFT` hoặc `CHANGES_REQUESTED`.
     - Không sửa owner/tenant/warehouse. Nếu sai recipient dùng DELETE Draft hoặc Tenant reject sau submit.
@@ -231,7 +232,7 @@ Số commit là 12–10 và phần của VIỆT ANH chứa nhiều thay đổi 
     - Serialize layout hiện tại vào `layoutSnapshot`.
     - Set `PENDING_TENANT_CONFIRM`, `submittedAt = now`, clear change-request marker đang xử lý.
     - Gửi notification cho đúng Tenant; lỗi notification không được rollback Contract nếu convention hiện tại dùng best-effort.
-  - **Action flags response:** `canEdit`, `canDelete`, `canSubmit`, `canConfirm`, `canRequestChanges`, `canReject`, `canViewLayout`, `canManageWms` phải do BE tính theo user/status/subscription.
+  - **Action flags response:** `canEdit`, `canDelete`, `canSubmit`, `canRecall`, `canConfirm`, `canRequestChanges`, `canReject`, `canViewLayout`, `canManageWms` phải do BE tính theo user/status/subscription.
   - **Test trong commit:** submit/resubmit; overlap inclusive; concurrent/lock path; khác Tenant được phép; thiếu paper file; invalid layout; immutable direct IDs; snapshot không đổi khi default layout đổi.
   - **Hoàn thành khi:** FE Owner có đủ API từ tạo Draft đến gửi Contract mà không gọi Booking API.
   - **Commit hoàn thành:** `d75c479`
@@ -602,6 +603,7 @@ Warehouse create/update fields mới:
 | GET | `/api/owner/contracts/{id}/layout` | Contract của Owner |
 | PUT | `/api/owner/contracts/{id}/layout` | DRAFT, CHANGES_REQUESTED |
 | POST | `/api/owner/contracts/{id}/submit` | DRAFT, CHANGES_REQUESTED |
+| POST | `/api/owner/contracts/{id}/recall` | PENDING_TENANT_CONFIRM |
 
 ## Contract Tenant API
 
@@ -666,6 +668,7 @@ Contract response tối thiểu:
   "canEdit": false,
   "canDelete": false,
   "canSubmit": false,
+  "canRecall": false,
   "canConfirm": true,
   "canRequestChanges": true,
   "canReject": true,
@@ -679,7 +682,7 @@ Contract response tối thiểu:
 | Status | Owner | Tenant |
 |---|---|---|
 | DRAFT | Edit layout/terms, submit, soft-delete | Không thấy hoặc chỉ thấy nếu policy cho phép |
-| PENDING_TENANT_CONFIRM | View | Confirm, request changes, reject, view layout |
+| PENDING_TENANT_CONFIRM | View, recall for editing | Confirm, request changes, reject, view layout |
 | CHANGES_REQUESTED | Edit layout/terms, resubmit | View reason/layout |
 | ACTIVE | View | View layout; manage WMS chỉ khi Subscription ACTIVE |
 | REJECTED | View history | View history/reason |

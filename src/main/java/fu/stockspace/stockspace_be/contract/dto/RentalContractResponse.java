@@ -40,6 +40,8 @@ public class RentalContractResponse {
     private boolean canDelete;
     @Schema(description = "Current viewer may submit or resubmit this contract")
     private boolean canSubmit;
+    @Schema(description = "Current owner may recall a submitted contract for editing")
+    private boolean canRecall;
     @Schema(description = "Current viewer may confirm this submitted contract")
     private boolean canConfirm;
     @Schema(description = "Current viewer may request owner changes")

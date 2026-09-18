@@ -313,6 +313,54 @@ class DirectContractSubmissionServiceTest {
     }
 
     @Test
+    void ownerCanRecallPendingContractForEditing() {
+        contract.setStatus(ContractStatus.PENDING_TENANT_CONFIRM);
+        contract.setSubmittedAt(java.time.LocalDateTime.of(2026, 9, 9, 10, 0));
+        contract.setChangeRequestReason("stale reason");
+        contract.setRejectionReason("stale rejection");
+        when(contractRepository.findByIdForUpdate(contractId)).thenReturn(Optional.of(contract));
+        when(contractRepository.save(contract)).thenReturn(contract);
+
+        RentalContractResponse response = contractService.recallOwnerContract(ownerId, contractId);
+
+        assertEquals(ContractStatus.DRAFT, contract.getStatus());
+        assertNull(contract.getSubmittedAt());
+        assertNull(contract.getConfirmedAt());
+        assertNull(contract.getChangeRequestReason());
+        assertNull(contract.getRejectionReason());
+        assertEquals(Boolean.TRUE, response.isCanEdit());
+        assertEquals(Boolean.TRUE, response.isCanSubmit());
+        assertEquals(Boolean.FALSE, response.isCanRecall());
+        verify(contractRepository).findByIdForUpdate(contractId);
+        verify(contractRepository).save(contract);
+        verify(notificationService).push(
+                eq(tenantId), any(), any(), eq("CONTRACT_RECALLED"));
+    }
+
+    @Test
+    void ownerCanRecallFlagIsOnlyAvailableWhileTenantConfirmationIsPending() {
+        contract.setStatus(ContractStatus.PENDING_TENANT_CONFIRM);
+
+        RentalContractResponse response = contractService.mapToResponse(contract, ownerId);
+
+        assertEquals(Boolean.TRUE, response.isCanRecall());
+        assertEquals(Boolean.FALSE, response.isCanEdit());
+        assertEquals(Boolean.FALSE, response.isCanSubmit());
+    }
+
+    @Test
+    void recallRejectsContractThatIsNotPendingTenantConfirmation() {
+        when(contractRepository.findByIdForUpdate(contractId)).thenReturn(Optional.of(contract));
+
+        BadRequestException exception = assertThrows(BadRequestException.class,
+                () -> contractService.recallOwnerContract(ownerId, contractId));
+
+        assertEquals(ErrorCode.INVALID_CONTRACT_STATUS, exception.getErrorCode());
+        verify(contractRepository, never()).save(contract);
+        verifyNoInteractions(notificationService);
+    }
+
+    @Test
     void submitRejectsInvalidLayoutBeforeSaving() {
         stubContractLookup();
         when(warehouseService.lockWarehouseForContractSubmit(warehouseId)).thenReturn(warehouse);

@@ -266,6 +266,34 @@ class PublicWarehouseChatToolsTest {
     }
 
     @Test
+    void searchWarehousesKeepsExactNameWhenQuestionComparesPricingModels() throws Exception {
+        Warehouse warehouse = Warehouse.builder()
+                .id(UUID.randomUUID())
+                .name("Kho FPT SOFTWARE")
+                .address("Khu Công Nghệ Cao, Thành phố Hồ Chí Minh")
+                .capacity(new BigDecimal("2500"))
+                .rentalPricingType(RentalPricingType.PER_SQUARE_METER_MONTHLY)
+                .rentalPrice(new BigDecimal("1000000"))
+                .status(WarehouseStatus.AVAILABLE)
+                .build();
+        when(warehouseRepository.searchPublic(
+                eq("%kho fpt software%"), eq(WarehouseStatus.AVAILABLE),
+                eq(null), eq(null), eq(null), eq(null), eq(null), eq(null), eq(null), eq(null),
+                any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(warehouse)));
+
+        JsonNode result = objectMapper.readTree(
+                new SearchWarehousesTool(warehouseRepository, objectMapper).execute(Map.of(
+                        "keyword", "Kho FPT SOFTWARE giá bao nhiêu và tính theo tháng hay m2"
+                ), null));
+
+        assertEquals(1, result.get("total").asInt());
+        assertEquals("Kho FPT SOFTWARE", result.at("/warehouses/0/name").asText());
+        assertTrue(result.get("keywordIntentRemoved").asBoolean());
+        assertEquals("Kho FPT SOFTWARE", result.get("searchedKeyword").asText());
+    }
+
+    @Test
     void searchWarehousesMatchesStorageNeedThroughSemanticConcepts() throws Exception {
         Warehouse warehouse = Warehouse.builder()
                 .id(UUID.randomUUID())
