@@ -27,7 +27,7 @@ public final class ChatQueryPlanner {
             "(?<![\\p{L}\\d])([0-9][0-9.,]*)\\s*(?:m2|met vuong)",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern LOCATION = Pattern.compile(
-            "(?iu)(?:\\b(?:ở|tại|khu vực|gần)\\s+)([^,;.!?]+?)(?=\\s+(?:giá|theo|từ|dưới|trên|có|với|và|tối thiểu|ít nhất|phù hợp|còn|đang)|[,;.!?]|$)",
+            "(?iu)(?:\\b(?:ở|tại|khu vực|gần)\\s+)([^,;!?]+?)(?=\\s+(?:giá|theo|từ|dưới|trên|có|với|và|tối thiểu|ít nhất|phù hợp|còn|đang)|[,;!?]|$)",
             Pattern.UNICODE_CHARACTER_CLASS);
     private static final Set<String> SEARCH_MARKERS = Set.of(
             "tim", "kiem", "danh sach", "loc", "goi y", "kho nao", "co kho",
@@ -186,7 +186,8 @@ public final class ChatQueryPlanner {
         if (location != null
                 && !Set.of("do", "day", "kia", "nay").contains(normalize(location))) {
             String normalizedLocation = normalize(location);
-            filters.put("keyword", location);
+            String canonicalLocation = WarehouseLocationAliases.canonicalProvince(location);
+            filters.put("keyword", canonicalLocation);
             filters.remove("province");
             filters.remove("district");
             if (normalizedLocation.startsWith("quan ")
@@ -198,7 +199,7 @@ public final class ChatQueryPlanner {
                     || normalizedLocation.startsWith("thanh pho ")
                     || normalizedLocation.startsWith("tp ")
                     || PROVINCE_NAMES.contains(normalizedLocation))) {
-                filters.put("province", location);
+                filters.put("province", canonicalLocation);
             }
         }
         filters.putIfAbsent("pageSize", 5);
@@ -336,22 +337,23 @@ public final class ChatQueryPlanner {
         String location = extractLocation(original);
         if (location != null) {
             String normalizedLocation = normalize(location);
+            String canonicalLocation = WarehouseLocationAliases.canonicalProvince(location);
             // Keep the location as the lexical anchor and the full sentence as
             // the semantic query. This prevents SQL LIKE from receiving the
             // entire natural-language question while preserving intent for
             // vector ranking.
-            filters.put("keyword", location);
+            filters.put("keyword", canonicalLocation);
             filters.put("semanticQuery", originalText);
             if (normalizedLocation.startsWith("quan ")
                     || normalizedLocation.startsWith("huyen ")
                     || normalizedLocation.startsWith("thi xa ")) {
-                filters.put("district", location);
+                filters.put("district", canonicalLocation);
             } else if (!WARD_PREFIXES.stream().anyMatch(normalizedLocation::startsWith)
                     && (normalizedLocation.startsWith("tinh ")
                     || normalizedLocation.startsWith("thanh pho ")
                     || normalizedLocation.startsWith("tp ")
                     || PROVINCE_NAMES.contains(normalizedLocation))) {
-                filters.put("province", location);
+                filters.put("province", canonicalLocation);
             }
         }
 

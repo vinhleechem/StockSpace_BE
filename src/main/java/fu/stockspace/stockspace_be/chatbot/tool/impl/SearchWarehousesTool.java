@@ -3,6 +3,7 @@ package fu.stockspace.stockspace_be.chatbot.tool.impl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fu.stockspace.stockspace_be.chatbot.client.EmbeddingClient;
 import fu.stockspace.stockspace_be.chatbot.service.SemanticQueryExpansion;
+import fu.stockspace.stockspace_be.chatbot.service.WarehouseLocationAliases;
 import fu.stockspace.stockspace_be.chatbot.tool.ChatTool;
 import fu.stockspace.stockspace_be.warehouse.entity.RentalPricingType;
 import fu.stockspace.stockspace_be.warehouse.entity.Warehouse;
@@ -181,12 +182,13 @@ public class SearchWarehousesTool implements ChatTool {
         try {
             Map<String, Object> safeParams = params == null ? Map.of() : params;
             String requestedKeyword = getStringParam(safeParams, "keyword");
-            String keyword = cleanEntitySearchKeyword(requestedKeyword);
+            String keyword = WarehouseLocationAliases.canonicalProvince(
+                    cleanEntitySearchKeyword(requestedKeyword));
             String semanticQuery = getStringParam(safeParams, "semanticQuery");
             if (semanticQuery == null) {
                 semanticQuery = requestedKeyword;
             }
-            String province = getLikeStringParam(safeParams, "province");
+            String province = getProvinceLikeParam(safeParams, "province");
             String district = getLikeStringParam(safeParams, "district");
             RentalPricingType pricingType = getPricingTypeParam(safeParams, "pricingType");
             BigDecimal minPrice = getNonNegativeDecimalParam(safeParams, "minRentalPrice");
@@ -636,6 +638,11 @@ public class SearchWarehousesTool implements ChatTool {
 
     private String getLikeStringParam(Map<String, Object> params, String key) {
         String value = getStringParam(params, key);
+        return value == null ? null : "%" + value.toLowerCase(Locale.ROOT) + "%";
+    }
+
+    private String getProvinceLikeParam(Map<String, Object> params, String key) {
+        String value = WarehouseLocationAliases.canonicalProvince(getStringParam(params, key));
         return value == null ? null : "%" + value.toLowerCase(Locale.ROOT) + "%";
     }
 

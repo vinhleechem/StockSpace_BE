@@ -31,6 +31,15 @@ class ChatQueryPlannerTest {
     }
 
     @Test
+    void canonicalizesHoChiMinhAliasesForStructuredWarehouseSearch() {
+        ChatQueryPlanner.Plan plan = ChatQueryPlanner.plan(
+                "Tìm kho phù hợp ở TP.HCM");
+
+        assertEquals("Hồ Chí Minh", plan.filters().get("province"));
+        assertEquals("Hồ Chí Minh", plan.filters().get("keyword"));
+    }
+
+    @Test
     void doesNotTurnOperationalStockQuestionIntoPublicWarehouseSearch() {
         ChatQueryPlanner.Plan plan = ChatQueryPlanner.plan("Xem tồn kho hiện tại");
 
