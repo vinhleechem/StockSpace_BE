@@ -34,6 +34,9 @@ public class WarehouseResponse {
     private String status;
     private String rejectReason;
     private boolean isVerified;
+    @Schema(description = "Latest inspection report status; null means no inspection request exists",
+            allowableValues = {"PENDING", "IN_PROGRESS", "PASSED", "FAILED"})
+    private String inspectionStatus;
     private UUID typeId;
     private String typeName;
     private UUID ownerId;
