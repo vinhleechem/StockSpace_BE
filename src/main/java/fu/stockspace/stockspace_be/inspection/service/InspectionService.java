@@ -195,6 +195,7 @@ public class InspectionService {
             log.info("Inspector {} submitted PASSED report for warehouse {}",
                     inspectorId, report.getWarehouse().getId());
         } else {
+            warehouseService.markAsFailedByInspection(report.getWarehouse().getId());
             log.info("Inspector {} submitted FAILED report for warehouse {}",
                     inspectorId, report.getWarehouse().getId());
         }

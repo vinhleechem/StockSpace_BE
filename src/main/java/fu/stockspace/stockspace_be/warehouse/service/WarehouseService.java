@@ -538,6 +538,32 @@ public class WarehouseService {
         log.info("Warehouse {} verified via inspection", warehouseId);
     }
 
+    /**
+     * A failed inspection invalidates both the verification flag and any
+     * currently visible publication. The warehouse remains AVAILABLE so the
+     * owner can fix it and request another inspection.
+     */
+    @Transactional
+    public void markAsFailedByInspection(UUID warehouseId) {
+        Warehouse warehouse = warehouseRepository.findByIdForUpdate(warehouseId)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
+
+        warehouse.setVerified(false);
+        warehouse.setPublishedAt(null);
+        warehouse.setVisibleUntil(null);
+
+        LocalDateTime now = LocalDateTime.now(publicationClock);
+        listingOrderRepository.findOpenPaidByWarehouseIdForUpdate(warehouseId, now)
+                .forEach(order -> {
+                    order.setStatus(ListingOrderStatus.TERMINATED);
+                    listingOrderRepository.save(order);
+                });
+
+        warehouseRepository.save(warehouse);
+        log.info("Warehouse {} failed inspection; verification and publication invalidated",
+                warehouseId);
+    }
+
 
 
 
@@ -642,10 +668,12 @@ public class WarehouseService {
         String publicationStatus = resolvePublicationStatus(w, currentListingOrderStatus);
         boolean canStartPublication = w.isActive()
                 && !w.isDeleted()
-                && w.getStatus() != WarehouseStatus.INACTIVE;
+                && w.getStatus() != WarehouseStatus.INACTIVE
+                && w.isVerified();
         boolean canRenewPublication = w.isActive()
                 && !w.isDeleted()
-                && w.getStatus() == WarehouseStatus.AVAILABLE;
+                && w.getStatus() == WarehouseStatus.AVAILABLE
+                && w.isVerified();
 
         return WarehouseResponse.builder()
                 .id(w.getId())
@@ -749,6 +777,9 @@ public class WarehouseService {
         if (currentListingOrderStatus == ListingOrderStatus.REFUNDED
                 && warehouse.getStatus() == WarehouseStatus.INACTIVE) {
             return PUBLICATION_REFUNDED;
+        }
+        if (!warehouse.isVerified()) {
+            return PUBLICATION_DRAFT;
         }
         if (warehouse.getStatus() != WarehouseStatus.AVAILABLE) {
             return PUBLICATION_DRAFT;
