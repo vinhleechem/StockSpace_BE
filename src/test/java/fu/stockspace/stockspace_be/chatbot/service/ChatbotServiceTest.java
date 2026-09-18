@@ -185,7 +185,7 @@ class ChatbotServiceTest {
         UUID userId = UUID.randomUUID();
         UUID warehouseId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
-        ChatTool allowedTool = namedTool("getMyStock");
+        ChatTool allowedTool = namedTool("removedWmsTool");
         List<ChatTool> allowedTools = List.of(allowedTool);
         when(conversationStore.prepareUserSession(userId, null))
                 .thenReturn(new PreparedChatSession(sessionId, null, List.of()));
@@ -288,6 +288,39 @@ class ChatbotServiceTest {
     }
 
     @Test
+    void hidesPolicyCitationLabelsFromUserReply() {
+        UUID userId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        ChatTool policyTool = namedTool("searchSystemPolicy");
+        List<ChatTool> allowedTools = List.of(policyTool);
+        String message = "Quy trình thuê kho như thế nào?";
+        String replyWithCitation = "Bạn cần xác nhận hợp đồng. "
+                + "[Quy trình thuê kho - đoạn 1]\n\n"
+                + "Nguồn tham khảo: Quy trình thuê kho · đoạn 1";
+
+        when(conversationStore.prepareUserSession(userId, null))
+                .thenReturn(new PreparedChatSession(sessionId, null, List.of()));
+        when(toolRegistry.getToolsForRole("ROLE_TENANT")).thenReturn(allowedTools);
+        when(activeWarehouseContextResolver.resolve(userId, null))
+                .thenReturn(new ChatRequestContext(userId, null));
+        when(promptBuilder.buildSystemPrompt(eq("ROLE_TENANT"), eq(allowedTools), any()))
+                .thenReturn("system prompt");
+        when(policyTool.executeWithContext(anyMap(), any(ChatRequestContext.class)))
+                .thenReturn("{\"policies\":[{\"citation\":{\"label\":\"Quy trình thuê kho · đoạn 1\"}}]}");
+        when(conversationStore.appendUserTurn(
+                eq(userId), eq(sessionId), eq(message), eq("Bạn cần xác nhận hợp đồng.")))
+                .thenReturn(LocalDateTime.now());
+        doReturn(new OpenRouterClient.AiResponse(replyWithCitation, null))
+                .when(openRouterClient).complete(
+                        anyList(), eq(allowedTools), any(Duration.class));
+
+        service.processTenantMessage(userId, new SendMessageRequest(null, message));
+
+        verify(conversationStore).appendUserTurn(
+                userId, sessionId, message, "Bạn cần xác nhận hợp đồng.");
+    }
+
+    @Test
     void preloadsStructuredWarehouseSearchPlanBeforeModelCanAnswer() {
         UUID userId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
@@ -325,7 +358,7 @@ class ChatbotServiceTest {
     void doesNotRouteEnglishInventorySuggestionThroughChatbotWmsTools() {
         UUID userId = UUID.randomUUID();
         UUID sessionId = UUID.randomUUID();
-        ChatTool stockTool = namedTool("getMyStock");
+        ChatTool stockTool = namedTool("removedWmsTool");
         List<ChatTool> allowedTools = List.of(stockTool);
         String message = "Check my inventory";
 
@@ -388,6 +421,50 @@ class ChatbotServiceTest {
                 "Xin chào",
                 "Chào bạn"
         );
+    }
+
+    @Test
+    void guestEvidenceStreamDoesNotExposePolicyCitationLabels() {
+        configureStreamRuntime();
+        UUID sessionId = UUID.randomUUID();
+        String token = UUID.randomUUID().toString();
+        ChatTool policyTool = namedTool("searchSystemPolicy");
+        List<ChatTool> allowedTools = List.of(policyTool);
+        String message = "Quy trình thuê kho như thế nào?";
+        String replyWithCitation = "Bạn cần xác nhận hợp đồng. "
+                + "[Quy trình thuê kho - đoạn 1]";
+
+        when(conversationStore.prepareGuestSession(null))
+                .thenReturn(new PreparedChatSession(sessionId, token, List.of()));
+        when(toolRegistry.getToolsForRole("GUEST")).thenReturn(allowedTools);
+        when(promptBuilder.buildSystemPrompt(
+                eq("GUEST"), eq(allowedTools), any(ChatRequestContext.class)))
+                .thenReturn("system prompt");
+        when(policyTool.executeWithContext(anyMap(), any(ChatRequestContext.class)))
+                .thenReturn("{\"policies\":[{\"citation\":{\"label\":\"Quy trình thuê kho · đoạn 1\"}}]}");
+        when(conversationStore.appendGuestTurn(
+                eq(token), eq(sessionId), eq(message), eq("Bạn cần xác nhận hợp đồng.")))
+                .thenReturn(LocalDateTime.now());
+        org.mockito.Mockito.doAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            Consumer<String> chunks = invocation.getArgument(3);
+            chunks.accept(replyWithCitation);
+            return new OpenRouterClient.AiResponse(replyWithCitation, null);
+        }).when(openRouterClient).completeStreaming(
+                anyList(),
+                eq(allowedTools),
+                any(Duration.class),
+                any(Consumer.class),
+                any(BooleanSupplier.class)
+        );
+
+        assertNotNull(service.streamGuestMessage(
+                null,
+                new SendMessageRequest(null, message)
+        ));
+
+        verify(conversationStore).appendGuestTurn(
+                token, sessionId, message, "Bạn cần xác nhận hợp đồng.");
     }
 
     @Test

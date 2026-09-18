@@ -2,7 +2,6 @@ package fu.stockspace.stockspace_be.chatbot.tool.impl;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import fu.stockspace.stockspace_be.chatbot.tool.ChatRequestContext;
 import fu.stockspace.stockspace_be.common.dto.SystemConfigResponse;
 import fu.stockspace.stockspace_be.common.dto.SystemPolicyResponse;
 import fu.stockspace.stockspace_be.common.entity.ApprovalStatus;
@@ -19,14 +18,9 @@ import fu.stockspace.stockspace_be.warehouse.dto.RackResponse;
 import fu.stockspace.stockspace_be.warehouse.dto.WarehouseBinResponse;
 import fu.stockspace.stockspace_be.warehouse.dto.WarehouseLayoutResponse;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseLayoutService;
-import fu.stockspace.stockspace_be.wms.putaway.PutawayInputItem;
-import fu.stockspace.stockspace_be.wms.putaway.PutawaySuggestionItem;
-import fu.stockspace.stockspace_be.wms.putaway.PutawaySuggestionResult;
-import fu.stockspace.stockspace_be.wms.putaway.PutawaySuggestionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
@@ -43,7 +37,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -57,7 +50,6 @@ class ExpandedChatToolsTest {
     @Mock private WithdrawService withdrawService;
     @Mock private ServicePackageService packageService;
     @Mock private SubscriptionService subscriptionService;
-    @Mock private PutawaySuggestionService putawaySuggestionService;
 
     private ObjectMapper objectMapper;
     private UUID userId;
@@ -193,29 +185,4 @@ class ExpandedChatToolsTest {
         assertFalse(json.contains(packageId.toString()));
     }
 
-    @Test
-    void putawayPreviewUsesVerifiedWarehouseContextAndDoesNotWrite() throws Exception {
-        UUID skuId = UUID.randomUUID();
-        when(putawaySuggestionService.suggest(eq(userId), isNull(), eq(warehouseId), any()))
-                .thenReturn(new PutawaySuggestionResult(
-                        warehouseId,
-                        UUID.randomUUID(),
-                        List.of(new PutawaySuggestionItem(
-                                skuId, "SKU-01", "Sản phẩm A", 12, List.of(), 0, null))));
-        ChatRequestContext context = new ChatRequestContext(userId, warehouseId, "Kho hiện tại");
-
-        String json = new SuggestPutawayTool(objectMapper, putawaySuggestionService)
-                .executeWithContext(Map.of("items", List.of(Map.of(
-                        "skuId", skuId.toString(), "quantity", 12))), context);
-        JsonNode result = objectMapper.readTree(json);
-
-        assertEquals("Kho hiện tại", result.get("warehouseName").asText());
-        assertEquals("SKU-01", result.at("/items/0/skuCode").asText());
-        assertTrue(result.get("notice").asText().contains("không giữ chỗ"));
-
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<List<PutawayInputItem>> items = ArgumentCaptor.forClass(List.class);
-        verify(putawaySuggestionService).suggest(eq(userId), isNull(), eq(warehouseId), items.capture());
-        assertEquals(12, items.getValue().get(0).quantity());
-    }
 }
