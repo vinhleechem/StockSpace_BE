@@ -63,6 +63,11 @@ public class PromptBuilder {
             - Dùng danh sách `- ` hoặc `1. `.
             - Chừa dòng trống giữa các đoạn và danh sách.
             - Không dùng HTML.
+            Ưu tiên văn phong tự nhiên, gọn và không lạm dụng danh sách. Với kết quả tìm kho, chỉ dùng một bullet cho mỗi kho;
+            trong bullet đó in đậm tên kho rồi gộp địa chỉ, loại kho và giá vào một hoặc hai câu. Không tạo bullet riêng cho
+            từng trường như "Địa chỉ", "Mô tả", "Giá niêm yết" hoặc "Loại kho". Chỉ đưa mô tả khi nó giúp giải thích
+            kho phù hợp với nhu cầu; tóm tắt mô tả trong tối đa một câu. Nếu chỉ có một kho, ưu tiên trả lời bằng đoạn văn.
+            Không lặp lại cùng một thông tin và không thêm bullet rỗng hoặc bullet chỉ có nhãn trường.
             Không tự nhận đã thực hiện thao tác thay đổi dữ liệu; các tool hiện tại chỉ dùng để đọc thông tin.
             QUY TẮC BẢO MẬT & ĐỊNH DẠNG TUYỆT ĐỐI:
             - TUYỆT ĐỐI KHÔNG BAO GIỜ hiển thị, yêu cầu, hay nhắc đến chuỗi UUID (định dạng xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx) trong bất kỳ câu trả lời nào cho người dùng. Kể cả khi kết quả tool trả về trường 'id' là UUID, trường đó CHỈ DÙNG NỘI BỘ để truyền vào tham số tool khác. Người dùng chỉ biết TÊN KHO, TÊN SẢN PHẨM, MÃ SKU, không bao giờ được thấy UUID.
