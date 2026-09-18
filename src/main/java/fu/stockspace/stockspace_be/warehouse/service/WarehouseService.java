@@ -732,7 +732,7 @@ public class WarehouseService {
                 .rentalPricingType(pricingType)
                 .status(w.getStatus().name())
                 .rejectReason(w.getRejectReason())
-                .isVerified(w.isVerified())
+                .verified(resolveInspectionVerification(inspectionStatus))
                 .inspectionStatus(inspectionStatus)
                 .typeId(w.getType() != null ? w.getType().getId() : null)
                 .typeName(w.getType() != null ? w.getType().getName() : null)
@@ -742,8 +742,8 @@ public class WarehouseService {
                 .imageUrls(urls)
                 .policyId(w.getPolicy() != null ? w.getPolicy().getId() : null)
                 .policyVersion(w.getPolicy() != null ? w.getPolicy().getVersion() : null)
-                .publishedAt(w.getPublishedAt())
-                .visibleUntil(w.getVisibleUntil())
+                .publishedAt(inspectionFailed ? null : w.getPublishedAt())
+                .visibleUntil(inspectionFailed ? null : w.getVisibleUntil())
                 .publicationStatus(publicationStatus)
                 .canPublish(canStartPublication
                         && PUBLICATION_DRAFT.equals(publicationStatus)
@@ -868,6 +868,16 @@ public class WarehouseService {
                 .totalPages(page.getTotalPages())
                 .last(page.isLast())
                 .build();
+    }
+
+    private Boolean resolveInspectionVerification(String inspectionStatus) {
+        if (InspectionStatus.PASSED.name().equals(inspectionStatus)) {
+            return true;
+        }
+        if (InspectionStatus.FAILED.name().equals(inspectionStatus)) {
+            return false;
+        }
+        return null;
     }
 
     private String findLatestInspectionStatus(UUID warehouseId) {

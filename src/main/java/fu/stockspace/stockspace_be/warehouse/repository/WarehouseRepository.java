@@ -56,6 +56,17 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
               AND w.isActive = true
               AND w.isDeleted = false
               AND w.status = fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus.AVAILABLE
+              AND NOT EXISTS (
+                    SELECT failed.id
+                    FROM InspectionReport failed
+                    WHERE failed.warehouse.id = w.id
+                      AND failed.status = fu.stockspace.stockspace_be.inspection.entity.InspectionStatus.FAILED
+                      AND failed.createdAt = (
+                            SELECT MAX(latest.createdAt)
+                            FROM InspectionReport latest
+                            WHERE latest.warehouse.id = w.id
+                      )
+              )
               AND w.publishedAt IS NOT NULL
               AND w.publishedAt <= CURRENT_TIMESTAMP
               AND w.visibleUntil IS NOT NULL
@@ -69,6 +80,17 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
               WHERE w.isActive = true
                 AND w.isDeleted = false
                 AND ((:status IS NULL AND w.status = fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus.AVAILABLE) OR (:status IS NOT NULL AND w.status = :status))
+              AND NOT EXISTS (
+                    SELECT failed.id
+                    FROM InspectionReport failed
+                    WHERE failed.warehouse.id = w.id
+                      AND failed.status = fu.stockspace.stockspace_be.inspection.entity.InspectionStatus.FAILED
+                      AND failed.createdAt = (
+                            SELECT MAX(latest.createdAt)
+                            FROM InspectionReport latest
+                            WHERE latest.warehouse.id = w.id
+                      )
+              )
               AND w.publishedAt IS NOT NULL
               AND w.publishedAt <= CURRENT_TIMESTAMP
               AND w.visibleUntil IS NOT NULL
@@ -113,6 +135,17 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
               WHERE w.isActive = true
                 AND w.isDeleted = false
                 AND w.status = fu.stockspace.stockspace_be.warehouse.entity.WarehouseStatus.AVAILABLE
+              AND NOT EXISTS (
+                    SELECT failed.id
+                    FROM InspectionReport failed
+                    WHERE failed.warehouse.id = w.id
+                      AND failed.status = fu.stockspace.stockspace_be.inspection.entity.InspectionStatus.FAILED
+                      AND failed.createdAt = (
+                            SELECT MAX(latest.createdAt)
+                            FROM InspectionReport latest
+                            WHERE latest.warehouse.id = w.id
+                      )
+              )
               AND w.publishedAt IS NOT NULL
               AND w.publishedAt <= CURRENT_TIMESTAMP
               AND w.visibleUntil IS NOT NULL

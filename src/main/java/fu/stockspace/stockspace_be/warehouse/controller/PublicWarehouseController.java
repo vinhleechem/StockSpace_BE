@@ -7,8 +7,6 @@ import fu.stockspace.stockspace_be.warehouse.dto.*;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseService;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseTypeService;
 import fu.stockspace.stockspace_be.warehouse.service.WarehouseLayoutService;
-import fu.stockspace.stockspace_be.auth.entity.User;
-import fu.stockspace.stockspace_be.auth.util.SecurityUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
@@ -220,25 +218,7 @@ public class PublicWarehouseController {
     @GetMapping("/{id}/layout")
     @Operation(summary = "Lấy sơ đồ layout kho bãi (Public / Guest / Tenant)")
     public ResponseEntity<ApiResponse<WarehouseLayoutResponse>> getLayout(@PathVariable UUID id) {
-        UUID userId = null;
-        String role = "PUBLIC";
-
-        var currentUserOpt = SecurityUtil.getCurrentUser();
-        if (currentUserOpt.isPresent()) {
-            User user = currentUserOpt.get();
-            userId = user.getId();
-            boolean isTenant = user.getAuthorities().stream()
-                    .anyMatch(a -> a.getAuthority().equals("ROLE_TENANT"));
-            boolean isOwner = user.getAuthorities().stream()
-                    .anyMatch(a -> a.getAuthority().equals("ROLE_OWNER") || a.getAuthority().equals("ROLE_ADMIN"));
-            if (isTenant) {
-                role = "TENANT";
-            } else if (isOwner) {
-                role = "OWNER";
-            }
-        }
-
-        WarehouseLayoutResponse response = warehouseLayoutService.getLayoutTree(id, userId, role);
+        WarehouseLayoutResponse response = warehouseLayoutService.getLayoutTree(id, null, "PUBLIC");
         return ResponseEntity.ok(ApiResponse.success("Lấy sơ đồ layout kho thành công", response));
     }
 

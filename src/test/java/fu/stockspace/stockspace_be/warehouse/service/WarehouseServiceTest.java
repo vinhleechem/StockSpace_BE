@@ -791,6 +791,7 @@ class WarehouseServiceTest {
                 .get(0);
 
         assertNull(withoutInspection.getInspectionStatus());
+        assertNull(withoutInspection.getVerified());
         assertTrue(withoutInspection.isCanPublish());
 
         InspectionReport failedReport = InspectionReport.builder()
@@ -800,6 +801,8 @@ class WarehouseServiceTest {
                 .createdAt(NOW.minusMinutes(1))
                 .updatedAt(NOW)
                 .build();
+        warehouse.setPublishedAt(NOW.minusDays(1));
+        warehouse.setVisibleUntil(NOW.plusDays(5));
         when(inspectionReportRepository.findLatestByWarehouseIds(List.of(warehouseId)))
                 .thenReturn(List.of(failedReport));
 
@@ -809,7 +812,10 @@ class WarehouseServiceTest {
                 .get(0);
 
         assertEquals(InspectionStatus.FAILED.name(), withFailedInspection.getInspectionStatus());
+        assertFalse(withFailedInspection.getVerified());
         assertFalse(withFailedInspection.isCanPublish());
+        assertNull(withFailedInspection.getPublishedAt());
+        assertNull(withFailedInspection.getVisibleUntil());
     }
 
     @Test
