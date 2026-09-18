@@ -5,6 +5,7 @@ import fu.stockspace.stockspace_be.auth.entity.User;
 import fu.stockspace.stockspace_be.auth.repository.UserRepository;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.service.SystemConfigService;
+import fu.stockspace.stockspace_be.inspection.dto.SubmitInspectionRequest;
 import fu.stockspace.stockspace_be.inspection.entity.InspectionReport;
 import fu.stockspace.stockspace_be.inspection.entity.InspectionStatus;
 import fu.stockspace.stockspace_be.inspection.repository.InspectionReportRepository;
@@ -114,5 +115,34 @@ class InspectionServiceTest {
 
         assertEquals(persistedImages, response.getImages());
         assertNotSame(persistedImages, response.getImages());
+    }
+
+    @Test
+    void failedInspectionInvalidatesWarehouseVerificationAndPublication() {
+        UUID inspectorId = UUID.randomUUID();
+        User inspector = User.builder().id(inspectorId).fullName("Inspector").build();
+        warehouse.setVerified(true);
+        warehouse.setPublishedAt(java.time.LocalDateTime.now().minusDays(1));
+        warehouse.setVisibleUntil(java.time.LocalDateTime.now().plusDays(5));
+        InspectionReport report = InspectionReport.builder()
+                .id(UUID.randomUUID())
+                .warehouse(warehouse)
+                .inspector(inspector)
+                .status(InspectionStatus.IN_PROGRESS)
+                .images(new ArrayList<>())
+                .build();
+        SubmitInspectionRequest request = new SubmitInspectionRequest();
+        request.setStatus(InspectionStatus.FAILED);
+        request.setNotes("Diện tích thực tế không khớp");
+
+        when(inspectionRepository.findById(report.getId())).thenReturn(Optional.of(report));
+        when(inspectionRepository.save(any(InspectionReport.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = inspectionService.submitReport(inspectorId, report.getId(), request);
+
+        assertEquals(InspectionStatus.FAILED.name(), response.getStatus());
+        verify(warehouseService).markAsFailedByInspection(warehouseId);
+        verify(warehouseService, never()).markAsVerifiedByInspection(any());
     }
 }

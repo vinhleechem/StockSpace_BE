@@ -304,7 +304,8 @@ public class ListingOrderService {
         if (!warehouse.isActive()
                 || warehouse.isDeleted()
                 || warehouse.getStatus() == null
-                || warehouse.getStatus() != WarehouseStatus.AVAILABLE) {
+                || warehouse.getStatus() != WarehouseStatus.AVAILABLE
+                || !warehouse.isVerified()) {
             throw new BadRequestException(ErrorCode.WAREHOUSE_NOT_AVAILABLE);
         }
     }

@@ -75,16 +75,18 @@ class RentalAreaAllocationPolicyTest {
     }
 
     @Test
-    void partialRentalRejectsAnAreaEqualToTheWholeWarehouse() {
-        BadRequestException exception = assertThrows(BadRequestException.class, () ->
+    void negotiatedRentalAllowsAnAreaEqualToTheWholeWarehouse() {
+        RentalAreaAllocationPolicy.LeasedDimensions dimensions =
                 RentalAreaAllocationPolicy.resolveDimensions(
                         RentalPricingType.NEGOTIATED,
                         new BigDecimal("10"),
                         new BigDecimal("20"),
                         new BigDecimal("5"),
-                        defaultLayout));
+                        defaultLayout);
 
-        assertEquals("INVALID_LEASE_DIMENSIONS", exception.getErrorCode().name());
+        assertEquals(new BigDecimal("10"), dimensions.width());
+        assertEquals(new BigDecimal("20"), dimensions.length());
+        assertEquals(new BigDecimal("200"), dimensions.areaM2());
     }
 
     @Test

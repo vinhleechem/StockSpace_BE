@@ -188,6 +188,36 @@ class WarehouseServiceTest {
     }
 
     @Test
+    void failedInspectionClearsVerificationAndTerminatesOpenPublication() {
+        ListingOrder order = ListingOrder.builder()
+                .id(UUID.randomUUID())
+                .warehouse(warehouse)
+                .status(ListingOrderStatus.PAID)
+                .build();
+        warehouse.setStatus(WarehouseStatus.AVAILABLE);
+        warehouse.setVerified(true);
+        warehouse.setPublishedAt(NOW.minusDays(1));
+        warehouse.setVisibleUntil(NOW.plusDays(5));
+
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(listingOrderRepository.findOpenPaidByWarehouseIdForUpdate(eq(warehouseId), any()))
+                .thenReturn(List.of(order));
+        when(listingOrderRepository.save(any(ListingOrder.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(warehouseRepository.save(any(Warehouse.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        warehouseService.markAsFailedByInspection(warehouseId);
+
+        assertFalse(warehouse.isVerified());
+        assertNull(warehouse.getPublishedAt());
+        assertNull(warehouse.getVisibleUntil());
+        assertEquals(ListingOrderStatus.TERMINATED, order.getStatus());
+        verify(listingOrderRepository).save(order);
+        verify(warehouseRepository).save(warehouse);
+    }
+
+    @Test
     void rejectWarehouse_WithReason_Success() {
         String reason = "Kho không đủ giấy phép PCCC";
 
@@ -525,17 +555,15 @@ class WarehouseServiceTest {
     }
 
     @Test
-    void contactRequestAllowsUnverifiedPublishedWarehouse() {
+    void contactRequestRejectsUnverifiedPublishedWarehouse() {
         warehouse.setStatus(WarehouseStatus.AVAILABLE);
         warehouse.setVerified(false);
         warehouse.setPublishedAt(NOW.minusDays(1));
         warehouse.setVisibleUntil(NOW.plusDays(10));
-        when(warehouseRepository.findPublicAvailableById(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(warehouseRepository.findPublicAvailableById(warehouseId)).thenReturn(Optional.empty());
 
-        WarehouseOwnerContactResponse response = warehouseService.getOwnerContact(warehouseId);
-
-        assertEquals(warehouseId, response.getWarehouseId());
-        assertEquals(ownerId, response.getOwnerId());
+        assertThrows(ResourceNotFoundException.class,
+                () -> warehouseService.getOwnerContact(warehouseId));
     }
 
     @Test
@@ -661,6 +689,23 @@ class WarehouseServiceTest {
 
         assertEquals("DRAFT", response.getPublicationStatus());
         assertTrue(response.isCanPublish());
+        assertFalse(response.isCanRenew());
+    }
+
+    @Test
+    void unverifiedWarehouseCannotExposePublicationActions() {
+        warehouse.setStatus(WarehouseStatus.AVAILABLE);
+        warehouse.setVerified(false);
+        when(warehouseRepository.findByOwnerId(eq(ownerId), any()))
+                .thenReturn(new PageImpl<>(List.of(warehouse)));
+
+        WarehouseResponse response = warehouseService
+                .getMyWarehouses(ownerId, 0, 10, "createdAt", "desc")
+                .getContent()
+                .get(0);
+
+        assertEquals("DRAFT", response.getPublicationStatus());
+        assertFalse(response.isCanPublish());
         assertFalse(response.isCanRenew());
     }
 

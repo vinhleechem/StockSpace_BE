@@ -103,6 +103,7 @@ class ListingOrderServiceTest {
                 .owner(owner)
                 .name("Warehouse A")
                 .status(WarehouseStatus.AVAILABLE)
+                .isVerified(true)
                 .isActive(true)
                 .isDeleted(false)
                 .build();
@@ -192,6 +193,20 @@ class ListingOrderServiceTest {
     @Test
     void purchaseRejectsWarehouseThatIsNotApproved() {
         warehouse.setStatus(WarehouseStatus.PENDING_APPROVAL);
+        when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+
+        BadRequestException exception = assertThrows(
+                BadRequestException.class,
+                () -> listingOrderService.purchasePublication(ownerId, warehouseId, request(TODAY)));
+
+        assertEquals(ErrorCode.WAREHOUSE_NOT_AVAILABLE, exception.getErrorCode());
+        verify(listingPackageRepository, never()).findById(any());
+        verifyNoInteractions(walletService, transactionRepository);
+    }
+
+    @Test
+    void purchaseRejectsWarehouseThatFailedInspection() {
+        warehouse.setVerified(false);
         when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
 
         BadRequestException exception = assertThrows(

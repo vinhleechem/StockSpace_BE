@@ -15,7 +15,8 @@ import java.math.BigDecimal;
  * <ul>
  *     <li>{@code FIXED_MONTHLY} uses the complete default layout.</li>
  *     <li>{@code PER_SQUARE_METER_MONTHLY} and {@code NEGOTIATED} use a
- *     partial area supplied by the owner.</li>
+ *     leased area supplied by the owner, up to the complete default layout
+ *     area.</li>
  * </ul>
  */
 public final class RentalAreaAllocationPolicy {
@@ -55,9 +56,9 @@ public final class RentalAreaAllocationPolicy {
 
         BigDecimal leasedArea = requestedWidth.multiply(requestedLength);
         BigDecimal totalArea = defaultDimensions.width().multiply(defaultDimensions.length());
-        if (leasedArea.compareTo(totalArea) >= 0) {
+        if (leasedArea.compareTo(totalArea) > 0) {
             throw new BadRequestException(ErrorCode.INVALID_LEASE_DIMENSIONS,
-                    "Partial rental area must be less than the warehouse default layout area");
+                    "Leased area must not exceed the warehouse default layout area");
         }
 
         return new LeasedDimensions(
