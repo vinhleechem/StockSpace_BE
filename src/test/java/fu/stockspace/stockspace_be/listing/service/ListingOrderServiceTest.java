@@ -5,6 +5,9 @@ import fu.stockspace.stockspace_be.common.exception.ErrorCode;
 import fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ForbiddenException;
 import fu.stockspace.stockspace_be.common.exception.exceptions.ResourceConflictException;
+import fu.stockspace.stockspace_be.inspection.entity.InspectionReport;
+import fu.stockspace.stockspace_be.inspection.entity.InspectionStatus;
+import fu.stockspace.stockspace_be.inspection.repository.InspectionReportRepository;
 import fu.stockspace.stockspace_be.listing.dto.PurchaseListingPackageRequest;
 import fu.stockspace.stockspace_be.listing.entity.ListingOrder;
 import fu.stockspace.stockspace_be.listing.entity.ListingOrderStatus;
@@ -73,6 +76,9 @@ class ListingOrderServiceTest {
     private WarehouseLayoutRepository warehouseLayoutRepository;
 
     @Mock
+    private InspectionReportRepository inspectionReportRepository;
+
+    @Mock
     private WalletService walletService;
 
     @Mock
@@ -103,7 +109,7 @@ class ListingOrderServiceTest {
                 .owner(owner)
                 .name("Warehouse A")
                 .status(WarehouseStatus.AVAILABLE)
-                .isVerified(true)
+                .isVerified(false)
                 .isActive(true)
                 .isDeleted(false)
                 .build();
@@ -130,6 +136,8 @@ class ListingOrderServiceTest {
         lenient().when(warehouseLayoutRepository.findByWarehouseIdAndIsDefaultTrue(warehouseId))
                 .thenReturn(Optional.of(defaultLayout));
         lenient().when(listingOrderRepository.findOpenPaidByWarehouseIdForUpdate(warehouseId, NOW))
+                .thenReturn(List.of());
+        lenient().when(inspectionReportRepository.findByWarehouseId(warehouseId))
                 .thenReturn(List.of());
     }
 
@@ -206,8 +214,16 @@ class ListingOrderServiceTest {
 
     @Test
     void purchaseRejectsWarehouseThatFailedInspection() {
-        warehouse.setVerified(false);
+        InspectionReport failedReport = InspectionReport.builder()
+                .id(UUID.randomUUID())
+                .warehouse(warehouse)
+                .status(InspectionStatus.FAILED)
+                .createdAt(NOW.minusMinutes(1))
+                .updatedAt(NOW)
+                .build();
         when(warehouseRepository.findByIdForUpdate(warehouseId)).thenReturn(Optional.of(warehouse));
+        when(inspectionReportRepository.findByWarehouseId(warehouseId))
+                .thenReturn(List.of(failedReport));
 
         BadRequestException exception = assertThrows(
                 BadRequestException.class,

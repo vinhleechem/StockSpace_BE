@@ -760,7 +760,7 @@ class WarehouseServiceTest {
     }
 
     @Test
-    void unverifiedWarehouseCannotExposePublicationActions() {
+    void warehouseWithoutInspectionCanExposePublicationActions() {
         warehouse.setStatus(WarehouseStatus.AVAILABLE);
         warehouse.setVerified(false);
         when(warehouseRepository.findByOwnerId(eq(ownerId), any()))
@@ -772,7 +772,7 @@ class WarehouseServiceTest {
                 .get(0);
 
         assertEquals("DRAFT", response.getPublicationStatus());
-        assertFalse(response.isCanPublish());
+        assertTrue(response.isCanPublish());
         assertFalse(response.isCanRenew());
     }
 
@@ -791,6 +791,7 @@ class WarehouseServiceTest {
                 .get(0);
 
         assertNull(withoutInspection.getInspectionStatus());
+        assertTrue(withoutInspection.isCanPublish());
 
         InspectionReport failedReport = InspectionReport.builder()
                 .id(UUID.randomUUID())
@@ -808,6 +809,7 @@ class WarehouseServiceTest {
                 .get(0);
 
         assertEquals(InspectionStatus.FAILED.name(), withFailedInspection.getInspectionStatus());
+        assertFalse(withFailedInspection.isCanPublish());
     }
 
     @Test

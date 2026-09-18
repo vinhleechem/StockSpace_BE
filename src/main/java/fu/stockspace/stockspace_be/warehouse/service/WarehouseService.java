@@ -704,15 +704,19 @@ public class WarehouseService {
 
         java.math.BigDecimal rentalPrice = w.getRentalPrice();
         RentalPricingType pricingType = effectivePricingType(w);
-        String publicationStatus = resolvePublicationStatus(w, currentListingOrderStatus);
+        boolean inspectionFailed = InspectionStatus.FAILED.name().equals(inspectionStatus);
+        String publicationStatus = resolvePublicationStatus(
+                w,
+                currentListingOrderStatus,
+                inspectionFailed);
         boolean canStartPublication = w.isActive()
                 && !w.isDeleted()
-                && w.getStatus() != WarehouseStatus.INACTIVE
-                && w.isVerified();
+                && w.getStatus() == WarehouseStatus.AVAILABLE
+                && !inspectionFailed;
         boolean canRenewPublication = w.isActive()
                 && !w.isDeleted()
                 && w.getStatus() == WarehouseStatus.AVAILABLE
-                && w.isVerified();
+                && !inspectionFailed;
 
         return WarehouseResponse.builder()
                 .id(w.getId())
@@ -809,7 +813,8 @@ public class WarehouseService {
 
     private String resolvePublicationStatus(
             Warehouse warehouse,
-            ListingOrderStatus currentListingOrderStatus
+            ListingOrderStatus currentListingOrderStatus,
+            boolean inspectionFailed
     ) {
         if (currentListingOrderStatus == ListingOrderStatus.PENDING_APPROVAL) {
             return PUBLICATION_PENDING_APPROVAL;
@@ -818,7 +823,7 @@ public class WarehouseService {
                 && warehouse.getStatus() == WarehouseStatus.INACTIVE) {
             return PUBLICATION_REFUNDED;
         }
-        if (!warehouse.isVerified()) {
+        if (inspectionFailed) {
             return PUBLICATION_DRAFT;
         }
         if (warehouse.getStatus() != WarehouseStatus.AVAILABLE) {
