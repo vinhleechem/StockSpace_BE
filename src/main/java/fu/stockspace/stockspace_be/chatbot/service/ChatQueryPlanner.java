@@ -357,13 +357,19 @@ public final class ChatQueryPlanner {
             }
         }
 
-        if (normalized.contains("theo m2") || normalized.contains("moi m2")
-                || normalized.contains("m2 moi thang")) {
-            filters.put("pricingType", "PER_SQUARE_METER_MONTHLY");
-        } else if (normalized.contains("thoa thuan")) {
-            filters.put("pricingType", "NEGOTIATED");
-        } else if (normalized.contains("co dinh") || normalized.contains("theo thang")) {
-            filters.put("pricingType", "FIXED_MONTHLY");
+        // A comparison question such as "theo tháng hay m²" asks us to
+        // report the warehouse's actual pricing model, not filter one model
+        // out before lookup.  Applying FIXED_MONTHLY here hid warehouses that
+        // were correctly listed as PER_SQUARE_METER_MONTHLY.
+        if (!comparesPricingModels(normalized) && !isEntityPricingQuestion(normalized)) {
+            if (normalized.contains("theo m2") || normalized.contains("moi m2")
+                    || normalized.contains("m2 moi thang")) {
+                filters.put("pricingType", "PER_SQUARE_METER_MONTHLY");
+            } else if (normalized.contains("thoa thuan")) {
+                filters.put("pricingType", "NEGOTIATED");
+            } else if (normalized.contains("co dinh") || normalized.contains("theo thang")) {
+                filters.put("pricingType", "FIXED_MONTHLY");
+            }
         }
 
         Matcher capacityMatcher = CAPACITY.matcher(normalized);
@@ -450,6 +456,28 @@ public final class ChatQueryPlanner {
         } else if (normalized.contains("dat hon") || normalized.contains("gia cao hon")) {
             filters.put("sortBy", "PRICE_DESC");
         }
+    }
+
+    private static boolean comparesPricingModels(String normalized) {
+        boolean mentionsSquareMeter = normalized.contains("m2")
+                || normalized.contains("met vuong");
+        boolean mentionsMonthly = normalized.contains("theo thang")
+                || normalized.contains("moi thang");
+        boolean asksEitherOr = normalized.contains(" hay ")
+                || normalized.contains(" hoac ")
+                || normalized.contains(" so voi ");
+        return mentionsSquareMeter && mentionsMonthly && asksEitherOr;
+    }
+
+    private static boolean isEntityPricingQuestion(String normalized) {
+        boolean asksForPricingDetails = normalized.contains("gia bao nhieu")
+                || normalized.contains("gia theo ")
+                || normalized.contains("tinh theo ")
+                || normalized.contains("cach tinh gia");
+        boolean explicitlySearches = containsAny(normalized, SEARCH_MARKERS)
+                || normalized.contains("tim kho")
+                || normalized.contains("loc kho");
+        return asksForPricingDetails && !explicitlySearches;
     }
 
     private static String extractLocation(String original) {

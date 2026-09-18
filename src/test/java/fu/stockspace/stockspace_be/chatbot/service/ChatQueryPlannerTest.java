@@ -66,6 +66,23 @@ class ChatQueryPlannerTest {
     }
 
     @Test
+    void doesNotFilterPricingModelWhenUserAsksToCompareMonthlyAndSquareMeterPrice() {
+        ChatQueryPlanner.Plan plan = ChatQueryPlanner.plan(
+                "Kho FPT SOFTWARE giá bao nhiêu và tính theo tháng hay m2");
+
+        assertEquals(ChatQueryPlanner.Intent.WAREHOUSE_SEARCH, plan.intent());
+        assertFalse(plan.filters().containsKey("pricingType"));
+    }
+
+    @Test
+    void doesNotTreatNamedWarehousePriceQuestionAsPricingFilter() {
+        ChatQueryPlanner.Plan plan = ChatQueryPlanner.plan(
+                "Kho FPT SOFTWARE giá bao nhiêu theo tháng");
+
+        assertFalse(plan.filters().containsKey("pricingType"));
+    }
+
+    @Test
     void decomposesCompoundRentalQuestionIntoIndependentPolicyQueries() {
         List<ChatQueryPlanner.SubQuery> queries = ChatQueryPlanner.decompose(
                 "Gia hạn hợp đồng và bảo hiểm hàng hóa"

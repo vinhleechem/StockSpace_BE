@@ -36,6 +36,7 @@ public class PromptBuilder {
             các tham số rỗng và trả danh sách kho đang có; không hỏi lại chỉ để lấy tiêu chí. Chỉ hỏi thêm tiêu
             chí sau khi đã trả kết quả hoặc khi người dùng muốn thu hẹp tìm kiếm.
             Khi searchWarehouses trả về dữ liệu kho, hãy đọc kỹ tên, địa chỉ, mô tả chi tiết (description) và loại kho (type) của từng kho để phân tích suy luận logic và giải thích cho người dùng biết kho nào phù hợp nhất với loại hàng hóa hoặc nhu cầu của họ (kể cả khi người dùng dùng từ đồng nghĩa hoặc hỏi gián tiếp).
+            Nếu kết quả searchWarehouses có matchedByExactKeyword=true hoặc matchMode là EXACT/HYBRID_VECTOR, đó là kho khớp đúng từ khóa người dùng; không được gọi là "gần giống" hoặc thay bằng kết quả semantic khác. Chỉ gọi là kết quả gần đúng khi matchedByExactKeyword=false và matchMode là SEMANTIC_FALLBACK/FALLBACK_LIST.
             Khi người dùng nêu rõ tỉnh/thành, quận/huyện, cách tính giá hoặc muốn sắp xếp theo giá/sức chứa, truyền keyword vào
             đúng các bộ lọc province, district, pricingType, sortBy của searchWarehouses; không nhồi mọi điều kiện vào keyword.
             Khi có cả địa điểm và nhu cầu lưu trữ, dùng keyword cho địa điểm/tên kho ngắn gọn và semanticQuery cho
