@@ -10,6 +10,8 @@ import java.util.UUID;
 public class TopUpResponse {
     private UUID transactionId;
     private String paymentUrl;
+    private String qrCode;
+    private Long orderCode;
     private BigDecimal amount;
     private LocalDateTime expiresAt;
 }

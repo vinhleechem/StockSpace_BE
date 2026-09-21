@@ -53,6 +53,8 @@ class WalletServiceTopUpLifecycleTest {
     private NotificationService notificationService;
     @Mock
     private VnPayService vnPayService;
+    @Mock
+    private PayOsService payOsService;
 
     private WalletService walletService;
     private Wallet wallet;
@@ -66,6 +68,7 @@ class WalletServiceTopUpLifecycleTest {
                 userRepository,
                 notificationService,
                 vnPayService,
+                payOsService,
                 clock);
         ReflectionTestUtils.setField(walletService, "topUpExpiryMinutes", 15L);
         ReflectionTestUtils.setField(walletService, "topUpExpiryGraceMinutes", 2L);
@@ -193,5 +196,129 @@ class WalletServiceTopUpLifecycleTest {
 
         verify(walletRepository, never()).findByUserIdWithLock(userId);
         assertEquals(TransactionStatus.PENDING, transaction.getStatus());
+    }
+
+    @Test
+    void createTopUpRequestWithPayOs_Success() {
+        BigDecimal amount = new BigDecimal("50000");
+        when(walletRepository.findByUserId(any())).thenReturn(Optional.of(wallet));
+        when(transactionRepository.findByPaymentCode(any())).thenReturn(Optional.empty());
+        when(transactionRepository.save(any(Transaction.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        vn.payos.model.v2.paymentRequests.CreatePaymentLinkResponse mockPayOsResp = 
+                org.mockito.Mockito.mock(vn.payos.model.v2.paymentRequests.CreatePaymentLinkResponse.class);
+        when(mockPayOsResp.getCheckoutUrl()).thenReturn("https://payos.test/checkout");
+        when(mockPayOsResp.getQrCode()).thenReturn("QR_TEST_CODE");
+        when(payOsService.createPaymentLink(any(), eq(amount), any(), any()))
+                .thenReturn(mockPayOsResp);
+
+        TopUpResponse response = walletService.createTopUpRequest(
+                UUID.randomUUID(),
+                TopUpRequest.builder().amount(amount).paymentMethod(PaymentMethod.PAYOS).build(),
+                "127.0.0.1");
+
+        ArgumentCaptor<Transaction> captor = ArgumentCaptor.forClass(Transaction.class);
+        verify(transactionRepository).save(captor.capture());
+        assertEquals(TransactionStatus.PENDING, captor.getValue().getStatus());
+        assertEquals(PaymentMethod.PAYOS, captor.getValue().getPaymentMethod());
+        assertEquals("https://payos.test/checkout", response.getPaymentUrl());
+        assertEquals("QR_TEST_CODE", response.getQrCode());
+        assertEquals(Long.valueOf(captor.getValue().getPaymentCode()), response.getOrderCode());
+    }
+
+    @Test
+    void processPayOsWebhook_Success_CreditsWallet() {
+        UUID userId = UUID.randomUUID();
+        User user = org.mockito.Mockito.mock(User.class);
+        when(user.getId()).thenReturn(userId);
+        wallet.setUser(user);
+        wallet.setBalance(BigDecimal.ZERO);
+
+        Transaction transaction = Transaction.builder()
+                .wallet(wallet)
+                .amount(new BigDecimal("50000"))
+                .transactionType(TransactionType.TOP_UP)
+                .paymentMethod(PaymentMethod.PAYOS)
+                .status(TransactionStatus.PENDING)
+                .paymentCode("123456789")
+                .build();
+
+        vn.payos.model.webhooks.WebhookData webhookData = 
+                org.mockito.Mockito.mock(vn.payos.model.webhooks.WebhookData.class);
+        when(webhookData.getOrderCode()).thenReturn(123456789L);
+        when(webhookData.getAmount()).thenReturn(50000L);
+        when(webhookData.getCode()).thenReturn("00");
+        when(webhookData.getReference()).thenReturn("PAYOS_REF_001");
+
+        when(transactionRepository.findByPaymentCodeForUpdate("123456789"))
+                .thenReturn(Optional.of(transaction));
+        when(walletRepository.findByUserIdWithLock(userId)).thenReturn(Optional.of(wallet));
+        when(transactionRepository.save(any(Transaction.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        walletService.processPayOsWebhook(webhookData);
+
+        assertEquals(TransactionStatus.SUCCESS, transaction.getStatus());
+        assertEquals(new BigDecimal("50000"), wallet.getBalance());
+        assertEquals("PAYOS_REF_001", transaction.getReferenceId());
+        verify(notificationService).push(eq(userId), any(), any(), eq("PAYMENT"));
+    }
+
+    @Test
+    void processPayOsWebhook_DuplicateWebhook_IsIdempotent() {
+        UUID userId = UUID.randomUUID();
+        User user = org.mockito.Mockito.mock(User.class);
+        wallet.setUser(user);
+        wallet.setBalance(new BigDecimal("50000"));
+
+        Transaction transaction = Transaction.builder()
+                .wallet(wallet)
+                .amount(new BigDecimal("50000"))
+                .transactionType(TransactionType.TOP_UP)
+                .paymentMethod(PaymentMethod.PAYOS)
+                .status(TransactionStatus.SUCCESS)
+                .paymentCode("123456789")
+                .build();
+
+        vn.payos.model.webhooks.WebhookData webhookData = 
+                org.mockito.Mockito.mock(vn.payos.model.webhooks.WebhookData.class);
+        when(webhookData.getOrderCode()).thenReturn(123456789L);
+
+        when(transactionRepository.findByPaymentCodeForUpdate("123456789"))
+                .thenReturn(Optional.of(transaction));
+
+        walletService.processPayOsWebhook(webhookData);
+
+        // Balance remains unchanged, no lock acquired on wallet
+        assertEquals(new BigDecimal("50000"), wallet.getBalance());
+        verify(walletRepository, never()).findByUserIdWithLock(any());
+        verify(notificationService, never()).push(any(), any(), any(), any());
+    }
+
+    @Test
+    void processPayOsWebhook_AmountMismatch_ThrowsException() {
+        Transaction transaction = Transaction.builder()
+                .wallet(wallet)
+                .amount(new BigDecimal("100000"))
+                .transactionType(TransactionType.TOP_UP)
+                .paymentMethod(PaymentMethod.PAYOS)
+                .status(TransactionStatus.PENDING)
+                .paymentCode("123456789")
+                .build();
+
+        vn.payos.model.webhooks.WebhookData webhookData = 
+                org.mockito.Mockito.mock(vn.payos.model.webhooks.WebhookData.class);
+        when(webhookData.getOrderCode()).thenReturn(123456789L);
+        when(webhookData.getAmount()).thenReturn(50000L); // Expected 100000, got 50000
+
+        when(transactionRepository.findByPaymentCodeForUpdate("123456789"))
+                .thenReturn(Optional.of(transaction));
+
+        assertThrows(fu.stockspace.stockspace_be.common.exception.exceptions.BadRequestException.class,
+                () -> walletService.processPayOsWebhook(webhookData));
+
+        assertEquals(TransactionStatus.PENDING, transaction.getStatus());
+        verify(walletRepository, never()).findByUserIdWithLock(any());
     }
 }
