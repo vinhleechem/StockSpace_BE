@@ -1,6 +1,5 @@
 package fu.stockspace.stockspace_be.auth.controller;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import fu.stockspace.stockspace_be.wallet.repository.TransactionRepository;
 import fu.stockspace.stockspace_be.wallet.service.PayOsService;
 import fu.stockspace.stockspace_be.wallet.service.WalletService;
@@ -38,10 +37,31 @@ public class PayOsCallbackController {
      */
     @PostMapping("/payos-webhook")
     @Operation(summary = "Endpoint xử lý Webhook thanh toán từ PayOS")
-    public ResponseEntity<Map<String, Object>> handlePayOsWebhook(@RequestBody JsonNode webhookBody) {
+    public ResponseEntity<Map<String, Object>> handlePayOsWebhook(@RequestBody(required = false) Map<String, Object> webhookBody) {
         log.info("Received PayOS webhook payload: {}", webhookBody);
 
         Map<String, Object> response = new HashMap<>();
+
+        if (webhookBody == null || webhookBody.isEmpty()) {
+            response.put("error", 0);
+            response.put("message", "Empty payload acknowledged");
+            return ResponseEntity.ok(response);
+        }
+
+        // Fast-path: Kiểm tra nếu là webhook ping test khi cài đặt webhook URL từ PayOS Dashboard
+        Object dataObj = webhookBody.get("data");
+        if (dataObj instanceof Map<?, ?> dataMap) {
+            Object orderCodeObj = dataMap.get("orderCode");
+            Object descObj = dataMap.get("description");
+            String descStr = descObj != null ? descObj.toString().toLowerCase() : "";
+            if ((orderCodeObj != null && "123".equals(orderCodeObj.toString()))
+                    || descStr.contains("thu nghiem") || descStr.contains("test")) {
+                log.info("PayOS webhook verification ping detected for dummy orderCode: {}. Responding 200 OK immediately.", orderCodeObj);
+                response.put("error", 0);
+                response.put("message", "Test webhook confirmed");
+                return ResponseEntity.ok(response);
+            }
+        }
 
         try {
             // 1. Xác thực chữ ký dữ liệu từ PayOS
@@ -49,16 +69,9 @@ public class PayOsCallbackController {
             Long orderCode = webhookData.getOrderCode();
             String paymentCode = String.valueOf(orderCode);
 
-            // 2. Kiểm tra nếu là webhook test / ping từ PayOS dashboard khi đăng ký webhook URL
+            // 2. Kiểm tra nếu là đơn hàng không tồn tại trong hệ thống
             boolean exists = transactionRepository.findByPaymentCode(paymentCode).isPresent();
             if (!exists) {
-                String desc = webhookData.getDescription() != null ? webhookData.getDescription().toLowerCase() : "";
-                if (orderCode == 123L || desc.contains("thu nghiem") || desc.contains("test")) {
-                    log.info("PayOS webhook verification ping detected for dummy orderCode: {}. Responding 200 OK.", orderCode);
-                    response.put("error", 0);
-                    response.put("message", "Test webhook confirmed");
-                    return ResponseEntity.ok(response);
-                }
                 log.warn("Transaction not found for PayOS orderCode: {}", orderCode);
                 response.put("error", 0);
                 response.put("message", "Order not found in system but webhook acknowledged");
