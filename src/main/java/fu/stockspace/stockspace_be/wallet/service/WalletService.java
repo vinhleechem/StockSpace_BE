@@ -21,10 +21,13 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
+import vn.payos.model.v2.paymentRequests.CreatePaymentLinkResponse;
+import vn.payos.model.webhooks.WebhookData;
 
 @Slf4j
 @Service
@@ -36,6 +39,7 @@ public class WalletService {
     private final UserRepository userRepository;
     private final NotificationService notificationService;
     private final VnPayService vnPayService;
+    private final PayOsService payOsService;
 
     private final Clock businessClock;
 
@@ -80,30 +84,136 @@ public class WalletService {
     @Transactional
     public TopUpResponse createTopUpRequest(UUID userId, TopUpRequest request, String ipAddress) {
         Wallet wallet = getOrCreateWallet(userId);
-        String paymentCode = generatePaymentCode();
+        PaymentMethod method = request.getPaymentMethod() != null ? request.getPaymentMethod() : PaymentMethod.PAYOS;
         LocalDateTime expiresAt = LocalDateTime.now(businessClock)
                 .plusMinutes(Math.max(topUpExpiryMinutes, 1));
+
+        if (method == PaymentMethod.VNPAY) {
+            String paymentCode = generatePaymentCode();
+            Transaction transaction = Transaction.builder()
+                    .wallet(wallet)
+                    .amount(request.getAmount())
+                    .transactionType(TransactionType.TOP_UP)
+                    .paymentMethod(PaymentMethod.VNPAY)
+                    .status(TransactionStatus.PENDING)
+                    .paymentCode(paymentCode)
+                    .expiresAt(expiresAt)
+                    .build();
+            transaction = transactionRepository.save(transaction);
+
+            String paymentUrl = vnPayService.createPaymentUrl(paymentCode, request.getAmount(), ipAddress);
+
+            return TopUpResponse.builder()
+                    .transactionId(transaction.getId())
+                    .paymentUrl(paymentUrl)
+                    .amount(request.getAmount())
+                    .expiresAt(expiresAt)
+                    .build();
+        }
+
+        // Mặc định sử dụng PayOS
+        Long orderCode = generateNumericOrderCode();
+        String paymentCode = String.valueOf(orderCode);
+        long expiredAtEpochSeconds = expiresAt.atZone(ZoneId.of("Asia/Ho_Chi_Minh")).toEpochSecond();
 
         Transaction transaction = Transaction.builder()
                 .wallet(wallet)
                 .amount(request.getAmount())
                 .transactionType(TransactionType.TOP_UP)
-                .paymentMethod(request.getPaymentMethod())
+                .paymentMethod(PaymentMethod.PAYOS)
                 .status(TransactionStatus.PENDING)
                 .paymentCode(paymentCode)
                 .expiresAt(expiresAt)
                 .build();
         transaction = transactionRepository.save(transaction);
 
-
-        String paymentUrl = vnPayService.createPaymentUrl(paymentCode, request.getAmount(), ipAddress);
+        CreatePaymentLinkResponse payOsResponse = payOsService.createPaymentLink(
+                orderCode,
+                request.getAmount(),
+                "Nap vi " + orderCode,
+                expiredAtEpochSeconds
+        );
 
         return TopUpResponse.builder()
                 .transactionId(transaction.getId())
-                .paymentUrl(paymentUrl)
+                .paymentUrl(payOsResponse.getCheckoutUrl())
+                .qrCode(payOsResponse.getQrCode())
+                .orderCode(orderCode)
                 .amount(request.getAmount())
                 .expiresAt(expiresAt)
                 .build();
+    }
+
+    @Transactional
+    public void processPayOsWebhook(WebhookData data) {
+        if (data == null || data.getOrderCode() == null) {
+            log.warn("Received empty PayOS webhook data");
+            return;
+        }
+
+        Long orderCode = data.getOrderCode();
+        String paymentCode = String.valueOf(orderCode);
+        log.info("Processing PayOS webhook for orderCode: {}, amount: {}, code: {}", orderCode, data.getAmount(), data.getCode());
+
+        Transaction transaction = transactionRepository.findByPaymentCodeForUpdate(paymentCode)
+                .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.SYSTEM_ERROR, "Không tìm thấy giao dịch PayOS với mã: " + paymentCode));
+
+        if (transaction.getStatus() == TransactionStatus.SUCCESS
+                || transaction.getStatus() == TransactionStatus.FAILED) {
+            log.info("PayOS transaction {} already processed. Status: {}", paymentCode, transaction.getStatus());
+            return;
+        }
+
+        if (transaction.getStatus() != TransactionStatus.PENDING
+                && transaction.getStatus() != TransactionStatus.EXPIRED) {
+            log.info("PayOS transaction {} is not payable. Status: {}", paymentCode, transaction.getStatus());
+            return;
+        }
+
+        BigDecimal actualAmount = BigDecimal.valueOf(data.getAmount());
+        if (transaction.getAmount() == null || transaction.getAmount().compareTo(actualAmount) != 0) {
+            log.error("PayOS amount mismatch for orderCode {}: expected {}, received {}",
+                    orderCode, transaction.getAmount(), actualAmount);
+            throw new BadRequestException("Số tiền thanh toán PayOS không khớp với giao dịch");
+        }
+
+        TransactionStatus previousStatus = transaction.getStatus();
+        String paymentLinkId = data.getPaymentLinkId();
+        String reference = data.getReference();
+        String refId = paymentLinkId != null && !paymentLinkId.isBlank() ? paymentLinkId : reference;
+
+        if ("00".equals(data.getCode())) {
+            UUID userId = transaction.getWallet().getUser().getId();
+            Wallet wallet = walletRepository.findByUserIdWithLock(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WALLET_NOT_FOUND));
+
+            wallet.setBalance(wallet.getBalance().add(actualAmount));
+            walletRepository.save(wallet);
+
+            transaction.setStatus(TransactionStatus.SUCCESS);
+            transaction.setAmount(actualAmount);
+            transaction.setReferenceId(refId);
+            transactionRepository.save(transaction);
+
+            log.info("Successfully credited {} VND to user {} via PayOS (orderCode: {}, previousStatus: {})",
+                    actualAmount, userId, orderCode, previousStatus);
+
+            notificationService.push(
+                    userId,
+                    "Nạp tiền thành công",
+                    "Ví của bạn đã được nạp " + actualAmount + " VND thành công qua cổng thanh toán PayOS.",
+                    "PAYMENT"
+            );
+        } else {
+            if (previousStatus == TransactionStatus.PENDING) {
+                transaction.setStatus(TransactionStatus.FAILED);
+                transaction.setReferenceId(refId);
+                transactionRepository.save(transaction);
+                log.warn("PayOS transaction failed with code: {} (orderCode: {})", data.getCode(), orderCode);
+            } else {
+                log.info("Keeping expired PayOS transaction {} as EXPIRED after late failure webhook", orderCode);
+            }
+        }
     }
 
 
@@ -328,6 +438,17 @@ public class WalletService {
         return transactionRepository.save(transaction);
     }
 
+
+    private Long generateNumericOrderCode() {
+        Random rnd = new Random();
+        long code;
+        do {
+            long seconds = System.currentTimeMillis() / 1000L;
+            int suffix = rnd.nextInt(10000);
+            code = seconds * 10000L + suffix;
+        } while (transactionRepository.findByPaymentCode(String.valueOf(code)).isPresent());
+        return code;
+    }
 
     private String generatePaymentCode() {
         String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";

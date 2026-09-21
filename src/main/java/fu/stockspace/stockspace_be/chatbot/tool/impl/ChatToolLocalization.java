@@ -246,6 +246,7 @@ final class ChatToolLocalization {
         return switch (method) {
             case BANK_TRANSFER -> "Chuyển khoản ngân hàng";
             case VNPAY -> "VNPAY";
+            case PAYOS -> "PayOS";
             case MOMO -> "MoMo";
             case WALLET -> "Ví StockSpace";
         };
