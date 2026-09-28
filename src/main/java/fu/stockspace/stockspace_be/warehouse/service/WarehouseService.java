@@ -323,6 +323,8 @@ public class WarehouseService {
         Pageable pageable = PageRequest.of(page, size, sort);
 
         String kw = StringUtils.hasText(request.getKeyword()) ? "%" + request.getKeyword().trim().toLowerCase() + "%" : null;
+        String provinceName = StringUtils.hasText(request.getProvinceName()) ? "%" + request.getProvinceName().trim().toLowerCase() + "%" : null;
+        String districtName = StringUtils.hasText(request.getDistrictName()) ? "%" + request.getDistrictName().trim().toLowerCase() + "%" : null;
 
         Page<Warehouse> result = warehouseRepository.searchPublic(
                 kw,
@@ -333,7 +335,10 @@ public class WarehouseService {
                 request.getMaxCapacity(),
                 request.getProvinceCode(),
                 request.getDistrictCode(),
+                provinceName,
+                districtName,
                 request.getWarehouseTypeId(),
+                request.getRentalPricingType(),
                 request.getIsVerified(),
                 pageable
         );
