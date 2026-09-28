@@ -50,11 +50,15 @@ public class WarehouseSearchRequest {
 
     private String provinceCode;
 
+    private String provinceName;
+
     private String districtCode;
+
+    private String districtName;
 
     private UUID warehouseTypeId;
 
-
+    private fu.stockspace.stockspace_be.warehouse.entity.RentalPricingType rentalPricingType;
 
     private Boolean isVerified;
 }

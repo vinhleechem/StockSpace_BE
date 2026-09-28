@@ -75,8 +75,11 @@ public class PublicWarehouseController {
             @RequestParam(required = false) BigDecimal minCapacity,
             @RequestParam(required = false) BigDecimal maxCapacity,
             @RequestParam(required = false) String provinceCode,
+            @RequestParam(required = false) String provinceName,
             @RequestParam(required = false) String districtCode,
+            @RequestParam(required = false) String districtName,
             @RequestParam(required = false) UUID warehouseTypeId,
+            @RequestParam(required = false) fu.stockspace.stockspace_be.warehouse.entity.RentalPricingType rentalPricingType,
             @RequestParam(required = false) Boolean isVerified,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
@@ -89,9 +92,13 @@ public class PublicWarehouseController {
                 "maxRentalPrice", maxRentalPrice);
         String normalizedProvinceCode = normalizeFilterText(provinceCode);
         String normalizedDistrictCode = normalizeFilterText(districtCode);
+        String normalizedProvinceName = normalizeFilterText(provinceName);
+        String normalizedDistrictName = normalizeFilterText(districtName);
         validateSearchParameters(keyword, effectiveMinRentalPrice, effectiveMaxRentalPrice,
                 minCapacity, maxCapacity, normalizedProvinceCode, normalizedDistrictCode,
                 page, size, sortBy, sortDir);
+        validateLocationCode("provinceName", normalizedProvinceName);
+        validateLocationCode("districtName", normalizedDistrictName);
 
         WarehouseSearchRequest request = new WarehouseSearchRequest();
         request.setKeyword(keyword);
@@ -100,8 +107,11 @@ public class PublicWarehouseController {
         request.setMinCapacity(minCapacity);
         request.setMaxCapacity(maxCapacity);
         request.setProvinceCode(normalizedProvinceCode);
+        request.setProvinceName(normalizedProvinceName);
         request.setDistrictCode(normalizedDistrictCode);
+        request.setDistrictName(normalizedDistrictName);
         request.setWarehouseTypeId(warehouseTypeId);
+        request.setRentalPricingType(rentalPricingType);
         request.setIsVerified(isVerified);
 
         PagedResponse<WarehouseResponse> result = warehouseService.searchWarehouses(request, page, size, sortBy, sortDir);

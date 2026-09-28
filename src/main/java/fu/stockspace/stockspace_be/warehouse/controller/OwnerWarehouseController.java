@@ -121,15 +121,21 @@ public class OwnerWarehouseController {
 
     @GetMapping
     @PreAuthorize("@rbac.hasPermission('WAREHOUSE_READ')")
-    @Operation(summary = "Danh sách kho của Owner (phân trang)")
+    @Operation(summary = "Danh sách kho của Owner (phân trang, tìm kiếm, lọc)")
     public ResponseEntity<ApiResponse<PagedResponse<WarehouseResponse>>> getMyWarehouses(
+            @Parameter(description = "Từ khóa tìm kiếm (tên kho / địa chỉ)")
+            @RequestParam(required = false) String keyword,
+            @Parameter(description = "Lọc theo trạng thái kho")
+            @RequestParam(required = false) WarehouseStatus status,
+            @Parameter(description = "Lọc theo trạng thái xác minh")
+            @RequestParam(required = false) Boolean isVerified,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir
     ) {
         UUID ownerId = getCurrentUserId();
-        PagedResponse<WarehouseResponse> result = warehouseService.getMyWarehouses(ownerId, page, size, sortBy, sortDir);
+        PagedResponse<WarehouseResponse> result = warehouseService.getMyWarehouses(ownerId, keyword, status, isVerified, page, size, sortBy, sortDir);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách kho thành công", result));
     }
 

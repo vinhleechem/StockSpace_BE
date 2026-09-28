@@ -58,6 +58,9 @@ class PublicWarehouseSearchTest {
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
                 2,
                 20,
                 "capacity",
@@ -87,6 +90,9 @@ class PublicWarehouseSearchTest {
                 null,
                 new BigDecimal("100"),
                 new BigDecimal("200"),
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -126,6 +132,9 @@ class PublicWarehouseSearchTest {
                 null,
                 null,
                 null,
+                null,
+                null,
+                null,
                 0,
                 10,
                 "createdAt",
@@ -148,6 +157,9 @@ class PublicWarehouseSearchTest {
                 null,
                 new BigDecimal("200"),
                 new BigDecimal("100"),
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,
@@ -178,8 +190,11 @@ class PublicWarehouseSearchTest {
                 new BigDecimal("50"),
                 new BigDecimal("200"),
                 " 79 ",
+                null,
                 "760",
+                null,
                 warehouseTypeId,
+                null,
                 true,
                 0,
                 10,
@@ -202,6 +217,43 @@ class PublicWarehouseSearchTest {
     }
 
     @Test
+    void forwardsRentalPricingTypeAndLocationNamesFilters() {
+        when(warehouseService.searchWarehouses(any(WarehouseSearchRequest.class), eq(0), eq(10),
+                eq("createdAt"), eq("desc"))).thenReturn(emptyPage(0, 10));
+
+        controller().search(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "Hồ Chí Minh",
+                null,
+                "Quận 1",
+                null,
+                fu.stockspace.stockspace_be.warehouse.entity.RentalPricingType.FIXED_MONTHLY,
+                true,
+                0,
+                10,
+                "createdAt",
+                "desc"
+        );
+
+        ArgumentCaptor<WarehouseSearchRequest> requestCaptor =
+                ArgumentCaptor.forClass(WarehouseSearchRequest.class);
+        verify(warehouseService).searchWarehouses(requestCaptor.capture(), eq(0), eq(10),
+                eq("createdAt"), eq("desc"));
+
+        WarehouseSearchRequest request = requestCaptor.getValue();
+        assertEquals("Hồ Chí Minh", request.getProvinceName());
+        assertEquals("Quận 1", request.getDistrictName());
+        assertEquals(fu.stockspace.stockspace_be.warehouse.entity.RentalPricingType.FIXED_MONTHLY, request.getRentalPricingType());
+    }
+
+    @Test
     void rejectsInvertedCapacityRangeBeforeQueryingService() {
         assertThrows(BadRequestException.class, () -> controller().search(
                 null,
@@ -211,6 +263,9 @@ class PublicWarehouseSearchTest {
                 null,
                 new BigDecimal("200"),
                 new BigDecimal("100"),
+                null,
+                null,
+                null,
                 null,
                 null,
                 null,
