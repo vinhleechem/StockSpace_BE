@@ -11,11 +11,6 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/**
- * Turns the user's natural-language request into a small, model-readable
- * plan.  The plan is advisory for the LLM and authoritative for deterministic
- * preloading, so tool arguments remain the final source of truth.
- */
 public final class ChatQueryPlanner {
 
     private static final Pattern DIACRITICS = Pattern.compile("\\p{M}+");
@@ -75,7 +70,6 @@ public final class ChatQueryPlanner {
         return plan(message, Map.of());
     }
 
-    /** Plans a turn while optionally carrying forward the previous warehouse-search filters. */
     public static Plan plan(String message, Map<String, Object> previousWarehouseSearch) {
         Map<String, Object> previous = previousWarehouseSearch == null
                 ? Map.of()
@@ -138,10 +132,6 @@ public final class ChatQueryPlanner {
                 stringValue(previous.get("keyword"), ""));
         String currentSemantic = stringValue(current.filters().get("semanticQuery"), original);
         if (!previousSemantic.isBlank()) {
-            // A follow-up such as "ở Bình Dương" changes the location but
-            // keeps the original business need (for example "kho lạnh").
-            // Keep both signals for the vector ranker instead of dropping the
-            // previous requirement when a new location is supplied.
             merged.put("semanticQuery", combineSemanticQueries(currentSemantic, previousSemantic));
         }
         if (!reset && !explicitLocation && previous.get("keyword") != null) {
@@ -243,11 +233,6 @@ public final class ChatQueryPlanner {
         return value == null || value.toString().isBlank() ? fallback : value.toString();
     }
 
-    /**
-     * Decomposes compound rental questions into deterministic retrieval units.
-     * The old planner selected one route for the entire sentence, causing the
-     * second half of questions such as "gia hạn và bảo hiểm" to be ignored.
-     */
     public static List<SubQuery> decompose(String message) {
         if (message == null || message.isBlank()) {
             return List.of();
@@ -280,10 +265,6 @@ public final class ChatQueryPlanner {
                 result.add(new SubQuery(message.trim(), intent, rentalArguments(intent, message)));
             }
         }
-        // Keep one retrieval for a compound question when every part maps to
-        // the same policy bucket.  This preserves the full user wording (and
-        // therefore all lexical context) while still splitting genuinely
-        // different topics such as renewal + insurance.
         if (result.size() > 1 && result.stream().map(SubQuery::intent)
                 .map(RentalIntentClassifier.Intent::requiredTool)
                 .distinct().count() == 1
@@ -338,10 +319,6 @@ public final class ChatQueryPlanner {
         if (location != null) {
             String normalizedLocation = normalize(location);
             String canonicalLocation = WarehouseLocationAliases.canonicalProvince(location);
-            // Keep the location as the lexical anchor and the full sentence as
-            // the semantic query. This prevents SQL LIKE from receiving the
-            // entire natural-language question while preserving intent for
-            // vector ranking.
             filters.put("keyword", canonicalLocation);
             filters.put("semanticQuery", originalText);
             if (normalizedLocation.startsWith("quan ")
@@ -357,10 +334,6 @@ public final class ChatQueryPlanner {
             }
         }
 
-        // A comparison question such as "theo tháng hay m²" asks us to
-        // report the warehouse's actual pricing model, not filter one model
-        // out before lookup.  Applying FIXED_MONTHLY here hid warehouses that
-        // were correctly listed as PER_SQUARE_METER_MONTHLY.
         if (!comparesPricingModels(normalized) && !isEntityPricingQuestion(normalized)) {
             if (normalized.contains("theo m2") || normalized.contains("moi m2")
                     || normalized.contains("m2 moi thang")) {
@@ -415,8 +388,6 @@ public final class ChatQueryPlanner {
                 secondPriceUnit = numberMatcher.group(2);
             }
         }
-        // Vietnamese price ranges commonly write the unit only once at the
-        // end ("từ 5 đến 15 triệu"). Infer that unit for the first bound.
         String inferredUnit = firstPriceUnit == null ? secondPriceUnit : firstPriceUnit;
         BigDecimal firstPrice = parseNumber(firstPriceRaw, inferredUnit);
         BigDecimal secondPrice = parseNumber(
@@ -604,8 +575,6 @@ public final class ChatQueryPlanner {
                 return "";
             }
             Map<String, Object> safeFilters = new LinkedHashMap<>(filters);
-            // The raw keyword remains server-side tool input; do not echo
-            // arbitrary user text into a system message.
             if (safeFilters.containsKey("keyword")) {
                 safeFilters.put("keyword", "<user-query>");
             }

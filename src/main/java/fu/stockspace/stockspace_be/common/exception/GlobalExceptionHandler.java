@@ -190,11 +190,6 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(ex.getErrorCode(), ex.getMessage()));
     }
 
-    /**
-     * A saturated/unavailable Hikari pool is a temporary capacity problem,
-     * not an application bug. Return 503 so clients can retry and so the
-     * generic 500 response does not hide the actual database outage.
-     */
     @ExceptionHandler({
             CannotCreateTransactionException.class,
             CannotGetJdbcConnectionException.class

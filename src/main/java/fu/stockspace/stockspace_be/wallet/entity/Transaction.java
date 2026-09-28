@@ -44,11 +44,6 @@ public class Transaction extends BaseEntity {
     @Column(name = "payment_code", unique = true, length = 50)
     private String paymentCode;
 
-    /**
-     * The local deadline for a top-up payment.  This is deliberately separate
-     * from {@code createdAt}: old transactions may not have a deadline and
-     * the gateway's fifteen-minute window must remain explicit in our data.
-     */
     @Column(name = "expires_at")
     private LocalDateTime expiresAt;
 

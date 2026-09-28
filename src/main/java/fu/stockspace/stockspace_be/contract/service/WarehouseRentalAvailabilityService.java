@@ -12,12 +12,6 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 
-/**
- * Calculates the date-aware area allocation of a Warehouse.
- *
- * <p>This service intentionally does not acquire a lock. Callers performing a
- * mutation must lock the Warehouse first and then call this service again.</p>
- */
 @Service
 @RequiredArgsConstructor
 public class WarehouseRentalAvailabilityService {

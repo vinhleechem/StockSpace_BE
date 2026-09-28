@@ -10,12 +10,6 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-/**
- * Selects a small, relevant passage from a knowledge document. The old search
- * returned the whole document, which made long policies noisy and prevented a
- * UI from showing useful provenance. This selector keeps original offsets so a
- * client can later open the exact source span.
- */
 public final class KnowledgePassageSelector {
 
     private static final int TARGET_CHARS = 900;
@@ -69,7 +63,6 @@ public final class KnowledgePassageSelector {
                         passageIndex++, passageStart, passageEnd,
                         text.toString().trim(), 0.0
                 ));
-                // A small overlap keeps a fact at a passage boundary searchable.
                 String overlap = text.length() > 180
                         ? text.substring(text.length() - 180).trim()
                         : text.toString().trim();
@@ -86,8 +79,6 @@ public final class KnowledgePassageSelector {
             text.append(sentence.text());
             passageEnd = sentence.endOffset();
 
-            // A single huge sentence is split deterministically, rather than
-            // returning an oversized prompt/tool payload.
             while (text.length() > MAX_CHARS) {
                 int splitAt = text.lastIndexOf(" ", MAX_CHARS);
                 if (splitAt < 1) {

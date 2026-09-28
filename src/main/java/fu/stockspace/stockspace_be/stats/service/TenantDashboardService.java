@@ -79,8 +79,6 @@ public class TenantDashboardService {
     }
 
     private long countPendingReceipts(UUID tenantId, DocumentType type) {
-        // The tenant is the immutable owner of the receipt, including receipts
-        // created by staff, so this count cannot leak another tenant's data.
         return receiptRepository.countByTenantIdAndTypeAndStatusAndIsActiveTrueAndIsDeletedFalse(
                 tenantId, type, ApprovalStatus.PENDING);
     }

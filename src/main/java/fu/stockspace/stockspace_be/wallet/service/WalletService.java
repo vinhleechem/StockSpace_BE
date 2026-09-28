@@ -111,7 +111,6 @@ public class WalletService {
                     .build();
         }
 
-        // Mặc định sử dụng PayOS
         Long orderCode = generateNumericOrderCode();
         String paymentCode = String.valueOf(orderCode);
         long expiredAtEpochSeconds = expiresAt.atZone(ZoneId.of("Asia/Ho_Chi_Minh")).toEpochSecond();
@@ -234,9 +233,6 @@ public class WalletService {
         String transactionNo = params.get("vnp_TransactionNo");
 
 
-        // Lock the transaction row before checking its state. Wallet locking
-        // alone does not prevent concurrent callbacks from both observing
-        // PENDING and crediting the same payment twice.
         Transaction transaction = transactionRepository.findByPaymentCodeForUpdate(paymentCode)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.SYSTEM_ERROR, "Không tìm thấy mã giao dịch: " + paymentCode));
 
@@ -297,12 +293,6 @@ public class WalletService {
         }
     }
 
-    /**
-     * Marks abandoned top-up attempts as expired after the VNPAY deadline and
-     * an optional grace period. The transaction-row lock serializes this with a
-     * late callback, so a valid successful callback can still move EXPIRED to
-     * SUCCESS and credit the wallet exactly once.
-     */
     @Transactional
     public int expirePendingTopUps() {
         LocalDateTime now = LocalDateTime.now(businessClock);
@@ -355,7 +345,6 @@ public class WalletService {
                     }
                 });
             } else {
-                // Direct unit calls do not have a Spring transaction boundary.
                 notifier.run();
             }
         } catch (Exception exception) {
@@ -374,7 +363,6 @@ public class WalletService {
                     "PAYMENT_EXPIRED"
             );
         } catch (Exception exception) {
-            // Notifications are best-effort and must not change payment state.
             log.warn("Failed to notify user about expired top-up {}: {}",
                     paymentCode, exception.getMessage());
         }

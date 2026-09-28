@@ -10,21 +10,12 @@ import org.springframework.stereotype.Component;
 import java.time.Clock;
 import java.time.LocalDateTime;
 
-/**
- * Applies the publication lifecycle rules to owner-owned content edits.
- */
 @Component
 @RequiredArgsConstructor
 public class WarehousePublicationEditPolicy {
 
     private final Clock publicationClock;
 
-    /**
-     * Prepares a warehouse for an owner content edit.
-     *
-     * @return {@code true} when the edit invalidates the previous approval and
-     *         an Admin notification is required
-     */
     public boolean prepareOwnerEdit(Warehouse warehouse) {
         if (warehouse.getStatus() != WarehouseStatus.AVAILABLE) {
             return false;
@@ -39,12 +30,6 @@ public class WarehousePublicationEditPolicy {
         return true;
     }
 
-    /**
-     * Checks whether owner content can be edited without changing the
-     * warehouse state. The service layer repeats the authoritative check while
-     * holding the warehouse lock; this method is used by upload endpoints to
-     * avoid creating orphaned external files for a locked publication.
-     */
     public void assertOwnerEditAllowed(Warehouse warehouse) {
         if (warehouse.getStatus() != WarehouseStatus.AVAILABLE) {
             return;

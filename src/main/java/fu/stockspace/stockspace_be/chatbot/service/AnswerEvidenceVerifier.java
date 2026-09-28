@@ -11,12 +11,6 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/**
- * Last-mile guard against numerical hallucinations.  It is deliberately
- * conservative: if a response contains a material number that is absent from
- * successful tool evidence, the caller receives a safe retry message instead
- * of a plausible-looking but unverifiable answer.
- */
 public final class AnswerEvidenceVerifier {
 
     private static final String INTERNAL_UNVERIFIED_MARKER = "[số liệu chưa xác minh]";
@@ -37,7 +31,6 @@ public final class AnswerEvidenceVerifier {
         return verify(reply, null, traces);
     }
 
-    /** Treats numbers supplied by the user as inputs, not hallucinated facts. */
     public static Verification verify(
             String reply,
             String userMessage,
@@ -94,7 +87,6 @@ public final class AnswerEvidenceVerifier {
         return guard(reply, null, traces);
     }
 
-    /** Hard safety fallback retained for callers that require all-or-nothing behavior. */
     public static String guard(
             String reply,
             String userMessage,
@@ -108,10 +100,6 @@ public final class AnswerEvidenceVerifier {
                 + "nên không muốn trả lời sai. Bạn vui lòng thử lại sau.";
     }
 
-    /**
-     * Preserves grounded sentences and neutralizes only sentences containing
-     * unsupported material numbers. This is the normal chatbot path.
-     */
     public static String sanitize(
             String reply,
             String userMessage,
@@ -188,12 +176,6 @@ public final class AnswerEvidenceVerifier {
         return dates.stream().anyMatch(date -> start >= date.start() && end <= date.end());
     }
 
-    /**
-     * Allows the verifier to recognize a result that is transparently derived
-     * from user-provided inputs (for example, "10 m2 x 100.000/m2"), without
-     * accepting arbitrary model-generated numbers. Only an explicit operator
-     * between adjacent numeric inputs is considered evidence.
-     */
     private static void addDerivedNumbers(Set<String> target, String text) {
         if (text == null || text.isBlank()) {
             return;
@@ -209,8 +191,6 @@ public final class AnswerEvidenceVerifier {
                 mentions.add(new NumericMention(
                         matcher.start(), matcher.end(), new BigDecimal(canonical)));
             } catch (NumberFormatException ignored) {
-                // The regular expression and canonicalizer already reject
-                // malformed values; keep this helper fail-safe regardless.
             }
         }
         for (int index = 0; index + 1 < mentions.size(); index++) {

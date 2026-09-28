@@ -29,10 +29,6 @@ public class XlsxWorkbookReader {
         this.properties = properties;
     }
 
-    /**
-     * Opens a user workbook after applying the file-level safety checks.
-     * The caller owns and must close the returned workbook.
-     */
     public Workbook open(byte[] content, String originalFilename) {
         validateFile(content, originalFilename);
         ZipSecureFile.setMinInflateRatio(MIN_INFLATE_RATIO);

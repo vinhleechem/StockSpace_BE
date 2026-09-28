@@ -8,7 +8,6 @@ import lombok.NoArgsConstructor;
 
 import java.util.UUID;
 
-/** Note-only update used after a blind count has been submitted. */
 @Data
 @Builder
 @NoArgsConstructor

@@ -7,13 +7,6 @@ import java.util.Objects;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
-/**
- * Deterministic, side-effect-free FIFO planner for one SKU.
- *
- * <p>Candidates are expected to be pre-filtered to the requested SKU and
- * warehouse by the calling service. Inactive, deleted, empty and malformed
- * candidates are ignored here as a final safety guard.</p>
- */
 @Component
 public class FifoAllocationPlanner {
 

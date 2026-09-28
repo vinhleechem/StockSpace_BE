@@ -11,12 +11,6 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
-/**
- * Owner-editable terms for a direct rental contract draft.
- *
- * Contract participants and the warehouse are intentionally not part of this
- * request. They are immutable after the draft has been created.
- */
 @Getter
 @Setter
 @Schema(description = "Owner-editable terms while a contract is DRAFT or CHANGES_REQUESTED; participants and warehouse are immutable")
@@ -52,7 +46,6 @@ public class UpdateRentalContractRequest {
     @Size(max = 2000, message = "Owner note must not exceed 2000 characters")
     private String ownerNote;
 
-    /** A null value keeps the files already attached to the draft. */
     @Schema(description = "Replacement paper-contract file URLs; null preserves existing files")
     private List<String> paperContractFiles;
 }

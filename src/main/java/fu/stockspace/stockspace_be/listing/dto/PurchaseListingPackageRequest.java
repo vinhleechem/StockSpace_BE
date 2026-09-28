@@ -29,12 +29,6 @@ public class PurchaseListingPackageRequest {
     @NotNull(message = "Publication start date is required")
     private LocalDate startDate;
 
-    /**
-     * Keeps existing internal callers source-compatible until the publication
-     * service starts requiring the schedule date.
-     *
-     * @deprecated use {@link #PurchaseListingPackageRequest(UUID, LocalDate)}
-     */
     @Deprecated
     public PurchaseListingPackageRequest(UUID listingPackageId) {
         this(listingPackageId, null);

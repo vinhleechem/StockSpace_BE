@@ -3,11 +3,6 @@ package fu.stockspace.stockspace_be.chatbot.service;
 import java.util.Map;
 import java.util.LinkedHashMap;
 
-/**
- * Internal trace for a tool execution. The trace is never returned by the chat
- * history API; it is reduced to safe entity references before being persisted
- * as conversation memory.
- */
 public record ToolExecutionTrace(
         String toolName,
         Map<String, Object> arguments,

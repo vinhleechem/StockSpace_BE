@@ -22,7 +22,6 @@ public class StockTransferRetryRequest {
     @NotNull
     private UUID destinationWarehouseId;
 
-    /** Optional receiver assigned at the new retry destination. */
     private UUID destinationStaffId;
 
     @Future(message = "Expected arrival phải ở tương lai")

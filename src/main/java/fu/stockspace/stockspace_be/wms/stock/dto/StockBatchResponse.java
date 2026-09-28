@@ -32,7 +32,6 @@ public class StockBatchResponse {
     private UUID binId;
     private String binName;
 
-    /** When true, quantity fields are placeholders and must not be displayed as numbers. */
     private int quantity;
     private int reservedQuantity;
     private int availableQuantity;

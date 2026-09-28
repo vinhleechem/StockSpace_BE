@@ -54,10 +54,6 @@ public class ChatSession extends BaseEntity {
     @Column(name = "title", length = 100)
     private String title;
 
-    /**
-     * Compact internal entity memory derived from successful tool calls. This
-     * is never exposed through session/message DTOs.
-     */
     @Column(name = "context_json", columnDefinition = "TEXT")
     private String contextJson;
 

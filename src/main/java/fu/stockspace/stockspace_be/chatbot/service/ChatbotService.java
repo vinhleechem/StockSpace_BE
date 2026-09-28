@@ -303,9 +303,6 @@ public class ChatbotService {
         if (isUnsupportedWmsQuestion(userMessage, memory)) {
             return new AgentRunResult(unsupportedWmsReply(), List.of());
         }
-        // Rental answers are emitted only after the mandatory evidence gate
-        // completes.  Buffering these deltas avoids showing an ungrounded
-        // partial answer when a live-rule lookup fails midway through SSE.
         ChatQueryPlanner.Plan queryPlan = planQuery(userMessage, memory);
         boolean evidenceQuestion = requiresSystemEvidence(userMessage, memory, queryPlan);
         Consumer<String> safeDeltaConsumer = evidenceQuestion ? ignored -> { } : deltaConsumer;
@@ -430,9 +427,6 @@ public class ChatbotService {
                                 queryPlan),
                         userMessage, allowedByName, traces, queryPlan),
                 userMessage, traces, memory, queryPlan);
-        // Evidence questions are buffered until this point, so one bounded
-        // repair pass can safely rewrite unsupported numeric claims before the
-        // final SSE event is emitted.
         if (evidenceQuestion) {
             candidate = repairNumericClaims(
                     conversation,
@@ -715,12 +709,6 @@ public class ChatbotService {
         }
     }
 
-    /**
-     * Handles the high-frequency failure mode where a user asks for a field
-     * of the warehouse returned in the previous turn. This read-only lookup is
-     * deterministic and happens before the model gets a chance to repeat a
-     * broad search with the full natural-language question as its keyword.
-     */
     private void preloadWarehouseDimensionLookup(
             List<Map<String, Object>> conversation,
             Map<String, ChatTool> allowedByName,
@@ -779,11 +767,6 @@ public class ChatbotService {
         }
     }
 
-    /**
-     * Rental-system questions are grounded before the model is allowed to
-     * compose an answer.  This prevents a generic LLM answer from being used
-     * for live fees, active rules, package data, or the tenant's own records.
-     */
     private void preloadRentalLookup(
             List<Map<String, Object>> conversation,
             Map<String, ChatTool> allowedByName,
@@ -1056,8 +1039,6 @@ public class ChatbotService {
         if (normalized.isBlank()) {
             return false;
         }
-        // Public warehouse capacity/volume filters are valid search criteria;
-        // only operational questions should be redirected to the WMS module.
         if (hasUnsupportedWmsMarkers(normalized)) {
             return true;
         }
@@ -1099,7 +1080,6 @@ public class ChatbotService {
                 "kho toi", "kho minh", "cua toi", "cua minh", "van hanh"))) {
             return true;
         }
-        // Match English WMS terms as whole words so "StockSpace" is safe.
         return Set.of("sku", "inbound", "outbound", "receipt", "inventory",
                         "stock", "audit", "transfer", "putaway", "picking")
                 .stream()
@@ -1179,10 +1159,6 @@ public class ChatbotService {
                 .orElse(null);
     }
 
-    /**
-     * Citation metadata remains available to the evidence verifier and memory,
-     * but source labels are implementation details and must never reach users.
-     */
     private String sanitizeUserVisibleCitations(String reply) {
         if (reply == null || reply.isBlank()) {
             return reply;
@@ -1418,11 +1394,6 @@ public class ChatbotService {
         private final AtomicReference<ScheduledFuture<?>> heartbeat =
                 new AtomicReference<>();
         private final StringBuilder streamedReply = new StringBuilder();
-        /**
-         * Holds a possible partial UUID between provider chunks. Sanitizing
-         * each chunk independently is not sufficient because a UUID can be
-         * split at any character boundary in an SSE response.
-         */
         private final StringBuilder pendingReply = new StringBuilder();
 
         private StreamCoordinator(SseEmitter emitter,
@@ -1485,10 +1456,6 @@ public class ChatbotService {
                     sendDelta(providerReply);
                 } else if (providerReply.startsWith(streamedReply.toString())
                         && providerReply.length() > streamedReply.length()) {
-                    // The provider text may already have been emitted before
-                    // the final citation-enforcement pass. Emit only the
-                    // additive suffix so SSE and non-streaming responses stay
-                    // identical.
                     sendDelta(providerReply.substring(streamedReply.length()));
                 }
                 flushPendingDelta();

@@ -14,7 +14,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
-/** Read-only tenant tool for questions about the package currently in use. */
 @Slf4j
 @Component
 @RequiredArgsConstructor

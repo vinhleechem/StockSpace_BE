@@ -47,10 +47,6 @@ public class RentalContract extends BaseEntity {
     @JoinColumn(name = "warehouse_id", nullable = false)
     private Warehouse warehouse;
 
-    /**
-     * Nullable self-reference for a successor contract created as a renewal.
-     * The source contract remains immutable and is never replaced by this link.
-     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "renewed_from_contract_id")
     private RentalContract renewedFromContract;

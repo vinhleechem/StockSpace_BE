@@ -13,11 +13,6 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 
-/**
- * Resolves the active warehouse requested by the UI to a display-safe context.
- * A caller-supplied id is never added to the prompt until tenant access has
- * been verified.
- */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -53,7 +48,6 @@ public class ActiveWarehouseContextResolver {
                 }
             }
 
-            // Smart fallback: If no warehouse was explicitly requested, but tenant has exactly 1 active warehouse, auto-resolve it
             java.util.List<Warehouse> activeWarehouses = accessService.findActiveContractWarehouses(tenantId);
             if (activeWarehouses != null && activeWarehouses.size() == 1) {
                 Warehouse single = activeWarehouses.get(0);

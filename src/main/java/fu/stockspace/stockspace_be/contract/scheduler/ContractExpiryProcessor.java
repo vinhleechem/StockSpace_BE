@@ -112,8 +112,6 @@ public class ContractExpiryProcessor {
                     "Scheduled renewal does not match its source contract: " + successor.getId());
         }
 
-        // Promote the successor before expiring the source. Both changes are
-        // committed atomically in this per-contract transaction.
         successor.setStatus(ContractStatus.ACTIVE);
         if (source.getStatus() == ContractStatus.ACTIVE) {
             source.setStatus(ContractStatus.EXPIRED);

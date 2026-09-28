@@ -18,7 +18,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
-/** Maintains embeddings for the public warehouse profile search index. */
 @Service
 @RequiredArgsConstructor
 public class WarehouseSearchIndexService {

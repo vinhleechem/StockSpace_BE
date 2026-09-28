@@ -94,14 +94,12 @@ public class InventoryReceiptService {
         return createReceipt(userId, request, LocalDateTime.now());
     }
 
-    /** Used by trusted offline import orchestration; online requests keep the business clock default. */
     @Transactional
     public InventoryReceiptResponse createReceipt(UUID userId, CreateInventoryReceiptRequest request,
                                                   LocalDateTime occurredAt) {
         return createReceipt(userId, request, occurredAt, true);
     }
 
-    /** Creates a receipt for an already validated offline job without per-receipt notifications. */
     @Transactional
     public InventoryReceiptResponse createReceiptForOfflineImport(
             UUID userId, CreateInventoryReceiptRequest request, LocalDateTime occurredAt) {
@@ -675,7 +673,6 @@ public class InventoryReceiptService {
         return approveReceipt(approverId, receiptId, true);
     }
 
-    /** Approves an offline-import receipt without emitting one notification per receipt. */
     @Transactional
     public InventoryReceiptResponse approveReceiptForOfflineImport(UUID approverId, UUID receiptId) {
         return approveReceipt(approverId, receiptId, false);
@@ -946,7 +943,6 @@ public class InventoryReceiptService {
         return createAdjustmentReceipt(userId, auditId, warehouseId, type, batchId, quantity, false);
     }
 
-    /** Called by the audit transaction while that audit owns the warehouse lock. */
     @Transactional
     public InventoryReceipt createAuditAdjustmentReceipt(
             UUID userId, UUID auditId, UUID warehouseId,

@@ -6,12 +6,6 @@ import org.springframework.context.annotation.Configuration;
 import java.time.Clock;
 import java.time.ZoneId;
 
-/**
- * Provides the single application clock used by business date rules.
- *
- * <p>The platform currently operates in Ho Chi Minh City. Keeping the zone
- * explicit prevents business dates from depending on the host timezone.</p>
- */
 @Configuration
 public class BusinessTimeConfig {
 

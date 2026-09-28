@@ -282,12 +282,6 @@ public class StockTransferService {
         return mapToResponse(saved);
     }
 
-    /**
-     * Reserve the source quantities without changing on-hand stock. This is
-     * the production path for clients that need a real approval/allocation
-     * step before dispatch. The legacy approve-dispatch endpoint remains
-     * available for existing clients.
-     */
     @Transactional
     public StockTransferResponse allocateTransfer(UUID userId, UUID transferId) {
         return allocateTransfer(userId, transferId, null);
@@ -495,10 +489,6 @@ public class StockTransferService {
                 .toList();
     }
 
-    /**
-     * SLA escalation hook used by the scheduler.  It never changes inventory;
-     * it only makes a silent in-transit transfer visible for operator action.
-     */
     @Transactional
     public int markOverdueTransfers() {
         if (transferRepository == null) return 0;
@@ -742,8 +732,6 @@ public class StockTransferService {
                     });
             destinationAllocation.setQuantity(destinationAllocation.getQuantity() + allocationRequest.getQuantity());
             if (note != null) {
-                // The receipt item below preserves every receiving session's note;
-                // this field is the latest note shown on the transfer allocation.
                 destinationAllocation.setNote(note);
             }
             item.setReceivedQuantity(item.getReceivedQuantity() + allocationRequest.getQuantity());
@@ -799,7 +787,6 @@ public class StockTransferService {
         return mapToResponse(savedTransfer);
     }
 
-    /** Mark the truck as physically present before the receiving clerk starts counting. */
     @Transactional
     public StockTransferResponse arriveTransfer(UUID userId, UUID transferId, String idempotencyKey) {
         User actor = findUser(userId);
@@ -823,14 +810,6 @@ public class StockTransferService {
         return mapToResponse(saved);
     }
 
-    /**
-     * A destination can refuse a shipment before any quantity is booked into stock.
-     *
-     * The tenant may make the final decision, while the assigned destination
-     * staff may also refuse the receipt when the truck is still IN_TRANSIT (or
-     * has arrived but no quantity has been booked yet).  Source staff is not
-     * allowed through the destination-assignment check.
-     */
     @Transactional
     public StockTransferResponse rejectReceipt(UUID userId, UUID transferId,
                                                StockTransferDecisionRequest request,
@@ -866,13 +845,6 @@ public class StockTransferService {
         return mapToResponse(saved);
     }
 
-    /**
-     * Recall a dispatched transfer while it is still on the outbound leg.
-     * This is a source-side operation and is deliberately distinct from a
-     * destination's REJECT_RECEIPT decision.  No stock is changed here; the
-     * normal RETURN_REQUESTED -> RETURN_IN_TRANSIT -> receive-return workflow
-     * completes the physical recovery.
-     */
     @Transactional
     public StockTransferResponse recallInTransit(UUID userId, UUID transferId,
                                                  StockTransferDecisionRequest request,
@@ -905,8 +877,6 @@ public class StockTransferService {
         transfer.setStatus(StockTransferStatus.RETURN_REQUESTED);
         StockTransfer saved = transferRepository.save(transfer);
 
-        // Close the outbound leg before creating its return leg so the event
-        // remains attached to the leg that was recalled.
         markCurrentAttemptCancelled(saved, actor, reason);
         recordEvent(saved, from, saved.getStatus(), command, actor, reason, idempotencyKey);
         createAttempt(saved, StockTransferAttemptType.RETURN,
@@ -920,7 +890,6 @@ public class StockTransferService {
         return mapToResponse(saved);
     }
 
-    /** Close an open receiving session when the destination accepts a short shipment. */
     @Transactional
     public StockTransferResponse closeShortReceipt(UUID userId, UUID transferId,
                                                    StockTransferDecisionRequest request,
@@ -954,7 +923,6 @@ public class StockTransferService {
         return mapToResponse(saved);
     }
 
-    /** Request a new destination for the quantities that are still in the transport chain. */
     @Transactional
     public StockTransferResponse retryTransfer(UUID userId, UUID transferId,
                                                StockTransferRetryRequest request,
@@ -1028,7 +996,6 @@ public class StockTransferService {
         return mapToResponse(saved);
     }
 
-    /** Start a return-to-source leg. No stock is silently created at this point. */
     @Transactional
     public StockTransferResponse requestReturn(UUID userId, UUID transferId,
                                                StockTransferDecisionRequest request,
@@ -1374,11 +1341,6 @@ public class StockTransferService {
         }
     }
 
-    /**
-     * A legacy direct-dispatch request must still respect reservations created
-     * by other transfers.  The row lock on each batch serializes this check
-     * with allocation and other outbound movements.
-     */
     private void assertAvailableAfterReservations(StockTransfer transfer,
                                                   List<LockedSourceAllocation> allocations) {
         if (reservationRepository == null) {
@@ -1635,8 +1597,6 @@ public class StockTransferService {
     private void requireReceiptRejectionAccess(User actor, UUID tenantId,
                                                StockTransfer transfer) {
         if (isStaff(actor)) {
-            // Only the receiver assigned to the active destination may refuse
-            // the shipment.  This also deliberately excludes source staff.
             requireDestinationReceivingAccess(actor, tenantId, transfer);
         } else if (!hasRole(actor, RoleType.ROLE_TENANT)) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);

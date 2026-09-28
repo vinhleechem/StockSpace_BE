@@ -17,18 +17,6 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
-/**
- * First version deliberately locks the warehouse, even for a rack/bin scope.
- * This is conservative but guarantees that an untracked movement cannot make
- * the count stale. The lock can be narrowed after every stock mutation path is
- * routed through a single movement ledger.
- *
- * The lock is held after start for every unresolved workflow state:
- * {@code IN_PROGRESS}, {@code SUBMITTED}, {@code EDIT_REQUESTED},
- * {@code REOPENED}, and {@code RECOUNT_REQUIRED}. A recount is still part of
- * the unresolved audit; allowing stock movements before the next count would
- * make the recount impossible to reconcile with the submitted result.
- */
 @Service
 @RequiredArgsConstructor
 public class InventoryAuditLockService {
@@ -48,17 +36,12 @@ public class InventoryAuditLockService {
             InventoryAuditLock existingLock = activeLock.get();
             UUID existingAuditId = existingLock.getAudit() == null
                     ? null : existingLock.getAudit().getId();
-            // Starting the next recount round must reuse the lock that this
-            // audit already owns instead of treating it as a competing audit.
             if (existingAuditId != null && existingAuditId.equals(audit.getId())) {
                 return existingLock;
             }
             throw new ResourceConflictException(ErrorCode.AUDIT_MOVEMENT_LOCKED,
                     "Kho đang có một phiếu kiểm kê đang thực hiện");
         }
-        // Keep this reservation check as a defensive guard for legacy data where
-        // a RECOUNT_REQUIRED audit has no lock. Normally the active lock check
-        // above is what prevents another audit from starting.
         if (audit.getStatus() != AuditStatus.RECOUNT_REQUIRED
                 && auditRepository.existsByWarehouseIdAndStatusAndIsActiveTrueAndIsDeletedFalse(
                         warehouseId, AuditStatus.RECOUNT_REQUIRED)) {
@@ -84,8 +67,6 @@ public class InventoryAuditLockService {
         });
     }
 
-    // This method takes a row lock to serialize the check with audit start. It
-    // must therefore run in a write-capable transaction on PostgreSQL.
     @Transactional
     public void assertMovementAllowed(UUID warehouseId) {
         if (warehouseRepository != null) {

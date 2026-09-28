@@ -147,10 +147,6 @@ public class WmsImportJobService {
         }
     }
 
-    /**
-     * Executes one domain apply under a pessimistic job lock. A domain failure
-     * rolls back its transaction and is recorded as FAILED in a new transaction.
-     */
     public <T> T applyJob(UUID tenantId, UUID actorId, UUID jobId,
                           Function<WmsImportJob, T> domainApply) {
         AtomicBoolean domainStarted = new AtomicBoolean(false);

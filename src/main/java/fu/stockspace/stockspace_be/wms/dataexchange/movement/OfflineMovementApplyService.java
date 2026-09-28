@@ -51,11 +51,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Applies a validated offline movement job as one transaction. Receipt and
- * stock mutation rules remain in InventoryReceiptService; this service only
- * translates grouped workbook rows into the existing receipt command.
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor

@@ -9,10 +9,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Read-only operation projection used by the Staff portal.
- * Mutations remain on the owning WMS modules.
- */
 @Getter
 @Builder
 @NoArgsConstructor

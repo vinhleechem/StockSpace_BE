@@ -13,13 +13,6 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
-/**
- * Deterministic SERPENTINE_XY_V1 route planner.
- *
- * <p>This is a layout-grid heuristic, not a shortest-path algorithm. It only
- * orders the already selected FIFO allocations and never changes their batch
- * or quantity.</p>
- */
 @Component
 public class SerpentineRoutePlanner {
 

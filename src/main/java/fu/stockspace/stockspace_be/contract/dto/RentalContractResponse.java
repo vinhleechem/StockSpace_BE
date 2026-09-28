@@ -33,7 +33,6 @@ public class RentalContractResponse {
     private UUID ownerId;
     private String ownerName;
 
-    /** State- and viewer-dependent actions available to the current user. */
     @Schema(description = "Current viewer may edit contract terms")
     private boolean canEdit;
     @Schema(description = "Current viewer may soft-delete this draft")

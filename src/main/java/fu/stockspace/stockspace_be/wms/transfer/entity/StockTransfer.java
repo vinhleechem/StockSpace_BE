@@ -50,7 +50,6 @@ public class StockTransfer extends BaseEntity {
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
-    /** Human-readable document number, stable across retries and integrations. */
     @Column(name = "transfer_no", nullable = false, updatable = false, length = 40)
     private String transferNo;
 
@@ -71,17 +70,14 @@ public class StockTransfer extends BaseEntity {
     @JoinColumn(name = "destination_warehouse_id", nullable = false)
     private Warehouse destinationWarehouse;
 
-    /** Destination of the currently active physical leg; preserves the original route above. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "active_destination_warehouse_id")
     private Warehouse activeDestinationWarehouse;
 
-    /** Staff explicitly responsible for picking at the source warehouse. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assigned_source_staff_id")
     private User sourceStaff;
 
-    /** Staff currently responsible for receiving at the active destination warehouse. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assigned_destination_staff_id")
     private User destinationStaff;

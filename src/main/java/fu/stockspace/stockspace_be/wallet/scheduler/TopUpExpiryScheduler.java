@@ -6,7 +6,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-/** Cleans up abandoned VNPAY top-up attempts without touching wallet balance. */
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -25,7 +24,6 @@ public class TopUpExpiryScheduler {
                 log.info("Marked {} abandoned VNPAY top-up(s) as EXPIRED", expired);
             }
         } catch (RuntimeException exception) {
-            // A failed batch must not stop future scheduler runs.
             log.error("Failed to expire pending VNPAY top-ups", exception);
         }
     }

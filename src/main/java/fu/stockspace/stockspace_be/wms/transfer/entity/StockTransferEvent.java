@@ -23,7 +23,6 @@ import lombok.experimental.SuperBuilder;
 
 import java.util.UUID;
 
-/** Immutable-ish audit entry for every transfer command/state transition. */
 @Entity
 @Table(name = "stock_transfer_events", indexes = {
         @Index(name = "idx_stock_transfer_events_transfer_created", columnList = "transfer_id,created_at")

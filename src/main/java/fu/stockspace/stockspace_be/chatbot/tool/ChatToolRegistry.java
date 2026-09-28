@@ -54,11 +54,6 @@ public class ChatToolRegistry {
             )
     );
 
-    /**
-     * Reserved for chatbot capabilities that may be added later and require a
-     * subscription. Deep WMS operations are intentionally not exposed to the
-     * chatbot at all; they remain in the warehouse-management screens.
-     */
     private static final Set<String> SUBSCRIPTION_REQUIRED_TOOL_NAMES = Set.of();
     private final Map<String, List<ChatTool>> toolsByRole;
     private final Map<String, ChatTool> toolsByName;
@@ -90,11 +85,6 @@ public class ChatToolRegistry {
         return toolsByRole.getOrDefault(key, List.of());
     }
 
-    /**
-     * Applies the subscription gate to a tenant's allowlist before the tool
-     * definitions are sent to the model.  This is intentionally separate from
-     * role resolution because subscription state is request/user-specific.
-     */
     public static List<ChatTool> filterForActiveSubscription(
             List<ChatTool> tools,
             boolean hasActiveSubscription) {

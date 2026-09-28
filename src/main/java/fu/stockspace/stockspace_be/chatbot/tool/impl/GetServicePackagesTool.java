@@ -13,7 +13,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/** Public, read-only package catalogue. */
 @Slf4j
 @Component
 @RequiredArgsConstructor

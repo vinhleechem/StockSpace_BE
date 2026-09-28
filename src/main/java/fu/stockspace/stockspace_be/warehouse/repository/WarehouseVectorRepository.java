@@ -12,7 +12,6 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
-/** pgvector retrieval for public warehouse profiles. */
 @Repository
 public class WarehouseVectorRepository {
 

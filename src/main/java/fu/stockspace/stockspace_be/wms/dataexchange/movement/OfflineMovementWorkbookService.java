@@ -61,11 +61,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-/**
- * Creates the controlled workbook used for offline receipt movements and
- * validates it without creating receipts. Applying the resulting job is a
- * separate, tenant-only operation in the receipt orchestration service.
- */
 @Service
 @RequiredArgsConstructor
 public class OfflineMovementWorkbookService {
@@ -601,7 +596,6 @@ public class OfflineMovementWorkbookService {
                             return LocalDate.parse(text, formatter).atStartOfDay();
                         }
                     } catch (DateTimeParseException ignoredFinal) {
-                        // try next format
                     }
                 }
                 return null;

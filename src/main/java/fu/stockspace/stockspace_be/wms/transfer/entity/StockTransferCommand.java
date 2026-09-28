@@ -25,7 +25,6 @@ import lombok.experimental.SuperBuilder;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/** Persisted command token used to make retries safe across HTTP timeouts. */
 @Entity
 @Table(name = "stock_transfer_commands", indexes = {
         @Index(name = "idx_stock_transfer_commands_transfer", columnList = "transfer_id")

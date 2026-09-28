@@ -206,7 +206,7 @@ class WalletServiceTopUpLifecycleTest {
         when(transactionRepository.save(any(Transaction.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        vn.payos.model.v2.paymentRequests.CreatePaymentLinkResponse mockPayOsResp = 
+        vn.payos.model.v2.paymentRequests.CreatePaymentLinkResponse mockPayOsResp =
                 org.mockito.Mockito.mock(vn.payos.model.v2.paymentRequests.CreatePaymentLinkResponse.class);
         when(mockPayOsResp.getCheckoutUrl()).thenReturn("https://payos.test/checkout");
         when(mockPayOsResp.getQrCode()).thenReturn("QR_TEST_CODE");
@@ -244,7 +244,7 @@ class WalletServiceTopUpLifecycleTest {
                 .paymentCode("123456789")
                 .build();
 
-        vn.payos.model.webhooks.WebhookData webhookData = 
+        vn.payos.model.webhooks.WebhookData webhookData =
                 org.mockito.Mockito.mock(vn.payos.model.webhooks.WebhookData.class);
         when(webhookData.getOrderCode()).thenReturn(123456789L);
         when(webhookData.getAmount()).thenReturn(50000L);
@@ -281,7 +281,7 @@ class WalletServiceTopUpLifecycleTest {
                 .paymentCode("123456789")
                 .build();
 
-        vn.payos.model.webhooks.WebhookData webhookData = 
+        vn.payos.model.webhooks.WebhookData webhookData =
                 org.mockito.Mockito.mock(vn.payos.model.webhooks.WebhookData.class);
         when(webhookData.getOrderCode()).thenReturn(123456789L);
 
@@ -290,7 +290,6 @@ class WalletServiceTopUpLifecycleTest {
 
         walletService.processPayOsWebhook(webhookData);
 
-        // Balance remains unchanged, no lock acquired on wallet
         assertEquals(new BigDecimal("50000"), wallet.getBalance());
         verify(walletRepository, never()).findByUserIdWithLock(any());
         verify(notificationService, never()).push(any(), any(), any(), any());
@@ -307,10 +306,10 @@ class WalletServiceTopUpLifecycleTest {
                 .paymentCode("123456789")
                 .build();
 
-        vn.payos.model.webhooks.WebhookData webhookData = 
+        vn.payos.model.webhooks.WebhookData webhookData =
                 org.mockito.Mockito.mock(vn.payos.model.webhooks.WebhookData.class);
         when(webhookData.getOrderCode()).thenReturn(123456789L);
-        when(webhookData.getAmount()).thenReturn(50000L); // Expected 100000, got 50000
+        when(webhookData.getAmount()).thenReturn(50000L);
 
         when(transactionRepository.findByPaymentCodeForUpdate("123456789"))
                 .thenReturn(Optional.of(transaction));

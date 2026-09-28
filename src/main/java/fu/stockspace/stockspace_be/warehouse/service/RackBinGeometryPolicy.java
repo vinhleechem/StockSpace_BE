@@ -7,13 +7,6 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
-/**
- * Provides the canonical vertical geometry for bins inside a rack.
- *
- * <p>The shelf level is the business value supplied by the caller. The
- * persisted Z coordinate is derived from that level so that clients cannot
- * accidentally create different visual and persisted layouts.</p>
- */
 @Component
 public class RackBinGeometryPolicy {
 

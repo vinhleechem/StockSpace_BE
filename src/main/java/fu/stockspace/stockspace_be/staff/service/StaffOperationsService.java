@@ -32,10 +32,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-/**
- * Builds a read-only Staff operation list from existing WMS aggregates.
- * No task entity is persisted and no WMS mutation is duplicated here.
- */
 @Service
 @RequiredArgsConstructor
 public class StaffOperationsService {
