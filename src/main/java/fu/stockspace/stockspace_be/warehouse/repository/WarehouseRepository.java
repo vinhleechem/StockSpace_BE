@@ -103,7 +103,10 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
                    OR LOWER(w.type.name) LIKE :keyword)
               AND (:provinceCode IS NULL OR w.provinceCode = :provinceCode)
               AND (:districtCode IS NULL OR w.districtCode = :districtCode)
+              AND (:provinceName IS NULL OR LOWER(w.provinceName) LIKE :provinceName)
+              AND (:districtName IS NULL OR LOWER(w.districtName) LIKE :districtName)
               AND (:warehouseTypeId IS NULL OR w.type.id = :warehouseTypeId)
+              AND (:rentalPricingType IS NULL OR w.rentalPricingType = :rentalPricingType)
               AND (:minPrice IS NULL OR (w.rentalPrice IS NOT NULL AND w.rentalPrice >= :minPrice))
               AND (:maxPrice IS NULL OR (w.rentalPrice IS NOT NULL AND w.rentalPrice <= :maxPrice))
               AND (:minCapacity IS NULL OR w.capacity >= :minCapacity)
@@ -119,10 +122,33 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
             @Param("maxCapacity") BigDecimal maxCapacity,
             @Param("provinceCode") String provinceCode,
             @Param("districtCode") String districtCode,
+            @Param("provinceName") String provinceName,
+            @Param("districtName") String districtName,
             @Param("warehouseTypeId") UUID warehouseTypeId,
+            @Param("rentalPricingType") RentalPricingType rentalPricingType,
             @Param("isVerified") Boolean isVerified,
             Pageable pageable
     );
+
+    default Page<Warehouse> searchPublic(
+            String keyword,
+            WarehouseStatus status,
+            BigDecimal minPrice,
+            BigDecimal maxPrice,
+            BigDecimal minCapacity,
+            BigDecimal maxCapacity,
+            String provinceCode,
+            String districtCode,
+            UUID warehouseTypeId,
+            Boolean isVerified,
+            Pageable pageable
+    ) {
+        return searchPublic(
+                keyword, status, minPrice, maxPrice, minCapacity, maxCapacity,
+                provinceCode, districtCode, null, null,
+                warehouseTypeId, null, isVerified, pageable
+        );
+    }
 
     @EntityGraph(attributePaths = "type")
     @Query("""
@@ -192,6 +218,28 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
 
     @Query("SELECT w FROM Warehouse w WHERE w.owner.id = ?1 AND w.isDeleted = false")
     Page<Warehouse> findByOwnerId(UUID ownerId, Pageable pageable);
+
+    @EntityGraph(attributePaths = "type")
+    @Query("""
+            SELECT w FROM Warehouse w
+            WHERE w.owner.id = :ownerId
+              AND w.isDeleted = false
+              AND (:keyword IS NULL OR LOWER(w.name) LIKE :keyword
+                   OR LOWER(w.address) LIKE :keyword
+                   OR LOWER(w.provinceName) LIKE :keyword
+                   OR LOWER(w.districtName) LIKE :keyword
+                   OR LOWER(w.description) LIKE :keyword
+                   OR LOWER(w.type.name) LIKE :keyword)
+              AND (:status IS NULL OR w.status = :status)
+              AND (:isVerified IS NULL OR w.isVerified = :isVerified)
+            """)
+    Page<Warehouse> findByOwnerIdWithFilters(
+            @Param("ownerId") UUID ownerId,
+            @Param("keyword") String keyword,
+            @Param("status") WarehouseStatus status,
+            @Param("isVerified") Boolean isVerified,
+            Pageable pageable
+    );
 
     @Query("SELECT w FROM Warehouse w WHERE w.id = ?1 AND w.owner.id = ?2 AND w.isDeleted = false")
     Optional<Warehouse> findByIdAndOwnerId(UUID id, UUID ownerId);

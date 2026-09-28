@@ -25,8 +25,12 @@ public class WarehouseResponse {
     private String districtName;
     private String description;
     private BigDecimal capacity;
+    @Schema(description = "Frontend alias for capacity (total floor area in m2)")
+    private BigDecimal area;
     @Schema(description = "Listing price source; distinct from a contract's final monthly rent")
     private BigDecimal rentalPrice;
+    @Schema(description = "Frontend alias for rentalPrice")
+    private BigDecimal price;
     @Schema(allowableValues = {"FIXED_MONTHLY", "PER_SQUARE_METER_MONTHLY", "NEGOTIATED"})
     private RentalPricingType rentalPricingType;
 
@@ -35,6 +39,8 @@ public class WarehouseResponse {
     private String rejectReason;
     @Schema(description = "Inspection result flag: true=PASSED, false=FAILED, null=no completed inspection")
     private Boolean verified;
+    @Schema(description = "Frontend alias for verified inspection flag")
+    private Boolean isVerified;
     @Schema(description = "Latest inspection report status; null means no inspection request exists",
             allowableValues = {"PENDING", "IN_PROGRESS", "PASSED", "FAILED"})
     private String inspectionStatus;
@@ -43,6 +49,10 @@ public class WarehouseResponse {
     private UUID ownerId;
     private String ownerName;
     private String coverImageUrl;
+    @Schema(description = "Frontend alias for coverImageUrl")
+    private String thumbnail;
+    @Schema(description = "Frontend alias for address")
+    private String location;
     private List<String> imageUrls;
     private UUID policyId;
     private String policyVersion;

@@ -243,15 +243,30 @@ public class WarehouseService {
 
 
     @Transactional(readOnly = true)
-    public PagedResponse<WarehouseResponse> getMyWarehouses(UUID ownerId, int page, int size, String sortBy, String sortDir) {
+    public PagedResponse<WarehouseResponse> getMyWarehouses(UUID ownerId, String keyword, WarehouseStatus status,
+                                                           Boolean isVerified, int page, int size,
+                                                           String sortBy, String sortDir) {
         String normalizedSortBy = normalizeSortProperty(sortBy);
         Sort sort = "asc".equalsIgnoreCase(sortDir)
                 ? Sort.by(normalizedSortBy).ascending()
                 : Sort.by(normalizedSortBy).descending();
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        Page<Warehouse> warehousePage = warehouseRepository.findByOwnerId(ownerId, pageable);
+        Page<Warehouse> warehousePage;
+        if (!StringUtils.hasText(keyword) && status == null && isVerified == null) {
+            warehousePage = warehouseRepository.findByOwnerId(ownerId, pageable);
+        } else {
+            String kw = StringUtils.hasText(keyword) ? "%" + keyword.trim().toLowerCase() + "%" : null;
+            warehousePage = warehouseRepository.findByOwnerIdWithFilters(
+                    ownerId, kw, status, isVerified, pageable
+            );
+        }
         return toPagedResponse(warehousePage, true);
+    }
+
+    @Transactional(readOnly = true)
+    public PagedResponse<WarehouseResponse> getMyWarehouses(UUID ownerId, int page, int size, String sortBy, String sortDir) {
+        return getMyWarehouses(ownerId, null, null, null, page, size, sortBy, sortDir);
     }
 
 
@@ -323,6 +338,8 @@ public class WarehouseService {
         Pageable pageable = PageRequest.of(page, size, sort);
 
         String kw = StringUtils.hasText(request.getKeyword()) ? "%" + request.getKeyword().trim().toLowerCase() + "%" : null;
+        String provinceName = StringUtils.hasText(request.getProvinceName()) ? "%" + request.getProvinceName().trim().toLowerCase() + "%" : null;
+        String districtName = StringUtils.hasText(request.getDistrictName()) ? "%" + request.getDistrictName().trim().toLowerCase() + "%" : null;
 
         Page<Warehouse> result = warehouseRepository.searchPublic(
                 kw,
@@ -333,7 +350,10 @@ public class WarehouseService {
                 request.getMaxCapacity(),
                 request.getProvinceCode(),
                 request.getDistrictCode(),
+                provinceName,
+                districtName,
                 request.getWarehouseTypeId(),
+                request.getRentalPricingType(),
                 request.getIsVerified(),
                 pageable
         );
@@ -703,17 +723,22 @@ public class WarehouseService {
                 .districtName(w.getDistrictName())
                 .description(w.getDescription())
                 .capacity(w.getCapacity())
+                .area(w.getCapacity())
                 .rentalPrice(rentalPrice)
+                .price(rentalPrice)
                 .rentalPricingType(pricingType)
                 .status(w.getStatus().name())
                 .rejectReason(w.getRejectReason())
                 .verified(resolveInspectionVerification(inspectionStatus))
+                .isVerified(resolveInspectionVerification(inspectionStatus))
                 .inspectionStatus(inspectionStatus)
                 .typeId(w.getType() != null ? w.getType().getId() : null)
                 .typeName(w.getType() != null ? w.getType().getName() : null)
                 .ownerId(w.getOwner() != null ? w.getOwner().getId() : null)
                 .ownerName(w.getOwner() != null ? w.getOwner().getFullName() : null)
                 .coverImageUrl(cover)
+                .thumbnail(cover)
+                .location(w.getAddress())
                 .imageUrls(urls)
                 .policyId(w.getPolicy() != null ? w.getPolicy().getId() : null)
                 .policyVersion(w.getPolicy() != null ? w.getPolicy().getVersion() : null)
