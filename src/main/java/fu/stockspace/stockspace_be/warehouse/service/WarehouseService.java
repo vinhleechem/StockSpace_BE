@@ -252,11 +252,15 @@ public class WarehouseService {
                 : Sort.by(normalizedSortBy).descending();
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        String kw = StringUtils.hasText(keyword) ? "%" + keyword.trim().toLowerCase() + "%" : null;
-
-        Page<Warehouse> warehousePage = warehouseRepository.findByOwnerIdWithFilters(
-                ownerId, kw, status, isVerified, pageable
-        );
+        Page<Warehouse> warehousePage;
+        if (!StringUtils.hasText(keyword) && status == null && isVerified == null) {
+            warehousePage = warehouseRepository.findByOwnerId(ownerId, pageable);
+        } else {
+            String kw = StringUtils.hasText(keyword) ? "%" + keyword.trim().toLowerCase() + "%" : null;
+            warehousePage = warehouseRepository.findByOwnerIdWithFilters(
+                    ownerId, kw, status, isVerified, pageable
+            );
+        }
         return toPagedResponse(warehousePage, true);
     }
 

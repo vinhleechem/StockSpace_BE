@@ -571,7 +571,10 @@ class WarehouseServiceTest {
                 eq(new BigDecimal("200")),
                 eq("79"),
                 eq("760"),
+                org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull(),
                 eq(warehouseTypeId),
+                org.mockito.ArgumentMatchers.isNull(),
                 eq(true),
                 any()
         )).thenReturn(new PageImpl<>(List.of(warehouse)));
@@ -589,7 +592,10 @@ class WarehouseServiceTest {
                 eq(new BigDecimal("200")),
                 eq("79"),
                 eq("760"),
+                org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull(),
                 eq(warehouseTypeId),
+                org.mockito.ArgumentMatchers.isNull(),
                 eq(true),
                 any()
         );
@@ -898,5 +904,29 @@ class WarehouseServiceTest {
 
         assertTrue(warehouse.isDeleted());
         verify(warehouseRepository).save(warehouse);
+    }
+
+    @Test
+    void getMyWarehousesCallsFilteredRepositoryWhenFiltersProvided() {
+        warehouse.setStatus(WarehouseStatus.AVAILABLE);
+        when(warehouseRepository.findByOwnerIdWithFilters(
+                eq(ownerId),
+                eq("%kho%"),
+                eq(WarehouseStatus.AVAILABLE),
+                eq(true),
+                any()
+        )).thenReturn(new PageImpl<>(List.of(warehouse)));
+
+        PagedResponse<WarehouseResponse> response = warehouseService
+                .getMyWarehouses(ownerId, "kho", WarehouseStatus.AVAILABLE, true, 0, 10, "createdAt", "desc");
+
+        assertEquals(1, response.getTotalElements());
+        verify(warehouseRepository).findByOwnerIdWithFilters(
+                eq(ownerId),
+                eq("%kho%"),
+                eq(WarehouseStatus.AVAILABLE),
+                eq(true),
+                any()
+        );
     }
 }

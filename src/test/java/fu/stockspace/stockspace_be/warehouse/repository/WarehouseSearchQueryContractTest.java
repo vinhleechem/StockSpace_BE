@@ -27,7 +27,10 @@ class WarehouseSearchQueryContractTest {
                 java.math.BigDecimal.class,
                 String.class,
                 String.class,
+                String.class,
+                String.class,
                 java.util.UUID.class,
+                fu.stockspace.stockspace_be.warehouse.entity.RentalPricingType.class,
                 Boolean.class,
                 org.springframework.data.domain.Pageable.class
         );
@@ -44,7 +47,10 @@ class WarehouseSearchQueryContractTest {
         assertTrue(query.contains("w.visibleUntil >= CURRENT_TIMESTAMP"));
         assertTrue(query.contains(":provinceCode"));
         assertTrue(query.contains(":districtCode"));
+        assertTrue(query.contains(":provinceName"));
+        assertTrue(query.contains(":districtName"));
         assertTrue(query.contains(":warehouseTypeId"));
+        assertTrue(query.contains(":rentalPricingType"));
         assertTrue(query.contains(":minCapacity"));
         assertTrue(query.contains(":maxCapacity"));
         assertTrue(query.contains(":minPrice"));
