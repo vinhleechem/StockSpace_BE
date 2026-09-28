@@ -28,10 +28,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Read-only outbound picking preview. It plans against the current stock
- * snapshot and never creates receipts, reservations or stock mutations.
- */
 @Service
 @RequiredArgsConstructor
 public class OutboundPickingSuggestionService {

@@ -124,11 +124,6 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
             Pageable pageable
     );
 
-    /**
-     * Chat-facing variant with the structured filters that are safe to expose
-     * to a user. The original method is kept for the warehouse management
-     * screens so this extension does not change their query contract.
-     */
     @EntityGraph(attributePaths = "type")
     @Query("""
             SELECT w FROM Warehouse w

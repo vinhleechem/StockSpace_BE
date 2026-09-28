@@ -8,7 +8,6 @@ import lombok.experimental.SuperBuilder;
 
 import java.util.UUID;
 
-/** Idempotency and traceability record for one batch-level delta of an approved audit item. */
 @Entity
 @Table(name = "inventory_audit_adjustments", uniqueConstraints = {
         @UniqueConstraint(name = "ux_inventory_audit_adjustment_item_batch", columnNames = {"audit_item_id", "batch_id"})

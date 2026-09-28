@@ -35,11 +35,6 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/**
- * Calculates deterministic put-away suggestions from the active tenant
- * layout and current physical stock. This service never creates or updates
- * stock, receipts, transactions, reservations, racks, or bins.
- */
 @Service
 @RequiredArgsConstructor
 public class PutawaySuggestionService {

@@ -101,11 +101,6 @@ public class WarehouseLayoutService {
         return mapToLayoutResponse(layout);
     }
 
-    /**
-     * Read-only layout access for Staff assigned to a tenant warehouse.
-     * Staff can inspect the tenant snapshot, but cannot use this method to
-     * modify layout data.
-     */
     @Transactional(readOnly = true)
     public WarehouseLayoutResponse getStaffLayoutTree(UUID warehouseId, UUID staffId, UUID tenantId) {
         tenantWarehouseAccessService.requireActiveContract(tenantId, warehouseId);
@@ -261,8 +256,6 @@ public class WarehouseLayoutService {
         boolean hasActiveContract = contractRepository.existsCurrentDirectActiveContract(
                 tenantId, warehouseId, LocalDate.now(businessClock));
 
-        // Do not overwrite the operational layout of an already active contract.
-        // A3 does not lock overlap yet; the draft only keeps an independent snapshot.
         if (existing != null && existing.isActive() && !existing.isDeleted() && hasActiveContract) {
             return cloneDefaultContents
                     ? asTenantSnapshot(defaultLayout, tenantId)
@@ -419,10 +412,6 @@ public class WarehouseLayoutService {
         warehouseRepository.save(warehouse);
     }
 
-    /**
-     * Resolves the only layout a caller is allowed to mutate. Owner writes the
-     * warehouse default layout; Tenant writes only its own active snapshot.
-     */
     private WarehouseLayout resolveLayoutForSave(Warehouse warehouse,
                                                   UUID warehouseId,
                                                   UUID userId,
@@ -640,10 +629,6 @@ public class WarehouseLayoutService {
         return mapToLayoutResponse(layout);
     }
 
-    /**
-     * Saves the tenant layout belonging to a contract proposal. The caller
-     * must authorize the contract owner before reaching this method.
-     */
     @Transactional
     public WarehouseLayoutResponse saveContractLayout(UUID warehouseId,
                                                        UUID tenantId,
@@ -662,12 +647,6 @@ public class WarehouseLayoutService {
                 .map(this::mapToLayoutResponse);
     }
 
-    /**
-     * Revalidates a contract layout response without changing any layout
-     * data. This is used immediately before contract submission so a stale or
-     * manually altered layout cannot bypass the same geometry rules used by
-     * bulk layout saves.
-     */
     @Transactional(readOnly = true)
     public void validateContractLayout(WarehouseLayoutResponse layout,
                                        UUID warehouseId,
@@ -841,11 +820,6 @@ public class WarehouseLayoutService {
                 .build();
     }
 
-    /**
-     * Produces a deterministic copy before a layout tree is stored in a
-     * contract snapshot. Repository iteration order must not change the
-     * serialized snapshot for the same logical layout.
-     */
     public WarehouseLayoutResponse stabilizeLayoutSnapshot(WarehouseLayoutResponse source) {
         if (source == null) {
             return null;

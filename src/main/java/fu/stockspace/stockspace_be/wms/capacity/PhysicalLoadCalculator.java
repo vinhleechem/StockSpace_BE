@@ -10,10 +10,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Single source of truth for converting SKU quantities to physical load.
- * Values are calculated with BigDecimal and are never persisted as counters.
- */
 @Component
 public class PhysicalLoadCalculator {
 

@@ -22,7 +22,6 @@ public class StockTransferResponse {
     private StockTransferStatus status;
     private WarehouseSummaryResponse sourceWarehouse;
     private WarehouseSummaryResponse destinationWarehouse;
-    /** Current operational destination; destinationWarehouse remains the original request route. */
     private WarehouseSummaryResponse currentDestinationWarehouse;
     private TransferActorResponse sourceStaff;
     private TransferActorResponse destinationStaff;

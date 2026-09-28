@@ -26,12 +26,6 @@ import lombok.experimental.SuperBuilder;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * A physical movement leg.  One transfer request can have an outbound leg,
- * several forward/retry legs and one or more return legs.  The original
- * transfer document is deliberately kept immutable while legs hold the
- * operational route history.
- */
 @Entity
 @Table(name = "stock_transfer_attempts", indexes = {
         @Index(name = "idx_stock_transfer_attempts_transfer_sequence", columnList = "transfer_id,sequence_no")
@@ -75,7 +69,6 @@ public class StockTransferAttempt extends BaseEntity {
     @JoinColumn(name = "destination_warehouse_id", nullable = false)
     private Warehouse destinationWarehouse;
 
-    /** Receiver assignment snapshot for this physical leg. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assigned_destination_staff_id")
     private User destinationStaff;

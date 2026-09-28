@@ -115,11 +115,6 @@ public class Warehouse extends BaseEntity {
     @JoinColumn(name = "policy_version_id", nullable = false)
     private SystemPolicy policy;
 
-    /**
-     * Embedding of the public warehouse profile used only for semantic search.
-     * Eligibility and tenant visibility are still enforced by the repository
-     * query; the vector is never an authorization boundary.
-     */
     @JdbcTypeCode(SqlTypes.VECTOR)
     @Array(length = SEARCH_EMBEDDING_DIMENSIONS)
     @Column(name = "search_embedding", columnDefinition = "vector(1536)")

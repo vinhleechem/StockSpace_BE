@@ -129,7 +129,6 @@ public class InventoryAuditService {
         WarehouseBin bin = binOf(item);
         AuditItemOrigin itemOrigin = item.getItemOrigin();
         if (itemOrigin == null) {
-            // Compatibility for rows created before item_origin was introduced.
             itemOrigin = item.getExpectedQuantity() == 0
                     ? AuditItemOrigin.UNEXPECTED : AuditItemOrigin.SNAPSHOT;
         }
@@ -199,7 +198,6 @@ public class InventoryAuditService {
                 .build();
     }
 
-    /* -------------------------- canonical workflow ------------------------- */
 
     @Transactional
     public InventoryAuditResponse createAudit(UUID userId, CreateInventoryAuditPlanRequest request) {
@@ -281,9 +279,6 @@ public class InventoryAuditService {
                 .getContent().stream()
                 .filter(batch -> inScope(startedAudit, batch))
                 .toList();
-        // A counter verifies the physical quantity of one SKU at one location. Batch/lot
-        // allocation is deliberately deferred to approval, otherwise one physical count
-        // would be split into several rows and could not handle a FIFO shortage safely.
         Map<BatchScopeKey, List<StockBatch>> groupedBatches = batches.stream()
                 .collect(Collectors.groupingBy(batch -> new BatchScopeKey(
                         batch.getSkuId(), idOf(batch.getRack()), idOf(batch.getBin()))));
@@ -343,11 +338,6 @@ public class InventoryAuditService {
         return maskCounterResponse(mapToResponse(audit, currentAuditItems(audit)), actor);
     }
 
-    /**
-     * Save explanations after submission without accepting a quantity update.
-     * Quantity changes remain impossible until a tenant explicitly approves an
-     * edit request.
-     */
     @Transactional
     public InventoryAuditResponse saveAuditNotes(UUID userId, UUID auditId, SaveAuditNotesRequest request) {
         InventoryAudit audit = getAuditForUpdate(auditId);
@@ -498,7 +488,6 @@ public class InventoryAuditService {
         return maskCounterResponse(mapToResponse(audit, items), actor);
     }
 
-    /** Counter (staff or tenant) asks for an in-place correction after seeing the system quantity. */
     @Transactional
     public InventoryAuditResponse requestEdit(UUID userId, UUID auditId, String reason) {
         InventoryAudit audit = getAuditForUpdate(auditId);
@@ -525,7 +514,6 @@ public class InventoryAuditService {
         return maskCounterResponse(mapToResponse(audit, currentAuditItems(audit)), actor);
     }
 
-    /** Tenant approves the request and unlocks quantity editing on the same audit. */
     @Transactional
     public InventoryAuditResponse approveEdit(UUID userId, UUID auditId) {
         InventoryAudit audit = getAuditForUpdate(auditId);
@@ -564,9 +552,6 @@ public class InventoryAuditService {
         audit.setReviewReason(reason.trim());
         audit.setReviewedAt(LocalDateTime.now());
         audit = auditRepository.save(audit);
-        // Keep the warehouse locked throughout the unresolved recount flow.
-        // For the normal path this reuses the lock already held since start;
-        // it also repairs a legacy record that reached SUBMITTED without one.
         auditLockService.acquire(audit);
         pushAuditNotification(audit.getAssignedTo() != null ? audit.getAssignedTo().getId() : audit.getRequestedBy().getId(),
                 "Yêu cầu kiểm kê lại", "Phiếu kiểm kê kho " + audit.getWarehouse().getName()
@@ -691,7 +676,7 @@ public class InventoryAuditService {
 
         List<StockBatch> candidates;
         if (item.getBatch() != null) {
-            candidates = List.of(item.getBatch()); // compatibility with historical/manual rows
+            candidates = List.of(item.getBatch());
         } else {
             candidates = stockBatchRepository
                     .findAllBySkuIdAndWarehouseIdAndIsActiveTrueAndIsDeletedFalse(
@@ -828,8 +813,6 @@ public class InventoryAuditService {
 
     private void requireAuditCountAccess(InventoryAudit audit, User actor) {
         requireAuditReadAccess(audit, actor);
-        // Staff must be the assigned counter. A tenant counter is authorized by
-        // tenant/warehouse access and is intentionally not assignment-bound.
         if (isStaff(actor) && (audit.getAssignedTo() == null
                 || !actor.getId().equals(audit.getAssignedTo().getId()))) {
             throw new ForbiddenException(ErrorCode.FORBIDDEN);

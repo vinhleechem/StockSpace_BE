@@ -28,10 +28,6 @@ public class InventoryReceipt extends BaseEntity {
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
-    /**
-     * Immutable data owner. This must not be inferred from createdBy when a
-     * receipt is read because staff membership can change over time.
-     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tenant_id", nullable = false, updatable = false)
     private User tenant;

@@ -182,8 +182,6 @@ public class PublicWarehouseController {
 
     private BigDecimal coalescePriceFilter(String legacyName, BigDecimal legacyValue,
                                            String currentName, BigDecimal currentValue) {
-        // Keep the old alias during the compatibility window. The explicitly
-        // named current field is authoritative when both are sent.
         return currentValue != null ? currentValue : legacyValue;
     }
 

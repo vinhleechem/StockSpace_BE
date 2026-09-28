@@ -6,7 +6,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
-/** Builds a stable, public-only document for warehouse semantic retrieval. */
 public final class WarehouseSearchDocumentSupport {
 
     private WarehouseSearchDocumentSupport() {

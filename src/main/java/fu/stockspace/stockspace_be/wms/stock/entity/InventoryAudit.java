@@ -34,7 +34,6 @@ public class InventoryAudit extends BaseEntity {
     @JoinColumn(name = "warehouse_id", nullable = false)
     private Warehouse warehouse;
 
-    /** Immutable tenant owner of the audit. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tenant_id")
     private User tenant;
@@ -47,7 +46,6 @@ public class InventoryAudit extends BaseEntity {
     @JoinColumn(name = "approved_by")
     private User approvedBy;
 
-    /** Staff member who requested an in-place edit after submission. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "edit_requested_by")
     private User editRequestedBy;
@@ -55,7 +53,6 @@ public class InventoryAudit extends BaseEntity {
     @Column(name = "edit_requested_at")
     private LocalDateTime editRequestedAt;
 
-    /** Tenant reviewer who approved the in-place edit. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "edit_approved_by")
     private User editApprovedBy;

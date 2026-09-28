@@ -44,13 +44,6 @@ public class SearchWarehousesTool implements ChatTool {
     private static final int NORMALIZED_SEARCH_CANDIDATE_LIMIT = 200;
     private static final Pattern DIACRITICS = Pattern.compile("\\p{M}+");
     private static final Pattern NON_WORD = Pattern.compile("[^\\p{L}\\p{N}]+");
-    /**
-     * A follow-up such as "Kho A bao nhiêu m2" is an entity lookup plus an
-     * area question.  Passing the question words into a SQL LIKE predicate
-     * makes an otherwise valid warehouse look missing, so strip only the
-     * well-known dimension phrases before searching.  The original phrase is
-     * still returned to the model as {@code requestedKeyword}.
-     */
     private static final Pattern DIMENSION_QUESTION = Pattern.compile(
             "(?iu)(?:\\b(?:diện\\s+tích|dien\\s+tich|kích\\s+thước|kich\\s+thuoc)\\b"
                     + "(?:\\s+bao\\s+nhiêu(?:\\s*(?:m2|m²|mét\\s+vuông|met\\s+vuong))?)?\\b"
@@ -132,7 +125,6 @@ public class SearchWarehousesTool implements ChatTool {
         this.pgVectorEnabled = pgVectorEnabled;
     }
 
-    /** Kept for focused unit tests that exercise lexical search only. */
     public SearchWarehousesTool(WarehouseRepository warehouseRepository, ObjectMapper objectMapper) {
         this(warehouseRepository, objectMapper, null, null, false);
     }
@@ -226,9 +218,6 @@ public class SearchWarehousesTool implements ChatTool {
                 }
             }
 
-            // Run vector ranking for a natural-language query or whenever the
-            // lexical pass found nothing. Exact-name lookups remain lexical so
-            // a semantically similar warehouse cannot replace the named one.
             boolean needsSemanticRanking = results.isEmpty()
                     || (semanticQuery != null && keyword != null
                     && !semanticQuery.equalsIgnoreCase(keyword));
@@ -349,7 +338,6 @@ public class SearchWarehousesTool implements ChatTool {
                 .replaceAll("[?!,:;]+", " ")
                 .replaceAll("\\s+", " ")
                 .trim();
-        // Do not turn a standalone dimension question into a broad listing.
         return cleaned.isBlank() ? keyword.trim() : cleaned;
     }
 
@@ -391,9 +379,6 @@ public class SearchWarehousesTool implements ChatTool {
                 null, province, district, pricingType,
                 minPrice, maxPrice, minCapacity, maxCapacity, isVerified,
                 0, NORMALIZED_SEARCH_CANDIDATE_LIMIT, sort);
-        // A user may omit Vietnamese diacritics ("Binh Duong", "An Phu")
-        // while the structured columns retain them. Retry over the public
-        // candidate set and let the normalized scorer match the address.
         if (candidates.isEmpty() && (province != null || district != null)) {
             candidates = search(
                     null, null, null, pricingType,
@@ -490,8 +475,6 @@ public class SearchWarehousesTool implements ChatTool {
                 expandedPhrases.addAll(concept.expansions());
             }
         }
-        // Merge the shared domain vocabulary with the original warehouse
-        // concepts so aliases and small typos use the same candidate set.
         expandedPhrases.addAll(SemanticQueryExpansion.expand(normalizedKeyword));
         return new SemanticQuery(
                 normalizedKeyword,

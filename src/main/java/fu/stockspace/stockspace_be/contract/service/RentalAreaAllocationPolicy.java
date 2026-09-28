@@ -7,18 +7,6 @@ import fu.stockspace.stockspace_be.warehouse.entity.RentalPricingType;
 
 import java.math.BigDecimal;
 
-/**
- * Resolves the leased dimensions that are authoritative for a rental contract.
- *
- * <p>The current pricing type already expresses the rental scope, so no
- * additional persisted scope is required:</p>
- * <ul>
- *     <li>{@code FIXED_MONTHLY} uses the complete default layout.</li>
- *     <li>{@code PER_SQUARE_METER_MONTHLY} and {@code NEGOTIATED} use a
- *     leased area supplied by the owner, up to the complete default layout
- *     area.</li>
- * </ul>
- */
 public final class RentalAreaAllocationPolicy {
 
     private RentalAreaAllocationPolicy() {
@@ -69,10 +57,6 @@ public final class RentalAreaAllocationPolicy {
         return pricingType == RentalPricingType.FIXED_MONTHLY;
     }
 
-    /**
-     * Validates dimensions already stored on a contract against the current
-     * default layout without resolving a new rental scope.
-     */
     public static LeasedDimensions validatePreservedDimensions(
             RentalPricingType pricingType,
             BigDecimal width,

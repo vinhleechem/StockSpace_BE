@@ -27,12 +27,10 @@ public class WarehouseSearchRequest {
 
     private BigDecimal maxRentalPrice;
 
-    /** @deprecated Use minRentalPrice. Kept for one compatibility release. */
     @Deprecated
     @Schema(deprecated = true, description = "Legacy alias for minRentalPrice")
     private BigDecimal minPrice;
 
-    /** @deprecated Use maxRentalPrice. Kept for one compatibility release. */
     @Deprecated
     @Schema(deprecated = true, description = "Legacy alias for maxRentalPrice")
     private BigDecimal maxPrice;

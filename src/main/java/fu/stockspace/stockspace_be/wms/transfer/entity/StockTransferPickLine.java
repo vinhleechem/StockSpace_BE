@@ -24,7 +24,6 @@ import lombok.experimental.SuperBuilder;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/** Immutable scan/pick record. Stock is still owned by the source warehouse until dispatch. */
 @Entity
 @Table(name = "stock_transfer_pick_lines")
 @Getter

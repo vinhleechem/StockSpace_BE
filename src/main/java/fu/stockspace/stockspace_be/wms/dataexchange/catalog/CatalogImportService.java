@@ -180,9 +180,6 @@ public class CatalogImportService {
     }
 
     private List<fu.stockspace.stockspace_be.wms.dataexchange.job.WmsImportRow> jobServiceRows(UUID jobId) {
-        // The job service deliberately owns the row repository in order to keep
-        // row access centralized. This method is replaced by the package-level
-        // row reader once feature-specific imports are added.
         return jobServiceRowsRepository().findByJobIdOrderBySheetNameAscRowNumberAsc(jobId);
     }
 

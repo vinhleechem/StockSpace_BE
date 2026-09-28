@@ -5,14 +5,6 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-/**
- * Small, deterministic intent gate for warehouse-rental questions.
- *
- * The LLM is still responsible for understanding the wording, but it must
- * not be the first component deciding whether a live rule or private tenant
- * record is needed.  Keeping this classifier dependency-free also makes the
- * safety boundary easy to unit test.
- */
 public final class RentalIntentClassifier {
 
     private static final Pattern DIACRITICS = Pattern.compile("\\p{M}+");

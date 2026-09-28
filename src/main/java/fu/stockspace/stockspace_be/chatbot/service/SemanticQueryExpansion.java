@@ -8,12 +8,6 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-/**
- * Domain vocabulary used when a user describes the same warehouse concept in
- * different words.  It is intentionally deterministic: embeddings can rank
- * candidates, but these aliases make the fallback path useful when the
- * embedding provider is unavailable or a user makes a small typing mistake.
- */
 public final class SemanticQueryExpansion {
 
     private static final Pattern DIACRITICS = Pattern.compile("\\p{M}+");
@@ -65,7 +59,6 @@ public final class SemanticQueryExpansion {
     private SemanticQueryExpansion() {
     }
 
-    /** Returns matching aliases, including the trigger itself, in stable order. */
     public static Set<String> expand(String value) {
         String normalized = normalize(value);
         if (normalized.isBlank()) {

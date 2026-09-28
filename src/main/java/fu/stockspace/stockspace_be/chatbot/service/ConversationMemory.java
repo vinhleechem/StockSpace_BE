@@ -11,12 +11,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
-/**
- * Small, structured memory that survives between chat turns. It deliberately
- * stores entity references and a bounded set of public-search filters instead
- * of raw tool payloads so prompts stay small and operational data is always
- * refreshed through a tool before answering.
- */
 public record ConversationMemory(
         List<EntityReference> entities,
         List<String> recentTools,
@@ -44,7 +38,6 @@ public record ConversationMemory(
         lastWarehouseSearch = sanitizeSearchContext(lastWarehouseSearch);
     }
 
-    /** Backwards-compatible constructor for sessions/tests created before search context was persisted. */
     public ConversationMemory(List<EntityReference> entities, List<String> recentTools) {
         this(entities, recentTools, Map.of());
     }
@@ -57,11 +50,6 @@ public record ConversationMemory(
         return entities.isEmpty() && recentTools.isEmpty() && lastWarehouseSearch.isEmpty();
     }
 
-    /**
-     * Builds model-facing context. UUIDs are intentionally available to the
-     * model for chained tool calls, while the response sanitizer prevents them
-     * from reaching the user.
-     */
     public String promptContext(String userMessage) {
         if (entities.isEmpty() && lastWarehouseSearch.isEmpty()) {
             return "";
@@ -112,10 +100,6 @@ public record ConversationMemory(
         return Map.copyOf(safe);
     }
 
-    /**
-     * Repairs a missing/name-based warehouseId emitted by the model using the
-     * entity memory. Authorized tools still enforce access to the resolved ID.
-     */
     public Map<String, Object> enrichToolArguments(
             String toolName,
             Map<String, Object> rawArguments,
@@ -174,8 +158,6 @@ public record ConversationMemory(
             }
         }
 
-        // A short referential follow-up is safe only when the previous result
-        // contained a single warehouse. Never guess among multiple warehouses.
         int wordCount = normalizedText.isBlank()
                 ? 0
                 : normalizedText.split("\\s+").length;

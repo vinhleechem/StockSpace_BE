@@ -26,10 +26,6 @@ public record SendMessageRequest(
         @Schema(description = "Màn hình nghiệp vụ đang mở, dùng để hiểu câu hỏi nối tiếp; backend chỉ nhận giá trị trong allowlist.")
         String activeScreen
 ) {
-    /**
-     * Keeps existing Java callers source-compatible. HTTP clients may omit the
-     * optional active warehouse context as well.
-     */
     public SendMessageRequest(String sessionId, String message) {
         this(sessionId, message, null, null);
     }

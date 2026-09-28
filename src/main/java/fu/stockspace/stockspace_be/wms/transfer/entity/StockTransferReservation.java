@@ -25,11 +25,6 @@ import lombok.experimental.SuperBuilder;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * A reservation is a hold on available stock, not a stock mutation.  Keeping
- * it as a first-class row prevents two different workflows from silently
- * promising the same quantity of a batch.
- */
 @Entity
 @Table(name = "stock_transfer_reservations", indexes = {
         @Index(name = "idx_stock_transfer_reservation_batch_status", columnList = "source_stock_batch_id,status"),

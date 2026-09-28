@@ -13,13 +13,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Model-backed intent extraction for every eligible turn. It deliberately
- * returns a tiny allowlisted decision instead of calling business tools itself.
- * The deterministic planner is the provider-outage fallback; the existing
- * server-side tool registry, subscription checks and evidence gates remain
- * authoritative.
- */
 @Component
 @ConditionalOnBean(ChatClient.Builder.class)
 @ConditionalOnProperty(
@@ -79,7 +72,6 @@ public final class StructuredQueryPlanner {
         this.chatClient = builder.build();
     }
 
-    /** Returns NONE on provider/configuration/validation failure. */
     public ChatQueryPlanner.Plan plan(
             String userMessage,
             Map<String, Object> previousWarehouseSearch
@@ -98,8 +90,6 @@ public final class StructuredQueryPlanner {
                     .entity(Decision.class, spec -> spec.validateSchema());
             return toPlan(decision, userMessage, previousWarehouseSearch);
         } catch (RuntimeException exception) {
-            // The legacy planner/OpenRouter loop is intentionally the safe
-            // fallback. Do not turn a model outage into a chat outage.
             log.debug("[StructuredQueryPlanner] Model route unavailable; using deterministic fallback type={}",
                     exception.getClass().getSimpleName());
             return ChatQueryPlanner.Plan.none();
@@ -264,7 +254,6 @@ public final class StructuredQueryPlanner {
         return value == null ? "" : String.valueOf(value);
     }
 
-    /** Deliberately small schema: model output cannot contain tool names or SQL. */
     public record Decision(
             String intent,
             String contextAction,

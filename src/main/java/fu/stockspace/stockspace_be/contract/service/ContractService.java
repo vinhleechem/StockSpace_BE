@@ -138,11 +138,6 @@ public class ContractService {
         return mapToResponse(draft);
     }
 
-    /**
-     * Creates the owner-editable successor draft for an active direct contract.
-     * All identity, scope and layout fields are copied from the locked source;
-     * the owner can only provide the new end date and renewal-specific terms.
-     */
     @Transactional
     public RentalContractResponse createRenewalDraft(UUID ownerId,
                                                      UUID sourceContractId,
@@ -220,11 +215,6 @@ public class ContractService {
         return mapToResponse(renewal, ownerId);
     }
 
-    /**
-     * Updates only the mutable terms of a direct owner-created contract. The
-     * owner, tenant and warehouse are deliberately taken from the persisted
-     * contract and cannot be changed through this API.
-     */
     @Transactional
     public RentalContractResponse updateOwnerDraft(UUID ownerId,
                                                    UUID contractId,
@@ -323,11 +313,6 @@ public class ContractService {
         return mapToResponse(renewal, ownerId);
     }
 
-    /**
-     * Revalidates and submits a direct contract.
-     * The warehouse row is locked before the overlap query so two concurrent
-     * submissions for the same warehouse observe a serialized state.
-     */
     @Transactional
     public RentalContractResponse submitOwnerContract(UUID ownerId, UUID contractId) {
         RentalContract contract = findDirectContractForOwnerEdit(ownerId, contractId);
@@ -414,11 +399,6 @@ public class ContractService {
         return mapToResponse(contract, ownerId, availability);
     }
 
-    /**
-     * Recalls a contract that is waiting for tenant confirmation so the owner
-     * can correct and submit it again. The submitted terms and layout are
-     * intentionally kept as the starting point for the next edit.
-     */
     @Transactional
     public RentalContractResponse recallOwnerContract(UUID ownerId, UUID contractId) {
         RentalContract contract = findDirectContractForOwnerRecall(ownerId, contractId);
@@ -441,11 +421,6 @@ public class ContractService {
         return mapToResponse(contract, ownerId);
     }
 
-    /**
-     * Revalidates and submits a renewal successor. Lock order is deliberately
-     * warehouse, source contract, successor so concurrent renewal operations
-     * serialize around the same physical warehouse and source lifecycle.
-     */
     private RentalContractResponse submitRenewalContract(UUID ownerId,
                                                           RentalContract candidate) {
         UUID sourceContractId = candidate.getRenewedFromContract().getId();
@@ -675,12 +650,6 @@ public class ContractService {
         }
     }
 
-    /**
-     * Confirms a direct contract submitted by its owner. This lifecycle is
-     * deliberately independent from platform wallet flows: tenant confirmation
-     * only activates the contract and does not
-     * change the warehouse listing status.
-     */
     @Transactional
     public RentalContractResponse confirmDirectContract(UUID tenantId, UUID contractId) {
         RentalContract contract = findDirectContractForTenantReview(tenantId, contractId);
@@ -886,11 +855,6 @@ public class ContractService {
         }
     }
 
-    /**
-     * Moves a submitted direct contract back to the owner for correction.
-     * Tenant review does not mutate the submitted terms or layout; the owner
-     * edit/resubmit flow owns those mutations.
-     */
     @Transactional
     public RentalContractResponse requestDirectContractChanges(
             UUID tenantId,
@@ -920,11 +884,6 @@ public class ContractService {
         return mapToResponse(contract, tenantId);
     }
 
-    /**
-     * Rejects a submitted direct contract while preserving it as read-only
-     * history. The tenant layout proposal is archived only when the tenant
-     * has no other active contract using the same warehouse.
-     */
     @Transactional
     public RentalContractResponse rejectDirectContract(
             UUID tenantId,

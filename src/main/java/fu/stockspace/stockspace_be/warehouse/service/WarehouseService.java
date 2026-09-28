@@ -129,10 +129,6 @@ public class WarehouseService {
                 .capacity(request.getCapacity())
                 .rentalPricingType(pricingType)
                 .rentalPrice(rentalPrice)
-                // A warehouse is submitted for Admin review as soon as the
-                // owner starts the create + layout flow. There is no
-                // warehouse-level draft state; the layout is saved by the
-                // next request before Admin can approve it.
                 .status(WarehouseStatus.PENDING_APPROVAL)
                 .isVerified(false)
                 .policy(policy)
@@ -152,9 +148,6 @@ public class WarehouseService {
             attachImages(warehouse, request.getImageUrls());
         }
 
-        // Notify after the warehouse row and its images have been persisted.
-        // Notification delivery is best-effort and is isolated by the
-        // notifier so a mail/WebSocket failure cannot roll back creation.
         approvalNotifier.notifyAdmin(warehouse);
 
         log.info("Warehouse created: {} (ID: {})", warehouse.getName(), warehouse.getId());
@@ -289,11 +282,6 @@ public class WarehouseService {
         return saved;
     }
 
-    /**
-     * Performs the read-only guard required before uploading owner images to
-     * external storage. The image mutation methods repeat the check under a
-     * row lock before persisting URLs.
-     */
     @Transactional(readOnly = true)
     public void validateOwnerContentEdit(UUID ownerId, UUID warehouseId) {
         Warehouse warehouse = getOwnedWarehouse(ownerId, warehouseId);
@@ -426,9 +414,6 @@ public class WarehouseService {
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
         requireWarehouseOwner(warehouse, ownerId);
 
-        // New warehouses are submitted automatically by createWarehouse. This
-        // endpoint remains only for an Admin-rejected warehouse that the owner
-        // edited and wants to send again.
         if (warehouse.getStatus() != WarehouseStatus.INACTIVE) {
             throw new BadRequestException(ErrorCode.WAREHOUSE_INVALID_STATUS_TRANSITION);
         }
@@ -551,12 +536,6 @@ public class WarehouseService {
         log.info("Warehouse {} verified via inspection", warehouseId);
     }
 
-    /**
-     * A failed inspection invalidates the verification flag and hides the
-     * current publication. An open paid order is intentionally kept so the
-     * owner can resume the remaining paid period after passing inspection
-     * again without paying for a second listing package.
-     */
     @Transactional
     public void markAsFailedByInspection(UUID warehouseId) {
         Warehouse warehouse = warehouseRepository.findByIdForUpdate(warehouseId)
@@ -612,10 +591,6 @@ public class WarehouseService {
         return warehouse;
     }
 
-    /**
-     * Locks a warehouse row for direct-contract submission. Contract overlap
-     * checks are serialized per warehouse without locking unrelated warehouses.
-     */
     @Transactional
     public Warehouse lockWarehouseForContractSubmit(UUID warehouseId) {
         return warehouseRepository.findByIdForUpdate(warehouseId)

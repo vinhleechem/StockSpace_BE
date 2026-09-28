@@ -14,7 +14,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-/** Converts successful tool results into compact, tenant/session-scoped memory. */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -173,7 +172,6 @@ public class ConversationMemoryService {
             try {
                 return UUID.fromString(value.asText().trim()).toString();
             } catch (IllegalArgumentException ignored) {
-                // Try the next known ID field.
             }
         }
         return null;

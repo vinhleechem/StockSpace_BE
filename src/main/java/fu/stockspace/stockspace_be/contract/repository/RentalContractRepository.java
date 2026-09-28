@@ -119,11 +119,6 @@ public interface RentalContractRepository extends JpaRepository<RentalContract, 
             @Param("warehouseId") UUID warehouseId,
             @Param("today") java.time.LocalDate today);
 
-    /**
-     * Direct-contract overlap check used while the parent warehouse row is
-     * locked. Date boundaries are inclusive: a contract ending on a date
-     * conflicts with another contract starting on that same date.
-     */
     @Query("""
             SELECT COUNT(c) > 0 FROM RentalContract c
             WHERE c.id <> :contractId

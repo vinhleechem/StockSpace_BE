@@ -31,10 +31,6 @@ public class PayOsCallbackController {
     @Value("${app.payos.return-url:https://stock-space-nu.vercel.app/wallet/callback}")
     private String frontendCallbackUrl;
 
-    /**
-     * Webhook nhận thông báo biến động giao dịch tự động (Server-to-Server) từ PayOS.
-     * PayOS gửi POST request kèm chữ ký HMAC SHA-256.
-     */
     @PostMapping("/payos-webhook")
     @Operation(summary = "Endpoint xử lý Webhook thanh toán từ PayOS")
     public ResponseEntity<Map<String, Object>> handlePayOsWebhook(@RequestBody(required = false) Map<String, Object> webhookBody) {
@@ -48,7 +44,6 @@ public class PayOsCallbackController {
             return ResponseEntity.ok(response);
         }
 
-        // Fast-path: Kiểm tra nếu là webhook ping test khi cài đặt webhook URL từ PayOS Dashboard
         Object dataObj = webhookBody.get("data");
         if (dataObj instanceof Map<?, ?> dataMap) {
             Object orderCodeObj = dataMap.get("orderCode");
@@ -64,12 +59,10 @@ public class PayOsCallbackController {
         }
 
         try {
-            // 1. Xác thực chữ ký dữ liệu từ PayOS
             WebhookData webhookData = payOsService.verifyWebhook(webhookBody);
             Long orderCode = webhookData.getOrderCode();
             String paymentCode = String.valueOf(orderCode);
 
-            // 2. Kiểm tra nếu là đơn hàng không tồn tại trong hệ thống
             boolean exists = transactionRepository.findByPaymentCode(paymentCode).isPresent();
             if (!exists) {
                 log.warn("Transaction not found for PayOS orderCode: {}", orderCode);
@@ -78,7 +71,6 @@ public class PayOsCallbackController {
                 return ResponseEntity.ok(response);
             }
 
-            // 3. Xử lý cộng tiền và cập nhật trạng thái đơn nạp
             walletService.processPayOsWebhook(webhookData);
 
             response.put("error", 0);
@@ -89,15 +81,10 @@ public class PayOsCallbackController {
             log.error("Error processing PayOS webhook: {}", e.getMessage(), e);
             response.put("error", -1);
             response.put("message", e.getMessage());
-            // Trả về 400 để PayOS ghi nhận lỗi xác thực nếu chữ ký sai
             return ResponseEntity.badRequest().body(response);
         }
     }
 
-    /**
-     * Endpoint hỗ trợ trường hợp PayOS redirect người dùng về Backend.
-     * Backend sẽ chuyển hướng tiếp về trang Frontend callback.
-     */
     @GetMapping("/payos-callback")
     @Operation(summary = "Đón nhận chuyển hướng của người dùng từ PayOS về Backend và redirect sang Frontend")
     public void handlePayOsRedirect(
@@ -123,9 +110,6 @@ public class PayOsCallbackController {
         response.sendRedirect(redirectUrl);
     }
 
-    /**
-     * Endpoint xác nhận URL webhook với PayOS (dùng khi cài đặt Webhook URL lần đầu).
-     */
     @PostMapping("/payos/confirm-webhook")
     @Operation(summary = "Xác nhận Webhook URL với PayOS")
     public ResponseEntity<Map<String, Object>> confirmWebhook(@RequestParam String webhookUrl) {

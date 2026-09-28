@@ -8,10 +8,6 @@ import java.util.Objects;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
-/**
- * Deterministic, side-effect-free planner used after physical capacity has
- * been calculated for every candidate bin.
- */
 @Component
 public class PutawaySuggestionPlanner {
 

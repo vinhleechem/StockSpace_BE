@@ -54,15 +54,6 @@ public class PayOsService {
         }
     }
 
-    /**
-     * Tạo link thanh toán PayOS.
-     *
-     * @param orderCode Mã đơn hàng (bắt buộc số nguyên long độc nhất)
-     * @param amount    Số tiền giao dịch (VND)
-     * @param description Mô tả đơn hàng (PayOS giới hạn tối đa 25 ký tự không dấu)
-     * @param expiredAtEpochSeconds Thời gian hết hạn link tính bằng giây (epoch timestamp)
-     * @return CreatePaymentLinkResponse chứa checkoutUrl và qrCode
-     */
     public CreatePaymentLinkResponse createPaymentLink(Long orderCode, BigDecimal amount, String description, Long expiredAtEpochSeconds) {
         ensureInitialized();
         log.info("Creating PayOS payment link: orderCode={}, amount={}, description={}", orderCode, amount, description);
@@ -92,12 +83,6 @@ public class PayOsService {
         }
     }
 
-    /**
-     * Xác thực chữ ký webhook nhận từ server PayOS.
-     *
-     * @param webhookBody Dữ liệu JSON hoặc Map gửi từ webhook PayOS
-     * @return WebhookData đã được xác thực an toàn
-     */
     public WebhookData verifyWebhook(Object webhookBody) {
         ensureInitialized();
         try {
@@ -113,9 +98,6 @@ public class PayOsService {
         }
     }
 
-    /**
-     * Lấy thông tin thanh toán trực tiếp từ PayOS theo orderCode (dùng để đối soát/fallback nếu cần).
-     */
     public PaymentLink getPaymentLinkInformation(Long orderCode) {
         ensureInitialized();
         try {
@@ -126,9 +108,6 @@ public class PayOsService {
         }
     }
 
-    /**
-     * Xác nhận Webhook URL với PayOS.
-     */
     public String confirmWebhookUrl(String webhookUrl) {
         ensureInitialized();
         try {
@@ -141,9 +120,6 @@ public class PayOsService {
         }
     }
 
-    /**
-     * PayOS giới hạn trường description tối đa 25 ký tự, không dấu, không ký tự đặc biệt.
-     */
     private String sanitizeDescription(String description, Long orderCode) {
         if (description == null || description.isBlank()) {
             return "Nap vi " + orderCode;

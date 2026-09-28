@@ -296,7 +296,6 @@ public class StockBatchService {
             long reservedQuantity,
             long availableQuantity
     ) {
-        /** Backward-compatible constructor for existing tool/test callers. */
         public WarehouseStockSummary(UUID warehouseId, String warehouseName,
                                      long productCount, long batchCount, long totalQuantity) {
             this(warehouseId, warehouseName, productCount, batchCount,
@@ -313,8 +312,6 @@ public class StockBatchService {
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STOCK_BATCH_NOT_FOUND));
         if (inventoryAuditLockService != null && batch.getWarehouse() != null) {
             inventoryAuditLockService.assertMovementAllowed(batch.getWarehouse().getId());
-            // Re-read after the warehouse lock is acquired so two direct stock
-            // mutations cannot calculate from the same stale quantity.
             batch = stockBatchRepository.findByIdForUpdate(batchId)
                     .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.STOCK_BATCH_NOT_FOUND));
         }

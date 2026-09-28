@@ -27,11 +27,9 @@ public class StockTransferReturnLineRequest {
     @NotNull
     private UUID sourceBinId;
 
-    /** Condition accepted back into the source warehouse. */
     @Builder.Default
     private StockTransferReturnDisposition disposition = StockTransferReturnDisposition.GOOD;
 
-    /** Required when the returned quantity is marked REJECTED. */
     @Size(max = 2000)
     private String note;
 }

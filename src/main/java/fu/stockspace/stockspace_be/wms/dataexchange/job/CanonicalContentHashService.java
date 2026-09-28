@@ -26,10 +26,6 @@ public class CanonicalContentHashService {
         this.objectMapper = objectMapper;
     }
 
-    /**
-     * Hashes normalized rows and scope, never the original XLSX bytes. Map
-     * keys and numeric scales are normalized so equivalent edits have one hash.
-     */
     public String hash(WmsImportType importType, Map<String, ?> scope, List<WmsImportRowInput> rows) {
         ObjectNode root = JsonNodeFactory.instance.objectNode();
         root.put("import_type", importType.name());

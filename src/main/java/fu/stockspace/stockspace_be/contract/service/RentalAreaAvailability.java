@@ -2,10 +2,6 @@ package fu.stockspace.stockspace_be.contract.service;
 
 import java.math.BigDecimal;
 
-/**
- * Read-only area allocation metrics for one warehouse and contract period.
- * The value is calculated on demand and is not persisted.
- */
 public record RentalAreaAvailability(
         BigDecimal totalAreaM2,
         BigDecimal reservedAreaM2,

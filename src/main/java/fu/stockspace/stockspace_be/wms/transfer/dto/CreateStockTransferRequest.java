@@ -27,13 +27,10 @@ public class CreateStockTransferRequest {
     @NotNull(message = "Kho đích không được để trống")
     private UUID destinationWarehouseId;
 
-    /** Optional staff responsible for picking at the source warehouse. */
     private UUID sourceStaffId;
 
-    /** Optional staff responsible for receiving at the destination warehouse. */
     private UUID destinationStaffId;
 
-    /** Optional SLA supplied by the operator; omitted values default to 48 hours. */
     @Future(message = "Expected arrival phải ở tương lai")
     private LocalDateTime expectedArrivalAt;
 

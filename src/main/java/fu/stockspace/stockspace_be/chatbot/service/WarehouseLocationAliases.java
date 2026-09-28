@@ -5,12 +5,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
 
-/**
- * Converts common conversational city aliases into the location labels stored
- * on warehouse records.  The chatbot can receive a location from either the
- * deterministic planner or the model tool call, so this normalization is
- * deliberately shared by both paths.
- */
 public final class WarehouseLocationAliases {
 
     private static final Pattern DIACRITICS = Pattern.compile("\\p{M}+");

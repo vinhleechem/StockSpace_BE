@@ -17,7 +17,6 @@ import java.util.List;
 @Builder
 public class ReceiveStockTransferRequest {
 
-    /** New clients may receive several sessions; legacy clients stay atomic. */
     @Builder.Default
     private boolean allowPartial = false;
 

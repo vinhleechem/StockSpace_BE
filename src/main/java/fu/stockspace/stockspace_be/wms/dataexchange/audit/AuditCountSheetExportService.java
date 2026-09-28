@@ -44,7 +44,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/** Exports only the current blind-count round of an accessible audit. */
 @Service
 @RequiredArgsConstructor
 public class AuditCountSheetExportService {

@@ -50,9 +50,6 @@ public final class XlsxWorkbookWriter {
             row.createCell(0).setCellValue(safeText(entry.getKey()));
             row.createCell(1).setCellValue(safeText(entry.getValue()));
         }
-        // A hidden metadata sheet is not a security boundary. The password only
-        // prevents accidental edits in Excel; authorization is always checked
-        // against the authenticated user and the database.
         sheet.protectSheet("wms-data");
         workbook.setSheetHidden(workbook.getSheetIndex(sheet), true);
         return sheet;
@@ -95,7 +92,6 @@ public final class XlsxWorkbookWriter {
         }
     }
 
-    /** Prefixes values that Excel could interpret as a formula. */
     public static String safeText(Object value) {
         if (value == null) {
             return "";

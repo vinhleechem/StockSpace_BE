@@ -24,10 +24,6 @@ public class StockFingerprintService {
     private final CanonicalContentHashService hashService;
     private final ObjectMapper objectMapper;
 
-    /**
-     * Fingerprint is a change detector for offline workbooks, not an
-     * authorization mechanism or a database signature.
-     */
     public String fingerprint(UUID warehouseId) {
         List<Map<String, Object>> batches = stockBatchRepository.findAllByWarehouseIdAndIsDeletedFalse(warehouseId).stream()
                 .filter(batch -> batch.isActive() && !batch.isDeleted())

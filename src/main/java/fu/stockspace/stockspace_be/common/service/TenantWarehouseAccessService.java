@@ -17,13 +17,6 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Central authorization policy for tenant warehouse access.
- *
- * Contract access and subscription access are deliberately separate: an
- * active Contract grants observation, while WMS mutation requires both an
- * active Contract and a current active Subscription.
- */
 @Service
 @RequiredArgsConstructor
 public class TenantWarehouseAccessService {
