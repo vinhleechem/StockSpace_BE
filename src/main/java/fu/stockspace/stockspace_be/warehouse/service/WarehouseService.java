@@ -243,15 +243,26 @@ public class WarehouseService {
 
 
     @Transactional(readOnly = true)
-    public PagedResponse<WarehouseResponse> getMyWarehouses(UUID ownerId, int page, int size, String sortBy, String sortDir) {
+    public PagedResponse<WarehouseResponse> getMyWarehouses(UUID ownerId, String keyword, WarehouseStatus status,
+                                                           Boolean isVerified, int page, int size,
+                                                           String sortBy, String sortDir) {
         String normalizedSortBy = normalizeSortProperty(sortBy);
         Sort sort = "asc".equalsIgnoreCase(sortDir)
                 ? Sort.by(normalizedSortBy).ascending()
                 : Sort.by(normalizedSortBy).descending();
         Pageable pageable = PageRequest.of(page, size, sort);
 
-        Page<Warehouse> warehousePage = warehouseRepository.findByOwnerId(ownerId, pageable);
+        String kw = StringUtils.hasText(keyword) ? "%" + keyword.trim().toLowerCase() + "%" : null;
+
+        Page<Warehouse> warehousePage = warehouseRepository.findByOwnerIdWithFilters(
+                ownerId, kw, status, isVerified, pageable
+        );
         return toPagedResponse(warehousePage, true);
+    }
+
+    @Transactional(readOnly = true)
+    public PagedResponse<WarehouseResponse> getMyWarehouses(UUID ownerId, int page, int size, String sortBy, String sortDir) {
+        return getMyWarehouses(ownerId, null, null, null, page, size, sortBy, sortDir);
     }
 
 
