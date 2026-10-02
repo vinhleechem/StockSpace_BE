@@ -45,6 +45,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import java.time.LocalDate;
 
 import java.util.List;
 import java.util.Optional;
@@ -602,5 +603,47 @@ class StockTransferServiceTest {
                                 .build()))
                         .build()))
                 .build();
+    }
+
+    @Test
+    void getTransfers_withDateFilters_forwardsBoundariesToRepository() {
+        LocalDate fromDate = LocalDate.of(2026, 10, 1);
+        LocalDate toDate = LocalDate.of(2026, 10, 2);
+        PageRequest pageRequest = PageRequest.of(0, 10);
+        StockTransfer sampleTransfer = StockTransfer.builder()
+                .id(UUID.randomUUID())
+                .tenant(tenant)
+                .sourceWarehouse(sourceWarehouse)
+                .destinationWarehouse(destinationWarehouse)
+                .status(StockTransferStatus.PENDING)
+                .build();
+        when(userRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
+        when(transferRepository.search(
+                eq(tenantId), eq(sourceWarehouseId), eq(destinationWarehouseId),
+                eq(StockTransferStatus.PENDING), eq(null),
+                eq(fromDate.atStartOfDay()), any(), eq(pageRequest)))
+                .thenReturn(new PageImpl<>(List.of(sampleTransfer), pageRequest, 1));
+
+        fu.stockspace.stockspace_be.common.dto.PagedResponse<StockTransferResponse> result =
+                transferService.getTransfers(
+                        tenantId, sourceWarehouseId, destinationWarehouseId,
+                        StockTransferStatus.PENDING, fromDate, toDate, pageRequest);
+
+        assertEquals(1, result.getTotalElements());
+        org.mockito.Mockito.verify(transferRepository).search(
+                eq(tenantId), eq(sourceWarehouseId), eq(destinationWarehouseId),
+                eq(StockTransferStatus.PENDING), eq(null),
+                eq(fromDate.atStartOfDay()), any(), eq(pageRequest));
+    }
+
+    @Test
+    void getTransfers_withInvalidDateRange_throwsBadRequest() {
+        LocalDate fromDate = LocalDate.of(2026, 10, 5);
+        LocalDate toDate = LocalDate.of(2026, 10, 1);
+        PageRequest pageRequest = PageRequest.of(0, 10);
+
+        assertThrows(BadRequestException.class, () -> transferService.getTransfers(
+                tenantId, sourceWarehouseId, destinationWarehouseId,
+                StockTransferStatus.PENDING, fromDate, toDate, pageRequest));
     }
 }
