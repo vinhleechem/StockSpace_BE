@@ -19,10 +19,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Tag(name = "Tenant — WMS Stock Batch Management", description = "Các API quản lý tồn kho (Stock Batch) dành cho Tenant")
@@ -40,13 +42,15 @@ public class StockBatchController {
     @Operation(summary = "Xem toàn bộ tồn kho trong kho đang thuê (phân trang theo warehouseId)")
     public ResponseEntity<ApiResponse<PagedResponse<StockBatchResponse>>> getStockByWarehouse(
             @RequestParam UUID warehouseId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
         UUID tenantId = TenantContextUtil.getCurrentTenantId();
         Pageable pageable = PageRequest.of(page, size);
         PagedResponse<StockBatchResponse> response = stockBatchService.getStockByWarehouse(
-                tenantId, warehouseId, getCurrentStaffIdIfApplicable(), pageable);
+                tenantId, warehouseId, getCurrentStaffIdIfApplicable(), fromDate, toDate, pageable);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách tồn kho thành công", response));
     }
 

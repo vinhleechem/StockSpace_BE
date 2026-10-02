@@ -36,6 +36,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -78,12 +80,30 @@ public class StockBatchService {
     @Transactional(readOnly = true)
     public PagedResponse<StockBatchResponse> getStockByWarehouse(
         UUID tenantId, UUID warehouseId, UUID staffId, Pageable pageable) {
+        return getStockByWarehouse(tenantId, warehouseId, staffId, null, null, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public PagedResponse<StockBatchResponse> getStockByWarehouse(
+            UUID tenantId, UUID warehouseId, UUID staffId,
+            LocalDate fromDate, LocalDate toDate, Pageable pageable) {
+        if (fromDate != null && toDate != null && fromDate.isAfter(toDate)) {
+            throw new BadRequestException("fromDate cannot be after toDate");
+        }
         requireActiveWarehouseAccess(tenantId, warehouseId, staffId);
         warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.WAREHOUSE_NOT_FOUND));
         List<InventoryAudit> audits = activeBlindCountAudits(tenantId, warehouseId, staffId);
-        Page<StockBatch> page = stockBatchRepository.findByWarehouseIdAndTenantId(
-                warehouseId, tenantId, pageable);
+        LocalDateTime fromDateTime = fromDate != null ? fromDate.atStartOfDay() : null;
+        LocalDateTime toDateTime = toDate != null ? toDate.atTime(LocalTime.MAX) : null;
+        Page<StockBatch> page;
+        if (fromDate == null && toDate == null) {
+            page = stockBatchRepository.findByWarehouseIdAndTenantId(
+                    warehouseId, tenantId, pageable);
+        } else {
+            page = stockBatchRepository.findByWarehouseIdAndTenantId(
+                    warehouseId, tenantId, fromDateTime, toDateTime, pageable);
+        }
         return PagedResponse.fromPage(page, batch -> mapToResponse(batch, audits));
     }
 
