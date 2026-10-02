@@ -38,6 +38,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import java.time.LocalDate;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -1712,5 +1713,74 @@ class InventoryReceiptServiceTest {
         assertTrue(csv.contains("'=HYPERLINK(\"\"https://example.test\"\")"));
         assertTrue(csv.contains("\"'=SUM(A1:A2)\nLine 2, note\""));
         assertTrue(csv.contains("Rejected, please review"));
+    }
+
+    @Test
+    void getReceiptsByWarehouse_withDateFilters_callsSearchByTenantAndWarehouse() {
+        InventoryReceipt receipt = InventoryReceipt.builder()
+                .id(UUID.randomUUID())
+                .tenant(tenantUser)
+                .warehouse(warehouse)
+                .createdBy(tenantUser)
+                .type(DocumentType.INBOUND)
+                .status(ApprovalStatus.PENDING)
+                .build();
+        Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 10);
+        LocalDate fromDate = LocalDate.of(2026, 10, 1);
+        LocalDate toDate = LocalDate.of(2026, 10, 2);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
+        when(receiptRepository.searchByTenantAndWarehouse(
+                eq(userId), eq(warehouseId), eq(DocumentType.INBOUND),
+                eq(fromDate.atStartOfDay()), any(), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(receipt), pageable, 1));
+        when(receiptItemRepository.findByReceiptId(receipt.getId())).thenReturn(List.of());
+
+        PagedResponse<InventoryReceiptResponse> result = receiptService.getReceiptsByWarehouse(
+                userId, warehouseId, DocumentType.INBOUND, fromDate, toDate, pageable);
+
+        assertEquals(1, result.getTotalElements());
+        verify(receiptRepository).searchByTenantAndWarehouse(
+                eq(userId), eq(warehouseId), eq(DocumentType.INBOUND),
+                eq(fromDate.atStartOfDay()), any(), eq(pageable));
+    }
+
+    @Test
+    void getReceiptsByWarehouse_withInvalidDateRange_throwsBadRequest() {
+        Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 10);
+        LocalDate fromDate = LocalDate.of(2026, 10, 5);
+        LocalDate toDate = LocalDate.of(2026, 10, 1);
+
+        assertThrows(BadRequestException.class, () -> receiptService.getReceiptsByWarehouse(
+                userId, warehouseId, DocumentType.INBOUND, fromDate, toDate, pageable));
+    }
+
+    @Test
+    void exportReceiptsToCsv_withDateFilters_callsFilteredCsvQuery() {
+        InventoryReceipt receipt = InventoryReceipt.builder()
+                .id(UUID.randomUUID())
+                .warehouse(warehouse)
+                .createdBy(tenantUser)
+                .type(DocumentType.INBOUND)
+                .status(ApprovalStatus.PENDING)
+                .build();
+        LocalDate fromDate = LocalDate.of(2026, 10, 1);
+        LocalDate toDate = LocalDate.of(2026, 10, 2);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
+        when(receiptRepository.findForCsvByTenantAndWarehouseWithFilters(
+                eq(userId), eq(warehouseId), eq(DocumentType.INBOUND),
+                eq(fromDate.atStartOfDay()), any()))
+                .thenReturn(List.of(receipt));
+        when(receiptItemRepository.findByReceiptIdInWithDetails(List.of(receipt.getId())))
+                .thenReturn(List.of());
+
+        byte[] result = receiptService.exportReceiptsToCsv(
+                userId, warehouseId, DocumentType.INBOUND, fromDate, toDate);
+
+        assertNotNull(result);
+        verify(receiptRepository).findForCsvByTenantAndWarehouseWithFilters(
+                eq(userId), eq(warehouseId), eq(DocumentType.INBOUND),
+                eq(fromDate.atStartOfDay()), any());
     }
 }

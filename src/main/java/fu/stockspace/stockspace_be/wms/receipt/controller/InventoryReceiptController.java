@@ -18,8 +18,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Tag(name = "Tenant — WMS Inventory Receipt Management", description = "Các API WMS quản lý Phiếu nhập/xuất kho dành cho Tenant & Staff")
@@ -79,13 +81,16 @@ public class InventoryReceiptController {
     public ResponseEntity<ApiResponse<PagedResponse<InventoryReceiptResponse>>> getReceipts(
             @RequestParam UUID warehouseId,
             @RequestParam(required = false) DocumentType type,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
         Pageable pageable = PageRequest.of(page, size,
                 Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
         UUID userId = SecurityUtil.getCurrentUserId();
-        PagedResponse<InventoryReceiptResponse> response = receiptService.getReceiptsByWarehouse(userId, warehouseId, type, pageable);
+        PagedResponse<InventoryReceiptResponse> response = receiptService.getReceiptsByWarehouse(
+                userId, warehouseId, type, fromDate, toDate, pageable);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách phiếu thành công", response));
     }
 
@@ -104,10 +109,12 @@ public class InventoryReceiptController {
     @Operation(summary = "Xuất danh sách phiếu nhập/xuất kho ra file Excel/CSV")
     public ResponseEntity<byte[]> exportReceipts(
             @RequestParam UUID warehouseId,
-            @RequestParam(required = false) DocumentType type
+            @RequestParam(required = false) DocumentType type,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate
     ) {
         UUID userId = SecurityUtil.getCurrentUserId();
-        byte[] csvData = receiptService.exportReceiptsToCsv(userId, warehouseId, type);
+        byte[] csvData = receiptService.exportReceiptsToCsv(userId, warehouseId, type, fromDate, toDate);
         String filename = "inventory_receipts_" + (type != null ? type.name().toLowerCase() : "all") + ".csv";
 
         return ResponseEntity.ok()

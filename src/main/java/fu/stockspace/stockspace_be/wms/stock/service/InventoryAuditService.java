@@ -51,7 +51,9 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -619,20 +621,36 @@ public class InventoryAuditService {
 
     @Transactional(readOnly = true)
     public PagedResponse<InventoryAuditResponse> getAudits(UUID userId, UUID warehouseId, Pageable pageable) {
+        return getAudits(userId, warehouseId, null, null, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public PagedResponse<InventoryAuditResponse> getAudits(UUID userId, UUID warehouseId,
+                                                          LocalDate fromDate, LocalDate toDate,
+                                                          Pageable pageable) {
+        if (fromDate != null && toDate != null && fromDate.isAfter(toDate)) {
+            throw new BadRequestException("fromDate cannot be after toDate");
+        }
         User actor = findUser(userId);
         UUID tenantId = resolveTenantId(userId);
         List<UUID> accessibleWarehouseIds = (isStaff(actor)
                 ? accessService.findAccessibleContractWarehouses(tenantId, userId)
                 : accessService.findActiveContractWarehouses(tenantId))
                 .stream().map(Warehouse::getId).toList();
+        LocalDateTime fromDateTime = fromDate != null ? fromDate.atStartOfDay() : null;
+        LocalDateTime toDateTime = toDate != null ? toDate.atTime(LocalTime.MAX) : null;
         Page<InventoryAudit> page;
         if (warehouseId != null) {
             requireWarehouseObservationAccess(actor, tenantId, warehouseId);
-            page = auditRepository.findAuditsForTenant(warehouseId, List.of(warehouseId), tenantId, pageable);
+            page = fromDate == null && toDate == null
+                    ? auditRepository.findAuditsForTenant(warehouseId, List.of(warehouseId), tenantId, pageable)
+                    : auditRepository.findAuditsForTenant(warehouseId, List.of(warehouseId), tenantId, fromDateTime, toDateTime, pageable);
         } else if (accessibleWarehouseIds.isEmpty()) {
             page = Page.empty(pageable);
         } else {
-            page = auditRepository.findAuditsForTenant(null, accessibleWarehouseIds, tenantId, pageable);
+            page = fromDate == null && toDate == null
+                    ? auditRepository.findAuditsForTenant(null, accessibleWarehouseIds, tenantId, pageable)
+                    : auditRepository.findAuditsForTenant(null, accessibleWarehouseIds, tenantId, fromDateTime, toDateTime, pageable);
         }
         return PagedResponse.fromPage(page, audit ->
                 maskCounterResponse(mapToResponse(audit, currentAuditItems(audit)), actor));
