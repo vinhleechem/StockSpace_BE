@@ -52,7 +52,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -846,15 +848,32 @@ public class InventoryReceiptService {
     @Transactional(readOnly = true)
     public PagedResponse<InventoryReceiptResponse> getReceiptsByWarehouse(
             UUID userId, UUID warehouseId, DocumentType type, Pageable pageable) {
+        return getReceiptsByWarehouse(userId, warehouseId, type, null, null, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public PagedResponse<InventoryReceiptResponse> getReceiptsByWarehouse(
+            UUID userId, UUID warehouseId, DocumentType type,
+            LocalDate fromDate, LocalDate toDate, Pageable pageable) {
+        validateDateRange(fromDate, toDate);
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
         UUID tenantId = resolveTenantId(user);
         requireWarehouseObservationAccess(user, tenantId, warehouseId);
-        Page<InventoryReceipt> page = type == null
-                ? receiptRepository.findByTenantIdAndWarehouseIdAndIsDeletedFalse(
-                        tenantId, warehouseId, pageable)
-                : receiptRepository.findByTenantIdAndWarehouseIdAndTypeAndIsDeletedFalse(
-                        tenantId, warehouseId, type, pageable);
+
+        Page<InventoryReceipt> page;
+        if (fromDate == null && toDate == null) {
+            page = type == null
+                    ? receiptRepository.findByTenantIdAndWarehouseIdAndIsDeletedFalse(
+                            tenantId, warehouseId, pageable)
+                    : receiptRepository.findByTenantIdAndWarehouseIdAndTypeAndIsDeletedFalse(
+                            tenantId, warehouseId, type, pageable);
+        } else {
+            LocalDateTime fromDateTime = fromDate != null ? fromDate.atStartOfDay() : null;
+            LocalDateTime toDateTime = toDate != null ? toDate.atTime(LocalTime.MAX) : null;
+            page = receiptRepository.searchByTenantAndWarehouse(
+                    tenantId, warehouseId, type, fromDateTime, toDateTime, pageable);
+        }
         return mapReceiptPage(page);
     }
 
@@ -1034,14 +1053,36 @@ public class InventoryReceiptService {
 
     @Transactional(readOnly = true)
     public byte[] exportReceiptsToCsv(UUID userId, UUID warehouseId, DocumentType type) {
+        return exportReceiptsToCsv(userId, warehouseId, type, null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public byte[] exportReceiptsToCsv(UUID userId, UUID warehouseId, DocumentType type,
+                                      LocalDate fromDate, LocalDate toDate) {
+        validateDateRange(fromDate, toDate);
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
         UUID tenantId = resolveTenantId(user);
         requireWarehouseObservationAccess(user, tenantId, warehouseId);
-        List<InventoryReceipt> receipts = type == null
-                ? receiptRepository.findForCsvByTenantAndWarehouse(tenantId, warehouseId)
-                : receiptRepository.findForCsvByTenantAndWarehouseAndType(tenantId, warehouseId, type);
+
+        List<InventoryReceipt> receipts;
+        if (fromDate == null && toDate == null) {
+            receipts = type == null
+                    ? receiptRepository.findForCsvByTenantAndWarehouse(tenantId, warehouseId)
+                    : receiptRepository.findForCsvByTenantAndWarehouseAndType(tenantId, warehouseId, type);
+        } else {
+            LocalDateTime fromDateTime = fromDate != null ? fromDate.atStartOfDay() : null;
+            LocalDateTime toDateTime = toDate != null ? toDate.atTime(LocalTime.MAX) : null;
+            receipts = receiptRepository.findForCsvByTenantAndWarehouseWithFilters(
+                    tenantId, warehouseId, type, fromDateTime, toDateTime);
+        }
         return renderReceiptsCsv(receipts);
+    }
+
+    private void validateDateRange(LocalDate fromDate, LocalDate toDate) {
+        if (fromDate != null && toDate != null && fromDate.isAfter(toDate)) {
+            throw new BadRequestException("fromDate cannot be after toDate");
+        }
     }
 
     private byte[] renderReceiptsCsv(List<InventoryReceipt> receipts) {
