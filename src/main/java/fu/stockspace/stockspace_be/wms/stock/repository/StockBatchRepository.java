@@ -115,8 +115,24 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
               AND s.isActive = true
               AND b.isDeleted = false
               AND s.isDeleted = false
-              AND (:fromDateTime IS NULL OR coalesce(b.arrivalDate, b.createdAt) >= :fromDateTime)
-              AND (:toDateTime IS NULL OR coalesce(b.arrivalDate, b.createdAt) <= :toDateTime)
+            """)
+    Page<StockBatch> findByWarehouseIdAndTenantId(
+            @Param("warehouseId") UUID warehouseId,
+            @Param("tenantId") UUID tenantId,
+            Pageable pageable
+    );
+
+    @Query("""
+            SELECT b FROM StockBatch b
+            JOIN ProductSku s ON s.id = b.skuId
+            WHERE b.warehouse.id = :warehouseId
+              AND s.tenant.id = :tenantId
+              AND b.isActive = true
+              AND s.isActive = true
+              AND b.isDeleted = false
+              AND s.isDeleted = false
+              AND (cast(:fromDateTime as timestamp) IS NULL OR coalesce(b.arrivalDate, b.createdAt) >= :fromDateTime)
+              AND (cast(:toDateTime as timestamp) IS NULL OR coalesce(b.arrivalDate, b.createdAt) <= :toDateTime)
             """)
     Page<StockBatch> findByWarehouseIdAndTenantId(
             @Param("warehouseId") UUID warehouseId,
@@ -125,14 +141,6 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
             @Param("toDateTime") LocalDateTime toDateTime,
             Pageable pageable
     );
-
-    default Page<StockBatch> findByWarehouseIdAndTenantId(
-            UUID warehouseId,
-            UUID tenantId,
-            Pageable pageable
-    ) {
-        return findByWarehouseIdAndTenantId(warehouseId, tenantId, null, null, pageable);
-    }
 
     @Query("""
             SELECT COUNT(DISTINCT b.skuId) AS productCount,
