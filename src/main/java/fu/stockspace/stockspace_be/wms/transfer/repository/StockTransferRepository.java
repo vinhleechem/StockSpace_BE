@@ -28,8 +28,73 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, UU
               and (:sourceWarehouseId is null or t.sourceWarehouse.id = :sourceWarehouseId)
               and (:destinationWarehouseId is null or coalesce(t.activeDestinationWarehouse.id, t.destinationWarehouse.id) = :destinationWarehouseId)
               and (:status is null or t.status = :status)
-              and (:fromDateTime is null or t.createdAt >= :fromDateTime)
-              and (:toDateTime is null or t.createdAt <= :toDateTime)
+              and (
+                    :staffId is null
+                    or (
+                        t.sourceStaff.id = :staffId
+                        and exists (
+                            select assignedSource.id from StaffWarehouseAssignment assignedSource
+                            where assignedSource.staff.id = :staffId
+                              and assignedSource.tenant.id = :tenantId
+                              and assignedSource.warehouse.id = t.sourceWarehouse.id
+                              and assignedSource.status = fu.stockspace.stockspace_be.staff.entity.AssignmentStatus.ACTIVE
+                              and assignedSource.isActive = true
+                              and assignedSource.isDeleted = false
+                        )
+                    )
+                    or (
+                        t.destinationStaff.id = :staffId
+                        and exists (
+                            select assignedDestination.id from StaffWarehouseAssignment assignedDestination
+                            where assignedDestination.staff.id = :staffId
+                              and assignedDestination.tenant.id = :tenantId
+                              and assignedDestination.warehouse.id = coalesce(t.activeDestinationWarehouse.id, t.destinationWarehouse.id)
+                              and assignedDestination.status = fu.stockspace.stockspace_be.staff.entity.AssignmentStatus.ACTIVE
+                              and assignedDestination.isActive = true
+                              and assignedDestination.isDeleted = false
+                        )
+                    )
+                    or (
+                        exists (
+                            select sourceAssignment.id from StaffWarehouseAssignment sourceAssignment
+                            where sourceAssignment.staff.id = :staffId
+                              and sourceAssignment.tenant.id = :tenantId
+                              and sourceAssignment.warehouse.id = t.sourceWarehouse.id
+                              and sourceAssignment.status = fu.stockspace.stockspace_be.staff.entity.AssignmentStatus.ACTIVE
+                              and sourceAssignment.isActive = true
+                              and sourceAssignment.isDeleted = false
+                        )
+                        and exists (
+                            select destinationAssignment.id from StaffWarehouseAssignment destinationAssignment
+                            where destinationAssignment.staff.id = :staffId
+                              and destinationAssignment.tenant.id = :tenantId
+                              and destinationAssignment.warehouse.id = coalesce(t.activeDestinationWarehouse.id, t.destinationWarehouse.id)
+                              and destinationAssignment.status = fu.stockspace.stockspace_be.staff.entity.AssignmentStatus.ACTIVE
+                              and destinationAssignment.isActive = true
+                              and destinationAssignment.isDeleted = false
+                        )
+                    )
+              )
+            order by t.createdAt desc
+            """)
+    Page<StockTransfer> search(
+            @Param("tenantId") UUID tenantId,
+            @Param("sourceWarehouseId") UUID sourceWarehouseId,
+            @Param("destinationWarehouseId") UUID destinationWarehouseId,
+            @Param("status") StockTransferStatus status,
+            @Param("staffId") UUID staffId,
+            Pageable pageable);
+
+    @Query("""
+            select t from StockTransfer t
+            where t.tenant.id = :tenantId
+              and t.isActive = true
+              and t.isDeleted = false
+              and (:sourceWarehouseId is null or t.sourceWarehouse.id = :sourceWarehouseId)
+              and (:destinationWarehouseId is null or coalesce(t.activeDestinationWarehouse.id, t.destinationWarehouse.id) = :destinationWarehouseId)
+              and (:status is null or t.status = :status)
+              and (cast(:fromDateTime as timestamp) is null or t.createdAt >= :fromDateTime)
+              and (cast(:toDateTime as timestamp) is null or t.createdAt <= :toDateTime)
               and (
                     :staffId is null
                     or (
@@ -88,16 +153,6 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, UU
             @Param("fromDateTime") LocalDateTime fromDateTime,
             @Param("toDateTime") LocalDateTime toDateTime,
             Pageable pageable);
-
-    default Page<StockTransfer> search(
-            UUID tenantId,
-            UUID sourceWarehouseId,
-            UUID destinationWarehouseId,
-            StockTransferStatus status,
-            UUID staffId,
-            Pageable pageable) {
-        return search(tenantId, sourceWarehouseId, destinationWarehouseId, status, staffId, null, null, pageable);
-    }
 
     @Query("""
             select t from StockTransfer t
