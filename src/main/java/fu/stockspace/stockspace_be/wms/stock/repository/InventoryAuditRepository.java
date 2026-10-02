@@ -14,6 +14,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.time.LocalDateTime;
 
 import jakarta.persistence.LockModeType;
 
@@ -102,13 +103,26 @@ public interface InventoryAuditRepository extends JpaRepository<InventoryAudit, 
                    OR EXISTS (SELECT m.id FROM TenantMember m
                               WHERE m.user.id = a.requestedBy.id AND m.tenant.id = :tenantId
                                 AND m.isActive = true AND m.isDeleted = false))
+              AND (:fromDateTime IS NULL OR a.createdAt >= :fromDateTime)
+              AND (:toDateTime IS NULL OR a.createdAt <= :toDateTime)
             """)
     Page<InventoryAudit> findAuditsForTenant(
             @Param("warehouseId") UUID warehouseId,
             @Param("warehouseIds") Collection<UUID> warehouseIds,
             @Param("tenantId") UUID tenantId,
+            @Param("fromDateTime") LocalDateTime fromDateTime,
+            @Param("toDateTime") LocalDateTime toDateTime,
             Pageable pageable
     );
+
+    default Page<InventoryAudit> findAuditsForTenant(
+            UUID warehouseId,
+            Collection<UUID> warehouseIds,
+            UUID tenantId,
+            Pageable pageable
+    ) {
+        return findAuditsForTenant(warehouseId, warehouseIds, tenantId, null, null, pageable);
+    }
 
     @Query("""
             select a from InventoryAudit a

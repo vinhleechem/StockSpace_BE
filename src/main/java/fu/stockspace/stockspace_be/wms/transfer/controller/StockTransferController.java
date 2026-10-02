@@ -21,8 +21,11 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+
+import java.time.LocalDate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -61,11 +64,14 @@ public class StockTransferController {
             @RequestParam(required = false) UUID sourceWarehouseId,
             @RequestParam(required = false) UUID destinationWarehouseId,
             @RequestParam(required = false) StockTransferStatus status,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         Pageable pageable = PageRequest.of(page, size);
         PagedResponse<StockTransferResponse> response = transferService.getTransfers(
-                SecurityUtil.getCurrentUserId(), sourceWarehouseId, destinationWarehouseId, status, pageable);
+                SecurityUtil.getCurrentUserId(), sourceWarehouseId, destinationWarehouseId, status,
+                fromDate, toDate, pageable);
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách chuyển kho thành công", response));
     }
 

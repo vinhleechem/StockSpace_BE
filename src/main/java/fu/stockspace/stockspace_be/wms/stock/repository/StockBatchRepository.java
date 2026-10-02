@@ -14,6 +14,7 @@ import org.springframework.data.jpa.repository.Lock;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.time.LocalDateTime;
 
 @Repository
 public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
@@ -114,12 +115,24 @@ public interface StockBatchRepository extends JpaRepository<StockBatch, UUID> {
               AND s.isActive = true
               AND b.isDeleted = false
               AND s.isDeleted = false
+              AND (:fromDateTime IS NULL OR coalesce(b.arrivalDate, b.createdAt) >= :fromDateTime)
+              AND (:toDateTime IS NULL OR coalesce(b.arrivalDate, b.createdAt) <= :toDateTime)
             """)
     Page<StockBatch> findByWarehouseIdAndTenantId(
             @Param("warehouseId") UUID warehouseId,
             @Param("tenantId") UUID tenantId,
+            @Param("fromDateTime") LocalDateTime fromDateTime,
+            @Param("toDateTime") LocalDateTime toDateTime,
             Pageable pageable
     );
+
+    default Page<StockBatch> findByWarehouseIdAndTenantId(
+            UUID warehouseId,
+            UUID tenantId,
+            Pageable pageable
+    ) {
+        return findByWarehouseIdAndTenantId(warehouseId, tenantId, null, null, pageable);
+    }
 
     @Query("""
             SELECT COUNT(DISTINCT b.skuId) AS productCount,

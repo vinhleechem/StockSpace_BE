@@ -28,6 +28,8 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, UU
               and (:sourceWarehouseId is null or t.sourceWarehouse.id = :sourceWarehouseId)
               and (:destinationWarehouseId is null or coalesce(t.activeDestinationWarehouse.id, t.destinationWarehouse.id) = :destinationWarehouseId)
               and (:status is null or t.status = :status)
+              and (:fromDateTime is null or t.createdAt >= :fromDateTime)
+              and (:toDateTime is null or t.createdAt <= :toDateTime)
               and (
                     :staffId is null
                     or (
@@ -83,7 +85,19 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, UU
             @Param("destinationWarehouseId") UUID destinationWarehouseId,
             @Param("status") StockTransferStatus status,
             @Param("staffId") UUID staffId,
+            @Param("fromDateTime") LocalDateTime fromDateTime,
+            @Param("toDateTime") LocalDateTime toDateTime,
             Pageable pageable);
+
+    default Page<StockTransfer> search(
+            UUID tenantId,
+            UUID sourceWarehouseId,
+            UUID destinationWarehouseId,
+            StockTransferStatus status,
+            UUID staffId,
+            Pageable pageable) {
+        return search(tenantId, sourceWarehouseId, destinationWarehouseId, status, staffId, null, null, pageable);
+    }
 
     @Query("""
             select t from StockTransfer t

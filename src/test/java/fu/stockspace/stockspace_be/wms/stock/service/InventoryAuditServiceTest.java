@@ -47,6 +47,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -435,5 +436,40 @@ class InventoryAuditServiceTest {
     private WarehouseBin binInRack(WarehouseRack rack, String code) {
         return WarehouseBin.builder()
                 .id(UUID.randomUUID()).rack(rack).name(code).code(code).build();
+    }
+
+    @Test
+    void getAudits_withDateFilters_forwardsBoundariesToRepository() {
+        LocalDate fromDate = LocalDate.of(2026, 10, 1);
+        LocalDate toDate = LocalDate.of(2026, 10, 2);
+        PageRequest pageRequest = PageRequest.of(0, 10);
+        InventoryAudit audit = inProgressAudit(AuditScopeType.WAREHOUSE, null, null);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(tenantUser));
+        when(accessService.findActiveContractWarehouses(userId)).thenReturn(List.of(warehouse));
+        when(auditRepository.findAuditsForTenant(
+                eq(warehouseId), eq(List.of(warehouseId)), eq(userId),
+                eq(fromDate.atStartOfDay()), any(), eq(pageRequest)))
+                .thenReturn(new PageImpl<>(List.of(audit), pageRequest, 1));
+        when(auditItemRepository.findByAuditIdAndCountRoundOrderById(audit.getId(), 1))
+                .thenReturn(List.of());
+
+        PagedResponse<InventoryAuditResponse> response = inventoryAuditService.getAudits(
+                userId, warehouseId, fromDate, toDate, pageRequest);
+
+        assertEquals(1, response.getTotalElements());
+        verify(auditRepository).findAuditsForTenant(
+                eq(warehouseId), eq(List.of(warehouseId)), eq(userId),
+                eq(fromDate.atStartOfDay()), any(), eq(pageRequest));
+    }
+
+    @Test
+    void getAudits_withInvalidDateRange_throwsBadRequest() {
+        LocalDate fromDate = LocalDate.of(2026, 10, 5);
+        LocalDate toDate = LocalDate.of(2026, 10, 1);
+        PageRequest pageRequest = PageRequest.of(0, 10);
+
+        assertThrows(BadRequestException.class, () -> inventoryAuditService.getAudits(
+                userId, warehouseId, fromDate, toDate, pageRequest));
     }
 }

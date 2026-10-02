@@ -17,6 +17,7 @@ import java.util.UUID;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.time.LocalDateTime;
 
 @Repository
 public interface InventoryReceiptRepository extends JpaRepository<InventoryReceipt, UUID> {
@@ -37,6 +38,42 @@ public interface InventoryReceiptRepository extends JpaRepository<InventoryRecei
 
     Page<InventoryReceipt> findByTenantIdAndWarehouseIdAndIsDeletedFalse(
             UUID tenantId, UUID warehouseId, Pageable pageable);
+
+    @Query("""
+            select r from InventoryReceipt r
+            where r.tenant.id = :tenantId
+              and r.warehouse.id = :warehouseId
+              and (:type is null or r.type = :type)
+              and (:fromDateTime is null or r.createdAt >= :fromDateTime)
+              and (:toDateTime is null or r.createdAt <= :toDateTime)
+              and r.isDeleted = false
+            """)
+    Page<InventoryReceipt> searchByTenantAndWarehouse(
+            @Param("tenantId") UUID tenantId,
+            @Param("warehouseId") UUID warehouseId,
+            @Param("type") DocumentType type,
+            @Param("fromDateTime") LocalDateTime fromDateTime,
+            @Param("toDateTime") LocalDateTime toDateTime,
+            Pageable pageable);
+
+    @Query("""
+            select r from InventoryReceipt r
+            left join fetch r.warehouse
+            left join fetch r.createdBy
+            where r.tenant.id = :tenantId
+              and r.warehouse.id = :warehouseId
+              and (:type is null or r.type = :type)
+              and (:fromDateTime is null or r.createdAt >= :fromDateTime)
+              and (:toDateTime is null or r.createdAt <= :toDateTime)
+              and r.isDeleted = false
+            order by r.createdAt desc, r.id desc
+            """)
+    List<InventoryReceipt> findForCsvByTenantAndWarehouseWithFilters(
+            @Param("tenantId") UUID tenantId,
+            @Param("warehouseId") UUID warehouseId,
+            @Param("type") DocumentType type,
+            @Param("fromDateTime") LocalDateTime fromDateTime,
+            @Param("toDateTime") LocalDateTime toDateTime);
 
     @Query("""
             select r from InventoryReceipt r

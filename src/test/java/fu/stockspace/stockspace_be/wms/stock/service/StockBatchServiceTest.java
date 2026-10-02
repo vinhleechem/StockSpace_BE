@@ -31,6 +31,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Collections;
@@ -130,6 +131,42 @@ class StockBatchServiceTest {
         assertTrue(response.getContent().isEmpty());
         verify(accessService).requireActiveStaffAssignment(staffId, tenantId, warehouseId);
         verify(stockBatchRepository).findByWarehouseIdAndTenantId(eq(warehouseId), eq(tenantId), any());
+    }
+
+    @Test
+    void testGetStockByWarehouse_WithDateRange_FiltersBatches() {
+        UUID staffId = UUID.randomUUID();
+        LocalDate fromDate = LocalDate.of(2026, 3, 1);
+        LocalDate toDate = LocalDate.of(2026, 3, 31);
+        Pageable pageable = PageRequest.of(0, 20);
+
+        when(warehouseRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+        doNothing().when(accessService).requireActiveStaffAssignment(staffId, tenantId, warehouseId);
+        when(stockBatchRepository.findByWarehouseIdAndTenantId(
+                eq(warehouseId), eq(tenantId), any(LocalDateTime.class), any(LocalDateTime.class), eq(pageable)))
+                .thenReturn(Page.empty());
+
+        PagedResponse<StockBatchResponse> response = stockBatchService.getStockByWarehouse(
+                tenantId, warehouseId, staffId, fromDate, toDate, pageable);
+
+        assertNotNull(response);
+        verify(stockBatchRepository).findByWarehouseIdAndTenantId(
+                eq(warehouseId), eq(tenantId), any(LocalDateTime.class), any(LocalDateTime.class), eq(pageable));
+    }
+
+    @Test
+    void testGetStockByWarehouse_InvalidDateRange_ThrowsBadRequestException() {
+        UUID staffId = UUID.randomUUID();
+        LocalDate fromDate = LocalDate.of(2026, 3, 31);
+        LocalDate toDate = LocalDate.of(2026, 3, 1);
+        Pageable pageable = PageRequest.of(0, 20);
+
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> stockBatchService.getStockByWarehouse(
+                        tenantId, warehouseId, staffId, fromDate, toDate, pageable));
+
+        assertEquals("fromDate cannot be after toDate", ex.getMessage());
+        verify(stockBatchRepository, never()).findByWarehouseIdAndTenantId(any(), any(), any(), any(), any());
     }
 
     @Test

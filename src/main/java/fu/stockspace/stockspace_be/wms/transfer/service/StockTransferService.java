@@ -98,7 +98,9 @@ import java.util.UUID;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 @Service
 @RequiredArgsConstructor
@@ -441,11 +443,34 @@ public class StockTransferService {
                                                               UUID destinationWarehouseId,
                                                               StockTransferStatus status,
                                                               Pageable pageable) {
+        return getTransfers(userId, sourceWarehouseId, destinationWarehouseId, status, null, null, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public PagedResponse<StockTransferResponse> getTransfers(UUID userId,
+                                                              UUID sourceWarehouseId,
+                                                              UUID destinationWarehouseId,
+                                                              StockTransferStatus status,
+                                                              LocalDate fromDate,
+                                                              LocalDate toDate,
+                                                              Pageable pageable) {
+        if (fromDate != null && toDate != null && fromDate.isAfter(toDate)) {
+            throw new BadRequestException("fromDate cannot be after toDate");
+        }
         User user = findUser(userId);
         UUID tenantId = resolveTenantId(user);
-        Page<StockTransfer> page = transferRepository.search(
-                tenantId, sourceWarehouseId, destinationWarehouseId, status,
-                isStaff(user) ? user.getId() : null, pageable);
+        Page<StockTransfer> page;
+        if (fromDate == null && toDate == null) {
+            page = transferRepository.search(
+                    tenantId, sourceWarehouseId, destinationWarehouseId, status,
+                    isStaff(user) ? user.getId() : null, pageable);
+        } else {
+            LocalDateTime fromDateTime = fromDate != null ? fromDate.atStartOfDay() : null;
+            LocalDateTime toDateTime = toDate != null ? toDate.atTime(LocalTime.MAX) : null;
+            page = transferRepository.search(
+                    tenantId, sourceWarehouseId, destinationWarehouseId, status,
+                    isStaff(user) ? user.getId() : null, fromDateTime, toDateTime, pageable);
+        }
         return PagedResponse.fromPage(page, this::mapToResponse);
     }
 
