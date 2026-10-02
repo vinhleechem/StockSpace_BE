@@ -44,8 +44,8 @@ public interface InventoryReceiptRepository extends JpaRepository<InventoryRecei
             where r.tenant.id = :tenantId
               and r.warehouse.id = :warehouseId
               and (:type is null or r.type = :type)
-              and (:fromDateTime is null or r.createdAt >= :fromDateTime)
-              and (:toDateTime is null or r.createdAt <= :toDateTime)
+              and (cast(:fromDateTime as timestamp) is null or r.createdAt >= :fromDateTime)
+              and (cast(:toDateTime as timestamp) is null or r.createdAt <= :toDateTime)
               and r.isDeleted = false
             """)
     Page<InventoryReceipt> searchByTenantAndWarehouse(
@@ -63,8 +63,8 @@ public interface InventoryReceiptRepository extends JpaRepository<InventoryRecei
             where r.tenant.id = :tenantId
               and r.warehouse.id = :warehouseId
               and (:type is null or r.type = :type)
-              and (:fromDateTime is null or r.createdAt >= :fromDateTime)
-              and (:toDateTime is null or r.createdAt <= :toDateTime)
+              and (cast(:fromDateTime as timestamp) is null or r.createdAt >= :fromDateTime)
+              and (cast(:toDateTime as timestamp) is null or r.createdAt <= :toDateTime)
               and r.isDeleted = false
             order by r.createdAt desc, r.id desc
             """)
