@@ -1,8 +1,8 @@
 package fu.stockspace.stockspace_be.common.config;
 
 import fu.stockspace.stockspace_be.notification.websocket.StompJwtChannelInterceptor;
+import fu.stockspace.stockspace_be.notification.websocket.StompErrorHandler;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
@@ -10,8 +10,6 @@ import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBr
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 
-import java.util.LinkedHashSet;
-import java.util.Set;
 
 
 
@@ -25,9 +23,8 @@ import java.util.Set;
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final StompJwtChannelInterceptor stompJwtChannelInterceptor;
-
-    @Value("${app.frontend.url:http://localhost:5173}")
-    private String frontendUrl;
+    private final StompErrorHandler stompErrorHandler;
+    private final FrontendOriginProperties frontendOriginProperties;
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
@@ -38,8 +35,11 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
+        registry.setErrorHandler(stompErrorHandler);
         registry.addEndpoint("/ws")
-                .setAllowedOrigins(allowedOrigins());
+                .setAllowedOrigins(
+                        frontendOriginProperties.resolvedAllowedOrigins().toArray(String[]::new)
+                );
     }
 
     @Override
@@ -47,16 +47,4 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registration.interceptors(stompJwtChannelInterceptor);
     }
 
-    private String[] allowedOrigins() {
-        Set<String> origins = new LinkedHashSet<>();
-        origins.add("http://localhost:5173");
-        origins.add("http://localhost:3000");
-        origins.add("https://stock-space-nu.vercel.app");
-
-        if (frontendUrl != null && !frontendUrl.isBlank()) {
-            origins.add(frontendUrl.trim().replaceAll("/+$", ""));
-        }
-
-        return origins.toArray(String[]::new);
-    }
 }

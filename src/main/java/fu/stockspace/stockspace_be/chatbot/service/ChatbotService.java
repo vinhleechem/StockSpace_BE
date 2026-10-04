@@ -28,6 +28,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -1389,12 +1390,18 @@ public class ChatbotService {
         private final AtomicBoolean cancelled = new AtomicBoolean();
         private final AtomicBoolean terminal = new AtomicBoolean();
         private final AtomicBoolean resourcesReleased = new AtomicBoolean();
+        private final AtomicBoolean completeEventSent = new AtomicBoolean();
+        private final AtomicBoolean errorEventSent = new AtomicBoolean();
+        private final AtomicBoolean transportFailureLogged = new AtomicBoolean();
         private final AtomicLong sequence = new AtomicLong();
+        private final AtomicReference<StreamState> state =
+                new AtomicReference<>(StreamState.CREATED);
         private final AtomicReference<Future<?>> worker = new AtomicReference<>();
         private final AtomicReference<ScheduledFuture<?>> heartbeat =
                 new AtomicReference<>();
         private final StringBuilder streamedReply = new StringBuilder();
         private final StringBuilder pendingReply = new StringBuilder();
+        private final Instant startedAt = Instant.now();
 
         private StreamCoordinator(SseEmitter emitter,
                                   UUID requestId,
@@ -1426,6 +1433,7 @@ public class ChatbotService {
         }
 
         private void run() {
+            state.set(StreamState.RUNNING);
             try {
                 sendRequired("session", new ChatStreamEvents.Session(
                         ChatStreamEvents.VERSION,
@@ -1484,6 +1492,7 @@ public class ChatbotService {
                 if (terminal.get() || cancelled.get()) {
                     return;
                 }
+                state.set(StreamState.FINALIZING);
                 try {
                     if (userId == null) {
                         timestamp = conversationStore.appendGuestTurn(
@@ -1510,13 +1519,12 @@ public class ChatbotService {
                     persistenceFailure = failure;
                     cancelled.set(true);
                     terminal.set(true);
+                    state.set(StreamState.FAILED);
                 }
             }
 
             if (persistenceFailure != null) {
-                log.error("[ChatStream] Persistence failed requestId={} type={}",
-                        requestId,
-                        persistenceFailure.getClass().getSimpleName());
+                logStreamFailure(persistenceFailure, ErrorCode.SYSTEM_ERROR);
                 sendErrorBestEffort(ErrorCode.SYSTEM_ERROR);
                 emitter.complete();
                 return;
@@ -1528,9 +1536,20 @@ public class ChatbotService {
                         prepared.sessionId(),
                         timestamp
                 ));
+                completeEventSent.set(true);
+                state.set(StreamState.COMPLETED);
+                log.info(
+                        "[ChatStream] Completed requestId={} sessionId={} "
+                                + "durationMs={} deltasSent={} replyChars={}",
+                        requestId,
+                        prepared.sessionId(),
+                        elapsedMillis(),
+                        sequence.get(),
+                        streamedReply.length()
+                );
             } catch (IOException exception) {
-                log.debug("[ChatStream] Client disconnected after commit requestId={}",
-                        requestId);
+                state.set(StreamState.TRANSPORT_ERROR);
+                logTransportFailure("complete-event", exception);
             } finally {
                 emitter.complete();
             }
@@ -1653,6 +1672,8 @@ public class ChatbotService {
                         LocalDateTime.now()
                 ));
             } catch (IOException exception) {
+                state.set(StreamState.TRANSPORT_ERROR);
+                logTransportFailure("heartbeat", exception);
                 cancelWithoutEvent();
             }
         }
@@ -1662,6 +1683,8 @@ public class ChatbotService {
             try {
                 sendRaw(eventName, payload);
             } catch (IOException exception) {
+                state.set(StreamState.TRANSPORT_ERROR);
+                logTransportFailure("event-" + eventName, exception);
                 cancelWithoutEvent();
                 throw new CancellationException("SSE client disconnected");
             }
@@ -1674,20 +1697,38 @@ public class ChatbotService {
         }
 
         private void timeout() {
+            state.set(StreamState.TIMED_OUT);
+            log.warn(
+                    "[ChatStream] Timed out requestId={} sessionId={} durationMs={} "
+                            + "deltasSent={} completeSent={} errorSent={}",
+                    requestId,
+                    prepared.sessionId(),
+                    elapsedMillis(),
+                    sequence.get(),
+                    completeEventSent.get(),
+                    errorEventSent.get()
+            );
             fail(new ChatProviderException(ErrorCode.CHAT_PROVIDER_TIMEOUT), true);
         }
 
-        private void transportError(Throwable ignored) {
+        private void transportError(Throwable failure) {
+            if (!completeEventSent.get() && !errorEventSent.get()) {
+                state.set(StreamState.TRANSPORT_ERROR);
+            }
+            logTransportFailure("emitter-callback", failure);
             cancelWithoutEvent();
         }
 
         private void transportCompleted() {
             if (!terminal.get()) {
+                state.set(StreamState.CLIENT_DISCONNECTED);
+                logUnexpectedTransportClosure();
                 cancelWithoutEvent();
             }
         }
 
         private void rejectBeforeStart() {
+            state.set(StreamState.REJECTED);
             claimCancellation();
             releaseResources();
             emitter.complete();
@@ -1727,6 +1768,9 @@ public class ChatbotService {
                 }
                 cancelled.set(true);
                 terminal.set(true);
+                if (state.get() != StreamState.TIMED_OUT) {
+                    state.set(StreamState.FAILED);
+                }
             }
 
             if (cancelWorker) {
@@ -1740,11 +1784,7 @@ public class ChatbotService {
                 ErrorCode publicError = failure instanceof ChatProviderException provider
                         ? provider.getErrorCode()
                         : ErrorCode.SYSTEM_ERROR;
-                if (!(failure instanceof ChatProviderException)) {
-                    log.error("[ChatStream] Request failed requestId={} type={}",
-                            requestId,
-                            failure.getClass().getSimpleName());
-                }
+                logStreamFailure(failure, publicError);
                 sendErrorBestEffort(publicError);
                 emitter.complete();
             }
@@ -1759,9 +1799,117 @@ public class ChatbotService {
                         errorCode.getMessage(),
                         isRetryable(errorCode)
                 ));
-            } catch (IOException ignored) {
-
+                errorEventSent.set(true);
+                log.info(
+                        "[ChatStream] Error event sent requestId={} sessionId={} "
+                                + "state={} durationMs={} errorCode={}",
+                        requestId,
+                        prepared.sessionId(),
+                        state.get(),
+                        elapsedMillis(),
+                        errorCode.name()
+                );
+            } catch (IOException exception) {
+                state.set(StreamState.TRANSPORT_ERROR);
+                logTransportFailure("error-event", exception);
             }
+        }
+
+        private void logStreamFailure(Throwable failure, ErrorCode publicError) {
+            String template = "[ChatStream] Request failed requestId={} sessionId={} "
+                    + "state={} durationMs={} deltasSent={} completeSent={} errorSent={} "
+                    + "errorCode={} type={}";
+            Object[] arguments = {
+                    requestId,
+                    prepared.sessionId(),
+                    state.get(),
+                    elapsedMillis(),
+                    sequence.get(),
+                    completeEventSent.get(),
+                    errorEventSent.get(),
+                    publicError.name(),
+                    failure.getClass().getSimpleName()
+            };
+            if (failure instanceof ChatProviderException) {
+                log.warn(template, arguments);
+            } else {
+                log.error(template, arguments);
+            }
+        }
+
+        private void logTransportFailure(String source, Throwable failure) {
+            if (!transportFailureLogged.compareAndSet(false, true)) {
+                return;
+            }
+            Throwable rootCause = rootCause(failure);
+            log.warn(
+                    "[ChatStream] Transport failure requestId={} sessionId={} "
+                            + "state={} source={} occurredAt={} durationMs={} "
+                            + "terminal={} cancelled={} completeSent={} errorSent={} "
+                            + "deltasSent={} type={} rootType={} message={}",
+                    requestId,
+                    prepared.sessionId(),
+                    state.get(),
+                    source,
+                    LocalDateTime.now(),
+                    elapsedMillis(),
+                    terminal.get(),
+                    cancelled.get(),
+                    completeEventSent.get(),
+                    errorEventSent.get(),
+                    sequence.get(),
+                    failure == null ? "unknown" : failure.getClass().getSimpleName(),
+                    rootCause == null ? "unknown" : rootCause.getClass().getSimpleName(),
+                    safeFailureMessage(rootCause)
+            );
+        }
+
+        private void logUnexpectedTransportClosure() {
+            if (!transportFailureLogged.compareAndSet(false, true)) {
+                return;
+            }
+            log.warn(
+                    "[ChatStream] Transport closed before terminal event requestId={} "
+                            + "sessionId={} state={} occurredAt={} durationMs={} "
+                            + "completeSent={} errorSent={} deltasSent={}",
+                    requestId,
+                    prepared.sessionId(),
+                    state.get(),
+                    LocalDateTime.now(),
+                    elapsedMillis(),
+                    completeEventSent.get(),
+                    errorEventSent.get(),
+                    sequence.get()
+            );
+        }
+
+        private Throwable rootCause(Throwable failure) {
+            Throwable current = failure;
+            for (int depth = 0;
+                 current != null && current.getCause() != null
+                         && current.getCause() != current && depth < 16;
+                 depth++) {
+                current = current.getCause();
+            }
+            return current;
+        }
+
+        private String safeFailureMessage(Throwable failure) {
+            if (failure == null || failure.getMessage() == null
+                    || failure.getMessage().isBlank()) {
+                return "none";
+            }
+            String sanitized = failure.getMessage()
+                    .replace('\r', ' ')
+                    .replace('\n', ' ')
+                    .trim();
+            return sanitized.length() <= 300
+                    ? sanitized
+                    : sanitized.substring(0, 300);
+        }
+
+        private long elapsedMillis() {
+            return Duration.between(startedAt, Instant.now()).toMillis();
         }
 
         private boolean isRetryable(ErrorCode errorCode) {
@@ -1783,6 +1931,18 @@ public class ChatbotService {
             if (permit != null) {
                 permit.close();
             }
+        }
+
+        private enum StreamState {
+            CREATED,
+            RUNNING,
+            FINALIZING,
+            COMPLETED,
+            FAILED,
+            TIMED_OUT,
+            TRANSPORT_ERROR,
+            CLIENT_DISCONNECTED,
+            REJECTED
         }
     }
 }

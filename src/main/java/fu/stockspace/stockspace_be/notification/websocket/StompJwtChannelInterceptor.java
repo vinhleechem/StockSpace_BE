@@ -6,7 +6,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
-import org.springframework.messaging.MessageDeliveryException;
 import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
@@ -15,6 +14,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+import java.util.Map;
 
 
 
@@ -48,36 +49,79 @@ public class StompJwtChannelInterceptor implements ChannelInterceptor {
         }
 
         if (accessor.getUser() == null) {
-            throw new MessageDeliveryException("Unauthenticated WebSocket session");
+            throw reject(
+                    message,
+                    accessor,
+                    "WS_AUTH_REQUIRED",
+                    "Authenticated STOMP session required",
+                    null
+            );
         }
 
         if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
             String destination = accessor.getDestination();
             if (!NOTIFICATION_DESTINATION.equals(destination)) {
-                throw new MessageDeliveryException("Subscription destination is not allowed");
+                throw reject(
+                        message,
+                        accessor,
+                        "WS_DESTINATION_FORBIDDEN",
+                        "Subscription destination is not allowed",
+                        null
+                );
             }
         }
 
         if (StompCommand.SEND.equals(accessor.getCommand())) {
-            throw new MessageDeliveryException("Client messages are not accepted on the notification WebSocket");
+            throw reject(
+                    message,
+                    accessor,
+                    "WS_SEND_FORBIDDEN",
+                    "Client messages are not accepted on this WebSocket",
+                    null
+            );
         }
 
         return message;
     }
 
     private void authenticate(Message<?> message, StompHeaderAccessor accessor) {
-        String authorization = accessor.getFirstNativeHeader("Authorization");
-        if (authorization == null || !authorization.startsWith("Bearer ")) {
-            throw new MessageDeliveryException("Missing WebSocket Authorization header");
+        String authorization = findAuthorizationHeader(accessor);
+        if (authorization == null || authorization.isBlank()) {
+            throw reject(
+                    message,
+                    accessor,
+                    "WS_AUTH_MISSING",
+                    "Missing WebSocket Authorization header",
+                    null
+            );
         }
 
-        String token = authorization.substring("Bearer ".length());
+        String[] authorizationParts = authorization.trim().split("\\s+", 2);
+        if (authorizationParts.length != 2
+                || !"Bearer".equalsIgnoreCase(authorizationParts[0])
+                || authorizationParts[1].isBlank()) {
+            throw reject(
+                    message,
+                    accessor,
+                    "WS_AUTH_MALFORMED",
+                    "Malformed WebSocket Authorization header",
+                    null
+            );
+        }
+
+        String token = authorizationParts[1].trim();
         try {
             String email = jwtUtil.extractEmail(token);
             UserDetails userDetails = userDetailsService.loadUserByUsername(email);
 
             if (!jwtUtil.validateToken(token, userDetails)) {
-                throw new MessageDeliveryException("Invalid WebSocket JWT");
+                throw reject(
+                        message,
+                        accessor,
+                        "WS_AUTH_INVALID",
+                        "Invalid or expired WebSocket JWT",
+                        null
+                );
             }
 
             accessor.setUser(new UsernamePasswordAuthenticationToken(
@@ -85,11 +129,45 @@ public class StompJwtChannelInterceptor implements ChannelInterceptor {
                     null,
                     userDetails.getAuthorities()
             ));
-        } catch (MessageDeliveryException exception) {
+        } catch (StompClientException exception) {
             throw exception;
         } catch (Exception exception) {
-            log.warn("Rejected WebSocket connection: {}", exception.getMessage());
-            throw new MessageDeliveryException(message, exception);
+            throw reject(
+                    message,
+                    accessor,
+                    "WS_AUTH_INVALID",
+                    "Invalid or expired WebSocket JWT",
+                    exception
+            );
         }
+    }
+
+    private String findAuthorizationHeader(StompHeaderAccessor accessor) {
+        for (Map.Entry<String, List<String>> header : accessor.toNativeHeaderMap().entrySet()) {
+            if (!"Authorization".equalsIgnoreCase(header.getKey())) {
+                continue;
+            }
+
+            return header.getValue().stream()
+                    .filter(value -> value != null && !value.isBlank())
+                    .findFirst()
+                    .orElse(null);
+        }
+        return null;
+    }
+
+    private StompClientException reject(Message<?> message,
+                                        StompHeaderAccessor accessor,
+                                        String code,
+                                        String clientMessage,
+                                        Throwable cause) {
+        log.warn(
+                "[WebSocket] Rejected STOMP frame sessionId={} command={} code={} causeType={}",
+                accessor.getSessionId(),
+                accessor.getCommand(),
+                code,
+                cause == null ? "none" : cause.getClass().getSimpleName()
+        );
+        return new StompClientException(message, code, clientMessage, cause);
     }
 }
