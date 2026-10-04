@@ -8,8 +8,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.ResponseCookie;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.lang.reflect.Method;
@@ -51,23 +49,5 @@ class RefreshTokenServiceTest {
         Transactional transactional = method.getAnnotation(Transactional.class);
         assertTrue(Arrays.asList(transactional.noRollbackFor())
                 .contains(UnauthorizedException.class));
-    }
-
-    @Test
-    void productionCookieSupportsCrossSiteRefreshAndUsesMatchingClearCookie() {
-        RefreshTokenService service = new RefreshTokenService(repository);
-        ReflectionTestUtils.setField(service, "refreshExpirationMs", 60_000L);
-        ReflectionTestUtils.setField(service, "secureCookie", true);
-        ReflectionTestUtils.setField(service, "cookieSameSite", "None");
-
-        ResponseCookie refreshCookie = service.buildRefreshTokenCookie("token-value");
-        ResponseCookie clearCookie = service.buildClearRefreshTokenCookie();
-
-        assertTrue(refreshCookie.toString().contains("HttpOnly"));
-        assertTrue(refreshCookie.toString().contains("Secure"));
-        assertTrue(refreshCookie.toString().contains("SameSite=None"));
-        assertTrue(refreshCookie.toString().contains("Path=/api/auth"));
-        assertTrue(clearCookie.toString().contains("SameSite=None"));
-        assertTrue(clearCookie.toString().contains("Max-Age=0"));
     }
 }

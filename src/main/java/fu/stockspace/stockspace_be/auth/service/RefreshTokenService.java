@@ -35,9 +35,6 @@ public class RefreshTokenService {
     @Value("${app.security.cookie-secure:false}")
     private boolean secureCookie;
 
-    @Value("${app.security.cookie-same-site:Lax}")
-    private String cookieSameSite;
-
 
     public static final String REFRESH_TOKEN_COOKIE_NAME = "refreshToken";
 
@@ -128,7 +125,7 @@ public class RefreshTokenService {
                 .secure(secureCookie)
                 .path("/api/auth")
                 .maxAge(Duration.ofMillis(refreshExpirationMs))
-                .sameSite(cookieSameSite)
+                .sameSite("Strict")
                 .build();
     }
 
@@ -141,7 +138,7 @@ public class RefreshTokenService {
                 .secure(secureCookie)
                 .path("/api/auth")
                 .maxAge(0)
-                .sameSite(cookieSameSite)
+                .sameSite("Strict")
                 .build();
     }
 }

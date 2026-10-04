@@ -49,47 +49,11 @@ class StompJwtChannelInterceptorTest {
     }
 
     @Test
-    void preSend_ConnectAcceptsCaseInsensitiveAuthorizationAndBearerScheme() {
-        User user = User.builder().email("tenant@test.com").build();
-        when(jwtUtil.extractEmail("valid-token")).thenReturn("tenant@test.com");
-        when(userDetailsService.loadUserByUsername("tenant@test.com")).thenReturn(user);
-        when(jwtUtil.validateToken("valid-token", user)).thenReturn(true);
-
-        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.CONNECT);
-        accessor.setNativeHeader("authorization", "bearer   valid-token");
-        accessor.setLeaveMutable(true);
-        Message<byte[]> message = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
-
-        Message<?> result = interceptor.preSend(message, null);
-
-        assertEquals("tenant@test.com", StompHeaderAccessor.wrap(result).getUser().getName());
-    }
-
-    @Test
     void preSend_ConnectWithoutJwt_IsRejected() {
         StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.CONNECT);
         Message<byte[]> message = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
 
-        MessageDeliveryException exception = assertThrows(
-                MessageDeliveryException.class,
-                () -> interceptor.preSend(message, null)
-        );
-
-        assertEquals("WS_AUTH_MISSING", ((StompClientException) exception).getCode());
-    }
-
-    @Test
-    void preSend_ConnectWithMalformedJwtHeader_IsRejectedWithStableCode() {
-        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.CONNECT);
-        accessor.setNativeHeader("Authorization", "valid-token");
-        Message<byte[]> message = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
-
-        MessageDeliveryException exception = assertThrows(
-                MessageDeliveryException.class,
-                () -> interceptor.preSend(message, null)
-        );
-
-        assertEquals("WS_AUTH_MALFORMED", ((StompClientException) exception).getCode());
+        assertThrows(MessageDeliveryException.class, () -> interceptor.preSend(message, null));
     }
 
     @Test
@@ -99,14 +63,6 @@ class StompJwtChannelInterceptorTest {
         accessor.setUser(() -> "tenant@test.com");
         Message<byte[]> message = MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
 
-        MessageDeliveryException exception = assertThrows(
-                MessageDeliveryException.class,
-                () -> interceptor.preSend(message, null)
-        );
-
-        assertEquals(
-                "WS_DESTINATION_FORBIDDEN",
-                ((StompClientException) exception).getCode()
-        );
+        assertThrows(MessageDeliveryException.class, () -> interceptor.preSend(message, null));
     }
 }

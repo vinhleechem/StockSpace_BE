@@ -1,7 +1,6 @@
 package fu.stockspace.stockspace_be.auth.security;
 
 import fu.stockspace.stockspace_be.auth.service.UserDetailsServiceImpl;
-import fu.stockspace.stockspace_be.common.config.FrontendOriginProperties;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,6 +22,8 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import org.springframework.beans.factory.annotation.Value;
+import java.util.ArrayList;
 import java.util.List;
 
 
@@ -39,7 +40,9 @@ public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
     private final UserDetailsServiceImpl userDetailsService;
-    private final FrontendOriginProperties frontendOriginProperties;
+
+    @Value("${app.frontend.url:http://localhost:5173}")
+    private String frontendUrl;
 
 
 
@@ -114,7 +117,19 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
 
-        config.setAllowedOrigins(frontendOriginProperties.resolvedAllowedOrigins());
+        List<String> origins = new ArrayList<>(List.of(
+                "http://localhost:5173",
+                "http://localhost:3000",
+                "https://stock-space-nu.vercel.app"
+        ));
+        if (frontendUrl != null && !frontendUrl.isBlank()) {
+            String cleanUrl = frontendUrl.trim().replaceAll("/+$", "");
+            if (!origins.contains(cleanUrl)) {
+                origins.add(cleanUrl);
+            }
+        }
+
+        config.setAllowedOrigins(origins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

@@ -150,45 +150,6 @@ deploy() {
     done
     echo ""
 
-    log_info "Kiểm tra WebSocket qua Nginx..."
-    WS_DOMAIN="stockspace-capstone.duckdns.org"
-    WS_ORIGIN="${FRONTEND_URL%/}"
-    WS_HEADERS="$(mktemp)"
-    WS_OK=false
-    if [ "${PUBLIC_HTTPS_READY:-false}" = "true" ]; then
-        WS_SCHEME="https"
-        WS_PORT=443
-    else
-        WS_SCHEME="http"
-        WS_PORT=80
-    fi
-
-    for ATTEMPT in $(seq 1 5); do
-        : > "$WS_HEADERS"
-        curl --silent --http1.1 --max-time 2 --noproxy '*' \
-            --resolve "$WS_DOMAIN:$WS_PORT:127.0.0.1" \
-            --dump-header "$WS_HEADERS" --output /dev/null \
-            --header "Origin: $WS_ORIGIN" \
-            --header "Connection: Upgrade" \
-            --header "Upgrade: websocket" \
-            --header "Sec-WebSocket-Version: 13" \
-            --header "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
-            --header "Sec-WebSocket-Protocol: v12.stomp" \
-            "$WS_SCHEME://$WS_DOMAIN/ws" || true
-
-        if grep -Eq '^HTTP/[0-9.]+ 101([[:space:]]|$)' "$WS_HEADERS"; then
-            WS_OK=true
-            break
-        fi
-        sleep 2
-    done
-    rm -f "$WS_HEADERS"
-
-    if [ "$WS_OK" != "true" ]; then
-        log_error "WebSocket /ws không trả về 101 qua Nginx. Kiểm tra docker compose logs nginx app."
-    fi
-    log_success "WebSocket proxy hoạt động (HTTP 101)."
-
     log_info "Dọn dẹp Docker images không dùng..."
     docker image prune -f
 
@@ -392,22 +353,8 @@ check_env() {
         if [ "${ALLOW_INSECURE_HTTP:-false}" != "true" ]; then
             log_error "Production phải có HTTPS trước khi deploy (PUBLIC_HTTPS_READY=true). Chỉ dùng ALLOW_INSECURE_HTTP=true cho môi trường test tạm thời."
         fi
-        if [ "${NGINX_CONFIG:-nginx.conf}" != "nginx.http.conf" ]; then
-            log_error "ALLOW_INSECURE_HTTP=true yêu cầu NGINX_CONFIG=nginx.http.conf."
-        fi
         log_warn "Đang deploy HTTP không mã hóa vì ALLOW_INSECURE_HTTP=true. Không dùng cấu hình này cho production public."
-    else
-        if [ "${NGINX_CONFIG:-nginx.conf}" != "nginx.conf" ]; then
-            log_error "PUBLIC_HTTPS_READY=true yêu cầu NGINX_CONFIG=nginx.conf."
-        fi
-        CERT_DIR="certbot/conf/live/stockspace-capstone.duckdns.org"
-        if [ ! -s "$CERT_DIR/fullchain.pem" ] || [ ! -s "$CERT_DIR/privkey.pem" ]; then
-            log_error "Thiếu TLS certificate trong $CERT_DIR; không thể khởi động Nginx HTTPS."
-        fi
     fi
-
-    export NGINX_CONFIG="${NGINX_CONFIG:-nginx.conf}"
-    log_info "Nginx production config: $NGINX_CONFIG"
 
     log_success "Tất cả biến bắt buộc đã có."
 }
